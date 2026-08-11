@@ -20,7 +20,8 @@ import { join } from 'path';
 // Composer-level: ChatInput joins the host's route with the live draft.
 // ---------------------------------------------------------------------------
 
-const mockSelectedModel = 'qwen3-4b-instruct-2507';
+const mockSelectedModel = 'fixture-local-model';
+const fixtureCloudModelLabel = 'Fixture Cloud Model';
 jest.mock('@/src/features/model-picker/store', () => ({
   useModelStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ selectedModel: mockSelectedModel, setModel: jest.fn() }),
@@ -81,18 +82,36 @@ describe('ChatInput payload disclosure', () => {
     const { getByText } = render(
       <ChatInput
         onSend={jest.fn()}
-        sendPreview={{ providerMode: 'ManagedGateway', modelLabel: 'GPT-5.6 Luna' }}
+        sendPreview={{ providerMode: 'ManagedGateway', modelLabel: fixtureCloudModelLabel }}
       />,
     );
 
     expect(getByText('Sent to AGI Cloud')).toBeTruthy();
   });
 
+  it('shows and clears the one-shot Skill attached to the next Cloud message', () => {
+    const onClearSelectedSkill = jest.fn();
+    const { getByLabelText, getByTestId } = render(
+      <ChatInput
+        onSend={jest.fn()}
+        selectedSkillName="fixture-review-skill"
+        onClearSelectedSkill={onClearSelectedSkill}
+      />,
+    );
+
+    expect(getByTestId('chat.composer.skill')).toBeTruthy();
+    expect(
+      getByLabelText('Skill fixture-review-skill selected for the next Cloud message'),
+    ).toBeTruthy();
+    fireEvent.press(getByLabelText('Clear selected Skill'));
+    expect(onClearSelectedSkill).toHaveBeenCalledTimes(1);
+  });
+
   it('discloses the model, privacy label and payload size on expand', async () => {
     const { getByTestId, getByText, queryByTestId } = render(
       <ChatInput
         onSend={jest.fn()}
-        sendPreview={{ providerMode: 'ManagedGateway', modelLabel: 'GPT-5.6 Luna' }}
+        sendPreview={{ providerMode: 'ManagedGateway', modelLabel: fixtureCloudModelLabel }}
       />,
     );
 
@@ -108,7 +127,7 @@ describe('ChatInput payload disclosure', () => {
 
     await waitFor(() => expect(getByTestId('send-preview-panel')).toBeTruthy());
     expect(getByText('Sent through AGI Managed gateway')).toBeTruthy();
-    expect(getByText('GPT-5.6 Luna')).toBeTruthy();
+    expect(getByText(fixtureCloudModelLabel)).toBeTruthy();
     // The live draft length is part of the disclosure, not a static blurb.
     expect(getByTestId('send-preview-details')).toBeTruthy();
     expect(getByText('11 chars')).toBeTruthy();
@@ -121,7 +140,7 @@ describe('ChatInput payload disclosure', () => {
       <ChatInput
         onSend={jest.fn()}
         attachRef={attachRef}
-        sendPreview={{ providerMode: 'ManagedGateway', modelLabel: 'GPT-5.6 Luna' }}
+        sendPreview={{ providerMode: 'ManagedGateway', modelLabel: fixtureCloudModelLabel }}
       />,
     );
 

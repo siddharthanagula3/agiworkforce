@@ -18,6 +18,7 @@ import type { ChatRequest } from '@agiworkforce/types';
 
 import { createGoogleAdapter } from '../index';
 import { fetchGoogleCatalog } from '../catalog';
+import { GOOGLE_DEFAULT_MODEL_ID } from './model-fixtures';
 
 const FAKE_KEY = 'AIzaSy-FAKE-TEST-KEY-DO-NOT-LEAK';
 
@@ -61,7 +62,7 @@ describe('Google adapter API key transport', () => {
 
     const adapter = createGoogleAdapter({ apiKey: FAKE_KEY, fetch: mockFetch });
     const req: ChatRequest = {
-      model: 'gemini-3.1-pro-preview',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'hello' }],
     };
 
@@ -105,7 +106,7 @@ describe('Google adapter API key transport', () => {
       fetch: mockFetch,
     });
     const req: ChatRequest = {
-      model: 'gemini-3.1-pro-preview',
+      model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [{ role: 'user', content: 'hi' }],
     };
 

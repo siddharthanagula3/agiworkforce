@@ -74,7 +74,7 @@ mod unit_tests {
                 tool_calls: None,
                 tool_call_id: None,
             }],
-            model: "gpt-5.6-sol".to_string(),
+            model: "fixture-vision-model".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(1024),
             stream: false,
@@ -85,7 +85,7 @@ mod unit_tests {
         };
 
         assert_eq!(request.messages.len(), 1);
-        assert_eq!(request.model, "gpt-5.6-sol");
+        assert_eq!(request.model, "fixture-vision-model");
         assert!(request.messages[0].multimodal_content.is_some());
     }
 
@@ -198,7 +198,7 @@ mod unit_tests {
                 tool_calls: None,
                 tool_call_id: None,
             }],
-            model: "gpt-5.6-sol".to_string(),
+            model: "fixture-vision-model".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(1024),
             stream: false,
@@ -360,7 +360,7 @@ mod function_calling_tests {
                 tool_calls: None,
                 tool_call_id: None,
             }],
-            model: "gpt-4".to_string(),
+            model: "fixture-primary-model".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(1024),
             stream: false,

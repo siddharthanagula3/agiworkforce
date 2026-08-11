@@ -104,7 +104,7 @@ mod llm_test_cases {
             content: "Hello, World!".to_string(),
             done: false,
             finish_reason: None,
-            model: Some("gpt-4o".to_string()),
+            model: Some("fixture-primary-model".to_string()),
             usage: Some(TokenUsage {
                 prompt_tokens: Some(10),
                 completion_tokens: Some(20),
@@ -244,11 +244,12 @@ mod llm_test_cases {
 
     #[test]
     fn test_parse_openai_sse_basic_content() {
-        let event = r#"data: {"choices":[{"delta":{"content":"Hello"}}],"model":"gpt-4o"}"#;
+        let event =
+            r#"data: {"choices":[{"delta":{"content":"Hello"}}],"model":"fixture-primary-model"}"#;
         let chunk = parse_sse_event(event, Provider::OpenAI).expect("parse failed");
         assert_eq!(chunk.content, "Hello");
         assert!(!chunk.done);
-        assert_eq!(chunk.model.as_deref(), Some("gpt-4o"));
+        assert_eq!(chunk.model.as_deref(), Some("fixture-primary-model"));
     }
 
     #[test]
@@ -303,7 +304,7 @@ mod llm_test_cases {
 
     #[test]
     fn test_parse_openai_sse_tool_call_delta() {
-        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":null}],"model":"gpt-4o"}"#;
+        let event = r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_xyz","type":"function","function":{"name":"get_weather","arguments":"{\"city\":"}}]},"finish_reason":null}],"model":"fixture-primary-model"}"#;
         let chunk = parse_sse_event(event, Provider::OpenAI).expect("parse failed");
         assert!(chunk.tool_calls.is_some());
         let tcs = chunk.tool_calls.unwrap();
@@ -404,17 +405,16 @@ mod llm_test_cases {
 
     #[test]
     fn test_parse_ollama_sse_basic_content() {
-        let event =
-            r#"{"model":"llama3","message":{"role":"assistant","content":"Hello"},"done":false}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":"Hello"},"done":false}"#;
         let chunk = parse_sse_event(event, Provider::Ollama).expect("parse failed");
         assert_eq!(chunk.content, "Hello");
         assert!(!chunk.done);
-        assert_eq!(chunk.model.as_deref(), Some("llama3"));
+        assert_eq!(chunk.model.as_deref(), Some("fixture-local-stream-model"));
     }
 
     #[test]
     fn test_parse_ollama_sse_done_true_with_usage() {
-        let event = r#"{"model":"llama3","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":100,"eval_count":50}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":""},"done":true,"done_reason":"stop","prompt_eval_count":100,"eval_count":50}"#;
         let chunk = parse_sse_event(event, Provider::Ollama).expect("parse failed");
         assert!(chunk.done);
         assert_eq!(chunk.finish_reason.as_deref(), Some("stop"));
@@ -427,7 +427,7 @@ mod llm_test_cases {
     #[test]
     fn test_parse_ollama_sse_done_true_stop_reason_fallback() {
         // When done=true and no done_reason, finish_reason should default to "stop"
-        let event = r#"{"model":"llama3","message":{"role":"assistant","content":""},"done":true}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":""},"done":true}"#;
         let chunk = parse_sse_event(event, Provider::Ollama).expect("parse failed");
         assert!(chunk.done);
         assert_eq!(chunk.finish_reason.as_deref(), Some("stop"));
@@ -435,7 +435,7 @@ mod llm_test_cases {
 
     #[test]
     fn test_parse_ollama_sse_tool_call() {
-        let event = r#"{"model":"llama3","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_file","arguments":{"path":"/tmp/test.txt"}}}]},"done":false}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"read_file","arguments":{"path":"/tmp/test.txt"}}}]},"done":false}"#;
         let chunk = parse_sse_event(event, Provider::Ollama).expect("parse failed");
         assert!(chunk.tool_calls.is_some());
         let tcs = chunk.tool_calls.unwrap();
@@ -447,7 +447,7 @@ mod llm_test_cases {
     #[test]
     fn test_parse_ollama_sse_tool_call_arguments_as_string() {
         // Ollama may return arguments as a JSON string instead of object
-        let event = r#"{"model":"llama3","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"ping","arguments":"{\"url\":\"http://example.com\"}"}}]},"done":false}"#;
+        let event = r#"{"model":"fixture-local-stream-model","message":{"role":"assistant","content":"","tool_calls":[{"function":{"name":"ping","arguments":"{\"url\":\"http://example.com\"}"}}]},"done":false}"#;
         let chunk = parse_sse_event(event, Provider::Ollama).expect("parse failed");
         let tcs = chunk.tool_calls.unwrap();
         assert!(tcs[0].arguments.contains("url"));
@@ -459,11 +459,11 @@ mod llm_test_cases {
 
     #[test]
     fn test_parse_ollama_sse_error_field_returns_err() {
-        let event = r#"{"error":"model not found: llama999"}"#;
+        let event = r#"{"error":"model not found: fixture-unknown-local-model"}"#;
         let result = parse_sse_event(event, Provider::Ollama);
         assert!(result.is_err());
         let msg = result.unwrap_err().to_string();
-        assert!(msg.contains("llama999"));
+        assert!(msg.contains("fixture-unknown-local-model"));
     }
 
     #[test]
@@ -562,9 +562,9 @@ mod llm_test_cases {
 
     #[test]
     fn test_chunk_with_model_but_no_content() {
-        let event = r#"data: {"choices":[],"model":"gpt-4o-mini"}"#;
+        let event = r#"data: {"choices":[],"model":"fixture-secondary-model"}"#;
         let chunk = parse_sse_event(event, Provider::OpenAI).expect("parse failed");
         assert!(chunk.content.is_empty());
-        assert_eq!(chunk.model.as_deref(), Some("gpt-4o-mini"));
+        assert_eq!(chunk.model.as_deref(), Some("fixture-secondary-model"));
     }
 }

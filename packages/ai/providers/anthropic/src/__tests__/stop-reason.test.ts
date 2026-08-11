@@ -12,6 +12,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { StreamChunk } from '@agiworkforce/types';
 
 import { translateAnthropicStream } from '../stream';
+import { ANTHROPIC_DEFAULT_MODEL_ID } from './model-fixtures';
 
 type Event = Anthropic.MessageStreamEvent;
 
@@ -33,7 +34,7 @@ function messageStart(id: string): Event {
       type: 'message',
       role: 'assistant',
       content: [],
-      model: 'claude-sonnet-5',
+      model: ANTHROPIC_DEFAULT_MODEL_ID,
       stop_reason: null,
       stop_sequence: null,
       usage: {

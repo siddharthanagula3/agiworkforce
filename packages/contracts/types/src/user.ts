@@ -99,8 +99,8 @@ export interface User {
  *   tokenBalance: 50000,
  *   monthlyTokenLimit: 100000,
  *   tokensUsedThisMonth: 50000,
- *   preferredModel: 'claude-opus-5',
- *   preferredProvider: 'anthropic',
+ *   preferredModel: selectedModel.id,
+ *   preferredProvider: selectedModel.provider,
  *   createdAt: '2026-01-15T00:00:00Z',
  *   updatedAt: '2026-03-15T10:00:00Z',
  * };

@@ -41,7 +41,7 @@ export default function SupportPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Support</p>
           <h1 id="agi-support-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">We read</span>
+            <span className="agi-fl-h1-line">We read</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">every email.</em>
             </span>

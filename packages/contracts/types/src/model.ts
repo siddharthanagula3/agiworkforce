@@ -31,7 +31,7 @@ import type { Provider } from './model-catalog';
  *   enabled: true,
  *   apiKeyConfigured: true,
  *   baseUrl: 'https://api.anthropic.com',
- *   models: ['claude-opus-5', 'claude-sonnet-5'],
+ *   models: providerModels.map(({ id }) => id),
  * };
  * ```
  */
@@ -74,8 +74,8 @@ export interface ModelProvider {
  * @example
  * ```typescript
  * const config: ModelConfig = {
- *   modelId: 'claude-opus-5',
- *   provider: 'anthropic',
+ *   modelId: selectedModel.id,
+ *   provider: selectedModel.provider,
  *   temperature: 0.7,
  *   maxTokens: 4096,
  *   topP: 1.0,
@@ -83,7 +83,7 @@ export interface ModelProvider {
  * ```
  */
 export interface ModelConfig {
-  /** Model identifier (e.g., `"claude-opus-5"`, `"gpt-5.6-sol"`). */
+  /** Model identifier resolved from the canonical model catalog. */
   modelId: string;
 
   /** Provider identifier. */
@@ -132,7 +132,7 @@ export interface ModelConfig {
  * @example
  * ```typescript
  * const pricing: ModelPricing = {
- *   modelId: 'claude-opus-5',
+ *   modelId: selectedModel.id,
  *   inputCostPerMillion: 15.0,
  *   outputCostPerMillion: 75.0,
  *   cachedInputCostPerMillion: 1.5,

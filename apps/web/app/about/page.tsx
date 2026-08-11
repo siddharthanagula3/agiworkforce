@@ -74,7 +74,7 @@ export default function AboutPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">About AGI</p>
           <h1 id="agi-about-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Multi-provider,</span>
+            <span className="agi-fl-h1-line">Multi-provider,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">by design.</em>
             </span>

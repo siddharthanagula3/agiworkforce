@@ -28,7 +28,7 @@ function makeSink() {
 
 /** Wrap a `delta` object in the OpenAI-wire `{choices: [{delta}]}` envelope the sink reads. */
 function payload(delta: Record<string, unknown>): Record<string, unknown> {
-  return { choices: [{ delta, index: 0 }], model: 'claude-x' };
+  return { choices: [{ delta, index: 0 }], model: 'fixture-stream-model' };
 }
 
 describe('cloudStreamDeltas — every x_* delta key the wire can emit', () => {

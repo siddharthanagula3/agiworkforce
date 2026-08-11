@@ -13,6 +13,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import type { CreateScheduleInput, Schedule, RecurrenceType } from '../store';
 import { isMobileScheduleRecurrenceSupported } from '../policy';
 import { isoToZonedDateInput, zonedDateAndTimeToIso } from '../timing';
+import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -58,7 +59,7 @@ export function ScheduleForm({
   // Form state
   const [name, setName] = useState(initialData?.name ?? '');
   const [prompt, setPrompt] = useState(initialData?.prompt ?? '');
-  const [model, setModel] = useState(initialData?.model ?? 'auto');
+  const [model, setModel] = useState(initialData?.model ?? DEFAULT_AUTO_MODE_ID);
   const modelPickerRef = useRef<BottomSheet>(null);
   const [recurrence, setRecurrence] = useState<RecurrenceType>(initialData?.recurrence ?? 'daily');
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initialData?.daysOfWeek ?? []);

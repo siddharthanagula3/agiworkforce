@@ -82,8 +82,8 @@ The Desktop component-domain wave is complete. Product UI domains have moved
 out of `src/components` into `apps/desktop/src/features`, including chat,
 settings, MCP, execution, memory, tooling side panels, v3 shell, governance,
 scheduler, screen capture, ROI, auth, file upload, document/media/code,
-overlay, and adjacent small domains. `apps/desktop/src/components` is now
-reserved for shared UI primitives only.
+overlay, and adjacent small domains. The former Desktop components tree has
+since been removed; shared primitives now live under the current UI owner.
 
 Per-directory ownership READMEs were retired on 2026-08-08; feature ownership is
 tracked through CODEOWNERS instead.
@@ -107,8 +107,8 @@ sub-tree). The other directories at `apps/web/` (`components/`, `hooks/`,
 `lib/`, `api/`, `core/`, `data/`, `handlers/`) still hold cross-feature code
 that should be either pushed into a domain or pulled out to `packages/`.
 
-The desktop frontend is the worst offender: `apps/desktop/src/components/`
-has 76 subdirectories, most of which map cleanly to a single product domain.
+At the time of this plan, the desktop frontend was the worst offender: its
+former components tree had 76 subdirectories, most mapping to one product domain.
 
 The cost of the current layout is reviewer cognitive load — to make a
 single feature change you read four-to-six unrelated directories — and a
@@ -334,7 +334,7 @@ Per-PR checklist for every domain move:
 - **Mobile (Wave B) done when:** `apps/mobile/components/` only contains
   shared atoms; every screen under `apps/mobile/app/` imports its
   domain-scoped components from `apps/mobile/src/features/<domain>/`.
-- **Desktop (Wave C) done when:** `apps/desktop/src/components/` is reduced
+- **Desktop (Wave C) done when:** the former Desktop components tree is reduced
   from 76 subdirs to ≤10 (shared UI atoms only); every other former
   component subdir lives under `apps/desktop/src/features/<domain>/`.
 

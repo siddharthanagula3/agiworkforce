@@ -54,7 +54,7 @@ from pydantic import SecretStr
 
 from skillspector.providers import registry
 
-REGISTRY_PATH = str(Path(__file__).with_name("model_registry.yaml"))
+REGISTRY_PATH = str(Path(__file__).parent.parent / "anthropic" / "model_registry.yaml")
 
 DEFAULT_API_VERSION = "vertex-2023-10-16"
 _PROXY_STRIPPED_HEADERS = frozenset({"x-api-key", "anthropic-version", "host", "content-length"})
@@ -206,7 +206,7 @@ class _ChatAnthropicProxy(ChatAnthropic):
 class AnthropicProxyProvider:
     """Anthropic proxy provider for Vertex-style raw-predict endpoints."""
 
-    DEFAULT_MODEL = "claude-sonnet-4-6"
+    DEFAULT_MODEL = registry.lookup_default_model(REGISTRY_PATH) or ""
     SLOT_DEFAULTS: ClassVar[dict[str, str]] = {}
 
     def resolve_credentials(self) -> tuple[str, str | None] | None:

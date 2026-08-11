@@ -5,7 +5,7 @@
  * "General" row's value, so the top-level list advertised a model that the
  * General screen does not own — and because `getShortDisplayName` fell back to
  * the raw id, a persisted selection the catalog no longer knows printed a wire
- * id (`gpt-5.6-terra`) straight onto the Settings root.
+ * id straight onto the Settings root.
  *
  * These tests hold both halves: nothing on the Settings root carries a catalog
  * id, and the "Models" row inside General carries the display name — falling
@@ -159,12 +159,12 @@ describe('PAR-M21 — Settings model value ownership', () => {
   });
 
   it('falls back to a neutral label, never a wire id, for a selection the catalog dropped', () => {
-    mockSelectedModel.id = 'gpt-5.6-terra-retired';
+    mockSelectedModel.id = 'fixture-retired-model';
 
     const { getByLabelText, queryByText } = render(<GeneralSettingsScreen />);
 
     expect(getByLabelText(`Models. ${UNKNOWN_MODEL_LABEL}`)).toBeTruthy();
-    expect(queryByText('gpt-5.6-terra-retired')).toBeNull();
+    expect(queryByText('fixture-retired-model')).toBeNull();
   });
 });
 

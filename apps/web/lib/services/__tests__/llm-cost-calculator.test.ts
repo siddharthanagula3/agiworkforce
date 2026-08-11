@@ -1,15 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { listCanonicalModels, resolveEffectiveModelPricing } from '@agiworkforce/types';
+
 import { LLMCostCalculator } from '../llm-cost-calculator';
 
 /**
- * Regression coverage for the founder-selected Sonnet 5 standard rates, the
- * dated-pricing mechanism, and cache-write billing.
+ * Regression coverage for stable pricing, dated pricing, and cache-write
+ * billing without coupling the calculator unit to a concrete release name.
  *
  * The catalog lookup is mocked only to ADD a synthetic scheduled model
  * (`fixture-scheduled-model`) used to prove the dated-window mechanism on
- * arbitrary dates. Every real model — Sonnet 5 included — still resolves
- * through the real catalog, so the founder pin below is a pin on shipped data.
+ * arbitrary dates. A separate catalog-derived assertion below proves the
+ * generated multi-band metadata reaches this calculator.
  */
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
@@ -38,25 +40,211 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
       { effectiveFrom: '2030-04-01' },
     ],
   };
+  const noWriteFixture = {
+    id: 'fixture-no-cache-write',
+    provider: 'openai',
+    inputCost: 0.75,
+    outputCost: 4.5,
+    cached_input: 0.075,
+  };
+  const tieredFixture = {
+    id: 'fixture-tiered-pricing',
+    provider: 'openai',
+    inputCost: 1,
+    outputCost: 4,
+    cached_input: 0.1,
+    cached_write: 1.25,
+    inputTokenPricingTiers: [
+      {
+        thresholdTokens: 100_000,
+        inputCost: 2,
+        outputCost: 6,
+        cached_input: 0.2,
+        cached_write: 2.5,
+      },
+      {
+        thresholdTokens: 200_000,
+        inputCost: 3,
+        outputCost: 8,
+        cached_input: 0.3,
+        cached_write: 3.75,
+      },
+    ],
+  };
+  const disjointTieredFixture = {
+    id: 'fixture-disjoint-tiered-pricing',
+    provider: 'anthropic',
+    inputCost: 1,
+    outputCost: 4,
+    cached_input: 0.1,
+    cached_write: 1.25,
+    inputTokenPricingTiers: [
+      {
+        thresholdTokens: 100_000,
+        inputCost: 2,
+        outputCost: 6,
+        cached_input: 0.2,
+        cached_write: 2.5,
+      },
+    ],
+  };
+  const stableAnthropicFixture = {
+    id: 'fixture-anthropic-standard',
+    provider: 'anthropic',
+    inputCost: 3,
+    outputCost: 15,
+    cached_input: 0.3,
+    cached_write: 3.75,
+    cached_write_1h: 6,
+  };
+  const premiumAnthropicFixture = {
+    id: 'fixture-anthropic-premium',
+    provider: 'anthropic',
+    inputCost: 5,
+    outputCost: 25,
+    cached_input: 0.5,
+    cached_write: 6.25,
+    cached_write_1h: 10,
+  };
+  const unpricedCacheFixture = {
+    id: 'fixture-inclusive-unpriced-cache',
+    provider: 'xai',
+    inputCost: 2,
+    outputCost: 10,
+  };
   return {
     ...actual,
     getModelMetadataById: (id: string) =>
-      id === fixture.id ? fixture : actual.getModelMetadataById(id),
+      id === fixture.id
+        ? fixture
+        : id === noWriteFixture.id
+          ? noWriteFixture
+          : id === tieredFixture.id
+            ? tieredFixture
+            : id === disjointTieredFixture.id
+              ? disjointTieredFixture
+              : id === stableAnthropicFixture.id
+                ? stableAnthropicFixture
+                : id === premiumAnthropicFixture.id
+                  ? premiumAnthropicFixture
+                  : id === unpricedCacheFixture.id
+                    ? unpricedCacheFixture
+                    : actual.getModelMetadataById(id),
   };
 });
 
-const SONNET_5 = 'claude-sonnet-5';
+function requireCatalogMultiBandModel() {
+  const model = listCanonicalModels().find(
+    (candidate) =>
+      (candidate.inputTokenPricingTiers?.length ?? 0) > 1 &&
+      typeof candidate.cached_input === 'number' &&
+      typeof candidate.cached_write === 'number' &&
+      candidate.inputTokenPricingTiers!.every(
+        (tier) => typeof tier.cached_input === 'number' && typeof tier.cached_write === 'number',
+      ),
+  );
+  if (!model?.inputTokenPricingTiers) {
+    throw new Error('Canonical multi-band billing fixture is missing');
+  }
+  return model;
+}
+
+describe('LLMCostCalculator — input-length pricing tiers', () => {
+  const model = 'fixture-tiered-pricing';
+  const date = new Date('2030-01-01T00:00:00Z');
+
+  it('uses strict thresholds and the greatest qualifying tier', () => {
+    expect(
+      LLMCostCalculator.calculateCost(
+        'openai',
+        model,
+        { promptTokens: 100_000, completionTokens: 100_000, totalTokens: 200_000 },
+        date,
+      ),
+    ).toBe(50);
+    expect(
+      LLMCostCalculator.calculateCost(
+        'openai',
+        model,
+        { promptTokens: 100_001, completionTokens: 100_000, totalTokens: 200_001 },
+        date,
+      ),
+    ).toBe(81);
+    expect(
+      LLMCostCalculator.calculateCost(
+        'openai',
+        model,
+        { promptTokens: 200_001, completionTokens: 100_000, totalTokens: 300_001 },
+        date,
+      ),
+    ).toBe(141);
+  });
+
+  it('reads every ordered band and rate from the generated catalog', () => {
+    const candidate = requireCatalogMultiBandModel();
+    const tiers = candidate.inputTokenPricingTiers!;
+    const base = resolveEffectiveModelPricing(candidate, date);
+
+    tiers.forEach((tier, index) => {
+      const preceding = index === 0 ? base : tiers[index - 1]!;
+      expect(
+        LLMCostCalculator.getPricing(candidate.provider, candidate.id, date, tier.thresholdTokens),
+      ).toEqual(
+        expect.objectContaining({
+          inputCostPer1MTokens: preceding.inputCost,
+          outputCostPer1MTokens: preceding.outputCost,
+          cachedInputCostPer1MTokens: preceding.cached_input,
+          cachedWriteCostPer1MTokens: preceding.cached_write,
+        }),
+      );
+      expect(
+        LLMCostCalculator.getPricing(
+          candidate.provider,
+          candidate.id,
+          date,
+          tier.thresholdTokens + 1,
+        ),
+      ).toEqual(
+        expect.objectContaining({
+          inputCostPer1MTokens: tier.inputCost,
+          outputCostPer1MTokens: tier.outputCost,
+          cachedInputCostPer1MTokens: tier.cached_input,
+          cachedWriteCostPer1MTokens: tier.cached_write,
+        }),
+      );
+    });
+  });
+
+  it('selects the tier from total disjoint input, including cache reads and writes', () => {
+    const disjointModel = 'fixture-disjoint-tiered-pricing';
+    const atThreshold = {
+      promptTokens: 60_000,
+      completionTokens: 0,
+      totalTokens: 100_000,
+      cacheReadInputTokens: 25_000,
+      cacheCreationInputTokens: 15_000,
+    };
+    const aboveThreshold = {
+      ...atThreshold,
+      totalTokens: 100_001,
+      cacheCreationInputTokens: 15_001,
+    };
+
+    expect(LLMCostCalculator.calculateCost('anthropic', disjointModel, atThreshold, date)).toBe(9);
+    expect(LLMCostCalculator.calculateCost('anthropic', disjointModel, aboveThreshold, date)).toBe(
+      17,
+    );
+  });
+});
+
+const STABLE_ANTHROPIC_MODEL = 'fixture-anthropic-standard';
 
 /**
- * Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md, reaffirmed
- * 2026-08-05). Sonnet 5 bills users the founder-selected standard $3/$15 per
- * MTok (cache read $0.30, 5m write $3.75, 1h write $6.00) on EVERY date.
- * Anthropic's introductory window is a provider-COST fact recorded in the
- * registry's verificationLog; it is never a product price. Every case pins a
- * fixed date on both sides of that retired 2026-08-31 boundary, so nothing here
- * moves with the calendar.
+ * A stable synthetic model proves that the absence of a schedule produces the
+ * same rate on every date. Product pricing itself remains owned and verified in
+ * the canonical catalog, so replacing a live model never rewrites this unit.
  */
-describe('LLMCostCalculator — Sonnet 5 standard pricing (founder pin)', () => {
+describe('LLMCostCalculator — stable unscheduled pricing', () => {
   const PIN_DATES = [
     new Date('2020-01-01T00:00:00.000Z'),
     new Date('2026-08-15T00:00:00.000Z'),
@@ -65,7 +253,7 @@ describe('LLMCostCalculator — Sonnet 5 standard pricing (founder pin)', () => 
 
   it('does not apply date-dependent promotional pricing', () => {
     for (const date of PIN_DATES) {
-      const pricing = LLMCostCalculator.getPricing('anthropic', SONNET_5, date);
+      const pricing = LLMCostCalculator.getPricing('anthropic', STABLE_ANTHROPIC_MODEL, date);
       expect(pricing.inputCostPer1MTokens).toBe(3);
       expect(pricing.outputCostPer1MTokens).toBe(15);
       expect(pricing.cachedInputCostPer1MTokens).toBe(0.3);
@@ -73,7 +261,9 @@ describe('LLMCostCalculator — Sonnet 5 standard pricing (founder pin)', () => 
       expect(pricing.cachedWrite1hCostPer1MTokens).toBe(6);
       // Field-by-field equality across dates, so a future window that moves any
       // single rate fails here too.
-      expect(pricing).toEqual(LLMCostCalculator.getPricing('anthropic', SONNET_5, PIN_DATES[0]));
+      expect(pricing).toEqual(
+        LLMCostCalculator.getPricing('anthropic', STABLE_ANTHROPIC_MODEL, PIN_DATES[0]),
+      );
     }
   });
 
@@ -88,7 +278,9 @@ describe('LLMCostCalculator — Sonnet 5 standard pricing (founder pin)', () => 
 
     // Standard: (1M*$3) + (1M*$15) + (1M*$0.3) + (1M*$3.75) = $22.05 → 2205 cents.
     for (const date of PIN_DATES) {
-      expect(LLMCostCalculator.calculateCost('anthropic', SONNET_5, usage, date)).toBe(2205);
+      expect(
+        LLMCostCalculator.calculateCost('anthropic', STABLE_ANTHROPIC_MODEL, usage, date),
+      ).toBe(2205);
     }
   });
 
@@ -101,15 +293,21 @@ describe('LLMCostCalculator — Sonnet 5 standard pricing (founder pin)', () => 
       cacheCreation1hInputTokens: 1_000_000,
     };
     for (const date of PIN_DATES) {
-      expect(LLMCostCalculator.calculateCost('anthropic', SONNET_5, usage, date)).toBe(600);
+      expect(
+        LLMCostCalculator.calculateCost('anthropic', STABLE_ANTHROPIC_MODEL, usage, date),
+      ).toBe(600);
     }
   });
 
   it('estimateCost and getInputCostPerMtok use the same standard rate on every date', () => {
     for (const date of PIN_DATES) {
-      expect(LLMCostCalculator.getInputCostPerMtok('anthropic', SONNET_5, date)).toBe(3);
+      expect(LLMCostCalculator.getInputCostPerMtok('anthropic', STABLE_ANTHROPIC_MODEL, date)).toBe(
+        3,
+      );
       // 1M input tokens * $3/M = 300 cents.
-      expect(LLMCostCalculator.estimateCost('anthropic', SONNET_5, 1_000_000, 0, date)).toBe(300);
+      expect(
+        LLMCostCalculator.estimateCost('anthropic', STABLE_ANTHROPIC_MODEL, 1_000_000, 0, date),
+      ).toBe(300);
     }
   });
 
@@ -117,15 +315,19 @@ describe('LLMCostCalculator — Sonnet 5 standard pricing (founder pin)', () => 
     const usage = { promptTokens: 100, completionTokens: 0, totalTokens: 100 };
     const date = new Date('2026-09-15T00:00:00.000Z');
 
-    expect(LLMCostCalculator.calculateCost('anthropic', SONNET_5, usage, date)).toBe(1);
-    expect(LLMCostCalculator.calculateCostMicrousd('anthropic', SONNET_5, usage, date)).toBe(300);
+    expect(LLMCostCalculator.calculateCost('anthropic', STABLE_ANTHROPIC_MODEL, usage, date)).toBe(
+      1,
+    );
+    expect(
+      LLMCostCalculator.calculateCostMicrousd('anthropic', STABLE_ANTHROPIC_MODEL, usage, date),
+    ).toBe(300);
   });
 
   it('does not charge a paid request with no observed usage', () => {
     expect(
       LLMCostCalculator.calculateCost(
         'anthropic',
-        SONNET_5,
+        STABLE_ANTHROPIC_MODEL,
         { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
         new Date('2026-09-15T00:00:00.000Z'),
       ),
@@ -228,12 +430,12 @@ describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', ()
   it('prices a model without a schedule identically on any date', () => {
     const early = LLMCostCalculator.getPricing(
       'anthropic',
-      'claude-opus-5',
+      'fixture-anthropic-premium',
       new Date('2020-01-01T00:00:00.000Z'),
     );
     const late = LLMCostCalculator.getPricing(
       'anthropic',
-      'claude-opus-5',
+      'fixture-anthropic-premium',
       new Date('2099-12-31T00:00:00.000Z'),
     );
     expect(late).toEqual(early);
@@ -241,42 +443,47 @@ describe('LLMCostCalculator — dated pricing mechanism (synthetic fixture)', ()
 });
 
 /**
- * OpenAI began charging for prompt-cache WRITES with the GPT-5.6 family: 1.25x
- * the uncached input rate, on automatic and explicit breakpoints alike. The
- * catalog expresses that as a `cached_write` price, so billing keys off the
- * declared price rather than off the model name — and models that declare none
- * (every pre-5.6 OpenAI model) keep free writes.
+ * Cache-write billing keys off the catalog's declared price rather than a
+ * concrete model family. Inclusive providers that declare none keep writes at
+ * the plain input rate, so each prompt token is billed exactly once.
  */
 describe('LLMCostCalculator — cache-write billing', () => {
   const PRICED_ON = new Date('2026-09-01T00:00:00.000Z');
 
-  it('reads the declared GPT-5.6 write price from the catalog', () => {
-    expect(LLMCostCalculator.getCacheWriteCostPerMtok('openai', 'gpt-5.6-terra', PRICED_ON)).toBe(
-      2.5,
-    );
-    expect(LLMCostCalculator.getCacheWriteCostPerMtok('openai', 'gpt-5.6-luna', PRICED_ON)).toBe(
-      0.25,
-    );
+  it('reads declared write prices from the selected input tier', () => {
+    expect(
+      LLMCostCalculator.getCacheWriteCostPerMtok('openai', 'fixture-tiered-pricing', PRICED_ON),
+    ).toBe(1.25);
+    expect(
+      LLMCostCalculator.getCacheWriteCostPerMtok(
+        'openai',
+        'fixture-tiered-pricing',
+        PRICED_ON,
+        100_001,
+      ),
+    ).toBe(2.5);
   });
 
   it('falls back to the plain input rate — a free write — when none is declared', () => {
-    const pricing = LLMCostCalculator.getPricing('openai', 'gpt-5.4-mini', PRICED_ON);
+    const model = 'fixture-no-cache-write';
+    const pricing = LLMCostCalculator.getPricing('openai', model, PRICED_ON);
     expect(pricing.cachedWriteCostPer1MTokens).toBeUndefined();
-    expect(LLMCostCalculator.getCacheWriteCostPerMtok('openai', 'gpt-5.4-mini', PRICED_ON)).toBe(
+    expect(LLMCostCalculator.getCacheWriteCostPerMtok('openai', model, PRICED_ON)).toBe(
       pricing.inputCostPer1MTokens,
     );
   });
 
   it('bills an inclusive-prompt OpenAI request once per token, writes at the declared rate', () => {
-    // gpt-5.6-terra: input $2/M, cached_input $0.2/M, cached_write $2.5/M.
+    // This request is above the catalog threshold, so it uses the published
+    // highest fixture rates: input $3/M, cache read $0.3/M, cache write $3.75/M.
     // OpenAI prompt_tokens INCLUDE both cache buckets, so:
-    //   plain input (1M - 400k - 200k) 400k * $2   = $0.80
-    //   cache read                     400k * $0.2 = $0.08
-    //   cache write                    200k * $2.5 = $0.50
-    //   total = $1.38 → 138 cents
+    //   plain input (1M - 400k - 200k) 400k * $3    = $1.20
+    //   cache read                     400k * $0.3  = $0.12
+    //   cache write                    200k * $3.75 = $0.75
+    //   exact total = $2.07; the existing whole-ledger-cent policy rounds up.
     const cents = LLMCostCalculator.calculateCost(
       'openai',
-      'gpt-5.6-terra',
+      'fixture-tiered-pricing',
       {
         promptTokens: 1_000_000,
         completionTokens: 0,
@@ -286,12 +493,11 @@ describe('LLMCostCalculator — cache-write billing', () => {
       },
       PRICED_ON,
     );
-    expect(cents).toBe(138);
+    expect(cents).toBe(208);
   });
 
-  it('adds nothing for a cache write on a pre-5.6 OpenAI model', () => {
-    // gpt-5.4-mini: input $0.75/M and no declared write price, so a 1M prompt
-    // that is entirely cache writes costs the same as one with no cache at all.
+  it('adds nothing for a cache write when the model declares no write price', () => {
+    const model = 'fixture-no-cache-write';
     const base = {
       promptTokens: 1_000_000,
       completionTokens: 0,
@@ -299,35 +505,29 @@ describe('LLMCostCalculator — cache-write billing', () => {
     };
     const withWrites = LLMCostCalculator.calculateCost(
       'openai',
-      'gpt-5.4-mini',
+      model,
       { ...base, cacheCreationInputTokens: 1_000_000 },
       PRICED_ON,
     );
-    const withoutWrites = LLMCostCalculator.calculateCost(
-      'openai',
-      'gpt-5.4-mini',
-      base,
-      PRICED_ON,
-    );
+    const withoutWrites = LLMCostCalculator.calculateCost('openai', model, base, PRICED_ON);
     expect(withWrites).toBe(75);
     expect(withWrites).toBe(withoutWrites);
   });
 
   it('bills a cache READ at the full input rate when the catalog prices none', () => {
-    // grok-4.5 publishes no cached_input. Billing a tenth of the input rate
-    // would invent a discount the catalog does not publish and would
-    // undercharge the same request the desktop calculator
-    // (apps/desktop/src-tauri/src/core/llm/cost_calculator.rs) bills in full.
-    // This is the reachable case: grok-4.5 is in
-    // tierAllowedModels.flagship_additions and its xAI adapter reuses the
-    // OpenAI stream translator, which reports cached prompt tokens.
-    const pricing = LLMCostCalculator.getPricing('xai', 'grok-4.5', PRICED_ON);
+    // The fixture publishes no cached_input. Billing a guessed discount would
+    // disagree with every other calculator and undercharge the request.
+    const pricing = LLMCostCalculator.getPricing(
+      'xai',
+      'fixture-inclusive-unpriced-cache',
+      PRICED_ON,
+    );
     expect(typeof pricing.cachedInputCostPer1MTokens).not.toBe('number');
 
     // 1M prompt served entirely from cache: 1M * $2 = 200 cents, not 20.
     const cents = LLMCostCalculator.calculateCost(
       'xai',
-      'grok-4.5',
+      'fixture-inclusive-unpriced-cache',
       {
         promptTokens: 1_000_000,
         completionTokens: 0,
@@ -341,20 +541,20 @@ describe('LLMCostCalculator — cache-write billing', () => {
 
   it('keeps Anthropic disjoint accounting distinct from OpenAI subset accounting', () => {
     expect(
-      LLMCostCalculator.getPricing('anthropic', 'claude-opus-5', PRICED_ON)
+      LLMCostCalculator.getPricing('anthropic', 'fixture-anthropic-premium', PRICED_ON)
         .cacheTokensDisjointFromInput,
     ).toBe(true);
     expect(
-      LLMCostCalculator.getPricing('openai', 'gpt-5.6-terra', PRICED_ON)
+      LLMCostCalculator.getPricing('openai', 'fixture-tiered-pricing', PRICED_ON)
         .cacheTokensDisjointFromInput,
     ).toBe(false);
 
-    // claude-opus-5: input $5/M, cache read $0.5/M, cache write $6.25/M. The
+    // The disjoint fixture uses input $5/M, read $0.5/M, and write $6.25/M. The
     // cache buckets are ADDITIONAL to promptTokens, so nothing is subtracted:
     // $5.00 + $0.50 + $6.25 = $11.75 → 1175 cents.
     const cents = LLMCostCalculator.calculateCost(
       'anthropic',
-      'claude-opus-5',
+      'fixture-anthropic-premium',
       {
         promptTokens: 1_000_000,
         completionTokens: 0,

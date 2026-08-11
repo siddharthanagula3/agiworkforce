@@ -8,12 +8,15 @@ import {
   wrapTextExportWithMarker,
 } from '../index';
 
+const FIXTURE_IMAGE_MODEL_ID = 'fixture-image-model';
+const FIXTURE_TEXT_MODEL_ID = 'fixture-text-model';
+
 describe('Article50Marker — buildProvenanceClaim', () => {
   it('builds a C2PA-style claim with the required Article 50(2) fields', () => {
     const claim = buildProvenanceClaim({
       kind: 'image',
       provider: 'google',
-      model: 'gemini-3.1-flash-image',
+      model: FIXTURE_IMAGE_MODEL_ID,
       generatedAt: '2026-05-17T12:00:00.000Z',
       contentHashSha256: 'a'.repeat(64),
     });
@@ -21,7 +24,7 @@ describe('Article50Marker — buildProvenanceClaim', () => {
     expect(claim.claim_generator).toBe('AGI');
     expect(claim.kind).toBe('image');
     expect(claim.provider).toBe('google');
-    expect(claim.model).toBe('gemini-3.1-flash-image');
+    expect(claim.model).toBe(FIXTURE_IMAGE_MODEL_ID);
     expect(claim.generated_at).toBe('2026-05-17T12:00:00.000Z');
     expect(claim.content_hash_sha256).toBe('a'.repeat(64));
     expect(claim.signature).toBeNull();
@@ -35,7 +38,7 @@ describe('Article50Marker — buildProvenanceClaim', () => {
     const claim = buildProvenanceClaim({
       kind: 'text',
       provider: 'anthropic',
-      model: 'claude-opus-5',
+      model: FIXTURE_TEXT_MODEL_ID,
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
     const serialised = serialiseClaim(claim);
@@ -50,14 +53,14 @@ describe('Article50Marker — <meta> tag', () => {
     const tag = renderAiGeneratedMetaTag({
       kind: 'image',
       provider: 'openai',
-      model: 'gpt-image-1',
+      model: FIXTURE_IMAGE_MODEL_ID,
       generatedAt: '2026-05-17T12:00:00.000Z',
     });
     expect(tag).toMatch(/<meta\s+name="agi:ai-generated"/);
     expect(tag).toContain('content="true"');
     expect(tag).toContain('data-kind="image"');
     expect(tag).toContain('data-provider="openai"');
-    expect(tag).toContain('data-model="gpt-image-1"');
+    expect(tag).toContain(`data-model="${FIXTURE_IMAGE_MODEL_ID}"`);
     expect(tag).toContain('data-generated-at="2026-05-17T12:00:00.000Z"');
   });
 
@@ -78,7 +81,7 @@ describe('Article50Marker — <meta> tag', () => {
       html,
       kind: 'text',
       provider: 'anthropic',
-      model: 'claude-sonnet-5',
+      model: FIXTURE_TEXT_MODEL_ID,
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
     expect(once.match(/<meta\s+name="agi:ai-generated"/gi)?.length).toBe(1);
@@ -87,7 +90,7 @@ describe('Article50Marker — <meta> tag', () => {
       html: once,
       kind: 'text',
       provider: 'anthropic',
-      model: 'claude-sonnet-5',
+      model: FIXTURE_TEXT_MODEL_ID,
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
     expect(twice.match(/<meta\s+name="agi:ai-generated"/gi)?.length).toBe(1);
@@ -109,7 +112,7 @@ describe('Article50Marker — wrapTextExportWithMarker + hasAiGeneratedMarker', 
     const wrapped = wrapTextExportWithMarker({
       text: 'hello world',
       provider: 'anthropic',
-      model: 'claude-sonnet-5',
+      model: FIXTURE_TEXT_MODEL_ID,
       generatedAt: '2026-05-17T00:00:00.000Z',
     });
     expect(wrapped).toContain('<!-- agi:ai-generated:c2pa-claim');

@@ -38,6 +38,7 @@ vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mockQuery(...args) },
     userId: 'user_contract_1',
+    organizationId: '11111111-1111-4111-8111-111111111111',
   })),
 }));
 
@@ -48,6 +49,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
 import { GET, POST } from '../route';
 
 const PROJ_ID = '018f6f2a-0000-7000-8000-000000000020';
+const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 const projectRow = {
   id: PROJ_ID,
@@ -86,6 +88,9 @@ describe('GET /api/projects/sync — shared cloud contract', () => {
     expect(parsed.error).toBeUndefined();
     expect(parsed.success).toBe(true);
     if (parsed.success) expect(parsed.data.cursor).toBe('4');
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('organization_id is not distinct from $3::uuid');
+    expect(params[2]).toBe(ORGANIZATION_ID);
   });
 
   it('empty pull page parses', async () => {
@@ -147,10 +152,13 @@ describe('POST /api/projects/sync — shared cloud contract', () => {
 
     const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
     expect(sql).toContain('existing.server_version = incoming.base_version');
+    expect(sql).toContain('existing.organization_id is not distinct from $4::uuid');
+    expect(sql).toContain('(id, user_id, organization_id, name');
     expect(sql).toContain('deleted_at = case when incoming.should_delete then now() else null end');
     expect(sql).toContain('assert_user_resource_limit(');
     expect(sql).toContain("'projects'");
     expect(params[2]).toBe(1);
+    expect(params[3]).toBe(ORGANIZATION_ID);
     const pushed = JSON.parse(String(params[1]));
     expect(pushed[0].baseVersion).toBe('0');
     expect(pushed[0].updatedAt).toBeUndefined();

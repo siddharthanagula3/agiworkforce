@@ -133,7 +133,7 @@ describe('toConversationPushItem', () => {
     updatedAt: T2,
     messageCount: 0,
     pinned: true,
-    model: 'gpt-5.4',
+    model: 'fixture-model',
     projectId: 'p1',
     serverVersion: '7',
   };
@@ -142,7 +142,7 @@ describe('toConversationPushItem', () => {
     expect(toConversationPushItem(base)).toEqual({
       id: 'c1',
       title: 'Hello',
-      model: 'gpt-5.4',
+      model: 'fixture-model',
       projectId: 'p1',
       pinned: true,
       baseVersion: '7',

@@ -8,6 +8,14 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { handleCorsPreflightRequest, getCorsHeaders, getSecurityHeaders } from '@/lib/cors';
 import { getVideoTask } from '@/lib/video-task-store';
+import { getUserScopedDb } from '@/lib/server/rls-db';
+import { getVideoGenerationJob } from '@/lib/server/video-generation-jobs';
+import {
+  publicVideoJobStatus,
+  reconcileVideoGenerationJob,
+} from '@/lib/services/video-job-reconciliation-service';
+import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
+import { deliverPendingVideoIncidentAlert } from '@/lib/services/video-incident-alert-service';
 import {
   aiGeneratedHeaders,
   buildAiGeneratedProvenance,
@@ -24,7 +32,7 @@ import {
  */
 
 // Each status check is a single outbound HTTP call and should complete quickly.
-export const maxDuration = 30;
+export const maxDuration = 120;
 export const runtime = 'nodejs';
 
 // Response types
@@ -45,11 +53,14 @@ interface VideoStatusResponse {
   provenance?: AiGeneratedProvenance;
 }
 
+const DURABLE_JOB_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 // Runway task status response
 // Ref: GET https://api.dev.runwayml.com/v1/tasks/{id}
 interface RunwayTaskStatusResponse {
   id: string;
-  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
+  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED' | 'CANCELLED';
   progress?: number;
   output?: string[];
   failure?: string;
@@ -76,11 +87,11 @@ interface GoogleOperationResponse {
     '@type': string;
     /**
      * What the live API actually returns. Verified against
-     * veo-3.1-lite-generate-preview on 2026-08-06: a completed operation nests
-     * the samples one level deeper than the flat `generatedSamples` this route
-     * used to read, so the URL was never found and the client polled until its
-     * five-minute timeout on a video that had already been generated (and
-     * billed).
+     * the catalog-selected live Google video model on 2026-08-06: a completed
+     * operation nests the samples one level deeper than the flat
+     * `generatedSamples` this route used to read, so the URL was never found
+     * and the client polled until its five-minute timeout on a video that had
+     * already been generated (and billed).
      */
     generateVideoResponse?: {
       generatedSamples?: Array<{
@@ -180,6 +191,7 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
       status = 'completed';
       break;
     case 'FAILED':
+    case 'CANCELED':
     case 'CANCELLED':
       status = 'failed';
       break;
@@ -194,8 +206,10 @@ async function getRunwayStatus(taskId: string): Promise<VideoStatusResponse> {
     progress: result.progress,
   };
 
-  if (status === 'completed' && result.output && result.output.length > 0) {
-    statusResponse.video_url = result.output[0];
+  if (status === 'completed') {
+    statusResponse.status = 'failed';
+    statusResponse.error =
+      'This legacy video task completed without durable delivery. Contact support for a credit review.';
   }
 
   if (status === 'failed' && result.failure) {
@@ -288,23 +302,10 @@ async function getGoogleVeoStatus(operationId: string): Promise<VideoStatusRespo
     progress: result.metadata?.progress,
   };
 
-  // Extract video URL when completed - handle both response shapes Veo may return
-  if (status === 'completed' && result.response) {
-    // Nested shape first — that is what the live API returns today.
-    const samples =
-      result.response.generateVideoResponse?.generatedSamples ??
-      result.response.generatedSamples ??
-      result.response.videos ??
-      [];
-    if (samples.length > 0) {
-      const firstVideo = samples[0]?.video;
-      if (firstVideo?.uri) {
-        statusResponse.video_url = firstVideo.uri;
-      } else if (firstVideo?.bytesBase64Encoded) {
-        // Embed as data URI if the provider returns inline base64
-        statusResponse.video_url = `data:video/mp4;base64,${firstVideo.bytesBase64Encoded}`;
-      }
-    }
+  if (status === 'completed') {
+    statusResponse.status = 'failed';
+    statusResponse.error =
+      'This legacy video task completed without durable delivery. Contact support for a credit review.';
   }
 
   if (status === 'failed' && result.error) {
@@ -339,6 +340,60 @@ async function handleVideoStatus(request: NextRequest): Promise<NextResponse> {
 
   if (!taskId) {
     throw createError.validation('Missing required parameter: task_id');
+  }
+
+  if (DURABLE_JOB_ID_PATTERN.test(taskId)) {
+    const scoped = await getUserScopedDb(request);
+    if (scoped.userId !== userId) {
+      throw createError.forbidden('You do not have permission to check this task');
+    }
+    const snapshot = await getVideoGenerationJob(scoped.db, taskId, userId);
+    if (!snapshot) {
+      logger.warn({ taskId, requestingUser: userId }, 'Durable video job ownership denied');
+      throw createError.forbidden('You do not have permission to check this task');
+    }
+
+    const job = await reconcileVideoGenerationJob(scoped.db, snapshot);
+    if (job.incidentAlertStatus === 'pending') {
+      await deliverPendingVideoIncidentAlert(scoped.db, job).catch((error) => {
+        logger.error(
+          { error, jobId: job.id },
+          'Video billing incident alert remains pending after status request',
+        );
+      });
+    }
+    const statusResponse: VideoStatusResponse = publicVideoJobStatus(job);
+    const provenance =
+      job.status === 'completed' && job.assetId
+        ? buildAiGeneratedProvenance({
+            kind: 'video',
+            provider: job.provider,
+            model: job.model,
+          })
+        : undefined;
+    if (provenance) {
+      statusResponse.provenance = provenance;
+      try {
+        await markManagedUsageClientDelivered({
+          db: scoped.db,
+          userId: job.userId,
+          idempotencyKey: job.idempotencyKey,
+          requestHash: job.requestHash,
+          leaseToken: job.billingLeaseToken,
+          estimatedCostCents: job.estimatedCostCents,
+        });
+      } catch (error) {
+        logger.warn({ error, jobId: job.id }, 'Video delivery marker could not be persisted');
+      }
+    }
+
+    return NextResponse.json(statusResponse, {
+      headers: {
+        ...getCorsHeaders(request),
+        ...getSecurityHeaders(),
+        ...(provenance ? aiGeneratedHeaders(provenance) : {}),
+      },
+    });
   }
 
   // Parse task ID to determine provider and get the original provider-side ID

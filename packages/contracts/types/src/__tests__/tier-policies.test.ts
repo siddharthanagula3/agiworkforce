@@ -96,8 +96,7 @@ describe('TIER_POLICIES — Pro tier compatibility policy', () => {
     expect(policy.allowedSlots).not.toContain('general_balanced');
     expect(policy.allowedSlots).not.toContain('coding_fast');
     expect(policy.allowedSlots).not.toContain('coding_premium');
-    // Hobby-pool reasoning_premium (DeepSeek) — Pro now uses Kimi K2.6 via
-    // reasoning_premium_pro.
+    // The Hobby reasoning slot is replaced by the Pro-specific counterpart.
     expect(policy.allowedSlots).not.toContain('reasoning_premium');
     // Creative writing folded into general_balanced_pro per spec.
     expect(policy.allowedSlots).not.toContain('creative_writing');

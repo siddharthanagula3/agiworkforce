@@ -123,12 +123,12 @@ impl ManagedCloudProvider {
             || m.contains("haiku")
     }
 
-    /// Returns true for Perplexity / Sonar models, which do not support
+    /// Returns true for Perplexity search models, which do not support
     /// function calling.  Sending `tools` or `tool_choice` to Perplexity
     /// results in an HTTP 400 error.
     fn is_perplexity_model(model: &str) -> bool {
-        let m = model.to_lowercase();
-        m.contains("perplexity") || m.contains("sonar")
+        crate::core::llm::models_config::get_provider_for_model(model)
+            == Some(crate::core::llm::Provider::Perplexity)
     }
 
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -260,7 +260,7 @@ impl ManagedCloudProvider {
             }
         }
 
-        // Perplexity / Sonar models do not support function calling.
+        // Perplexity search models do not support function calling.
         // Strip tools and tool_choice to avoid HTTP 400 errors from the API.
         if Self::is_perplexity_model(&canonical_model) {
             if let Some(obj) = transformed.as_object_mut() {
@@ -928,7 +928,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.6-luna".to_string(),
+            model: "fixture-managed-model".to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,

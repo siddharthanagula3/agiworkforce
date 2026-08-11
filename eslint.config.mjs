@@ -5,6 +5,24 @@ import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import importPlugin from 'eslint-plugin-import';
 import prettierConfig from 'eslint-config-prettier';
+import { readFileSync } from 'node:fs';
+
+const RETIRED_MODEL_CATALOG = JSON.parse(
+  readFileSync(
+    new URL('./packages/ai/model-registry/catalog/retired-models.json', import.meta.url),
+    'utf8',
+  ),
+);
+const RETIRED_MODEL_LITERAL_PATTERN = [
+  ...(RETIRED_MODEL_CATALOG.retiredModelIds ?? []),
+  ...(RETIRED_MODEL_CATALOG.guardedNonCanonicalModelIds ?? []),
+]
+  .map((id) =>
+    String(id)
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replaceAll('/', '\\/'),
+  )
+  .join('|');
 
 // Prevention-layer selectors, shared by every `no-restricted-syntax` block.
 //
@@ -20,40 +38,21 @@ const PREVENTION_LAYER_RESTRICTED_SYNTAX = [
     // digit (or canonical model-family word) immediately after
     // the provider prefix so substring tests like
     // `model.includes('claude-')` and tool-name strings like
-    // `'claude-code'` are NOT flagged. Matches: `'gpt-5.5'`,
-    // `"gpt-5.4-mini"`, `'claude-opus-5'`, `'claude-sonnet-4.6'`,
-    // `'gemini-3.5-flash-lite'`, `'grok-4.3'`, `'o1-mini'`.
-    // Misses: `'claude-'`, `'gpt-'`, `'claude-code'` (tool name),
-    // `'claude-cookbook'` (doc reference).
+    // `'claude-code'` are NOT flagged. Matches concrete versioned model IDs
+    // and provider model literals in either quote style, while leaving generic
+    // provider prefixes and tool/documentation names alone.
     selector:
       'Literal[value=/^(gpt-[0-9]|claude-(?:opus|sonnet|haiku|[1-9])|gemini-[0-9]|grok-[0-9]|o[1-9]-[a-z])/]',
     message:
       'Hardcoded model ID detected. Read from models.json via packages/contracts/types model-catalog helpers (getDefaultModelFor, resolveAutoModeModel, getRoutingSlotModel) — NEVER inline a literal. See CLAUDE.md "Critical rules". To opt out (tests, marketing copy), add `// eslint-disable-next-line no-restricted-syntax` with a `// FIXME: P1-XX` if migration is pending.',
   },
   {
-    // Deprecated-alias gate — PRD V5 lock #24, urgent action 2026-05-17.
-    //
-    // These IDs are EOL on a known cutoff date and must NEVER be inlined
-    // outside `models.json` (where they live ONLY as canonicalization
-    // alias keys for transitional legacy-ID resolution):
-    //   - `kimi-k2-*` family: dies 2026-05-25 (Moonshot deprecation).
-    //   - `deepseek-chat`: superseded by `deepseek-v4-flash`.
-    //   - `deepseek-reasoner`: superseded by `deepseek-v4-pro`.
-    //
-    // The regex anchors on `^` so legitimate substrings (e.g. inside a
-    // URL or comment) inside string literals are not flagged. The exact
-    // family-suffix `kimi-k2-` (with a trailing `-`) is required so the
-    // *current* model `kimi-k2.6` (note the `.`, not `-`) is NOT caught.
-    //
-    // Resolution: import `@agiworkforce/types` and use:
-    //   - `kimi-k2.6` for any Kimi K2 routing.
-    //   - `deepseek-v4-flash` for budget/fast lanes.
-    //   - `deepseek-v4-pro` for premium/reasoning lanes — resolve the
-    //     active routing-slot model via `getRoutingSlotModel()` /
-    //     `resolveAutoModeModel()` from `@agiworkforce/types` (catalog-driven).
-    selector: 'Literal[value=/^(kimi-k2-[^.]|deepseek-chat$|deepseek-reasoner$)/]',
+    // Deprecated aliases are catalog-owned. Building this selector from the
+    // retired-model registry keeps the fast ESLint feedback without creating
+    // a second authored list that must change during every model rollover.
+    selector: `Literal[value=/^(?:${RETIRED_MODEL_LITERAL_PATTERN})$/]`,
     message:
-      'Deprecated model alias literal detected (kimi-k2-*, deepseek-chat, or deepseek-reasoner). These IDs are EOL — kimi-k2-* family dies 2026-05-25; deepseek-chat/reasoner are superseded. Never hardcode model IDs: read from packages/contracts/types/src/models.json via @agiworkforce/types (getModelMetadataById / getRoutingSlotModel / resolveAutoModeModel / getDefaultModelFor) so routing stays catalog-driven.',
+      'Deprecated model alias literal detected. Never hardcode model IDs: resolve the current catalog route through @agiworkforce/types helpers.',
   },
   {
     // Egress chokepoint (trust-boundary P0). A raw fetch() to an our-cloud
@@ -445,6 +444,9 @@ export default [
       // The catalog SSOT itself — model IDs are LITERALLY the data here.
       'packages/contracts/types/src/models.json',
       'packages/contracts/types/src/model-catalog.ts',
+      // Canonical on-device/local model inventory. The repository-wide model
+      // literal guard permits this exact owner while rejecting copied siblings.
+      'packages/platform/local-llm/src/catalog.ts',
       // Tests can — and should — assert against literal model IDs to
       // pin the catalog SSOT. The harm is in production code paths.
       '**/*.test.ts',

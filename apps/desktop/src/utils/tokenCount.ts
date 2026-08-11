@@ -1,5 +1,9 @@
 import { getModelMetadata } from '../constants/llm';
 
+function hasPublishedTokenContextWindow(value: number | undefined): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
 export interface TokenBreakdown {
   inputTokens: number;
   outputTokens: number;
@@ -153,9 +157,14 @@ export function estimateContextItemTokens(item: {
 export function getContextUtilization(
   currentTokens: number,
   modelId: string,
-): { percentage: number; remaining: number; maxTokens: number } {
+): { percentage: number; remaining: number; maxTokens: number } | null {
   const metadata = getModelMetadata(modelId);
-  const maxTokens = metadata?.contextWindow || 4096;
+  let maxTokens = 4096;
+  if (metadata) {
+    const contextWindow = metadata.contextWindow;
+    if (!hasPublishedTokenContextWindow(contextWindow)) return null;
+    maxTokens = contextWindow;
+  }
   const percentage = (currentTokens / maxTokens) * 100;
   const remaining = Math.max(0, maxTokens - currentTokens);
 
@@ -169,6 +178,7 @@ export function isWithinContextLimit(
 ): boolean {
   const metadata = getModelMetadata(modelId);
   if (!metadata) return true;
+  if (!hasPublishedTokenContextWindow(metadata.contextWindow)) return false;
 
   const reservedTokens = metadata.contextWindow * reserveRatio;
   return currentTokens < metadata.contextWindow - reservedTokens;

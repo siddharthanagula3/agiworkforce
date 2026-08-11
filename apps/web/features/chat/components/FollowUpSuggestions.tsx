@@ -77,6 +77,18 @@ interface TopicEntry {
 
 /** Topic patterns: regex -> array of typed follow-up templates */
 const TOPIC_FOLLOW_UPS: TopicEntry[] = [
+  // Maps / places. Keep this ahead of technical categories because provider
+  // URLs such as Google Maps include `api` and `query`, which are transport
+  // details rather than evidence that the answer is about APIs or databases.
+  {
+    pattern:
+      /(?:google\.com\/maps|openstreetmap\.org|\bmap(?:s)?\b|\bdirections?\b|\blocations?\b|\bnearby\b|\baddresses?\b)/i,
+    followUps: [
+      { text: 'What are the best things to do nearby?', type: 'discover' },
+      { text: 'How do I get there?', type: 'apply' },
+      { text: 'What should I know before visiting?', type: 'deeper' },
+    ],
+  },
   // Code-related
   {
     pattern: /\b(function|class|component|module|interface|type|struct)\b/i,
@@ -191,7 +203,7 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
   // Testing
   {
     pattern:
-      /\b(test|spec|assertion|mock|stub|coverage|e2e|integration\s+test|unit\s+test|vitest|jest|cypress)\b/i,
+      /\b(?:spec|assertion|mock|stub|coverage|vitest|jest|cypress|e2e|(?:unit|integration|end-to-end|negative|regression|acceptance)\s+tests?|test(?:ing)?\s+(?:case|suite|coverage|runner|framework|fixture|mock|strategy))\b/i,
     followUps: [
       { text: 'What edge cases should I add tests for?', type: 'deeper' },
       { text: 'Can you add a negative test case?', type: 'alternative' },
@@ -211,7 +223,7 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
   // Data science / ML
   {
     pattern:
-      /\b(model|training|dataset|accuracy|precision|recall|neural|regression|classification|embedding|tensor|gradient)\b/i,
+      /\b(model|training|dataset|accuracy|precision|neural|linear\s+regression|logistic\s+regression|classification|embedding|tensor|gradient)\b/i,
     followUps: [
       { text: 'How can I reduce overfitting?', type: 'deeper' },
       { text: 'What alternative models should I try?', type: 'alternative' },

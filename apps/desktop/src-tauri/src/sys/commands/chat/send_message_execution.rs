@@ -1,6 +1,7 @@
 use super::*;
 use crate::core::llm::cost_calculator::CostCalculator;
 use crate::core::llm::sse_parser::TokenUsage;
+use crate::core::llm::token_counter::TokenCounter;
 use crate::core::llm::{ChatMessage, LLMRequest};
 use crate::sys::commands::chat::send_message_setup::{should_generate_memory, PreparedSendMessage};
 
@@ -702,6 +703,19 @@ fn spawn_streaming_chat(
                     }
                 };
 
+                let mut persistence_usage = StreamingPersistenceUsage::default();
+                let initial_model = stream_data.model.as_deref().unwrap_or(&model);
+                persistence_usage.record_request(
+                    provider_enum,
+                    initial_model,
+                    u32::try_from(TokenCounter::estimate_prompt_tokens(&llm_request.messages))
+                        .unwrap_or(u32::MAX),
+                    stream_data.estimated_output_tokens,
+                    stream_data.usage.as_ref(),
+                    stream_data.credits.as_ref(),
+                    !stream_data.was_stopped,
+                );
+
                 let mut token_count = stream_data.token_count;
                 let mut final_usage = stream_data.usage;
                 let mut final_credits = stream_data.credits;
@@ -1038,6 +1052,22 @@ fn spawn_streaming_chat(
                                     .await
                                     {
                                         Ok(followup_data) => {
+                                            let followup_model =
+                                                followup_data.model.as_deref().unwrap_or(&model);
+                                            persistence_usage.record_request(
+                                                provider_enum,
+                                                followup_model,
+                                                u32::try_from(
+                                                    TokenCounter::estimate_prompt_tokens(
+                                                        &followup_request.messages,
+                                                    ),
+                                                )
+                                                .unwrap_or(u32::MAX),
+                                                followup_data.estimated_output_tokens,
+                                                followup_data.usage.as_ref(),
+                                                followup_data.credits.as_ref(),
+                                                !followup_data.was_stopped,
+                                            );
                                             token_count += followup_data.token_count;
 
                                             if let Some(credits) = followup_data.credits {
@@ -1274,13 +1304,8 @@ fn spawn_streaming_chat(
                     );
                 }
 
-                let (final_tokens, final_cost) = calculate_streaming_persistence_usage(
-                    provider_enum,
-                    &model,
-                    token_count,
-                    final_usage.as_ref(),
-                    final_credits.as_ref(),
-                );
+                let final_tokens = persistence_usage.output_tokens;
+                let final_cost = persistence_usage.total_cost;
 
                 let assistant_message = match save_or_skip_assistant_message(
                     &runtime.db,
@@ -1745,6 +1770,7 @@ async fn run_nonstreaming_chat(
                 )
                 .await;
 
+                let total_cost = turn.total_cost;
                 let outcome = turn.last_outcome;
                 let tool_iteration = turn.tool_iterations;
                 let total_tool_tokens = turn.total_tool_tokens;
@@ -1784,7 +1810,7 @@ async fn run_nonstreaming_chat(
                     &conversation.user_id,
                     &final_content,
                     total_tokens,
-                    outcome.response.cost,
+                    Some(total_cost),
                     Some(outcome.provider.as_string()),
                     &outcome.model,
                     flags.incognito,
@@ -1829,45 +1855,60 @@ async fn run_nonstreaming_chat(
     ))
 }
 
-fn calculate_streaming_persistence_usage(
-    provider_enum: Option<crate::core::llm::Provider>,
-    model: &str,
-    token_count: u32,
-    final_usage: Option<&TokenUsage>,
-    final_credits: Option<&crate::core::llm::CreditsInfo>,
-) -> (u32, f64) {
-    if let Some(credits) = final_credits {
-        let tokens = final_usage
-            .and_then(|usage| usage.completion_tokens)
-            .unwrap_or(token_count);
-        return (tokens, credits.cost_cents / 100.0);
-    }
+#[derive(Debug, Default, Clone, Copy)]
+struct StreamingPersistenceUsage {
+    output_tokens: u32,
+    total_cost: f64,
+}
 
-    let output_tokens = if let Some(usage) = final_usage {
-        if let Some(completion_tokens) = usage.completion_tokens {
-            completion_tokens
-        } else if let (Some(total), Some(prompt)) = (usage.total_tokens, usage.prompt_tokens) {
-            total.saturating_sub(prompt)
-        } else {
-            token_count
+impl StreamingPersistenceUsage {
+    #[allow(clippy::too_many_arguments)]
+    fn record_request(
+        &mut self,
+        provider: Option<crate::core::llm::Provider>,
+        model: &str,
+        fallback_prompt_tokens: u32,
+        fallback_output_tokens: u32,
+        usage: Option<&TokenUsage>,
+        credits: Option<&crate::core::llm::CreditsInfo>,
+        completed_normally: bool,
+    ) {
+        let reported_output = usage.and_then(|usage| usage.completion_tokens).or_else(|| {
+            usage.and_then(|usage| {
+                usage
+                    .total_tokens
+                    .zip(usage.prompt_tokens)
+                    .map(|(total, prompt)| total.saturating_sub(prompt))
+            })
+        });
+        let output_tokens = match reported_output {
+            Some(reported) if completed_normally && reported > 0 => reported,
+            Some(reported) => reported.max(fallback_output_tokens),
+            None => fallback_output_tokens,
+        };
+        self.output_tokens = self.output_tokens.saturating_add(output_tokens);
+
+        if let Some(credits) = credits {
+            self.total_cost += credits.cost_cents / 100.0;
+            return;
         }
-    } else {
-        token_count
-    };
 
-    let prompt_tokens = final_usage.and_then(|u| u.prompt_tokens).unwrap_or(0);
-
-    let cost = provider_enum
-        .map(|provider| {
-            let cache_read = final_usage
-                .and_then(|u| u.cache_read_input_tokens)
-                .unwrap_or(0);
-            let cache_creation = final_usage
-                .and_then(|u| u.cache_creation_input_tokens)
-                .unwrap_or(0);
-            // Price this turn on today's date so dated catalog rates resolve.
-            let priced_on = chrono::Utc::now().date_naive();
-            if cache_read > 0 || cache_creation > 0 {
+        let prompt_tokens = usage
+            .and_then(|usage| usage.prompt_tokens)
+            .unwrap_or(fallback_prompt_tokens);
+        let cache_read = usage
+            .and_then(|usage| usage.cache_read_input_tokens)
+            .unwrap_or(0);
+        let cache_creation = usage
+            .and_then(|usage| usage.cache_creation_input_tokens)
+            .unwrap_or(0);
+        // A streaming fallback can serve a different catalog model/provider
+        // than the originally requested provider. Prefer the response model's
+        // catalog owner; retain the request provider only for opaque Local/BYOK
+        // model IDs that cannot be resolved.
+        let provider = crate::core::llm::models_config::get_provider_for_model(model).or(provider);
+        self.total_cost += provider
+            .map(|provider| {
                 CostCalculator::new().calculate_with_cache(
                     provider,
                     model,
@@ -1875,27 +1916,37 @@ fn calculate_streaming_persistence_usage(
                     output_tokens,
                     cache_read,
                     cache_creation,
-                    priced_on,
+                    chrono::Utc::now().date_naive(),
                 )
-            } else {
-                CostCalculator::new().calculate(
-                    provider,
-                    model,
-                    prompt_tokens,
-                    output_tokens,
-                    priced_on,
-                )
-            }
-        })
-        .unwrap_or(0.0);
-
-    (output_tokens, cost)
+            })
+            .unwrap_or(0.0);
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::empty_streaming_response;
+    use super::{empty_streaming_response, StreamingPersistenceUsage};
+    use crate::core::llm::cost_calculator::CostCalculator;
+    use crate::core::llm::models_config;
+    use crate::core::llm::sse_parser::TokenUsage;
+    use crate::core::llm::Provider;
     use crate::data::db::models::{Conversation, Message};
+
+    fn paid_catalog_model() -> (&'static str, Provider) {
+        let model = models_config::config()
+            .models
+            .values()
+            .find(|model| {
+                model.deprecated != Some(true)
+                    && model.input_cost > 0.0
+                    && model.output_cost > 0.0
+                    && Provider::from_string(&model.provider).is_some()
+            })
+            .expect("catalog must contain an active paid model");
+        let provider = Provider::from_string(&model.provider)
+            .expect("selected catalog provider must map to native provider");
+        (model.id.as_str(), provider)
+    }
 
     #[test]
     fn empty_streaming_response_zeroes_stats() {
@@ -1904,5 +1955,144 @@ mod tests {
         assert_eq!(response.stats.total_tokens, 0);
         assert_eq!(response.stats.total_cost, 0.0);
         assert!(response.last_message.is_none());
+    }
+
+    #[test]
+    fn streaming_persistence_prices_prompt_fallback_when_usage_is_absent() {
+        let (model, provider) = paid_catalog_model();
+        let prompt_tokens = 1_000;
+        let output_tokens = 500;
+        let mut persisted = StreamingPersistenceUsage::default();
+        persisted.record_request(
+            Some(provider),
+            model,
+            prompt_tokens,
+            output_tokens,
+            None,
+            None,
+            true,
+        );
+
+        let expected = CostCalculator::new().calculate_with_cache(
+            provider,
+            model,
+            prompt_tokens,
+            output_tokens,
+            0,
+            0,
+            chrono::Utc::now().date_naive(),
+        );
+        assert_eq!(persisted.output_tokens, output_tokens);
+        assert!((persisted.total_cost - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn streaming_persistence_prefers_response_model_provider_after_fallback() {
+        let (model, actual_provider) = paid_catalog_model();
+        let wrong_requested_provider = Provider::Ollama;
+        assert_ne!(actual_provider, wrong_requested_provider);
+        let prompt_tokens = 1_000;
+        let output_tokens = 500;
+        let calculator = CostCalculator::new();
+        let expected = calculator.calculate_with_cache(
+            actual_provider,
+            model,
+            prompt_tokens,
+            output_tokens,
+            0,
+            0,
+            chrono::Utc::now().date_naive(),
+        );
+        let wrong = calculator.calculate_with_cache(
+            wrong_requested_provider,
+            model,
+            prompt_tokens,
+            output_tokens,
+            0,
+            0,
+            chrono::Utc::now().date_naive(),
+        );
+        assert_ne!(expected, wrong, "fixture providers must price differently");
+
+        let mut persisted = StreamingPersistenceUsage::default();
+        persisted.record_request(
+            Some(wrong_requested_provider),
+            model,
+            prompt_tokens,
+            output_tokens,
+            None,
+            None,
+            true,
+        );
+        assert!((persisted.total_cost - expected).abs() < 1e-12);
+    }
+
+    #[test]
+    fn streaming_tool_loop_sums_request_costs_without_aggregate_repricing() {
+        let model = models_config::config()
+            .models
+            .values()
+            .find(|model| {
+                model.deprecated != Some(true)
+                    && (!model.input_token_pricing_tiers.is_empty() || model.long_context.is_some())
+                    && Provider::from_string(&model.provider).is_some()
+            })
+            .expect("catalog must contain a request-tier-priced model");
+        let provider = Provider::from_string(&model.provider)
+            .expect("selected catalog provider must map to native provider");
+        let threshold = model
+            .input_token_pricing_tiers
+            .iter()
+            .chain(model.long_context.iter())
+            .map(|tier| tier.threshold_tokens)
+            .min()
+            .and_then(|threshold| u32::try_from(threshold).ok())
+            .expect("catalog threshold must fit native token counters");
+        let per_request = threshold / 2 + 1;
+        assert!(per_request <= threshold);
+        let usage = TokenUsage {
+            prompt_tokens: Some(per_request),
+            completion_tokens: Some(0),
+            total_tokens: Some(per_request),
+            cache_read_input_tokens: None,
+            cache_creation_input_tokens: None,
+        };
+        let mut persisted = StreamingPersistenceUsage::default();
+        for _ in 0..2 {
+            persisted.record_request(
+                Some(provider),
+                &model.id,
+                per_request,
+                0,
+                Some(&usage),
+                None,
+                true,
+            );
+        }
+
+        let calculator = CostCalculator::new();
+        let one_request = calculator.calculate_with_cache(
+            provider,
+            &model.id,
+            per_request,
+            0,
+            0,
+            0,
+            chrono::Utc::now().date_naive(),
+        );
+        let aggregate = per_request
+            .checked_mul(2)
+            .expect("test aggregate token count must fit");
+        let retroactive = calculator.calculate_with_cache(
+            provider,
+            &model.id,
+            aggregate,
+            0,
+            0,
+            0,
+            chrono::Utc::now().date_naive(),
+        );
+        assert!((persisted.total_cost - one_request * 2.0).abs() < 1e-12);
+        assert_ne!(persisted.total_cost, retroactive);
     }
 }

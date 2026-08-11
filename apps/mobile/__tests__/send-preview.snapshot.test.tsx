@@ -45,11 +45,14 @@ jest.mock('lucide-react-native', () => {
 
 import { SendPreview } from '@/src/features/chat/components/SendPreview';
 
+const FIXTURE_LOCAL_MODEL_LABEL = 'Fixture Local Model';
+const FIXTURE_BYOK_MODEL_LABEL = 'Fixture BYOK Model';
+
 describe('Mobile SendPreview snapshots', () => {
   it('locks the Local turn rendered tree', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'Local',
-      modelLabel: 'Llama 3.2 8B',
+      modelLabel: FIXTURE_LOCAL_MODEL_LABEL,
       messageBody: 'hi',
     });
     const { toJSON } = render(<SendPreview presentation={presentation} />);
@@ -60,7 +63,7 @@ describe('Mobile SendPreview snapshots', () => {
     const presentation = summarizeSendPreview({
       providerMode: 'DirectByok',
       destinationHost: 'api.anthropic.com',
-      modelLabel: 'Claude Sonnet 4.6',
+      modelLabel: FIXTURE_BYOK_MODEL_LABEL,
     });
     const { toJSON } = render(<SendPreview presentation={presentation} />);
     expect(toJSON()).toMatchSnapshot();

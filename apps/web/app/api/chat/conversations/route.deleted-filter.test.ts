@@ -23,6 +23,9 @@ vi.mock('@/lib/server/neon-chat', () => ({
   requireCurrentUserId: (...args: unknown[]) => mocks.requireUser(...args),
   getNeonChatDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({

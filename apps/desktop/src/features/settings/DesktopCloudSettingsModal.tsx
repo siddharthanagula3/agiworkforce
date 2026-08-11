@@ -905,7 +905,13 @@ export function DesktopCloudSettingsModal({
             name: skill.name,
             description: skill.description,
             source: skill.source,
-            tab: skill.source === 'builtin' ? 'prompts' : 'agents',
+            tab: skill.source === 'bundled' ? 'prompts' : 'agents',
+            statusLabel: skill.lifecycle === 'draft' ? 'Coming later' : 'Included',
+            ...(skill.downloadable
+              ? {
+                  downloadHref: `${WEB_APP_URL}/api/skills/${encodeURIComponent(skill.name)}/download`,
+                }
+              : {}),
           })),
         );
         setHasLoadedSkills(true);

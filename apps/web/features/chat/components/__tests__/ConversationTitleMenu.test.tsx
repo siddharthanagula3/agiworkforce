@@ -31,6 +31,22 @@ describe('ConversationTitleMenu', () => {
     expect(trigger.textContent).toContain('Domain strategy');
   });
 
+  it('stays in the header flex flow so side panels cannot overlap it', () => {
+    render(
+      <ConversationTitleMenu
+        title="A long conversation title"
+        projects={projects}
+        onRename={vi.fn()}
+        onMoveToProject={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    const wrapper = screen.getByRole('button', { name: /conversation options/i }).parentElement;
+    expect(wrapper).toHaveClass('min-w-0', 'flex-1');
+    expect(wrapper).not.toHaveClass('absolute');
+  });
+
   it('opens to Rename / Move to project / Delete when projects exist', async () => {
     const user = userEvent.setup();
     render(

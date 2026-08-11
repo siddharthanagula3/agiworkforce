@@ -73,10 +73,11 @@
       "react-test-renderer": "19.2.6",
       "typescript": "5.9.3",
       "@types/node": "^24.13.3",
-      "@wdio/native-utils": "2.5.0"
+      "@wdio/native-utils": "2.5.0",
+      "@workflow/world-vercel": "4.6.1"
     },
     "patchedDependencies": {
-      "expo@55.0.28": "patches/expo@55.0.28.patch"
+      "next-themes@0.4.6": "patches/next-themes@0.4.6.patch"
     }
   },
   "scripts": {
@@ -128,6 +129,7 @@
     "check:hook-fire-sites": "node apps/cli/scripts/check-hook-fire-sites.mjs",
     "check:hardcoded-arrays": "node scripts/check-hardcoded-fixture-arrays.mjs",
     "check:hardcoded-endpoints": "node --test scripts/check-no-hardcoded-endpoints.test.mjs && node scripts/check-no-hardcoded-endpoints.mjs",
+    "check:model-id-literals": "node --test scripts/check-no-hardcoded-model-ids.test.mjs && node scripts/check-no-hardcoded-model-ids.mjs",
     "check:model-catalog": "node scripts/check-model-catalog-integrity.mjs",
     "check:availability-invariant": "node scripts/check-availability-invariant.mjs",
     "check:llm-failures": "node scripts/check-llm-failure-guardrails.mjs",
@@ -142,7 +144,7 @@
     "sync:models:check": "pnpm --filter @agiworkforce/model-registry check",
     "sync:models:refresh": "pnpm --filter @agiworkforce/model-registry refresh",
     "check:lock-drift": "node scripts/check-lock-build-drift.mjs",
-    "check:llm-operability": "pnpm check:agent-context && pnpm check:audit-inventory && pnpm check:capability-gaps && pnpm check:ui-gaps && pnpm check:executable-docs && pnpm check:agent-context-indexes && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:cloud-contract-ownership && pnpm check:artifact-sync-ownership && pnpm check:service-domain-ownership && pnpm check:module-reachability && pnpm check:surface-reachability && pnpm check:surface-invariants && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:env-contract && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm sync:models:check && pnpm check:report-retention && pnpm check:non-md-artifacts && pnpm check:neon-migrations && pnpm check:ci-guardrails && pnpm check:workflow-cargo-features && pnpm check:codeowners && pnpm check:doc-status && pnpm check:hooks && pnpm check:hook-fire-sites && pnpm check:model-catalog && pnpm check:marketing-models && pnpm check:availability-invariant && pnpm check:db-isolation && pnpm check:css-tokens && pnpm check:secrets && pnpm check:vacuous-e2e && pnpm check:llm-failures && pnpm check:hardcoded-endpoints",
+    "check:llm-operability": "pnpm check:agent-context && pnpm check:audit-inventory && pnpm check:capability-gaps && pnpm check:ui-gaps && pnpm check:executable-docs && pnpm check:agent-context-indexes && pnpm check:repo-organization && pnpm check:workspace-scripts && pnpm check:boundaries && pnpm check:cloud-contract-ownership && pnpm check:artifact-sync-ownership && pnpm check:service-domain-ownership && pnpm check:module-reachability && pnpm check:surface-reachability && pnpm check:surface-invariants && pnpm check:structure-conventions && pnpm check:mobile-hygiene && pnpm check:env-contract && pnpm check:service-layer && pnpm check:lane-ownership && pnpm check:generated-artifacts && pnpm sync:models:check && pnpm check:report-retention && pnpm check:non-md-artifacts && pnpm check:neon-migrations && pnpm check:ci-guardrails && pnpm check:workflow-cargo-features && pnpm check:codeowners && pnpm check:doc-status && pnpm check:hooks && pnpm check:hook-fire-sites && pnpm check:model-catalog && pnpm check:model-id-literals && pnpm check:marketing-models && pnpm check:availability-invariant && pnpm check:db-isolation && pnpm check:css-tokens && pnpm check:secrets && pnpm check:vacuous-e2e && pnpm check:llm-failures && pnpm check:hardcoded-endpoints",
     "audit:file-ledger": "node scripts/generate-surface-file-ledger.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

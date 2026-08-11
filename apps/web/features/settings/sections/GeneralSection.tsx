@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Monitor, Sun, Moon } from 'lucide-react';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -143,67 +143,60 @@ export function GeneralSection() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    // Hydrate exactly once, and only once both identity sources have actually
-    // resolved. Re-running on `clerkUser` arriving would also clobber edits the
-    // user had already typed.
-    if (hydratedRef.current) return;
-    if (!clerkLoaded || !billingInitialized) return;
-    hydratedRef.current = true;
-
+  const hydrateProfilePreferences = useCallback(async () => {
     const fallbackFullName =
       serverProfile?.display_name ??
       user?.name ??
       clerkUser?.fullName ??
       accountEmail.split('@')[0] ??
       '';
+    const fallbackPreferredName =
+      serverProfile?.preferred_name ?? clerkUser?.firstName ?? fallbackFullName.split(' ')[0] ?? '';
 
-    let cancelled = false;
-    void fetchStoredPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE)
-      .then((stored) => {
-        if (cancelled) return;
-        // Precedence is explicit: a stored value wins ONLY when it carries
-        // information. An empty stored string falls back to the derived
-        // default instead of silently locking the field empty forever.
-        setDisplayName(fallbackFullName);
-        setPreferredName(
-          storedText(stored.preferredName) ??
-            serverProfile?.preferred_name ??
-            clerkUser?.firstName ??
-            fallbackFullName.split(' ')[0] ??
-            '',
-        );
-        setWorkDescription(
-          (storedText(stored.workDescription) as WorkDescription | undefined) ??
-            (serverProfile?.work_description as WorkDescription | null) ??
-            '',
-        );
-        // Instructions are free-form: an empty stored value IS the user's
-        // answer, so no derived fallback applies.
-        setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
-        setLoadError(null);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setLoadError(error instanceof Error ? error.message : 'Failed to load settings');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPreferencesLoaded(true);
-      });
+    // Inputs stay disabled until this read settles. Setting identity fallbacks
+    // immediately avoids a blank-looking profile while the preferences request
+    // is in flight, without allowing the user to type into state that hydration
+    // would overwrite.
+    setPreferencesLoaded(false);
+    setLoadError(null);
+    setDisplayName(fallbackFullName);
+    setPreferredName(fallbackPreferredName);
+    dirtyRef.current = false;
 
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    accountEmail,
-    billingInitialized,
-    clerkLoaded,
-    clerkUser?.firstName,
-    clerkUser?.fullName,
-    serverProfile,
-    user?.name,
-  ]);
+    try {
+      const stored = await fetchStoredPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE);
+      // Precedence is explicit: a stored value wins ONLY when it carries
+      // information. An empty stored string falls back to the derived default
+      // instead of silently locking the field empty forever.
+      setPreferredName(storedText(stored.preferredName) ?? fallbackPreferredName);
+      setWorkDescription(
+        (storedText(stored.workDescription) as WorkDescription | undefined) ??
+          (serverProfile?.work_description as WorkDescription | null) ??
+          '',
+      );
+      // Instructions are free-form: an empty stored value IS the user's answer,
+      // so no derived fallback applies.
+      setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Failed to load settings');
+    } finally {
+      setPreferencesLoaded(true);
+    }
+  }, [accountEmail, clerkUser?.firstName, clerkUser?.fullName, serverProfile, user?.name]);
+
+  useEffect(() => {
+    // Hydrate exactly once, and only once both identity sources have actually
+    // resolved. The async load is deliberately not cancelled by React's
+    // development-only effect replay: the replay preserves refs, so cancelling
+    // the first request while the second returns here would leave Settings
+    // permanently loading.
+    if (hydratedRef.current) return;
+    if (!clerkLoaded || !billingInitialized) return;
+    hydratedRef.current = true;
+    void hydrateProfilePreferences();
+  }, [billingInitialized, clerkLoaded, hydrateProfilePreferences]);
+
+  const profilePreferencesReady = preferencesLoaded && loadError === null;
 
   // Auto-save the `general` namespace with a 400ms debounce, but ONLY after the
   // user has actually edited something and only when the load succeeded —
@@ -246,6 +239,7 @@ export function GeneralSection() {
   })();
 
   async function handleSave() {
+    if (!profilePreferencesReady) return;
     const trimmedFull = displayName.trim();
     if (!trimmedFull) return;
     const trimmedPreferred = preferredName.trim() || (trimmedFull.split(' ')[0] ?? trimmedFull);
@@ -322,8 +316,9 @@ export function GeneralSection() {
                 setDisplayName(e.target.value.slice(0, 80));
               }}
               maxLength={80}
+              disabled={!profilePreferencesReady || saving}
               placeholder="Your name"
-              className="w-56 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring sm:w-64"
             />
           </FieldRow>
 
@@ -342,8 +337,9 @@ export function GeneralSection() {
                 setPreferredName(e.target.value.slice(0, 60));
               }}
               maxLength={60}
+              disabled={!profilePreferencesReady || saving}
               placeholder="Nickname or first name"
-              className="w-56 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring sm:w-64"
             />
           </FieldRow>
 
@@ -352,11 +348,12 @@ export function GeneralSection() {
             <select
               id="general-work"
               value={workDescription}
+              disabled={!profilePreferencesReady || saving}
               onChange={(e) => {
                 markDirty();
                 setWorkDescription(e.target.value as WorkDescription);
               }}
-              className="w-56 cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-1 focus:ring-ring sm:w-64"
+              className="w-full cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring sm:w-64"
               style={{ appearance: 'none', WebkitAppearance: 'none' }}
             >
               <option value="">Select a role...</option>
@@ -383,8 +380,9 @@ export function GeneralSection() {
               }}
               maxLength={2000}
               rows={4}
+              disabled={!profilePreferencesReady || saving}
               placeholder="e.g. when learning new concepts, I find analogies particularly helpful"
-              className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+              className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring"
               style={{ fontFamily: 'inherit' }}
             />
             <span className="text-right text-[11px] text-muted-foreground">
@@ -397,7 +395,7 @@ export function GeneralSection() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={displayName.trim().length === 0 || saving}
+              disabled={!profilePreferencesReady || displayName.trim().length === 0 || saving}
               className="rounded-md bg-amber-600 px-4 py-2 text-[13px] font-semibold text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
             >
               {saving ? 'Saving...' : 'Save profile'}
@@ -406,8 +404,22 @@ export function GeneralSection() {
               <span className="text-xs text-muted-foreground">Synced to your account.</span>
             )}
             {saveError !== null && <span className="text-xs text-destructive">{saveError}</span>}
+            {!preferencesLoaded && (
+              <span role="status" className="text-xs text-muted-foreground">
+                Loading profile…
+              </span>
+            )}
             {loadError !== null && saveError === null && (
-              <span className="text-xs text-destructive">{loadError}</span>
+              <span className="flex items-center gap-2 text-xs text-destructive">
+                {loadError}
+                <button
+                  type="button"
+                  onClick={() => void hydrateProfilePreferences()}
+                  className="rounded-md border border-border px-2 py-1 font-medium text-foreground hover:bg-muted"
+                >
+                  Retry
+                </button>
+              </span>
             )}
           </div>
         </div>
@@ -420,17 +432,19 @@ export function GeneralSection() {
         <div className="flex flex-col gap-5">
           {/* Appearance */}
           <Row label="Appearance">
-            <div className="flex gap-1">
+            <div className="flex gap-1" role="group" aria-label="Theme">
               {THEME_OPTIONS.map((opt) => {
                 const Icon = opt.icon;
                 const isActive = theme === opt.value;
                 return (
                   <button
                     key={opt.value}
+                    type="button"
                     onClick={() => setNextTheme(opt.value)}
                     className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${isActive ? 'border-amber-600 bg-amber-600 text-white' : 'border-border bg-transparent text-muted-foreground hover:bg-muted'}`}
                     title={opt.label}
                     aria-label={`${opt.label} theme`}
+                    aria-pressed={isActive}
                   >
                     <Icon className="h-4 w-4" />
                   </button>
@@ -668,12 +682,12 @@ function ReadAloudVoiceRow() {
 
   return (
     <Row label="Read-aloud voice">
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <select
           value={voiceUri ?? ''}
           onChange={(event) => setVoiceUri(event.target.value || null)}
           aria-label="Read-aloud voice"
-          className="h-8 max-w-[220px] rounded-md border border-border bg-background px-2 text-sm text-foreground"
+          className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground sm:max-w-[220px]"
         >
           <option value="">Browser default</option>
           {voices.map((voice) => (
@@ -702,8 +716,8 @@ function ReadAloudVoiceRow() {
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-h-9 items-center justify-between gap-4">
-      <span className="shrink-0 text-sm text-foreground">{label}</span>
+    <div className="flex min-h-9 flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <span className="text-sm text-foreground sm:shrink-0">{label}</span>
       {children}
     </div>
   );
@@ -723,12 +737,12 @@ function FieldRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/40 pb-4">
+    <div className="flex flex-col items-stretch gap-2 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <label htmlFor={htmlFor} className="flex min-w-0 flex-col gap-0.5">
         <span className="text-[13px] font-medium text-foreground">{label}</span>
         {helper && <span className="text-[11px] text-muted-foreground">{helper}</span>}
       </label>
-      <div className="shrink-0">{children}</div>
+      <div className="w-full min-w-0 sm:w-auto sm:shrink-0">{children}</div>
     </div>
   );
 }

@@ -29,11 +29,11 @@ describe('usageMeter', () => {
   beforeEach(() => {
     vi.mocked(fetchTierInfo).mockReset();
     vi.mocked(fetchTierInfo).mockResolvedValue(undefined);
-    setConfiguredModel('claude-sonnet-5');
+    setConfiguredModel('fixture-cloud-model');
   });
 
   it('treats local models as unbounded without fetching cloud usage', async () => {
-    setConfiguredModel('ollama/llama3.2');
+    setConfiguredModel('ollama/fixture-local-model');
 
     await expect(resolvePlanTier(secrets)).resolves.toBe('local');
     await expect(resolveUsageMeter(secrets, 1_200)).resolves.toEqual({

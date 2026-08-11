@@ -32,6 +32,29 @@ struct CompactionUsage {
     output_tokens: u32,
     cache_read_tokens: u32,
     cache_creation_tokens: u32,
+    included_in_subscription: bool,
+}
+
+fn record_compaction_usage(
+    ledger: &mut crate::cost_ledger::CostLedger,
+    model: &str,
+    usage: CompactionUsage,
+) -> f64 {
+    ledger.record_completions(&[crate::cost_ledger::CompletionUsage {
+        model: model.to_string(),
+        input_tokens: usage.input_tokens,
+        output_tokens: usage.output_tokens,
+        cache_read_tokens: usage.cache_read_tokens,
+        cache_write_tokens: usage.cache_creation_tokens,
+        included_in_subscription: usage.included_in_subscription,
+    }])
+}
+
+fn all_completions_included(completions: &[crate::cost_ledger::CompletionUsage]) -> bool {
+    !completions.is_empty()
+        && completions
+            .iter()
+            .all(|completion| completion.included_in_subscription)
 }
 
 /// CLI adapter for the shared context engine. It always uses the session's
@@ -96,6 +119,7 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
                 output_tokens: result.output_tokens,
                 cache_read_tokens: result.cache_read_input_tokens,
                 cache_creation_tokens: result.cache_creation_input_tokens,
+                included_in_subscription: result.via_subscription,
             });
         }
         Ok(result.text)
@@ -321,6 +345,33 @@ impl AgentSession {
         }
     }
 
+    fn record_partial_completion_usage(
+        &mut self,
+        completions: &[crate::cost_ledger::CompletionUsage],
+    ) {
+        if completions.is_empty() {
+            return;
+        }
+        self.total_input_tokens += completions
+            .iter()
+            .map(|completion| completion.input_tokens)
+            .sum::<u32>();
+        self.total_output_tokens += completions
+            .iter()
+            .map(|completion| completion.output_tokens)
+            .sum::<u32>();
+        self.total_cache_read_tokens += completions
+            .iter()
+            .map(|completion| completion.cache_read_tokens)
+            .sum::<u32>();
+        self.total_cache_creation_tokens += completions
+            .iter()
+            .map(|completion| completion.cache_write_tokens)
+            .sum::<u32>();
+        self.turn_count += 1;
+        self.cost_ledger.record_completions(completions);
+    }
+
     /// Send a user message and run the full agentic loop.
     ///
     /// This is the thin orchestrator (Wave 5e1): consent + privacy boundary,
@@ -452,13 +503,7 @@ impl AgentSession {
             self.total_output_tokens += summary_usage.output_tokens;
             self.total_cache_read_tokens += summary_usage.cache_read_tokens;
             self.total_cache_creation_tokens += summary_usage.cache_creation_tokens;
-            self.cost_ledger.record_turn(
-                &self.model,
-                summary_usage.input_tokens,
-                summary_usage.output_tokens,
-                summary_usage.cache_read_tokens,
-                summary_usage.cache_creation_tokens,
-            );
+            record_compaction_usage(&mut self.cost_ledger, &self.model, summary_usage);
         }
 
         if result.compacted {
@@ -743,7 +788,7 @@ message -- revise and call `update_plan` again.\n\n",
             max_budget_usd: self.max_budget_usd,
         };
 
-        let run_result = {
+        let (run_result, completion_usage) = {
             let mut adapter = TurnHostAdapter {
                 session: &mut *self,
                 config,
@@ -754,15 +799,26 @@ message -- revise and call `update_plan` again.\n\n",
                 max_tokens,
                 first_on_chunk: Some(on_chunk),
                 hook_additional_contexts: Vec::new(),
+                completion_usage: Vec::new(),
             };
-            run_turn(&mut adapter, params, &mut tracker).await
+            let result = run_turn(&mut adapter, params, &mut tracker).await;
+            (result, std::mem::take(&mut adapter.completion_usage))
         };
 
         // Restore runaway state regardless of turn outcome.
         self.recent_tool_calls = tracker.recent_tool_calls;
         self.loop_strike_count = tracker.loop_strike_count;
 
-        let outcome = run_result?;
+        let outcome = match run_result {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                // Successful provider requests before a later continuation
+                // failure are still billable. Preserve those exact per-request
+                // receipts before propagating the turn error.
+                self.record_partial_completion_usage(&completion_usage);
+                return Err(error);
+            }
+        };
 
         let total_input = outcome.totals.input_tokens;
         let total_output = outcome.totals.output_tokens;
@@ -770,7 +826,10 @@ message -- revise and call `update_plan` again.\n\n",
         let total_cache_creation = outcome.totals.cache_creation_tokens;
         let result_reasoning = outcome.totals.reasoning_tokens;
         let last_input_tokens = outcome.last_input_tokens;
-        let via_subscription = outcome.via_subscription;
+        // The presentation flag means the whole logical turn was included.
+        // Mixed subscription/metered tool loops must display their exact paid
+        // delta instead of hiding it because only the first completion was included.
+        let via_subscription = all_completions_included(&completion_usage);
         let final_response = outcome.response;
 
         // Provider input usage describes the request immediately before the
@@ -796,13 +855,7 @@ message -- revise and call `update_plan` again.\n\n",
         self.total_cache_creation_tokens += total_cache_creation;
         self.total_reasoning_tokens += result_reasoning;
         self.turn_count += 1;
-        self.cost_ledger.record_turn(
-            &self.model,
-            total_input,
-            total_output,
-            total_cache_read,
-            total_cache_creation,
-        );
+        let cost_usd = self.cost_ledger.record_completions(&completion_usage);
 
         // Post-turn: memory extraction + skill learning
         if let Ok(home) = crate::config::CliConfig::config_dir() {
@@ -892,6 +945,7 @@ message -- revise and call `update_plan` again.\n\n",
             output_tokens: total_output,
             cache_read_tokens: total_cache_read,
             cache_creation_tokens: total_cache_creation,
+            cost_usd,
             via_subscription,
         })
     }
@@ -957,6 +1011,10 @@ struct TurnHostAdapter<'a> {
     /// `PostToolUse` additional-context fragments accrued during the sequential
     /// dispatch, flushed as a system message in `commit_tool_results`.
     hook_additional_contexts: Vec<String>,
+    /// Per-provider-request usage for exact long-context pricing. Engine totals
+    /// intentionally remain aggregate for telemetry, but pricing and budget
+    /// enforcement must not treat several tool-loop completions as one request.
+    completion_usage: Vec<crate::cost_ledger::CompletionUsage>,
 }
 
 impl TurnHostAdapter<'_> {
@@ -1357,10 +1415,23 @@ impl TurnHost for TurnHostAdapter<'_> {
         // caller's `on_chunk` for the first completion, `continuation_sink()`
         // thereafter) to preserve byte-for-byte incremental output, so the
         // engine's stream sink is intentionally unused here.
-        match phase {
+        let completion = match phase {
             TurnPhase::First => self.complete_first().await,
             TurnPhase::Continuation => self.complete_continuation().await,
+        };
+        if let Ok(completion) = &completion {
+            let usage = &completion.outcome.usage;
+            self.completion_usage
+                .push(crate::cost_ledger::CompletionUsage {
+                    model: self.session.model.clone(),
+                    input_tokens: usage.input_tokens,
+                    output_tokens: usage.output_tokens,
+                    cache_read_tokens: usage.cache_read_input_tokens,
+                    cache_write_tokens: usage.cache_creation_input_tokens,
+                    included_in_subscription: completion.via_subscription,
+                });
         }
+        completion
     }
 
     fn record_assistant(&mut self, completion: &Completion) {
@@ -2168,14 +2239,8 @@ impl TurnHost for TurnHostAdapter<'_> {
         LoopControl::Continue
     }
 
-    fn turn_cost_usd(&self, totals: &agiworkforce_agent_core::UsageTotals) -> f64 {
-        crate::cost_ledger::dollars_for(
-            &self.session.model,
-            totals.input_tokens,
-            totals.output_tokens,
-            totals.cache_read_tokens,
-            totals.cache_creation_tokens,
-        )
+    fn turn_cost_usd(&self, _totals: &agiworkforce_agent_core::UsageTotals) -> f64 {
+        crate::cost_ledger::dollars_for_completions(&self.completion_usage)
     }
 
     fn on_event(&mut self, event: &TurnEvent) {
@@ -2306,6 +2371,48 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
+    fn subscription_compaction_does_not_enter_paid_ledger() {
+        let model = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|entry| entry.input_price_per_1m > 0.0 && entry.output_price_per_1m > 0.0)
+            .map(|entry| entry.id.clone())
+            .expect("embedded catalog must include a paid text model");
+        let mut ledger = crate::cost_ledger::CostLedger::default();
+
+        let delta = record_compaction_usage(
+            &mut ledger,
+            &model,
+            CompactionUsage {
+                input_tokens: 10_000,
+                output_tokens: 1_000,
+                cache_read_tokens: 0,
+                cache_creation_tokens: 0,
+                included_in_subscription: true,
+            },
+        );
+
+        assert_eq!(delta, 0.0);
+        assert_eq!(ledger.total_usd, 0.0);
+    }
+
+    #[test]
+    fn mixed_subscription_turn_is_not_presented_as_fully_included() {
+        let fixture = |included_in_subscription| crate::cost_ledger::CompletionUsage {
+            model: "fixture-priced-model".to_string(),
+            input_tokens: 1,
+            output_tokens: 1,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            included_in_subscription,
+        };
+
+        assert!(all_completions_included(&[fixture(true), fixture(true)]));
+        assert!(!all_completions_included(&[fixture(true), fixture(false)]));
+        assert!(!all_completions_included(&[]));
+    }
+
+    #[test]
     fn tool_event_output_preserves_short_results() {
         assert_eq!(tool_event_output("complete result"), "complete result");
     }
@@ -2353,7 +2460,14 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("claude-opus-5", &ctx, None);
+        let initial_route = crate::model_catalog::resolve_auto_model(
+            "auto-premium",
+            agiworkforce_model_registry::RoutingTaskType::Coding,
+            "byok",
+            agiworkforce_model_registry::TrustMode::Byok,
+        )
+        .expect("BYOK coding route should be available");
+        let mut session = AgentSession::new(&initial_route.provider_model_id, &ctx, None);
         session.quiet = true;
         session.managed_session = Some(crate::runtime::session::ManagedSession::new(
             "auto-turn-test",
@@ -2363,7 +2477,7 @@ mod tests {
         session.set_managed_auto_routing(Some(
             crate::runtime::session::ManagedSessionAutoRouting {
                 selection: "auto-premium".to_string(),
-                model_key: "claude-opus-5".to_string(),
+                model_key: initial_route.model_key,
                 task_type:
                     agiworkforce_protocol::developer_session::DeveloperRoutingTaskType::Coding,
                 trust_mode: agiworkforce_model_registry::TrustMode::Byok,
@@ -2375,6 +2489,11 @@ mod tests {
     #[test]
     fn interactive_auto_turn_classifies_and_feeds_the_resolver() {
         let mut session = byok_auto_session();
+        let initial_model_key = session
+            .managed_auto_routing()
+            .expect("initial Auto state")
+            .model_key
+            .clone();
 
         // An untyped creative turn must re-classify — NOT stay on the Coding
         // hardcode — and the model must be exactly what the canonical resolver
@@ -2396,7 +2515,7 @@ mod tests {
             agiworkforce_model_registry::RoutingTaskType::CreativeWriting,
             "byok",
             agiworkforce_model_registry::TrustMode::Byok,
-            Some("claude-opus-5"),
+            Some(&initial_model_key),
             Some(agiworkforce_model_registry::RoutingTaskType::Coding),
         )
         .expect("BYOK creative route should be available");
@@ -2440,7 +2559,7 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        let mut session = AgentSession::new("claude-opus-5", &ctx, None);
+        let mut session = AgentSession::new(crate::model_catalog::default_model(), &ctx, None);
         session.quiet = true;
         let model_before = session.model.clone();
 
@@ -2490,6 +2609,7 @@ mod tests {
             max_tokens: 1_024,
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
+            completion_usage: Vec::new(),
         };
 
         assert_eq!(
@@ -2534,8 +2654,34 @@ mod tests {
             os: "test".to_string(),
             shell: "test".to_string(),
         };
-        // "llama3" routes to Ollama(Local) -> PrivacyMode::Local
-        AgentSession::new("llama3", &ctx, None)
+        // A colon-qualified synthetic fixture routes to Ollama(Local).
+        AgentSession::new("fixture-local-model:latest", &ctx, None)
+    }
+
+    #[test]
+    fn successful_completion_before_turn_error_is_still_ledgered() {
+        let mut session = make_local_session();
+        let model = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|entry| entry.input_price_per_1m > 0.0 && entry.output_price_per_1m > 0.0)
+            .map(|entry| entry.id.clone())
+            .expect("embedded catalog must include a paid text model");
+        let completion = crate::cost_ledger::CompletionUsage {
+            model,
+            input_tokens: 10_000,
+            output_tokens: 1_000,
+            cache_read_tokens: 0,
+            cache_write_tokens: 0,
+            included_in_subscription: false,
+        };
+
+        session.record_partial_completion_usage(&[completion]);
+
+        assert!(session.cost_ledger.total_usd > 0.0);
+        assert_eq!(session.total_input_tokens, 10_000);
+        assert_eq!(session.total_output_tokens, 1_000);
+        assert_eq!(session.turn_count, 1);
     }
 
     /// Simulates the pre-fix fallback-loop provider mutation (setting self.provider
@@ -2551,7 +2697,13 @@ mod tests {
         assert!(session.validate_privacy_boundary().is_ok());
 
         // Simulate the pre-fix fallback loop mutation: set provider to cloud.
-        let cloud_provider = crate::models::detect_provider("claude-sonnet-5");
+        let cloud_model = crate::model_catalog::models_for("anthropic")
+            .into_iter()
+            .next()
+            .expect("catalog must contain an Anthropic model")
+            .id
+            .clone();
+        let cloud_provider = crate::models::detect_provider(&cloud_model);
         assert_eq!(
             crate::models::provider_name(&cloud_provider),
             "anthropic",
@@ -2559,7 +2711,7 @@ mod tests {
              the catalog, detect_provider silently falls back to OpenAI and this test \
              stops exercising the intended cloud provider"
         );
-        session.model = "claude-sonnet-5".to_string();
+        session.model = cloud_model.clone();
         session.provider = cloud_provider;
 
         // The guard must catch this — stream_completion must never be reached.
@@ -2576,7 +2728,7 @@ mod tests {
             "error must identify the boundary violation; got: {err_msg}"
         );
         assert!(
-            err_msg.contains("claude-sonnet-5"),
+            err_msg.contains(&cloud_model),
             "error must name the offending model; got: {err_msg}"
         );
     }
@@ -2588,9 +2740,9 @@ mod tests {
         let mut session = make_local_session();
         assert_eq!(session.privacy_mode, crate::agent::PrivacyMode::Local);
 
-        // "llama3.1:8b" -> Ollama(Local), confirmed in provider_dispatch tests.
-        session.model = "llama3.1:8b".to_string();
-        session.provider = crate::models::detect_provider("llama3.1:8b");
+        let local_model = "fixture-local-model:latest";
+        session.model = local_model.to_string();
+        session.provider = crate::models::detect_provider(local_model);
 
         assert!(
             session.validate_privacy_boundary().is_ok(),
@@ -2604,7 +2756,7 @@ mod tests {
             pre_tool_hook_config("printf '%s' '{\"decision\":\"block\",\"reason\":\"policy\"}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
-            "claude-sonnet-5",
+            "fixture-hook-model",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
         .await;
@@ -2617,7 +2769,7 @@ mod tests {
         let config = pre_tool_hook_config("printf '%s' '{\"continue\":false}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
-            "claude-sonnet-5",
+            "fixture-hook-model",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
         .await;
@@ -2631,7 +2783,7 @@ mod tests {
             pre_tool_hook_config("printf '%s' '{\"updated_input\":{\"path\":\"TODO.md\"}}'");
         let outcome = run_pre_tool_use_hooks(
             &config,
-            "claude-sonnet-5",
+            "fixture-hook-model",
             &tool_call("read_file", serde_json::json!({"path":"README.md"})),
         )
         .await;
@@ -2666,6 +2818,7 @@ mod tests {
             max_tokens: 1_024,
             first_on_chunk: None,
             hook_additional_contexts: Vec::new(),
+            completion_usage: Vec::new(),
         };
 
         let prepared = adapter

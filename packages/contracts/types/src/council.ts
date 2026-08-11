@@ -23,8 +23,8 @@
  * @example
  * ```typescript
  * const vote: ModelVote = {
- *   modelId: 'claude-opus-5',
- *   provider: 'anthropic',
+ *   modelId: selectedModel.id,
+ *   provider: selectedModel.provider,
  *   response: 'The optimal approach is to use a B+ tree index...',
  *   confidence: 0.92,
  *   reasoning: 'Based on the query patterns described, a B+ tree provides...',
@@ -79,11 +79,7 @@ export interface ModelVote {
  *   id: 'council-abc',
  *   query: 'What database indexing strategy should we use for this schema?',
  *   context: 'We have a PostgreSQL database with 50M rows...',
- *   models: [
- *     { modelId: 'claude-opus-5', provider: 'anthropic' },
- *     { modelId: 'gpt-5.6-sol', provider: 'openai' },
- *     { modelId: 'gemini-3.1-pro-preview', provider: 'google' },
- *   ],
+ *   models: councilModels.map(({ id, provider }) => ({ modelId: id, provider })),
  *   consensusThreshold: 0.7,
  * };
  * ```
@@ -137,7 +133,7 @@ export interface CouncilQuery {
  *   confidenceScore: 0.89,
  *   votes: [vote1, vote2, vote3],
  *   agreementLevel: 0.85,
- *   dissent: 'GPT-5.4 suggested a hash index instead, but was outvoted...',
+ *   dissent: 'One voter suggested a hash index instead, but was outvoted...',
  *   status: 'completed',
  *   totalLatencyMs: 4200,
  *   totalCost: 0.092,

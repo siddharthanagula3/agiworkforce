@@ -7,11 +7,12 @@ import {
 } from '../openai-wire-compat';
 
 const NOW = () => 1_750_000_000_000;
+const FIXTURE_MODEL_ID = 'fixture-wire-model';
 
 describe('openAIWireRequestToChatRequest', () => {
   it('extracts system, maps tools and tool_choice, carries sampling params', () => {
     const req = openAIWireRequestToChatRequest({
-      model: 'test-model',
+      model: FIXTURE_MODEL_ID,
       messages: [
         { role: 'system', content: 'be terse' },
         { role: 'user', content: 'hi' },
@@ -43,7 +44,7 @@ describe('openAIWireRequestToChatRequest', () => {
 
   it('maps assistant tool_calls to tool_use blocks and tool messages to tool_result', () => {
     const req = openAIWireRequestToChatRequest({
-      model: 'm',
+      model: FIXTURE_MODEL_ID,
       messages: [
         { role: 'user', content: 'weather?' },
         {
@@ -73,7 +74,7 @@ describe('openAIWireRequestToChatRequest', () => {
 
   it('converts image_url parts (data URLs and https) into image blocks', () => {
     const req = openAIWireRequestToChatRequest({
-      model: 'm',
+      model: FIXTURE_MODEL_ID,
       messages: [
         {
           role: 'user',
@@ -95,7 +96,7 @@ describe('openAIWireRequestToChatRequest', () => {
 
   it('converts hydrated wire files into canonical file blocks', () => {
     const req = openAIWireRequestToChatRequest({
-      model: 'm',
+      model: FIXTURE_MODEL_ID,
       messages: [
         {
           role: 'user',
@@ -126,7 +127,7 @@ describe('openAIWireRequestToChatRequest', () => {
 
   it('keeps unparseable tool arguments as __raw instead of throwing', () => {
     const req = openAIWireRequestToChatRequest({
-      model: 'm',
+      model: FIXTURE_MODEL_ID,
       messages: [
         {
           role: 'assistant',
@@ -143,13 +144,17 @@ describe('openAIWireRequestToChatRequest', () => {
 
 describe('OpenAIWireAssembler streaming', () => {
   it('emits text deltas, tool-call frames, and the finish chunk', () => {
-    const assembler = new OpenAIWireAssembler({ model: 'm', now: NOW, id: 'chatcmpl-x' });
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      id: 'chatcmpl-x',
+    });
 
     const text = assembler.sseChunk({ type: 'text-delta', delta: 'Hel' });
     expect(text).toMatchObject({
       id: 'chatcmpl-x',
       object: 'chat.completion.chunk',
-      model: 'm',
+      model: FIXTURE_MODEL_ID,
       choices: [{ index: 0, delta: { content: 'Hel' }, finish_reason: null }],
     });
 
@@ -187,10 +192,14 @@ describe('OpenAIWireAssembler streaming', () => {
   });
 
   it('drops thinking deltas unless reasoning emission is enabled', () => {
-    const silent = new OpenAIWireAssembler({ model: 'm', now: NOW });
+    const silent = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
     expect(silent.sseChunk({ type: 'thinking-delta', delta: 'hmm' })).toBeNull();
 
-    const loud = new OpenAIWireAssembler({ model: 'm', now: NOW, emitReasoningContent: true });
+    const loud = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      emitReasoningContent: true,
+    });
     const chunk = loud.sseChunk({ type: 'thinking-delta', delta: 'hmm' });
     expect(chunk?.['choices']).toEqual([
       { index: 0, delta: { reasoning_content: 'hmm' }, finish_reason: null },
@@ -198,7 +207,7 @@ describe('OpenAIWireAssembler streaming', () => {
   });
 
   it('assigns increasing tool indexes per toolUseId', () => {
-    const assembler = new OpenAIWireAssembler({ model: 'm', now: NOW });
+    const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
     assembler.sseChunk({ type: 'tool-use-start', toolUseId: 'a', name: 'one' });
     const second = assembler.sseChunk({ type: 'tool-use-start', toolUseId: 'b', name: 'two' });
     const calls = (
@@ -209,7 +218,7 @@ describe('OpenAIWireAssembler streaming', () => {
 
   it('adds native search activity and source cards in openai-passthrough mode', () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'gpt-5.6-sol',
+      model: FIXTURE_MODEL_ID,
       now: NOW,
       wireMode: 'openai-passthrough',
     });
@@ -265,7 +274,7 @@ describe('OpenAIWireAssembler streaming', () => {
       );
 
     for (const wireMode of ['legacy-web', 'openai-passthrough'] as const) {
-      const assembler = new OpenAIWireAssembler({ model: 'm', now: NOW, wireMode });
+      const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW, wireMode });
       const opened = assembler.sseChunks({ type: 'thinking-delta', delta: 'weighing options' });
       const answered = assembler.sseChunks({ type: 'text-delta', delta: 'Answer.' });
 
@@ -279,7 +288,7 @@ describe('OpenAIWireAssembler streaming', () => {
 
   it('emits nothing for a turn without reasoning, so no empty thinking block is fabricated', () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'm',
+      model: FIXTURE_MODEL_ID,
       now: NOW,
       wireMode: 'openai-passthrough',
     });
@@ -302,13 +311,17 @@ describe('assembleOpenAIWireResponse (non-streaming)', () => {
       { type: 'stop', reason: 'tool_use' },
     ];
 
-    const response = assembleOpenAIWireResponse(chunks, { model: 'm', now: NOW, id: 'chatcmpl-y' });
+    const response = assembleOpenAIWireResponse(chunks, {
+      model: FIXTURE_MODEL_ID,
+      now: NOW,
+      id: 'chatcmpl-y',
+    });
 
     expect(response).toEqual({
       id: 'chatcmpl-y',
       object: 'chat.completion',
       created: Math.floor(NOW() / 1000),
-      model: 'm',
+      model: FIXTURE_MODEL_ID,
       choices: [
         {
           index: 0,
@@ -332,7 +345,7 @@ describe('assembleOpenAIWireResponse (non-streaming)', () => {
   });
 
   it('null content when only tool calls, records error as stop', () => {
-    const assembler = new OpenAIWireAssembler({ model: 'm', now: NOW });
+    const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
     assembler.ingest({ type: 'error', message: 'boom' });
     expect(assembler.lastError).toBe('boom');
     const response = assembler.response();
@@ -369,7 +382,7 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
 
   it("legacy-web: emits x_stream_error as {message,code,retryable} and a literal finish_reason:'error' (both wire-mode-agnostic AND legacy-web-specific signals present)", () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'claude-x',
+      model: FIXTURE_MODEL_ID,
       wireMode: 'legacy-web',
       now: NOW,
     });
@@ -399,7 +412,7 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
 
   it('legacy-web: omits code/retryable from the payload when the provider adapter did not supply them', () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'claude-x',
+      model: FIXTURE_MODEL_ID,
       wireMode: 'legacy-web',
       now: NOW,
     });
@@ -416,7 +429,7 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
 
   it('openai-passthrough: emits x_stream_error as {message,code,retryable} but NEVER an out-of-spec finish_reason (real-OpenAI byte-compat preserved)', () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'gpt-x',
+      model: FIXTURE_MODEL_ID,
       wireMode: 'openai-passthrough',
       now: NOW,
     });
@@ -443,14 +456,14 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
   });
 
   it('default mode: sseChunk() (singular, services/api-gateway) is UNCHANGED — no x_stream_error, matching its documented no-new-output contract for extension chunk types', () => {
-    const assembler = new OpenAIWireAssembler({ model: 'm', now: NOW });
+    const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
     assembler.ingest({ type: 'text-delta', delta: 'partial' });
     const chunk = assembler.sseChunk({ type: 'error', message: 'boom' });
     expect(chunk).toEqual({
       id: expect.any(String),
       object: 'chat.completion.chunk',
       created: expect.any(Number),
-      model: 'm',
+      model: FIXTURE_MODEL_ID,
       choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
     });
   });
@@ -458,7 +471,7 @@ describe('OpenAIWireAssembler mid-stream error signaling (x_stream_error)', () =
 
 describe('OpenAIWireAssembler safety refusal (first-class StreamChunkStop refusal member)', () => {
   it("default mode: a 'refusal' stop reaches the wire as finish_reason 'content_filter' — the OpenAI wire's own safety vocabulary, never a normal 'stop'", () => {
-    const assembler = new OpenAIWireAssembler({ model: 'm', now: NOW });
+    const assembler = new OpenAIWireAssembler({ model: FIXTURE_MODEL_ID, now: NOW });
     const chunk = assembler.sseChunk({ type: 'stop', reason: 'refusal' });
     expect(
       (chunk as { choices: Array<{ finish_reason?: string }> }).choices[0]!.finish_reason,
@@ -466,7 +479,11 @@ describe('OpenAIWireAssembler safety refusal (first-class StreamChunkStop refusa
   });
 
   it("legacy-web mode: a 'refusal' stop emits the literal finish_reason 'refusal' (the legacy wire's literal-passthrough rule), never 'error' and never 'stop'", () => {
-    const assembler = new OpenAIWireAssembler({ model: 'm', wireMode: 'legacy-web', now: NOW });
+    const assembler = new OpenAIWireAssembler({
+      model: FIXTURE_MODEL_ID,
+      wireMode: 'legacy-web',
+      now: NOW,
+    });
     const wire: Record<string, unknown>[] = [];
     for (const c of assembler.sseChunks({ type: 'stop', reason: 'refusal' })) wire.push(c);
     const finishReasons = wire
@@ -499,7 +516,7 @@ describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
 
   it('reconstructs signed thinking blocks and tag-free text without altering the wire', () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'claude-x',
+      model: FIXTURE_MODEL_ID,
       wireMode: 'legacy-web',
       now: NOW,
     });
@@ -535,7 +552,7 @@ describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
 
   it('captures multiple signed thinking blocks, delimited by their signatures', () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'claude-x',
+      model: FIXTURE_MODEL_ID,
       wireMode: 'legacy-web',
       now: NOW,
     });
@@ -555,7 +572,7 @@ describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
 
   it('omits a dangling unsigned thinking block (only signed blocks round-trip)', () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'claude-x',
+      model: FIXTURE_MODEL_ID,
       wireMode: 'legacy-web',
       now: NOW,
     });
@@ -566,7 +583,7 @@ describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
 
   it('captures nothing for a non-thinking stream (behavior-identical path)', () => {
     const assembler = new OpenAIWireAssembler({
-      model: 'gpt-x',
+      model: FIXTURE_MODEL_ID,
       wireMode: 'openai-passthrough',
       now: NOW,
     });
@@ -580,7 +597,7 @@ describe('OpenAIWireAssembler canonical thinking capture (legacy-web)', () => {
 describe('openAIWireRequestToChatRequest __canonicalThinking reconstruction', () => {
   it('prepends signed ThinkingBlocks before text and tool_use on the assistant turn', () => {
     const req = openAIWireRequestToChatRequest({
-      model: 'claude-x',
+      model: FIXTURE_MODEL_ID,
       messages: [
         { role: 'user', content: 'what time is it?' },
         {
@@ -607,7 +624,7 @@ describe('openAIWireRequestToChatRequest __canonicalThinking reconstruction', ()
 
   it('drops unsigned thinking blocks (an unsigned block would be rejected by Anthropic)', () => {
     const req = openAIWireRequestToChatRequest({
-      model: 'claude-x',
+      model: FIXTURE_MODEL_ID,
       messages: [
         {
           role: 'assistant',
@@ -626,7 +643,7 @@ describe('openAIWireRequestToChatRequest __canonicalThinking reconstruction', ()
 
   it('is unchanged for an assistant message without __canonicalThinking', () => {
     const req = openAIWireRequestToChatRequest({
-      model: 'claude-x',
+      model: FIXTURE_MODEL_ID,
       messages: [
         {
           role: 'assistant',

@@ -93,6 +93,7 @@ async function persistWorkflowAssistantTurn(
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       truncated: outcome === 'cancelled',
+      interactiveCards: journal.interactiveCards,
       runReference: {
         runId: input.runId,
         runPath: managedCloudAgentRunPath(input.runId),

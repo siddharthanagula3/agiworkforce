@@ -175,7 +175,7 @@ mod tests {
             // The desktop renderer sends no capabilities for an off-catalog local model.
             None,
             false,
-            "llama3.3:70b",
+            "fixture-local-model:dynamic",
             true,
         );
 

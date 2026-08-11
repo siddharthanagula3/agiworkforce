@@ -932,10 +932,10 @@ pub(super) fn render_raw_last_response(session: &AgentSession, arg: &str) -> Str
     let response = last.text_content();
 
     if arg.trim().eq_ignore_ascii_case("json") {
-        let cost = crate::output::format_cost(
-            &session.model,
+        let cost = crate::output::format_accumulated_cost(
             session.total_input_tokens,
             session.total_output_tokens,
+            session.cost_ledger.total_usd,
         );
         let value = crate::oneshot_result_json_value(
             &session.model,

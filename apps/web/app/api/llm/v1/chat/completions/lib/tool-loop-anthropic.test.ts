@@ -70,7 +70,10 @@ vi.mock('@/lib/e2b/runtime', () => ({
 
 import { runToolLoop } from './tool-loop';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
+
+const ANTHROPIC_MODEL = requireProviderDefaultModel('anthropic');
 
 /** Turn an array of canonical StreamChunks into an async generator, matching
  *  `ProviderAdapter.stream()`'s signature (req, signal) => AsyncIterable. */
@@ -83,16 +86,16 @@ function fakeAdapterStream(chunks: unknown[]) {
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-anthropic-1',
-    chatRequest: { model: 'claude-opus-5', messages: [], stream: true } as never,
+    chatRequest: { model: ANTHROPIC_MODEL, messages: [], stream: true } as never,
     conversationId: undefined,
-    requestedModel: 'claude-opus-5',
+    requestedModel: ANTHROPIC_MODEL,
     provider: 'anthropic',
     estimatedCostCents: 0,
     estimatedPromptTokens: 0,
     maxTokens: 1000,
     usedFallback: false,
     fallbackReason: undefined,
-    originalModel: 'claude-opus-5',
+    originalModel: ANTHROPIC_MODEL,
     resolvedTaskType: 'general' as never,
     classifierConfidence: 1,
     resolvedSlot: null,
@@ -101,7 +104,7 @@ function makeProcessed(): ProcessedRequest {
     isFlagshipRequest: false,
     indicResult: undefined as never,
     llmRequest: {
-      model: 'claude-opus-5',
+      model: ANTHROPIC_MODEL,
       messages: [{ role: 'user', content: 'search the web and fetch a page' }],
       max_tokens: 1000,
       stream: true,
@@ -357,7 +360,7 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     const usage = createObservedProviderUsage();
     await drain(runToolLoop(makeProcessed(), { approvalMode: 'auto', usage }));
 
-    expect(usage).toEqual({
+    expect(usage).toMatchObject({
       providerCalls: 2,
       inputTokens: 300,
       outputTokens: 50,
@@ -366,6 +369,11 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
       cacheWrite1hTokens: 7,
       reasoningTokens: 11,
     });
+    expect(usage.providerCallObservations).toHaveLength(2);
+    expect(usage.providerCallObservations?.map((call) => call.inputTokens)).toEqual([100, 200]);
+    expect(usage.providerCallObservations?.every((call) => call.costDollars !== undefined)).toBe(
+      true,
+    );
   });
 
   // ─── TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01 ───────────────────────────

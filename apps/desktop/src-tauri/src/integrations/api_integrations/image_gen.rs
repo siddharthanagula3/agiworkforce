@@ -4,29 +4,64 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::time::Duration;
 
-/// Resolve the catalog `apiModelId` for a given canonical id, falling back
-/// to the literal default when models.json is missing the entry. Centralizes
-/// the rule-models-json.md "never hardcode model IDs" rule for image gen.
-fn resolve_image_model(canonical_id: &str, hardcoded_fallback: &str) -> String {
-    let resolved = models_config::get_api_model_id(canonical_id);
-    if resolved == canonical_id {
-        // No catalog entry — fall back to the literal that callers expect.
-        hardcoded_fallback.to_string()
+/// Resolve a provider image model from the canonical catalog.
+///
+/// An explicitly requested model must be a non-deprecated image model owned by
+/// `provider`. When no model is requested, the provider must have exactly one
+/// eligible image model; multiple candidates require the caller/UI to choose.
+/// Missing or ambiguous metadata fails before a credentialed network request.
+fn resolve_image_model(provider: &str, requested_model: Option<&str>) -> Result<String> {
+    let models = models_config::get_all_model_entries();
+
+    let entry = if let Some(requested) = requested_model.filter(|model| !model.trim().is_empty()) {
+        let canonical = models_config::get_canonicalized_id(requested);
+        models.get(&canonical).or_else(|| {
+            models
+                .values()
+                .find(|entry| entry.api_model_id.as_deref() == Some(requested))
+        })
     } else {
-        resolved
+        let mut candidates = models
+            .values()
+            .filter(|entry| {
+                entry.provider == provider
+                    && entry.capabilities.image_gen
+                    && entry.deprecated != Some(true)
+            })
+            .collect::<Vec<_>>();
+        candidates.sort_by(|left, right| left.id.cmp(&right.id));
+        match candidates.as_slice() {
+            [entry] => Some(*entry),
+            [] => None,
+            _ => {
+                return Err(APIError::APIError(format!(
+                    "No unique catalog image model is configured for provider {provider}; select an explicit catalog model"
+                )))
+            }
+        }
     }
+    .filter(|entry| {
+        entry.provider == provider
+            && entry.capabilities.image_gen
+            && entry.deprecated != Some(true)
+    })
+    .ok_or_else(|| {
+        APIError::APIError(format!(
+            "No active catalog image model is configured for provider {provider}"
+        ))
+    })?;
+
+    Ok(entry
+        .api_model_id
+        .clone()
+        .unwrap_or_else(|| entry.id.clone()))
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ImageProvider {
-    #[serde(rename = "OpenAIGPTImage")]
-    OpenAIGPTImage,
-    StableDiffusion,
-    Midjourney,
-
-    GoogleImagen,
-
-    GoogleImagenLite,
+    OpenAI,
+    Google,
+    GoogleFast,
 }
 
 pub struct ImageGenerationClient {
@@ -112,13 +147,9 @@ impl ImageGenerationClient {
         request: &ImageGenerationRequest,
     ) -> Result<ImageGenerationResponse> {
         match self.provider {
-            ImageProvider::OpenAIGPTImage => self.generate_with_openai_image(request).await,
-            ImageProvider::StableDiffusion => self.generate_with_stable_diffusion(request).await,
-            ImageProvider::Midjourney => self.generate_with_midjourney(request).await,
-            ImageProvider::GoogleImagen => self.generate_with_google_imagen(request, false).await,
-            ImageProvider::GoogleImagenLite => {
-                self.generate_with_google_imagen(request, true).await
-            }
+            ImageProvider::OpenAI => self.generate_with_openai_image(request).await,
+            ImageProvider::Google => self.generate_with_google_image(request, false).await,
+            ImageProvider::GoogleFast => self.generate_with_google_image(request, true).await,
         }
     }
 
@@ -143,12 +174,7 @@ impl ImageGenerationClient {
 
         let openai_image_request = OpenAIImageRequest {
             prompt: request.prompt.clone(),
-            model: Some(
-                request
-                    .model
-                    .clone()
-                    .unwrap_or_else(|| resolve_image_model("gpt-image-2", "gpt-image-2")),
-            ),
+            model: Some(resolve_image_model("openai", request.model.as_deref())?),
             size: request.size.map(|s| match s {
                 ImageSize::Small => "256x256".to_string(),
                 ImageSize::Medium => "512x512".to_string(),
@@ -221,164 +247,27 @@ impl ImageGenerationClient {
                 revised_prompt,
             })
         } else if response.status().as_u16() == 429 {
-            Err(APIError::RateLimitExceeded("OpenAI GPT Image".to_string()))
+            Err(APIError::RateLimitExceeded(
+                "OpenAI image generation".to_string(),
+            ))
         } else {
             let error_text = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
             Err(APIError::APIError(format!(
-                "OpenAI GPT Image API error: {}",
+                "OpenAI image-generation API error: {}",
                 error_text
             )))
         }
     }
 
-    async fn generate_with_stable_diffusion(
+    async fn generate_with_google_image(
         &self,
         request: &ImageGenerationRequest,
+        _use_lite: bool,
     ) -> Result<ImageGenerationResponse> {
-        // Reads catalog's apiModelId for stable-diffusion-xl, falling back to
-        // the legacy literal so we never break when models.json is stale.
-        let resolved_default =
-            resolve_image_model("stable-diffusion-xl", "stable-diffusion-xl-1024-v1-0");
-        let model = request.model.as_deref().unwrap_or(&resolved_default);
-        let url = format!(
-            "https://api.stability.ai/v1/generation/{}/text-to-image",
-            model
-        );
-
-        #[derive(Serialize)]
-        struct StableDiffusionRequest {
-            text_prompts: Vec<TextPrompt>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            height: Option<u32>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            width: Option<u32>,
-            #[serde(skip_serializing_if = "Option::is_none")]
-            samples: Option<u32>,
-        }
-
-        #[derive(Serialize)]
-        struct TextPrompt {
-            text: String,
-            weight: f32,
-        }
-
-        let mut text_prompts = vec![TextPrompt {
-            text: request.prompt.clone(),
-            weight: 1.0,
-        }];
-
-        if let Some(negative) = &request.negative_prompt {
-            text_prompts.push(TextPrompt {
-                text: negative.clone(),
-                weight: -1.0,
-            });
-        }
-
-        let (width, height) = match request.size.unwrap_or(ImageSize::Large) {
-            ImageSize::Small => (256, 256),
-            ImageSize::Medium => (512, 512),
-            ImageSize::Large => (1024, 1024),
-            ImageSize::Wide => (1792, 1024),
-            ImageSize::Portrait => (1024, 1792),
-        };
-
-        let sd_request = StableDiffusionRequest {
-            text_prompts,
-            height: Some(height),
-            width: Some(width),
-            samples: request.n,
-        };
-
-        let response = self
-            .client
-            .post(url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .header("Content-Type", "application/json")
-            .json(&sd_request)
-            .send()
-            .await
-            .map_err(APIError::HttpError)?;
-
-        self.parse_stable_diffusion_response(response).await
-    }
-
-    async fn parse_stable_diffusion_response(
-        &self,
-        response: reqwest::Response,
-    ) -> Result<ImageGenerationResponse> {
-        if response.status().is_success() {
-            #[derive(Deserialize)]
-            struct SDResponse {
-                artifacts: Vec<SDArtifact>,
-            }
-
-            #[derive(Deserialize)]
-            struct SDArtifact {
-                base64: String,
-            }
-
-            let sd_response: SDResponse = response.json().await.map_err(APIError::HttpError)?;
-
-            let images = sd_response
-                .artifacts
-                .into_iter()
-                .map(|artifact| GeneratedImage {
-                    url: None,
-                    b64_json: Some(artifact.base64),
-                })
-                .collect();
-
-            Ok(ImageGenerationResponse {
-                images,
-                created_at: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_secs(),
-                revised_prompt: None,
-            })
-        } else if response.status().as_u16() == 429 {
-            Err(APIError::RateLimitExceeded("Stable Diffusion".to_string()))
-        } else {
-            let error_text = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "Unknown error".to_string());
-            Err(APIError::APIError(format!(
-                "Stable Diffusion API error: {}",
-                error_text
-            )))
-        }
-    }
-
-    async fn generate_with_midjourney(
-        &self,
-        _request: &ImageGenerationRequest,
-    ) -> Result<ImageGenerationResponse> {
-        Err(APIError::APIError(
-            "Midjourney API integration not yet available. Use OpenAI GPT Image or Stable Diffusion instead."
-                .to_string(),
-        ))
-    }
-
-    async fn generate_with_google_imagen(
-        &self,
-        request: &ImageGenerationRequest,
-        use_lite: bool,
-    ) -> Result<ImageGenerationResponse> {
-        let default_model = if use_lite {
-            resolve_image_model("imagen-4-fast", "imagen-4.0-fast-generate-001")
-        } else {
-            resolve_image_model("imagen-4", "imagen-4.0-generate-001")
-        };
-
-        let model = request
-            .model
-            .as_deref()
-            .unwrap_or(default_model.as_str())
-            .to_string();
+        let model = resolve_image_model("google", request.model.as_deref())?;
 
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:predict?key={}",
@@ -551,7 +440,7 @@ mod tests {
         let request = ImageGenerationRequest {
             prompt: "A beautiful landscape".to_string(),
             negative_prompt: Some("blurry, low quality".to_string()),
-            model: Some("imagen-4.0-generate-001".to_string()),
+            model: Some("fixture-image-model".to_string()),
             size: Some(ImageSize::Large),
             style: Some("photorealistic".to_string()),
             quality: Some(ImageQuality::HD),
@@ -561,6 +450,32 @@ mod tests {
         let json = serde_json::to_string(&request).unwrap();
         assert!(json.contains("landscape"));
         assert!(json.contains("1024x1024"));
+    }
+
+    #[test]
+    fn image_defaults_derive_from_the_catalog() {
+        for provider in ["openai", "google"] {
+            let resolved = resolve_image_model(provider, None)
+                .unwrap_or_else(|error| panic!("{provider} catalog default failed: {error}"));
+            let entry = models_config::get_all_model_entries()
+                .values()
+                .find(|entry| {
+                    entry.provider == provider
+                        && entry.capabilities.image_gen
+                        && entry.deprecated != Some(true)
+                })
+                .expect("provider must expose an active catalog image model");
+            assert_eq!(
+                resolved,
+                entry.api_model_id.as_deref().unwrap_or(entry.id.as_str())
+            );
+        }
+    }
+
+    #[test]
+    fn absent_or_unknown_image_models_fail_closed() {
+        assert!(resolve_image_model("stability", None).is_err());
+        assert!(resolve_image_model("google", Some("fixture-unknown-image-model")).is_err());
     }
 
     #[test]

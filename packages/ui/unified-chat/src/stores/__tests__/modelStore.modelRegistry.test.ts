@@ -13,6 +13,15 @@ const PROFILE_TIER = {
 } as const;
 
 describe('unified-chat fallback model registry', () => {
+  it('admits only chat fallbacks with provider-published token windows', () => {
+    expect(CLOUD_FALLBACK_MODELS.length).toBeGreaterThan(0);
+    expect(
+      CLOUD_FALLBACK_MODELS.every(
+        (model) => Number.isFinite(model.contextWindow) && model.contextWindow > 0,
+      ),
+    ).toBe(true);
+  });
+
   it('derives every Auto row and representative capability from the canonical registry', () => {
     const profiles = getAutoRoutingProfiles();
     const rows = CLOUD_FALLBACK_MODELS.filter((model) => model.id.startsWith('auto'));

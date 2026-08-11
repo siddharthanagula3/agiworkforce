@@ -1,8 +1,10 @@
+mod artifact_registry;
 pub mod barge_in;
 pub mod deepgram;
 pub mod dictation;
 pub mod local_stt;
 pub mod local_tts;
+mod piper_bundle;
 pub mod ptt;
 pub mod tts;
 pub mod vad;

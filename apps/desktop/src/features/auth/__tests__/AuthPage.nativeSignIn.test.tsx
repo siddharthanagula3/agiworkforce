@@ -63,9 +63,13 @@ describe('Desktop Cloud sign-in shell', () => {
     await waitFor(() => expect(onAuthSuccess).toHaveBeenCalledOnce());
   });
 
-  it('returns to Local Mode, which never needs an account', () => {
+  it('keeps Local Mode claims and the return control on a native host', () => {
     render(<AuthPage />);
 
+    expect(
+      screen.getByText('Sign in right here. Local Mode keeps working without an account.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Local Mode stays available without an account.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /use local mode/i }));
     expect(useAppModeStore.getState().mode).toBe('local');
   });

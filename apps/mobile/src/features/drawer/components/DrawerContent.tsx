@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import { View, Pressable, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
+import { type DrawerContentComponentProps } from 'expo-router/drawer';
 import {
   Bell,
   BookImage,
@@ -21,7 +22,6 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
-import { type DrawerContentComponentProps } from '@react-navigation/drawer';
 import { Text } from '@/components/ui/text';
 import { DesktopCompanionWidget } from '@/src/shared/components/DesktopCompanionWidget';
 import { useChatStore } from '@/stores/chatStore';

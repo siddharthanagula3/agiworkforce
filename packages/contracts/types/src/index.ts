@@ -92,6 +92,8 @@ export * from './user';
 
 // Billing plan pricing and included-usage budget helpers
 export * from './billing-catalog';
+export * from './billing-topups';
+export * from './mobile-iap';
 export * from './url';
 export * from './usage-vocabulary';
 export * from './quick-start-intents';

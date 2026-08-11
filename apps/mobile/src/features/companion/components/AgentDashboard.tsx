@@ -40,6 +40,7 @@ import { Separator } from '@/components/ui/separator';
 import { useAgentStore, type Agent, type RunArtifact } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
+import { getDisplayName } from '@/src/features/model-picker/service';
 import {
   requestAgentRefresh,
   sendAgentCommand,
@@ -562,7 +563,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
 
           {/* Model + Time */}
           <View className="flex-row items-center gap-3 mb-2">
-            <Text className="text-xs text-white/40">{agent.model}</Text>
+            <Text className="text-xs text-white/40">{getDisplayName(agent.model)}</Text>
             <Text className="text-xs text-white/40">{timeElapsed}</Text>
             {eta && (
               <View className="flex-row items-center gap-1">

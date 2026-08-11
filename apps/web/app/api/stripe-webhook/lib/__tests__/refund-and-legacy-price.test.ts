@@ -217,11 +217,17 @@ describe('charge.refunded revokes the entitlement the refund paid for', () => {
     await dispatchStripeEvent(
       db,
       {} as Stripe,
-      refundEvent({ metadata: { type: 'credit_topup' } }),
+      refundEvent({
+        metadata: {
+          type: 'credit_topup',
+          credit_amount_cents: '2000',
+          top_up_units: '1000',
+        },
+      }),
     );
 
     expect(planUpdates(calls)).toHaveLength(0);
-    expect(calls.some((call) => call.sql.includes('handle_refund'))).toBe(true);
+    expect(calls.some((call) => call.sql.includes('handle_top_up_refund'))).toBe(true);
   });
 });
 
@@ -289,10 +295,9 @@ describe('renewals on a Price the deployment no longer registers', () => {
  * `charge.metadata` empty and a refunded top-up would revoke the customer's
  * whole plan.
  *
- * Today no route creates a top-up checkout at all, so nothing is broken and
- * nothing here fails. This exists for the change that makes top-ups buyable:
- * it turns a silent wrongful revocation into a failing test at the moment the
- * purchase path is written.
+ * `/api/billing/top-up` now creates this Checkout Session. Keep this repository
+ * scan so a future creator cannot silently omit charge-visible metadata and
+ * turn a top-up refund into wrongful plan revocation.
  */
 describe('credit top-up checkout must stamp charge-visible metadata', () => {
   it('every credit_topup checkout also sets payment_intent_data.metadata', async () => {

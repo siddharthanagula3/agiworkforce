@@ -71,7 +71,10 @@ vi.mock('@/lib/e2b/runtime', () => ({
 }));
 
 import { runToolLoop } from './tool-loop';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
+
+const OPENAI_MODEL = requireProviderDefaultModel('openai');
 
 /** Turn an array of canonical StreamChunks into an async generator, matching
  *  `ProviderAdapter.stream()`'s signature (req, signal) => AsyncIterable. */
@@ -84,16 +87,16 @@ function fakeAdapterStream(chunks: unknown[]) {
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-openai-1',
-    chatRequest: { model: 'gpt-5.6-sol', messages: [], stream: true } as never,
+    chatRequest: { model: OPENAI_MODEL, messages: [], stream: true } as never,
     conversationId: undefined,
-    requestedModel: 'gpt-5.6-sol',
+    requestedModel: OPENAI_MODEL,
     provider: 'openai',
     estimatedCostCents: 0,
     estimatedPromptTokens: 0,
     maxTokens: 1000,
     usedFallback: false,
     fallbackReason: undefined,
-    originalModel: 'gpt-5.6-sol',
+    originalModel: OPENAI_MODEL,
     resolvedTaskType: 'general' as never,
     classifierConfidence: 1,
     resolvedSlot: null,
@@ -102,7 +105,7 @@ function makeProcessed(): ProcessedRequest {
     isFlagshipRequest: false,
     indicResult: undefined as never,
     llmRequest: {
-      model: 'gpt-5.6-sol',
+      model: OPENAI_MODEL,
       messages: [{ role: 'user', content: 'list the files in this repo' }],
       max_tokens: 1000,
       stream: true,

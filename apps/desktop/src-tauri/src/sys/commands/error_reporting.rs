@@ -160,8 +160,12 @@ mod tests {
         seed_log_dir(dir.path(), &[CONVERSATION_RECORD]);
 
         let recent = error_get_logs(50).await.expect("error_get_logs succeeds");
-        let exported = error_export_logs().await.expect("error_export_logs succeeds");
-        let attached = get_filtered_logs().await.expect("get_filtered_logs succeeds");
+        let exported = error_export_logs()
+            .await
+            .expect("error_export_logs succeeds");
+        let attached = get_filtered_logs()
+            .await
+            .expect("get_filtered_logs succeeds");
 
         // The readers previously looked for `agiworkforce.log` in Tauri's
         // app_log_dir and found nothing, so every bundle was empty.

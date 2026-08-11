@@ -144,7 +144,14 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { cancelMobileCloudAgentRun, streamChat } from '../services/streaming';
 import { getRemoteChatDisabledReason } from '../services/remoteChatGate';
 import { localGenerate } from '@agiworkforce/local-llm';
+import { getModelMetadataById } from '@agiworkforce/types';
 import { LOCKED_CLOUD_MODELS } from '../src/features/model-picker/service';
+import {
+  SYNTHETIC_IMAGE_MODEL_ID,
+  requireAutoMode,
+  requireLocalModel,
+  requireMobileCloudModel,
+} from '../test-utils/modelFixtures';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
 import { useProjectStore } from '../src/features/projects/store';
@@ -167,6 +174,7 @@ import {
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 
+const AUTO_MODEL_ID = requireAutoMode().id;
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 const mockCancelMobileCloudAgentRun = cancelMobileCloudAgentRun as jest.MockedFunction<
   typeof cancelMobileCloudAgentRun
@@ -253,9 +261,17 @@ function resetStore() {
 }
 
 const CONV_ID = 'test-conv-123';
-const MODEL = 'claude-3-5-sonnet';
-const LOCAL_MODEL = 'qwen3-4b-instruct-2507';
-const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
+const MODEL = 'fixture-model';
+const LOCAL_MODEL = requireLocalModel().id;
+const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const SEARCH_UNSUPPORTED_MODEL = requireMobileCloudModel(
+  (model) => getModelMetadataById(model.id)?.capabilities.search !== true,
+  'Mobile Cloud model without search support',
+).id;
+const RESEARCH_MODEL = requireMobileCloudModel((model) => {
+  const capabilities = getModelMetadataById(model.id)?.capabilities;
+  return capabilities?.research === true && capabilities.search === true;
+}, 'research-and-search-capable Mobile Cloud model').id;
 
 function seedCloudConversation(model = CLOUD_MODEL) {
   const existing = getState().conversations.find((conversation) => conversation.id === CONV_ID);
@@ -424,7 +440,7 @@ describe('chatStore — streaming state', () => {
       // The preference can only ever REMOVE the flag: an unsupported model must
       // still not receive a cosmetic web_search:true.
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      const unsupportedSearchModel = 'qwen-3.7-plus';
+      const unsupportedSearchModel = SEARCH_UNSUPPORTED_MODEL;
       useTierStore.setState({ tier: 'max', genericWebSearchAvailable: false });
       seedCloudConversation(unsupportedSearchModel);
       useChatStore.setState({
@@ -451,7 +467,7 @@ describe('chatStore — streaming state', () => {
 
     it('omits web_search when neither the model nor deployment can execute it', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      const unsupportedSearchModel = 'qwen-3.7-plus';
+      const unsupportedSearchModel = SEARCH_UNSUPPORTED_MODEL;
       useTierStore.setState({ tier: 'max', genericWebSearchAvailable: false });
       seedCloudConversation(unsupportedSearchModel);
 
@@ -599,7 +615,7 @@ describe('chatStore — streaming state', () => {
 
     it('sends Deep Research only when the server handshake grants it', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
-      const researchModel = 'claude-opus-5';
+      const researchModel = RESEARCH_MODEL;
       seedCloudConversation(researchModel);
       useTierStore.setState({
         tier: 'max',
@@ -1713,7 +1729,7 @@ describe('chatStore — streaming state', () => {
     });
 
     it('resolves a Cloud Auto profile to a concrete admitted model and preserves provenance', async () => {
-      seedCloudConversation('auto-balanced');
+      seedCloudConversation(AUTO_MODEL_ID);
       useWaitlistStore.setState({ cloudUnlocked: true });
       mockRemoteDisabledReason.mockReturnValue(null);
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
@@ -1728,25 +1744,25 @@ describe('chatStore — streaming state', () => {
       );
 
       await act(async () => {
-        await getState().sendMessage(CONV_ID, 'Explain this simply', 'auto-balanced');
+        await getState().sendMessage(CONV_ID, 'Explain this simply', AUTO_MODEL_ID);
       });
 
       expect(capturedBody?.model).toEqual(expect.any(String));
-      expect(capturedBody?.model).not.toBe('auto-balanced');
+      expect(capturedBody?.model).not.toBe(AUTO_MODEL_ID);
       const messages = getState().messages[CONV_ID] ?? [];
       const userMessage = messages.find((message) => message.role === 'user');
       const assistantMessage = messages.find((message) => message.role === 'assistant');
-      expect(userMessage?.model).toBe('auto-balanced');
+      expect(userMessage?.model).toBe(AUTO_MODEL_ID);
       expect(userMessage?.metadata).toEqual(
         expect.objectContaining({
-          requestedModel: 'auto-balanced',
+          requestedModel: AUTO_MODEL_ID,
           resolvedModel: capturedBody?.model,
         }),
       );
       expect(assistantMessage?.model).toBe(capturedBody?.model);
       expect(assistantMessage?.metadata).toEqual(
         expect.objectContaining({
-          requestedModel: 'auto-balanced',
+          requestedModel: AUTO_MODEL_ID,
           resolvedModel: capturedBody?.model,
         }),
       );
@@ -2102,7 +2118,7 @@ describe('chatStore — streaming state', () => {
         getState().completeImageGeneration(CONV_ID, assistantMessageId, {
           imageUrl: 'https://example.com/generated.png',
           revisedPrompt: 'A polished product launch scene',
-          model: 'gpt-image-2',
+          model: SYNTHETIC_IMAGE_MODEL_ID,
         });
       });
 
@@ -2117,7 +2133,7 @@ describe('chatStore — streaming state', () => {
           isGeneratingImage: false,
           imageGenStatus: 'completed',
           imageGenProgress: 100,
-          model: 'gpt-image-2',
+          model: SYNTHETIC_IMAGE_MODEL_ID,
         }),
       );
       expect(getState().conversations[0]?.lastMessage).toBe(

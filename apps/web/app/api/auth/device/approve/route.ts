@@ -13,6 +13,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
+import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 
 const DeviceCodeApproveSchema = z.object({
   user_code: z
@@ -22,6 +23,7 @@ const DeviceCodeApproveSchema = z.object({
     .transform((value) => value.trim().toUpperCase())
     .refine((value) => /^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(value), 'Invalid user code format'),
   action: z.enum(['approve', 'deny']).optional(),
+  surface: z.literal('desktop').optional(),
 });
 
 interface DeviceAuthorizationRow {
@@ -117,6 +119,22 @@ async function handleDeviceCodeApprove(request: NextRequest): Promise<NextRespon
     return NextResponse.json(
       { success: true, approved: false, status: 'denied' },
       { headers: { 'Cache-Control': 'no-store' } },
+    );
+  }
+
+  if (!(await hasAcceptedCurrentTerms(authUser.userId))) {
+    const returnParams = new URLSearchParams({ user_code: userCode });
+    if (parsed.data.surface === 'desktop') returnParams.set('surface', 'desktop');
+    const returnTo = `/auth/device?${returnParams.toString()}`;
+    return NextResponse.json(
+      {
+        error: {
+          code: 'TERMS_ACCEPTANCE_REQUIRED',
+          message: 'Review and accept the current Terms of Service before approving a device.',
+        },
+        acceptanceUrl: `/login/complete?redirectTo=${encodeURIComponent(returnTo)}`,
+      },
+      { status: 403, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 

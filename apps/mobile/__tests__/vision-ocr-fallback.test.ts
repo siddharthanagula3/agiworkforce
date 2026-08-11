@@ -34,7 +34,7 @@ describe('runVisionQuery OCR fallback', () => {
 
   it('routes through native OCR service and consumes { text, regions }', async () => {
     (getModelsForRole as jest.Mock).mockReturnValue([]);
-    (getDefaultModel as jest.Mock).mockReturnValue({ id: 'qwen3-fallback' });
+    (getDefaultModel as jest.Mock).mockReturnValue({ id: 'fixture-local-fallback-model' });
     (getInstalledModel as jest.Mock).mockResolvedValue(null);
     (detectCapabilities as jest.Mock).mockResolvedValue({
       tier1Available: false,
@@ -62,9 +62,9 @@ describe('runVisionQuery OCR fallback', () => {
 
     expect(recognizeText).toHaveBeenCalledWith('file:///tmp/photo.jpg');
     expect(localGenerate).toHaveBeenCalledWith(
-      'qwen3-fallback',
+      'fixture-local-fallback-model',
       expect.objectContaining({
-        modelId: 'qwen3-fallback',
+        modelId: 'fixture-local-fallback-model',
         prompt: expect.stringContaining('Detected invoice total: $12.34'),
       }),
     );

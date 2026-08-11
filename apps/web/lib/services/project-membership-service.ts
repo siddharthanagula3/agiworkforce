@@ -18,6 +18,7 @@ export async function replaceProjectConversationMembership(
   db: DatabaseAdapter,
   params: {
     userId: string;
+    organizationId: string | null;
     projectId: string;
     conversationIds: string[];
   },
@@ -28,9 +29,10 @@ export async function replaceProjectConversationMembership(
       `select id::text as id
          from web_conversations
         where user_id = $1
+          and organization_id is not distinct from $3::uuid
           and deleted_at is null
           and id::text = any($2::text[])`,
-      [params.userId, conversationIds],
+      [params.userId, conversationIds, params.organizationId],
     );
     if (owned.length !== conversationIds.length) {
       throw new ProjectConversationMembershipError(
@@ -44,9 +46,10 @@ export async function replaceProjectConversationMembership(
         set project_id = null, updated_at = now()
       where user_id = $1
         and project_id = $2
+        and organization_id is not distinct from $4::uuid
         and deleted_at is null
         and not (id::text = any($3::text[]))`,
-    [params.userId, params.projectId, conversationIds],
+    [params.userId, params.projectId, conversationIds, params.organizationId],
   );
 
   if (conversationIds.length > 0) {
@@ -54,9 +57,10 @@ export async function replaceProjectConversationMembership(
       `update web_conversations
           set project_id = $2, updated_at = now()
         where user_id = $1
+          and organization_id is not distinct from $4::uuid
           and deleted_at is null
           and id::text = any($3::text[])`,
-      [params.userId, params.projectId, conversationIds],
+      [params.userId, params.projectId, conversationIds, params.organizationId],
     );
   }
 }

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const storageMocks = vi.hoisted(() => ({
   getObject: vi.fn(),
   objectKeyFromStorageUri: vi.fn(),
+  isObjectStorageConfigured: vi.fn(() => true),
 }));
 const pdfMocks = vi.hoisted(() => ({ getDocument: vi.fn() }));
 

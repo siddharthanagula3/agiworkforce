@@ -6,7 +6,7 @@
  * moonshot, zhipu, mistral, groq, nvidia_nim, and open_router. OpenAI,
  * Anthropic, and Google keep their native provider-managed search tools
  * (higher quality, no extra hop, no platform search-key dependency);
- * Perplexity Sonar models search natively by default and never need this tool.
+ * Perplexity search models search natively by default and never need this tool.
  * Everyone else gets this function tool, executed by the tool loop in
  * tool-loop.ts, exactly the way `url_fetch` (lib/url-fetch/url-fetch-tool.ts)
  * closes the equivalent fetch-parity gap — this module intentionally mirrors
@@ -17,9 +17,9 @@
  * (`POST https://api.perplexity.ai/search`, verified against
  * docs.perplexity.ai/docs/search/quickstart 2026-07-11) — a purpose-built
  * structured-results endpoint (`results: [{title,url,snippet,date}]`),
- * distinct from Perplexity's Sonar chat-completions endpoint. Reuses
+ * distinct from Perplexity's native-search chat-completions endpoint. Reuses
  * `PERPLEXITY_API_KEY`, already provisioned on this server for the platform's
- * own selectable Perplexity/Sonar models (see apps/web/lib/byok-providers.ts
+ * own selectable Perplexity search models (see apps/web/lib/byok-providers.ts
  * and `providers.perplexity` in packages/contracts/types/src/models.json) — no new
  * vendor account or API key is required to stand this up.
  *

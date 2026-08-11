@@ -2,7 +2,9 @@
  * SkillCard
  *
  * Renders a single skill in either grid or list view.
- * Supports click-to-expand for full details and an active/inactive toggle.
+ * Supports click-to-expand for full details. Skills shown here are loaded by
+ * the native runtime; enable/disable controls stay hidden until the runtime
+ * owns a persisted execution-admission setting.
  */
 import {
   BookOpen,
@@ -21,14 +23,12 @@ import {
 import type { ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 import { Badge } from '@/ui/Badge';
-import { Switch } from '@/ui/Switch';
 import {
   useSkillMarketplaceStore,
   type MarketplaceSkill,
   type SkillCategory,
   type ViewMode,
 } from '../../stores/skillMarketplaceStore';
-import { toast } from 'sonner';
 
 // ── Category icon map ─────────────────────────────────────────────────────────
 
@@ -97,7 +97,6 @@ interface InnerProps {
   categoryColor: string;
   categoryIcon: ReactNode;
   onExpand: () => void;
-  onToggleActive: (e: React.MouseEvent) => void;
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
@@ -105,7 +104,6 @@ interface InnerProps {
 export function SkillCard({ skill, viewMode }: SkillCardProps) {
   const expandedSkillName = useSkillMarketplaceStore((s) => s.expandedSkillName);
   const setExpandedSkill = useSkillMarketplaceStore((s) => s.setExpandedSkill);
-  const toggleSkillActive = useSkillMarketplaceStore((s) => s.toggleSkillActive);
 
   const isExpanded = expandedSkillName === skill.name;
   const displayName = humanizeName(skill.name);
@@ -117,15 +115,6 @@ export function SkillCard({ skill, viewMode }: SkillCardProps) {
     setExpandedSkill(isExpanded ? null : skill.name);
   };
 
-  const handleToggleActive = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    const nextActive = !skill.isActive;
-    toggleSkillActive(skill.name);
-    toast(nextActive ? 'Skill activated' : 'Skill deactivated', {
-      description: `"${displayName}" is now ${nextActive ? 'active' : 'inactive'}.`,
-    });
-  };
-
   const innerProps: InnerProps = {
     skill,
     isExpanded,
@@ -133,7 +122,6 @@ export function SkillCard({ skill, viewMode }: SkillCardProps) {
     categoryColor,
     categoryIcon,
     onExpand: handleExpand,
-    onToggleActive: handleToggleActive,
   };
 
   if (viewMode === 'list') {
@@ -152,7 +140,6 @@ function SkillGridCard({
   categoryColor,
   categoryIcon,
   onExpand,
-  onToggleActive,
 }: InnerProps) {
   return (
     <article
@@ -203,24 +190,13 @@ function SkillGridCard({
         </div>
       )}
 
-      {/* Footer — active toggle */}
+      {/* Runtime truth: loaded skills are available. There is no persisted
+          native enable/disable command yet, so do not render a cosmetic switch. */}
       <div className="flex items-center justify-between border-t border-border px-4 py-2.5 mt-auto">
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
           {SOURCE_LABEL[skill.sourceType] ?? skill.sourceType}
         </span>
-        <div className="flex items-center gap-2" onClick={onToggleActive}>
-          <span className="text-xs text-muted-foreground">
-            {skill.isActive ? 'Active' : 'Inactive'}
-          </span>
-          <Switch
-            checked={skill.isActive}
-            onCheckedChange={() => {
-              /* Handled by the wrapper div's onClick */
-            }}
-            aria-label={`Toggle ${displayName}`}
-            className="scale-90"
-          />
-        </div>
+        <span className="text-xs text-muted-foreground">Available</span>
       </div>
     </article>
   );
@@ -235,7 +211,6 @@ function SkillListRow({
   categoryColor,
   categoryIcon,
   onExpand,
-  onToggleActive,
 }: InnerProps) {
   return (
     <article
@@ -275,17 +250,7 @@ function SkillListRow({
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
-          {/* Toggle — stopPropagation prevents the expand button from firing */}
-          <div className="flex items-center gap-1.5" onClick={onToggleActive}>
-            <Switch
-              checked={skill.isActive}
-              onCheckedChange={() => {
-                /* Handled by wrapper div */
-              }}
-              aria-label={`Toggle ${displayName}`}
-              className="scale-90"
-            />
-          </div>
+          <span className="text-xs text-muted-foreground">Available</span>
           {isExpanded ? (
             <ChevronUp className="h-4 w-4 text-muted-foreground" />
           ) : (

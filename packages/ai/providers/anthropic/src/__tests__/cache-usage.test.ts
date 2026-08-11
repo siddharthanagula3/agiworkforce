@@ -13,6 +13,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import type { StreamChunk } from '@agiworkforce/types';
 
 import { translateAnthropicStream } from '../stream';
+import { ANTHROPIC_PREMIUM_MODEL_ID } from './model-fixtures';
 
 type Event = Anthropic.MessageStreamEvent;
 
@@ -42,7 +43,7 @@ describe('translateAnthropicStream — 1h/5m cache-write split', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-5',
+          model: ANTHROPIC_PREMIUM_MODEL_ID,
           stop_reason: null,
           stop_sequence: null,
           usage: {
@@ -80,7 +81,7 @@ describe('translateAnthropicStream — 1h/5m cache-write split', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-5',
+          model: ANTHROPIC_PREMIUM_MODEL_ID,
           stop_reason: null,
           stop_sequence: null,
           usage: {
@@ -113,7 +114,7 @@ describe('translateAnthropicStream — 1h/5m cache-write split', () => {
           type: 'message',
           role: 'assistant',
           content: [],
-          model: 'claude-opus-5',
+          model: ANTHROPIC_PREMIUM_MODEL_ID,
           stop_reason: null,
           stop_sequence: null,
           usage: {

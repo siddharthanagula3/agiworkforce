@@ -17,7 +17,22 @@
  *   end-to-end or fails CI here, rather than in production.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getAllowedModelsForTier, getRoutingSlotModel, modelsCatalog } from '@agiworkforce/types';
+import {
+  getAllowedModelsForTier,
+  getRoutingSlotModel,
+  modelsCatalog,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
+
+const ANTHROPIC_MODEL = requireProviderDefaultModel('anthropic');
+const GOOGLE_MODEL = requireProviderDefaultModel('google');
+function requireCatalogProviderModel(provider: string): string {
+  const model = Object.values(modelsCatalog.models).find(
+    (candidate) => candidate.provider === provider,
+  );
+  if (!model) throw new Error(`Canonical ${provider} fixture is missing`);
+  return model.id;
+}
 
 // enforcePlanTier hits `subscriptions` via getUserScopedClient — mock the
 // Neon client module so the dispatch tests below don't need a real DB.
@@ -77,10 +92,11 @@ describe('llm route — catalog-driven Basic allow-list', () => {
   });
 
   it('excludes flagship models that should be Pro-only', () => {
-    // claude-opus-5 + gpt-5.5 are flagship; the api-gateway must NOT
-    // serve them on Basic even if a malicious caller supplies the ID.
-    expect(BASIC_ALLOWED_MODELS.has('claude-opus-5')).toBe(false);
-    expect(BASIC_ALLOWED_MODELS.has('gpt-5.5')).toBe(false);
+    const flagshipModels = modelsCatalog.tierAllowedModels.flagship_additions;
+    expect(flagshipModels.length).toBeGreaterThan(0);
+    for (const modelId of flagshipModels) {
+      expect(BASIC_ALLOWED_MODELS.has(modelId)).toBe(false);
+    }
   });
 
   it('every Basic-allowed model has a known provider in the catalog', () => {
@@ -99,17 +115,21 @@ describe('llm route — catalog-driven Basic allow-list', () => {
 });
 
 describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
-  it('resolves anthropic from claude-* models via the catalog', () => {
-    expect(resolveProvider('claude-sonnet-5')).toBe('anthropic');
-    expect(resolveProvider('claude-sonnet-5')).toBe('anthropic');
+  it('resolves Anthropic models via the catalog', () => {
+    expect(resolveProvider(ANTHROPIC_MODEL)).toBe('anthropic');
+    expect(resolveProvider(ANTHROPIC_MODEL)).toBe('anthropic');
   });
 
-  it('resolves openai from gpt-* and o-series models via the catalog', () => {
-    expect(resolveProvider('gpt-5.4-mini')).toBe('openai');
+  it('resolves OpenAI models from canonical catalog metadata', () => {
+    const openAIModel = Object.values(modelsCatalog.models).find(
+      (model) => model.provider === 'openai',
+    );
+    expect(openAIModel).toBeDefined();
+    expect(resolveProvider(openAIModel!.id)).toBe('openai');
   });
 
-  it('resolves google from gemini-* models via the catalog', () => {
-    expect(resolveProvider('gemini-3.5-flash-lite')).toBe('google');
+  it('resolves Google models via the catalog', () => {
+    expect(resolveProvider(GOOGLE_MODEL)).toBe('google');
   });
 
   it('throws 400 for catalog-unknown models (defense against typos)', () => {
@@ -122,13 +142,13 @@ describe('llm route — resolveProvider catalog lookup (P0-I)', () => {
     // and Perplexity now resolve instead of failing closed. Local-device
     // providers (lmstudio, and ollama unless the server deploys one)
     // remain outside the managed proxy; catalog-unknown models still 400.
-    expect(resolveProvider('grok-4.5')).toBe('xai');
-    expect(resolveProvider('deepseek-v4-flash')).toBe('deepseek');
-    expect(resolveProvider('sonar')).toBe('perplexity');
+    expect(resolveProvider(requireCatalogProviderModel('xai'))).toBe('xai');
+    expect(resolveProvider(requireCatalogProviderModel('deepseek'))).toBe('deepseek');
+    expect(resolveProvider(requireCatalogProviderModel('perplexity'))).toBe('perplexity');
   });
 
   it('proxies the current MiniMax model through its registered leaf adapter', () => {
-    expect(resolveProvider('minimax-m3')).toBe('minimax');
+    expect(resolveProvider(requireCatalogProviderModel('minimax'))).toBe('minimax');
   });
 
   it('lookup is consistent with the catalog provider field for every Basic model', () => {
@@ -236,7 +256,7 @@ describe('llm route — edge-case stress (Phase 4 hardening)', () => {
   });
 
   it('resolveProvider is deterministic under 1000 rapid calls for the same model', () => {
-    const model = 'claude-sonnet-5';
+    const model = ANTHROPIC_MODEL;
     const expected = resolveProvider(model);
     for (let i = 0; i < 1000; i++) {
       expect(resolveProvider(model)).toBe(expected);
@@ -269,8 +289,8 @@ describe('llm route — enforcePlanTier tier ladder (founder directive 2026-07-1
     expect(new Set(FLAGSHIP_ALLOWED_MODELS)).toEqual(
       new Set([...PRO_ALLOWED_MODELS, ...getAllowedModelsForTier('flagship_additions')]),
     );
-    // The directive's named models are flagship-gated.
-    for (const id of ['claude-opus-5', 'claude-fable-5', 'gpt-5.6-sol']) {
+    // Every catalog flagship addition is flagship-gated.
+    for (const id of modelsCatalog.tierAllowedModels.flagship_additions) {
       expect(PRO_ALLOWED_MODELS.has(id)).toBe(false);
       expect(FLAGSHIP_ALLOWED_MODELS.has(id)).toBe(true);
     }
@@ -356,7 +376,7 @@ describe('llm route — enforcePlanTier tier ladder (founder directive 2026-07-1
 
     it(`${tier} tier rejects a catalog-unknown model with 403`, async () => {
       tierState.planTier = tier;
-      await expect(enforcePlanTier('user-1', 'token', 'gpt-99-invented-model')).rejects.toThrow(
+      await expect(enforcePlanTier('user-1', 'token', 'fixture-unknown-model')).rejects.toThrow(
         /not available on managed cloud/,
       );
     });

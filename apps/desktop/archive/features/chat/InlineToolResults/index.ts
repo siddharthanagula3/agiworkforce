@@ -208,7 +208,6 @@ export const TOOL_RENDERERS: Record<
   image_generate: InlineImageGeneration,
   media_generate_image: InlineImageGeneration,
   dalle_generate: InlineImageGeneration,
-  stable_diffusion_generate: InlineImageGeneration,
   imagen_generate: InlineImageGeneration,
   video_generate: InlineVideoGeneration,
   media_generate_video: InlineVideoGeneration,

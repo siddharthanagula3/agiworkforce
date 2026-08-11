@@ -7,16 +7,22 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { classifyTaskLocally } from '@agiworkforce/routing';
 import { useChat } from '../useChat';
 import { useChatStore } from '../../stores/chatStore';
 import { useModelStore } from '../../stores/modelStore';
 import { useTierStore } from '../../stores/tierStore';
+import { createChatModelInfo } from '../../lib/modelInfo';
+import {
+  requireRoutableCatalogModel,
+  requireSelectedCatalogRoute,
+} from '../../test/modelCatalogFixtures';
 import type { ChatRuntime, StreamCallback } from '../../lib/runtime';
 import type { ModelInfo } from '../../lib/types';
 
 const localModel: ModelInfo = {
-  id: 'llama-local',
-  name: 'Llama Local',
+  id: 'fixture-local-model',
+  name: 'Local Model Fixture',
   provider: 'ollama',
   tier: 'standard',
   supportsThinking: false,
@@ -495,8 +501,8 @@ describe('useChat — stream events stay pinned to their origin conversation acr
 
 describe('useChat — execution-boundary model admission', () => {
   const byokModel: ModelInfo = {
-    id: 'gpt-direct',
-    name: 'GPT Direct',
+    id: 'fixture-direct-model',
+    name: 'Direct Provider Fixture',
     provider: 'openai',
     tier: 'standard',
     supportsThinking: true,
@@ -565,6 +571,10 @@ describe('useChat — execution-boundary model admission', () => {
 });
 
 describe('useChat — registry-backed Auto routing', () => {
+  const codingPrompt = 'Implement a function and unit tests';
+  const explanationPrompt = 'Explain this function';
+  const codingTaskType = classifyTaskLocally(codingPrompt, []).type;
+  const explanationTaskType = classifyTaskLocally(explanationPrompt, []).type;
   const autoModel: ModelInfo = {
     id: 'auto-balanced',
     name: 'Auto Balanced',
@@ -577,18 +587,77 @@ describe('useChat — registry-backed Auto routing', () => {
     isLocal: false,
     isByok: false,
   };
-  const routedModel: ModelInfo = {
-    id: 'claude-sonnet-5',
-    name: 'Claude Sonnet 5',
-    provider: 'anthropic',
-    tier: 'standard',
-    supportsThinking: true,
-    supportsVision: true,
-    supportsTools: true,
-    contextWindow: 1_000_000,
-    isLocal: false,
-    isByok: false,
-  };
+  const webAutoDecision = requireSelectedCatalogRoute(
+    {
+      selection: autoModel.id,
+      taskType: codingTaskType,
+      subscriptionTier: 'pro',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'web/cloud-chat',
+    },
+    'a Web managed-cloud Auto route for coding',
+  );
+  const desktopAutoDecision = requireSelectedCatalogRoute(
+    {
+      selection: autoModel.id,
+      taskType: codingTaskType,
+      subscriptionTier: 'pro',
+      trustMode: 'managed_cloud',
+      runtimeProfileId: 'desktop/cloud-chat',
+    },
+    'a Desktop managed-cloud Auto route for coding',
+  );
+
+  function toCatalogModelInfo(
+    metadata: ReturnType<typeof requireRoutableCatalogModel>,
+    isByok = false,
+  ): ModelInfo {
+    return createChatModelInfo({
+      id: metadata.id,
+      name: 'stale fixture label',
+      provider: metadata.provider,
+      isLocal: false,
+      isByok,
+    });
+  }
+
+  const explicitWebModel = toCatalogModelInfo(
+    requireRoutableCatalogModel(
+      (model) => model.contextWindow !== undefined && model.capabilities.tools,
+      {
+        taskType: explanationTaskType,
+        subscriptionTier: 'pro',
+        trustMode: 'managed_cloud',
+        runtimeProfileId: 'web/cloud-chat',
+      },
+      'a live explicit Web chat model',
+    ),
+  );
+  const explicitDesktopModel = toCatalogModelInfo(
+    requireRoutableCatalogModel(
+      (model) => model.contextWindow !== undefined && model.capabilities.tools,
+      {
+        taskType: explanationTaskType,
+        subscriptionTier: 'pro',
+        trustMode: 'managed_cloud',
+        runtimeProfileId: 'desktop/cloud-chat',
+      },
+      'a live explicit Desktop managed-cloud chat model',
+    ),
+  );
+  const explicitByokModel = toCatalogModelInfo(
+    requireRoutableCatalogModel(
+      (model) => model.contextWindow !== undefined && model.capabilities.tools,
+      {
+        taskType: explanationTaskType,
+        subscriptionTier: 'byok',
+        trustMode: 'byok',
+        runtimeProfileId: 'desktop/byok-chat',
+      },
+      'a live explicit Desktop BYOK chat model',
+    ),
+    true,
+  );
 
   function seedCloudConversation() {
     useChatStore.setState({
@@ -607,7 +676,7 @@ describe('useChat — registry-backed Auto routing', () => {
       isStreaming: false,
     } as never);
     useModelStore.setState({
-      models: [autoModel, routedModel],
+      models: [autoModel],
       selectedModelId: autoModel.id,
       recentModelIds: [],
       lastRoutingDecision: null,
@@ -628,13 +697,16 @@ describe('useChat — registry-backed Auto routing', () => {
     };
     const { result } = renderHook(() => useChat(runtime, { surfaceId: 'web-auto-policy' }));
 
-    act(() => result.current.sendMessage('Implement a function and unit tests'));
+    act(() => result.current.sendMessage(codingPrompt));
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-cloud',
-      'Implement a function and unit tests',
-      expect.objectContaining({ model: 'claude-sonnet-5', provider: 'anthropic' }),
+      codingPrompt,
+      expect.objectContaining({
+        model: webAutoDecision.modelKey,
+        provider: webAutoDecision.provider,
+      }),
     );
   });
 
@@ -713,6 +785,46 @@ describe('useChat — registry-backed Auto routing', () => {
     });
   });
 
+  it('forwards an admitted skill name and marks the turn as non-regenerable', async () => {
+    seedCloudConversation();
+    const sendMessage = vi.fn(async () => {});
+    const runtime: ChatRuntime = {
+      sendMessage,
+      stopGeneration: vi.fn(),
+      createConversation: vi.fn(async () => 'conv-cloud'),
+      deleteConversation: vi.fn(async () => {}),
+      renameConversation: vi.fn(async () => {}),
+      getPlatform: () => 'web',
+    };
+    const { result } = renderHook(() => useChat(runtime, { surfaceId: 'web-skill' }));
+
+    act(() =>
+      result.current.sendMessage(
+        'Review this',
+        undefined,
+        undefined,
+        undefined,
+        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'fixture-reviewed-skill',
+      ),
+    );
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+    expect(sendMessage).toHaveBeenCalledWith(
+      'conv-cloud',
+      'Review this',
+      expect.objectContaining({ skillName: 'fixture-reviewed-skill' }),
+    );
+    const userMessage = useChatStore
+      .getState()
+      .messagesByConversation['conv-cloud']?.find((message) => message.role === 'user');
+    expect(userMessage?.metadata?.['sendReplay']).toEqual({ hasSkillInstruction: true });
+  });
+
   it('does not forward a stale Research request through an unsupported runtime', async () => {
     seedCloudConversation();
     const sendMessage = vi.fn(async () => {});
@@ -759,19 +871,25 @@ describe('useChat — registry-backed Auto routing', () => {
     };
     const { result } = renderHook(() => useChat(runtime, { surfaceId: 'desktop-auto-policy' }));
 
-    act(() => result.current.sendMessage('Implement a function and unit tests'));
+    act(() => result.current.sendMessage(codingPrompt));
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-cloud',
-      'Implement a function and unit tests',
-      expect.objectContaining({ model: 'claude-sonnet-5', provider: 'anthropic' }),
+      codingPrompt,
+      expect.objectContaining({
+        model: desktopAutoDecision.modelKey,
+        provider: desktopAutoDecision.provider,
+      }),
     );
   });
 
   it('admits an explicit model through the implemented Desktop cloud profile', async () => {
     seedCloudConversation();
-    useModelStore.setState({ selectedModelId: routedModel.id });
+    useModelStore.setState({
+      models: [explicitDesktopModel],
+      selectedModelId: explicitDesktopModel.id,
+    });
     const sendMessage = vi.fn(async () => {});
     const runtime: ChatRuntime = {
       sendMessage,
@@ -783,25 +901,22 @@ describe('useChat — registry-backed Auto routing', () => {
     };
     const { result } = renderHook(() => useChat(runtime, { surfaceId: 'desktop-explicit-policy' }));
 
-    act(() => result.current.sendMessage('Explain this function'));
+    act(() => result.current.sendMessage(explanationPrompt));
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-cloud',
-      'Explain this function',
-      expect.objectContaining({ model: 'claude-sonnet-5', provider: 'anthropic' }),
+      explanationPrompt,
+      expect.objectContaining({
+        model: explicitDesktopModel.id,
+        provider: explicitDesktopModel.provider,
+      }),
     );
   });
 
-  it('admits a GA explicit model on Web', async () => {
+  it('admits a live explicit catalog model on Web', async () => {
     seedCloudConversation();
-    const unavailableModel: ModelInfo = {
-      ...routedModel,
-      id: 'gpt-5.6-sol',
-      name: 'GPT-5.6 Sol',
-      provider: 'openai',
-    };
-    useModelStore.setState({ models: [unavailableModel], selectedModelId: unavailableModel.id });
+    useModelStore.setState({ models: [explicitWebModel], selectedModelId: explicitWebModel.id });
     const sendMessage = vi.fn(async () => {});
     const runtime: ChatRuntime = {
       sendMessage,
@@ -813,18 +928,20 @@ describe('useChat — registry-backed Auto routing', () => {
     };
     const { result } = renderHook(() => useChat(runtime, { surfaceId: 'web-explicit-policy' }));
 
-    act(() => result.current.sendMessage('Explain this function'));
+    act(() => result.current.sendMessage(explanationPrompt));
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-cloud',
-      'Explain this function',
-      expect.objectContaining({ model: 'gpt-5.6-sol', provider: 'openai' }),
+      explanationPrompt,
+      expect.objectContaining({
+        model: explicitWebModel.id,
+        provider: explicitWebModel.provider,
+      }),
     );
   });
 
   it('admits a canonical explicit model through the Desktop BYOK registry profile', async () => {
-    const byokModel: ModelInfo = { ...routedModel, isByok: true };
     useChatStore.setState({
       activeConversationId: 'conv-byok',
       conversations: [
@@ -841,8 +958,8 @@ describe('useChat — registry-backed Auto routing', () => {
       isStreaming: false,
     } as never);
     useModelStore.setState({
-      models: [byokModel],
-      selectedModelId: byokModel.id,
+      models: [explicitByokModel],
+      selectedModelId: explicitByokModel.id,
       recentModelIds: [],
       lastRoutingDecision: null,
     });
@@ -857,22 +974,25 @@ describe('useChat — registry-backed Auto routing', () => {
     };
     const { result } = renderHook(() => useChat(runtime, { surfaceId: 'desktop-byok-policy' }));
 
-    act(() => result.current.sendMessage('Explain this function'));
+    act(() => result.current.sendMessage(explanationPrompt));
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
     expect(sendMessage).toHaveBeenCalledWith(
       'conv-byok',
-      'Explain this function',
-      expect.objectContaining({ model: 'claude-sonnet-5', provider: 'anthropic' }),
+      explanationPrompt,
+      expect.objectContaining({
+        model: explicitByokModel.id,
+        provider: explicitByokModel.provider,
+      }),
     );
   });
 
   it('keeps a host-discovered BYOK model usable when it is intentionally absent from the static registry', async () => {
     const dynamicByokModel: ModelInfo = {
-      ...routedModel,
-      id: 'private-gateway/custom-model',
-      name: 'Private Gateway Model',
-      provider: 'private_gateway',
+      ...explicitByokModel,
+      id: 'fixture-private-gateway-model',
+      name: 'Private Gateway Model Fixture',
+      provider: 'fixture_private_gateway',
       isByok: true,
     };
     useChatStore.setState({

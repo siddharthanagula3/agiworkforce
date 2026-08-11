@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState, type FormEvent } from 'react';
-import Link from 'next/link';
-import { Building2, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
+import { Building2, Copy, Mail, RefreshCw, RotateCw, Trash2, Users, X } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,14 +14,21 @@ import {
 } from '@agiworkforce/ui';
 import {
   useCreateOrganization,
-  useInviteTeamMember,
+  useCreateTeamInvitation,
+  useLeaveOrganization,
   useOrganizationOverview,
+  useSwitchWorkspace,
   useRemoveTeamMember,
+  useResendTeamInvitation,
+  useRevokeTeamInvitation,
+  useTeamInvitations,
   useTeamMembers,
   useUpdateOrganizationSettings,
   useUpdateTeamMemberRole,
+  type TeamInvitation,
   type TeamMember,
 } from '../hooks/use-settings-queries';
+import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { SSOPanel } from './team/SSOPanel';
 
 type MemberRole = TeamMember['role'];
@@ -30,6 +36,8 @@ type MemberRole = TeamMember['role'];
 type PendingMemberAction =
   | { kind: 'role'; member: TeamMember; role: MemberRole }
   | { kind: 'remove'; member: TeamMember }
+  | { kind: 'revoke-invitation'; invitation: TeamInvitation }
+  | { kind: 'leave-workspace' }
   | null;
 
 const controlStyle = {
@@ -55,12 +63,37 @@ const primaryButtonStyle = {
   cursor: 'pointer',
 } as const;
 
+const secondaryButtonStyle = {
+  minHeight: 36,
+  border: '1px solid var(--settings-border)',
+  borderRadius: 'var(--radius-md)',
+  background: 'transparent',
+  color: 'var(--text-2)',
+  fontSize: 12,
+  fontWeight: 600,
+  padding: '7px 11px',
+  cursor: 'pointer',
+} as const;
+
 function titleCase(value: string): string {
   return value
     .split('_')
     .filter(Boolean)
     .map((part) => `${part[0]!.toUpperCase()}${part.slice(1)}`)
     .join(' ');
+}
+
+function formatDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? value
+    : new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(date);
+}
+
+function buildInvitationLink(token: string): string {
+  const url = new URL('/invite', window.location.origin);
+  url.hash = new URLSearchParams({ token }).toString();
+  return url.toString();
 }
 
 function SectionCard({
@@ -123,17 +156,28 @@ export function TeamSection() {
   const access = overview?.access;
 
   const membersQuery = useTeamMembers(organization?.id);
+  const invitationsQuery = useTeamInvitations(organization?.id);
   const createOrganization = useCreateOrganization();
   const updateOrganization = useUpdateOrganizationSettings();
-  const addMember = useInviteTeamMember();
+  const switchWorkspace = useSwitchWorkspace();
+  const createInvitation = useCreateTeamInvitation();
+  const resendInvitation = useResendTeamInvitation();
+  const revokeInvitation = useRevokeTeamInvitation();
+  const leaveOrganization = useLeaveOrganization();
   const updateRole = useUpdateTeamMemberRole();
   const removeMember = useRemoveTeamMember();
 
   const [workspaceName, setWorkspaceName] = useState('');
   const [workspaceSlug, setWorkspaceSlug] = useState('');
   const [memberEmail, setMemberEmail] = useState('');
-  const [memberRole, setMemberRole] = useState<MemberRole>('member');
+  const [memberRole, setMemberRole] = useState<TeamInvitation['role']>('member');
   const [pendingAction, setPendingAction] = useState<PendingMemberAction>(null);
+  const [invitationLink, setInvitationLink] = useState<{
+    email: string;
+    url: string;
+  } | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const [successorUserId, setSuccessorUserId] = useState('');
 
   useEffect(() => {
     if (organization) {
@@ -173,6 +217,47 @@ export function TeamSection() {
     organization !== null &&
     ['owner', 'admin'].includes(organization.currentUserRole);
   const isOwner = organization?.currentUserRole === 'owner';
+  const pendingInvitations =
+    invitationsQuery.data?.invitations.filter((invitation) => invitation.status === 'pending') ??
+    [];
+  const licensedSeats = invitationsQuery.data?.seats?.licensedSeats ?? access.maxMembers;
+  const seatsConsumed = invitationsQuery.data?.seats?.seatsConsumed ?? access.seatsConsumed;
+  const seatsAvailable = invitationsQuery.data?.seats?.seatsAvailable ?? access.seatsAvailable;
+  const seatSource = invitationsQuery.data?.seats?.seatSource ?? access.seatSource;
+  const workspaces = overview.workspaces ?? [];
+
+  const workspacePicker =
+    workspaces.length > 0 ? (
+      <SectionCard
+        title="Active workspace"
+        description="Switching reloads tenant-owned chats, projects, tools, and settings together."
+      >
+        <div style={{ padding: 20, maxWidth: 520 }}>
+          <label style={{ display: 'grid', gap: 7, color: 'var(--text-2)', fontSize: 13 }}>
+            Workspace
+            <select
+              aria-label="Active workspace"
+              value={overview.activeOrganizationId ?? 'personal'}
+              disabled={switchWorkspace.isPending}
+              onChange={(event) => {
+                switchWorkspace.mutate(
+                  event.target.value === 'personal' ? null : event.target.value,
+                );
+              }}
+              style={controlStyle}
+            >
+              <option value="personal">Personal</option>
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name} · {titleCase(workspace.role)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <InlineError error={switchWorkspace.error} />
+        </div>
+      </SectionCard>
+    ) : null;
 
   function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -194,19 +279,65 @@ export function TeamSection() {
     });
   }
 
-  function handleAddMember(event: FormEvent) {
+  function handleInviteMember(event: FormEvent) {
     event.preventDefault();
     if (!organization) return;
-    addMember.mutate({
-      organizationId: organization.id,
-      email: memberEmail.trim(),
-      role: memberRole,
-    });
+    const email = memberEmail.trim();
+    createInvitation.mutate(
+      {
+        organizationId: organization.id,
+        email,
+        role: memberRole,
+      },
+      {
+        onSuccess: (result) => {
+          setInvitationLink({ email, url: buildInvitationLink(result.inviteToken) });
+          setMemberEmail('');
+          setCopyStatus('idle');
+        },
+      },
+    );
+  }
+
+  function handleRenewInvitation(invitation: TeamInvitation) {
+    if (!organization) return;
+    resendInvitation.mutate(
+      { organizationId: organization.id, invitationId: invitation.id },
+      {
+        onSuccess: (result) => {
+          setInvitationLink({
+            email: invitation.email,
+            url: buildInvitationLink(result.inviteToken),
+          });
+          setCopyStatus('idle');
+        },
+      },
+    );
+  }
+
+  async function copyInvitationLink() {
+    if (!invitationLink || !navigator.clipboard?.writeText) {
+      setCopyStatus('failed');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(invitationLink.url);
+      setCopyStatus('copied');
+    } catch {
+      setCopyStatus('failed');
+    }
   }
 
   function confirmMemberAction() {
     if (!pendingAction || !organization) return;
-    if (pendingAction.kind === 'remove') {
+    if (pendingAction.kind === 'revoke-invitation') {
+      revokeInvitation.mutate({
+        invitationId: pendingAction.invitation.id,
+        organizationId: organization.id,
+      });
+    } else if (pendingAction.kind === 'leave-workspace') {
+      leaveOrganization.mutate(successorUserId ? { successorUserId } : {});
+    } else if (pendingAction.kind === 'remove') {
       removeMember.mutate({
         memberId: pendingAction.member.id,
         organizationId: organization.id,
@@ -241,15 +372,17 @@ export function TeamSection() {
           </p>
         </div>
 
+        {workspacePicker}
+
         {!access.canManageTeam ? (
           <SectionCard title="Team administration">
             <div style={{ padding: 20 }}>
               <p style={{ color: 'var(--text-2)', fontSize: 14, lineHeight: 1.55, margin: 0 }}>
-                Team administration requires a provisioned Team or Enterprise plan. Your current
-                plan is {titleCase(access.plan)}.
+                Team administration requires a Team or Enterprise plan. Choose at least 2 Team seats
+                to create a workspace. Your current plan is {titleCase(access.plan)}.
               </p>
-              <Link
-                href="/contact-sales"
+              <SettingsPageLink
+                href="/pricing#pricing-team-title"
                 style={{
                   ...primaryButtonStyle,
                   display: 'inline-flex',
@@ -258,14 +391,14 @@ export function TeamSection() {
                   textDecoration: 'none',
                 }}
               >
-                Contact sales
-              </Link>
+                Choose Team seats
+              </SettingsPageLink>
             </div>
           </SectionCard>
         ) : (
           <SectionCard
             title="Create your workspace"
-            description="Your account can belong to one workspace in the current product."
+            description="Create the workspace you own. Invitations can add you to other workspaces."
           >
             <form
               onSubmit={handleCreate}
@@ -329,6 +462,8 @@ export function TeamSection() {
           Manage workspace details and the AGI accounts with access.
         </p>
       </div>
+
+      {workspacePicker}
 
       {!access.canManageTeam ? (
         <div
@@ -397,13 +532,77 @@ export function TeamSection() {
         </form>
       </SectionCard>
 
-      {canAdminister ? (
-        <SectionCard
-          title="Add an existing account"
-          description="The person must already have an AGI account."
+      <SectionCard
+        title="Seats & billing"
+        description={
+          seatSource === 'billing'
+            ? 'Licensed seat totals are synchronized from Stripe billing.'
+            : 'Seat totals are not linked to a Stripe subscription yet.'
+        }
+      >
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gap: 18,
+            padding: 20,
+          }}
         >
+          <div>
+            <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Licensed</div>
+            <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
+              {licensedSeats ?? '—'}
+            </div>
+          </div>
+          <div>
+            <div style={{ color: 'var(--text-3)', fontSize: 12 }}>In use</div>
+            <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
+              {seatsConsumed ?? '—'}
+            </div>
+          </div>
+          <div>
+            <div style={{ color: 'var(--text-3)', fontSize: 12 }}>Available</div>
+            <div style={{ color: 'var(--text-1)', fontSize: 20, fontWeight: 650 }}>
+              {seatsAvailable ?? '—'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'end', gap: 8 }}>
+            <SettingsPageLink
+              href={
+                typeof licensedSeats === 'number'
+                  ? `/pricing?seats=${licensedSeats}#pricing-team-title`
+                  : '/pricing#pricing-team-title'
+              }
+              style={{ ...secondaryButtonStyle, display: 'inline-flex', textDecoration: 'none' }}
+            >
+              Change seats
+            </SettingsPageLink>
+            <SettingsSectionLink
+              section="billing"
+              style={{ ...secondaryButtonStyle, display: 'inline-flex', textDecoration: 'none' }}
+            >
+              Manage billing
+            </SettingsSectionLink>
+          </div>
+        </div>
+        <p
+          style={{
+            borderTop: '1px solid var(--settings-border)',
+            color: 'var(--text-3)',
+            fontSize: 12,
+            lineHeight: 1.5,
+            margin: 0,
+            padding: '10px 20px',
+          }}
+        >
+          Active members and pending invitations each reserve one seat.
+        </p>
+      </SectionCard>
+
+      {canAdminister ? (
+        <SectionCard title="Invite teammate" description="Invitations expire after 7 days.">
           <form
-            onSubmit={handleAddMember}
+            onSubmit={handleInviteMember}
             style={{
               display: 'flex',
               flexWrap: 'wrap',
@@ -421,9 +620,9 @@ export function TeamSection() {
                 fontSize: 13,
               }}
             >
-              AGI account email
+              Email address
               <input
-                aria-label="AGI account email"
+                aria-label="Invitee email"
                 type="email"
                 value={memberEmail}
                 onChange={(event) => setMemberEmail(event.target.value)}
@@ -442,9 +641,9 @@ export function TeamSection() {
             >
               Role
               <select
-                aria-label="Member role"
+                aria-label="Invitation role"
                 value={memberRole}
-                onChange={(event) => setMemberRole(event.target.value as MemberRole)}
+                onChange={(event) => setMemberRole(event.target.value as TeamInvitation['role'])}
                 style={controlStyle}
               >
                 <option value="member">Member role</option>
@@ -452,18 +651,168 @@ export function TeamSection() {
                 <option value="admin">Admin role</option>
               </select>
             </label>
-            <button type="submit" disabled={addMember.isPending} style={primaryButtonStyle}>
-              <UserPlus size={14} style={{ marginRight: 7, verticalAlign: -2 }} />
-              {addMember.isPending ? 'Adding…' : 'Add member'}
+            <button
+              type="submit"
+              disabled={createInvitation.isPending || seatsAvailable === 0}
+              style={primaryButtonStyle}
+            >
+              <Mail size={14} style={{ marginRight: 7, verticalAlign: -2 }} />
+              {createInvitation.isPending ? 'Creating…' : 'Create invitation'}
             </button>
             <div style={{ flexBasis: '100%' }}>
               <p style={{ color: 'var(--text-3)', fontSize: 12, lineHeight: 1.5, margin: 0 }}>
-                No invitation email is sent. If the address has no AGI account, nothing is added. An
-                organization has exactly one owner — use Transfer ownership to move it.
+                No email is sent yet. Copy the private link after creating the invitation and send
+                it to that address. The recipient must sign in with the invited email.
               </p>
-              <InlineError error={addMember.error} />
+              {seatsAvailable === 0 ? (
+                <p role="alert" style={{ color: 'var(--text-2)', fontSize: 12, margin: '8px 0 0' }}>
+                  No seats are available. Revoke an invitation, remove a member, or buy more seats.
+                </p>
+              ) : null}
+              <InlineError error={createInvitation.error} />
             </div>
           </form>
+
+          {invitationLink ? (
+            <div
+              role="status"
+              style={{
+                borderTop: '1px solid var(--settings-border)',
+                background: 'var(--bg-base)',
+                padding: 20,
+              }}
+            >
+              <div
+                style={{
+                  alignItems: 'center',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 12,
+                  marginBottom: 8,
+                }}
+              >
+                <div style={{ color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}>
+                  Private link for {invitationLink.email}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Dismiss invitation link"
+                  onClick={() => setInvitationLink(null)}
+                  style={{ ...secondaryButtonStyle, minHeight: 32, padding: 7 }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <input
+                  aria-label="Private invitation link"
+                  readOnly
+                  value={invitationLink.url}
+                  style={{ ...controlStyle, flex: '1 1 280px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => void copyInvitationLink()}
+                  style={primaryButtonStyle}
+                >
+                  <Copy size={14} style={{ marginRight: 7, verticalAlign: -2 }} />
+                  {copyStatus === 'copied' ? 'Copied' : 'Copy link'}
+                </button>
+              </div>
+              {copyStatus === 'failed' ? (
+                <p role="alert" style={{ color: 'var(--text-2)', fontSize: 12, margin: '8px 0 0' }}>
+                  Copy is unavailable in this browser. Select the link and copy it manually.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+        </SectionCard>
+      ) : null}
+
+      {canAdminister ? (
+        <SectionCard
+          title="Pending invitations"
+          description={`${pendingInvitations.length} pending ${pendingInvitations.length === 1 ? 'invitation' : 'invitations'}`}
+        >
+          {invitationsQuery.isLoading ? (
+            <div role="status" style={{ padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
+              Loading invitations…
+            </div>
+          ) : invitationsQuery.isError ? (
+            <div style={{ padding: 20 }}>
+              <p role="alert" style={{ color: 'var(--text-2)', fontSize: 13, margin: '0 0 10px' }}>
+                Invitations could not be loaded.
+              </p>
+              <button
+                type="button"
+                onClick={() => void invitationsQuery.refetch()}
+                style={secondaryButtonStyle}
+              >
+                Try again
+              </button>
+            </div>
+          ) : pendingInvitations.length === 0 ? (
+            <div style={{ padding: 20, color: 'var(--text-3)', fontSize: 13 }}>
+              No pending invitations.
+            </div>
+          ) : (
+            pendingInvitations.map((invitation, index) => (
+              <div
+                key={invitation.id}
+                style={{
+                  alignItems: 'center',
+                  borderTop: index === 0 ? 0 : '1px solid var(--settings-border)',
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 10,
+                  minHeight: 66,
+                  padding: '12px 20px',
+                }}
+              >
+                <div style={{ minWidth: 0, flex: '1 1 220px' }}>
+                  <div
+                    style={{
+                      color: 'var(--text-1)',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={invitation.email}
+                  >
+                    {invitation.email}
+                  </div>
+                  <div style={{ color: 'var(--text-3)', fontSize: 12 }}>
+                    {titleCase(invitation.role)} · expires {formatDate(invitation.expiresAt)}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Renew invitation for ${invitation.email}`}
+                  disabled={resendInvitation.isPending}
+                  onClick={() => handleRenewInvitation(invitation)}
+                  style={secondaryButtonStyle}
+                >
+                  <RotateCw size={13} style={{ marginRight: 6, verticalAlign: -2 }} />
+                  New link
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Revoke invitation for ${invitation.email}`}
+                  disabled={revokeInvitation.isPending}
+                  onClick={() => setPendingAction({ kind: 'revoke-invitation', invitation })}
+                  style={{
+                    ...secondaryButtonStyle,
+                    color: 'var(--settings-destructive-foreground, #ef4444)',
+                  }}
+                >
+                  Revoke
+                </button>
+              </div>
+            ))
+          )}
+          <InlineError error={resendInvitation.error ?? revokeInvitation.error} />
         </SectionCard>
       ) : null}
 
@@ -614,6 +963,81 @@ export function TeamSection() {
         <InlineError error={updateRole.error ?? removeMember.error} />
       </SectionCard>
 
+      <SectionCard
+        title="Workspace membership"
+        description="Leaving releases your seat and removes this workspace from your account."
+      >
+        <div style={{ padding: 20 }}>
+          {isOwner ? (
+            <>
+              <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
+                Choose a successor. Ownership transfers and your membership is removed in one safe
+                operation, so the workspace is never orphaned.
+              </p>
+              <label
+                style={{
+                  display: 'grid',
+                  gap: 7,
+                  color: 'var(--text-2)',
+                  fontSize: 13,
+                  marginTop: 14,
+                }}
+              >
+                New owner
+                <select
+                  aria-label="New workspace owner"
+                  value={successorUserId}
+                  onChange={(event) => setSuccessorUserId(event.target.value)}
+                  style={{ ...controlStyle, maxWidth: 360 }}
+                >
+                  <option value="">Choose a member</option>
+                  {(membersQuery.data ?? [])
+                    .filter((member) => !member.isCurrentUser)
+                    .map((member) => (
+                      <option key={member.userId} value={member.userId}>
+                        {member.name} ({member.email})
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => setPendingAction({ kind: 'leave-workspace' })}
+                disabled={!successorUserId || leaveOrganization.isPending}
+                style={{
+                  ...secondaryButtonStyle,
+                  color: 'var(--settings-destructive-foreground, #ef4444)',
+                  marginTop: 14,
+                }}
+              >
+                {leaveOrganization.isPending ? 'Leaving…' : 'Transfer ownership and leave'}
+              </button>
+              <InlineError error={leaveOrganization.error} />
+            </>
+          ) : (
+            <>
+              <p style={{ color: 'var(--text-2)', fontSize: 13, lineHeight: 1.55, margin: 0 }}>
+                You will immediately lose access. After leaving, you can accept an invitation to a
+                different workspace.
+              </p>
+              <button
+                type="button"
+                onClick={() => setPendingAction({ kind: 'leave-workspace' })}
+                disabled={leaveOrganization.isPending}
+                style={{
+                  ...secondaryButtonStyle,
+                  color: 'var(--settings-destructive-foreground, #ef4444)',
+                  marginTop: 14,
+                }}
+              >
+                {leaveOrganization.isPending ? 'Leaving…' : 'Leave workspace'}
+              </button>
+              <InlineError error={leaveOrganization.error} />
+            </>
+          )}
+        </div>
+      </SectionCard>
+
       {/*
         Enterprise SSO. The panel asks the server whether this organization is
         entitled and renders nothing when it is not, so no plan check happens
@@ -630,20 +1054,42 @@ export function TeamSection() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {pendingAction?.kind === 'remove' ? 'Remove team member?' : 'Change member role?'}
+              {pendingAction?.kind === 'remove'
+                ? 'Remove team member?'
+                : pendingAction?.kind === 'revoke-invitation'
+                  ? 'Revoke invitation?'
+                  : pendingAction?.kind === 'leave-workspace'
+                    ? isOwner
+                      ? 'Transfer ownership and leave?'
+                      : 'Leave workspace?'
+                    : 'Change member role?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {pendingAction?.kind === 'remove'
                 ? `${pendingAction.member.name} will immediately lose access to this workspace.`
-                : pendingAction
-                  ? `${pendingAction.member.name} will become ${titleCase(pendingAction.role)}. The workspace must always retain at least one owner.`
-                  : ''}
+                : pendingAction?.kind === 'revoke-invitation'
+                  ? `${pendingAction.invitation.email} will no longer be able to join with this link. Its reserved seat becomes available immediately.`
+                  : pendingAction?.kind === 'leave-workspace'
+                    ? isOwner
+                      ? 'The selected member becomes owner, then you immediately lose access and your seat becomes available.'
+                      : 'You will immediately lose access to this workspace and your seat becomes available. This cannot be undone by you.'
+                    : pendingAction?.kind === 'role'
+                      ? `${pendingAction.member.name} will become ${titleCase(pendingAction.role)}. The workspace must always retain at least one owner.`
+                      : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmMemberAction}>
-              {pendingAction?.kind === 'remove' ? 'Remove member' : 'Change role'}
+              {pendingAction?.kind === 'remove'
+                ? 'Remove member'
+                : pendingAction?.kind === 'revoke-invitation'
+                  ? 'Revoke invitation'
+                  : pendingAction?.kind === 'leave-workspace'
+                    ? isOwner
+                      ? 'Transfer and leave'
+                      : 'Leave workspace'
+                    : 'Change role'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

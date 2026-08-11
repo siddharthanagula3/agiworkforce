@@ -1,6 +1,4 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@shared/components/seo/JsonLd';
-import { breadcrumbSchema, faqPageSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -55,15 +53,6 @@ const QA: { q: string; a: string }[] = [
 export default function FaqPage() {
   return (
     <div data-design="agi">
-      <JsonLd
-        data={[
-          faqPageSchema(QA),
-          breadcrumbSchema([
-            { name: 'Home', path: '/' },
-            { name: 'FAQ', path: '/faq' },
-          ]),
-        ]}
-      />
       <main className="agi-shell">
         <Header />
 
@@ -71,7 +60,7 @@ export default function FaqPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">FAQ</p>
           <h1 id="agi-faq-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Direct answers,</span>
+            <span className="agi-fl-h1-line">Direct answers,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">no spin.</em>
             </span>

@@ -1,6 +1,4 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@shared/components/seo/JsonLd';
-import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -52,13 +50,6 @@ const AGENT_FEATURES = [
 export default function FeaturesAgentsPage() {
   return (
     <div data-design="agi">
-      <JsonLd
-        data={breadcrumbSchema([
-          { name: 'Home', path: '/' },
-          { name: 'Features', path: '/features' },
-          { name: 'Agents', path: '/features/agents' },
-        ])}
-      />
       <main className="agi-shell">
         <Header />
 
@@ -66,7 +57,7 @@ export default function FeaturesAgentsPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">AGI Agents</p>
           <h1 id="agi-fl-agents-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Delegated work,</span>
+            <span className="agi-fl-h1-line">Delegated work,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">on your terms.</em>
             </span>

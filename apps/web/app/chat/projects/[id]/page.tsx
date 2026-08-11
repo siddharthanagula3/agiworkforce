@@ -3,25 +3,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { FolderOpen, MoreHorizontal, Settings2, Pin, PinOff } from 'lucide-react';
-import {
-  ProjectHeader,
-  ModelSelector,
-  useChatProjectStore as useProjectStore,
-  useChatModelStore,
-} from '@agiworkforce/unified-chat';
+import { toast } from 'sonner';
+import { ProjectHeader, useChatProjectStore as useProjectStore } from '@agiworkforce/unified-chat';
 import {
   SYNCED_APP_SURFACES,
   summarizeProjectHeader,
   type ProjectRecord,
   type ProjectAccentColor,
 } from '@agiworkforce/types';
-import { ChatComposerNew } from '@/features/chat/components/Composer/ChatComposerNew';
-import { useProjectMetaStore } from '@/features/projects/stores/project-meta-store';
+import {
+  ChatComposerNew,
+  type ComposerSendMeta,
+} from '@/features/chat/components/Composer/ChatComposerNew';
 import { useProjectConversations } from '@/lib/hooks/useConversations';
 import { SourcesPanel } from '@/features/projects/components/SourcesPanel';
 import { ProjectSettingsDialog } from '@/features/projects/components/ProjectSettingsDialog';
 import { useManagedCloudProjects } from '@/features/projects';
-import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 
 /**
@@ -83,7 +81,6 @@ const MAX_CONVERSATIONS_WARN = 80;
 
 export default function ProjectDetailPage() {
   const router = useRouter();
-  const { openSettings } = useSettingsModal();
   const params = useParams<{ id: string }>();
   const projectId = params?.id;
   const {
@@ -108,29 +105,6 @@ export default function ProjectDetailPage() {
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const toggleStar = useProjectStore((s) => s.toggleStar);
 
-  // Per-project model selection.
-  const globalModelId = useChatModelStore((s) => s.selectedModelId);
-  const setGlobalModel = useChatModelStore((s) => s.selectModel);
-  const projectModelId = useProjectMetaStore((s) =>
-    projectId ? s.getProjectModel(projectId) : undefined,
-  );
-  const setProjectModel = useProjectMetaStore((s) => s.setProjectModel);
-
-  // Sync project's saved model into global store on mount
-  useEffect(() => {
-    if (projectId && projectModelId) {
-      setGlobalModel(projectModelId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
-
-  // Persist global model changes back to per-project store
-  useEffect(() => {
-    if (projectId && globalModelId) {
-      setProjectModel(projectId, globalModelId);
-    }
-  }, [projectId, globalModelId, setProjectModel]);
-
   const [tab, setTab] = useState<Tab>('chats');
 
   // "..." overflow menu
@@ -153,13 +127,32 @@ export default function ProjectDetailPage() {
   }, [menuOpen]);
 
   const handleProjectSend = useCallback(
-    (content: string) => {
-      if (!project) return;
+    (
+      content: string,
+      attachments?: File[],
+      skillId?: string,
+      meta?: ComposerSendMeta,
+    ): void | false => {
+      if (!project) return false;
       try {
-        sessionStorage.setItem('agi.project.pendingMessage', content);
-        sessionStorage.setItem('agi.project.pendingProjectId', project.id);
-      } catch {
-        // sessionStorage unavailable
+        saveProjectChatHandoff(sessionStorage, {
+          content,
+          projectId: project.id,
+          attachments,
+          skillId,
+          meta: {
+            ...(meta ?? { workMode: 'agiwork', projectId: project.id }),
+            projectId: project.id,
+            workMode: 'agiwork',
+          },
+        });
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? `Could not open the project chat: ${error.message}`
+            : 'Could not open the project chat. Your draft is still here.',
+        );
+        return false;
       }
       setActiveProject(project.id);
       // `?projectId=` is the ONE canonical project entry param for /chat
@@ -325,7 +318,7 @@ export default function ProjectDetailPage() {
           }}
         >
           {/* ---------------------------------------------------------------- */}
-          {/* Top bar: back + model selector + "..." menu                      */}
+          {/* Top bar: back + project actions                                  */}
           {/* ---------------------------------------------------------------- */}
           <div
             style={{
@@ -360,18 +353,10 @@ export default function ProjectDetailPage() {
               &larr;
             </button>
 
-            {/* Right side: model selector + "..." menu */}
+            {/* Right side: project actions. Model choice belongs to the actual
+                send-owning composer below, so this page never presents a
+                second selector backed by a different store. */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <ModelSelector
-                // CRIT-008: open the modal in place. `/settings/general`
-                // renders a SettingsModalRedirect that lands the user on
-                // /chat, so navigating there dropped them out of the project.
-                onSettingsClick={() => openSettings('general')}
-                onProviderSwitchUpgradeRequired={() => {
-                  /* waitlist-gated in v1 */
-                }}
-              />
-
               {/* "..." overflow menu */}
               <div ref={menuRef} style={{ position: 'relative' }}>
                 <button
@@ -546,7 +531,7 @@ export default function ProjectDetailPage() {
             {/* Optional project description / instructions summary */}
             {headerPresentation && (
               <div style={{ marginTop: 8, maxWidth: 540 }}>
-                <ProjectHeader presentation={headerPresentation} />
+                <ProjectHeader compact presentation={headerPresentation} />
               </div>
             )}
           </div>

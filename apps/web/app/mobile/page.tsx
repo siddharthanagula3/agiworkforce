@@ -108,7 +108,7 @@ export default function MobilePage() {
                 AGI Mobile · iPhone &amp; Android · {SURFACE_STATUS.mobile}
               </p>
               <h1 id="agi-mobile-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Private AI,</span>
+                <span className="agi-fl-h1-line">Private AI,</span>{' '}
                 <span className="agi-fl-h1-line">
                   <em className="agi-fl-h1-em">in your pocket.</em>
                 </span>

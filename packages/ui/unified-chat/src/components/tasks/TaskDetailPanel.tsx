@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Download,
   ExternalLink,
+  ListChecks,
   Loader2,
   RefreshCw,
   RotateCcw,
@@ -180,9 +181,22 @@ export function TaskDetailPanel({
     return (
       <aside
         aria-label="Task details"
-        className="flex min-h-56 items-center justify-center rounded-xl border bg-card p-6 text-center text-sm text-muted-foreground lg:sticky lg:top-0 lg:min-h-[420px]"
+        className="flex min-h-56 items-center justify-center rounded-xl border bg-card p-6 text-center lg:sticky lg:top-0 lg:min-h-[420px] lg:self-start"
       >
-        Select a task to review its progress, outputs, and durable context.
+        <div className="flex max-w-64 flex-col items-center gap-3">
+          <span
+            className="flex h-12 w-12 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-primary"
+            aria-hidden
+          >
+            <ListChecks className="h-5 w-5" />
+          </span>
+          <div className="space-y-1.5">
+            <h2 className="text-sm font-semibold text-foreground">Select a task</h2>
+            <p className="text-sm leading-5 text-muted-foreground">
+              Review progress, outputs, and durable context without leaving this page.
+            </p>
+          </div>
+        </div>
       </aside>
     );
   }
@@ -226,7 +240,7 @@ export function TaskDetailPanel({
   return (
     <aside
       aria-label="Task details"
-      className="min-h-0 rounded-xl border bg-card lg:sticky lg:top-0 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto"
+      className="fixed inset-0 z-50 min-h-0 overflow-y-auto bg-card lg:sticky lg:inset-auto lg:z-auto lg:max-h-[calc(100vh-10rem)] lg:rounded-xl lg:border"
     >
       <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b bg-card p-4">
         <div className="min-w-0">

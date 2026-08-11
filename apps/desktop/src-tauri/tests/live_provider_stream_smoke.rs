@@ -25,6 +25,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use agiworkforce_desktop::core::llm::models_config::get_task_model;
 use agiworkforce_desktop::core::llm::providers::DirectApiProvider;
 use agiworkforce_desktop::core::llm::{ChatMessage, LLMProvider, LLMRequest, Provider};
 use futures_util::StreamExt;
@@ -80,7 +81,7 @@ fn trivial_request(model: &str) -> LLMRequest {
         model: model.to_string(),
         // Spend is kept trivial, but the cap must leave headroom for models that
         // burn completion tokens on internal reasoning before emitting any
-        // visible text (gpt-5.4-nano, deepseek-v4-flash). At 32 tokens those models
+        // visible text. At 32 tokens some reasoning models
         // hit the length cap mid-reasoning and stream zero content deltas; 512 is
         // still a fraction of a cent and lets the one-sentence greeting through.
         max_tokens: Some(512),
@@ -174,69 +175,34 @@ async fn smoke_one(
 async fn live_provider_stream_smoke() {
     let keys = load_env_keys();
 
-    // (Provider, label, model id from models.json SSOT, accepted key env var
+    // (Provider, label, accepted key env var
     // names in priority order — first non-empty match wins). Most providers use
     // a single canonical name; Google's key is written under several aliases
     // across env files (GOOGLE_API_KEY / GOOGLE_AI_API_KEY / GEMINI_API_KEY),
     // mirroring the web/gateway adapter fallback chain, so we accept all three.
-    let targets: &[(
-        Provider,
-        &'static str,
-        &'static str,
-        &'static [&'static str],
-    )] = &[
-        (
-            Provider::Anthropic,
-            "anthropic",
-            "claude-sonnet-5",
-            &["ANTHROPIC_API_KEY"],
-        ),
-        (
-            Provider::DeepSeek,
-            "deepseek",
-            "deepseek-v4-flash",
-            &["DEEPSEEK_API_KEY"],
-        ),
+    let targets: &[(Provider, &'static str, &'static [&'static str])] = &[
+        (Provider::Anthropic, "anthropic", &["ANTHROPIC_API_KEY"]),
+        (Provider::DeepSeek, "deepseek", &["DEEPSEEK_API_KEY"]),
         (
             Provider::Google,
             "google",
-            "gemini-3.5-flash-lite",
             &["GOOGLE_API_KEY", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY"],
         ),
-        // Renamed from gpt-5-nano 2026-07-11 (model-version bump). This live probe
-        // is the empirical check for whether gpt-5.4-nano is chat-tier (Chat
-        // Completions, like its predecessor) or reasoning-tier (Responses API,
-        // like sibling gpt-5.4-mini) — see known-flaws DESKTOP-OPENAI-REASONING-RESPONSES-01.
-        (
-            Provider::OpenAI,
-            "openai",
-            "gpt-5.4-nano",
-            &["OPENAI_API_KEY"],
-        ),
+        (Provider::OpenAI, "openai", &["OPENAI_API_KEY"]),
         // Moonshot is OpenAI-compatible (Chat Completions) — a second live
         // exercise of the crate's OpenAI-compat runner alongside DeepSeek.
-        (
-            Provider::Moonshot,
-            "moonshot",
-            "kimi-k2.6",
-            &["MOONSHOT_API_KEY"],
-        ),
+        (Provider::Moonshot, "moonshot", &["MOONSHOT_API_KEY"]),
         // Additional OpenAI-compatible providers present in the env file — any
         // one with a live key proves the crate's OpenAI-compat runner end to
         // end through the new desktop path.
-        (Provider::XAI, "xai", "grok-4.3", &["XAI_API_KEY"]),
-        (Provider::Qwen, "qwen", "qwen-flash", &["QWEN_API_KEY"]),
-        (Provider::Zhipu, "zhipu", "glm-5.2", &["ZHIPU_API_KEY"]),
-        (
-            Provider::Perplexity,
-            "perplexity",
-            "sonar",
-            &["PERPLEXITY_API_KEY"],
-        ),
+        (Provider::XAI, "xai", &["XAI_API_KEY"]),
+        (Provider::Qwen, "qwen", &["QWEN_API_KEY"]),
+        (Provider::Zhipu, "zhipu", &["ZHIPU_API_KEY"]),
+        (Provider::Perplexity, "perplexity", &["PERPLEXITY_API_KEY"]),
     ];
 
     let mut outcomes = Vec::new();
-    for (provider, label, model, key_envs) in targets {
+    for (provider, label, key_envs) in targets {
         let Some(key) = key_envs
             .iter()
             .find_map(|name| keys.get(*name).filter(|k| !k.is_empty()))
@@ -244,6 +210,7 @@ async fn live_provider_stream_smoke() {
             eprintln!("[smoke] {label}: no {key_envs:?} in env.local — skipping");
             continue;
         };
+        let model = get_task_model(provider, "chat");
         let o = smoke_one(*provider, label, model, key).await;
         outcomes.push(o);
     }

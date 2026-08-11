@@ -60,7 +60,7 @@ pub struct LLMRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_choice: Option<ToolChoice>,
 
-    // Extended thinking (Anthropic Claude 4.x)
+    // Extended thinking (Anthropic catalog capability)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_mode: Option<bool>,
 
@@ -68,8 +68,8 @@ pub struct LLMRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking: Option<ThinkingParameter>,
 
-    // Google Gemini 3 thinking level (0-4 scale)
-    /// Thinking level for Gemini 3 models (0=none, 1=low, 2=medium, 3=high, 4=extreme)
+    // Google catalog thinking level (0-4 scale)
+    /// Provider thinking level (0=none, 1=low, 2=medium, 3=high, 4=extreme)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub thinking_level: Option<u8>,
 
@@ -90,7 +90,7 @@ pub struct LLMRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_output: Option<AudioOutput>,
 
-    // Background mode (OpenAI GPT-5+)
+    // Background mode for supported OpenAI Responses requests.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub background: Option<bool>,
 
@@ -100,7 +100,7 @@ pub struct LLMRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conversation_id: Option<String>,
 
-    // Effort parameter (Anthropic Claude Opus 4.6+ – controls thinking depth)
+    // Anthropic effort parameter for catalog models that expose effort control.
     // Values: "low", "medium", "high"
     #[serde(skip_serializing_if = "Option::is_none")]
     pub effort: Option<String>,
@@ -387,7 +387,7 @@ pub enum ThinkingParameter {
         thinking_type: String,
         budget_tokens: u32,
     },
-    /// Adaptive thinking (Claude Opus 4.6+) – lets the model decide when
+    /// Adaptive thinking lets a capable catalog model decide when
     /// and how deeply to think.  Recommended for tool use workflows.
     /// Serialises as `{"type": "adaptive"}`.
     Adaptive {
@@ -715,12 +715,13 @@ impl Provider {
 
     #[allow(clippy::should_implement_trait)]
     pub fn from_string(value: &str) -> Option<Self> {
-        match value.to_lowercase().as_str() {
+        let normalized = value.to_lowercase();
+        match normalized.as_str() {
             "openai" => Some(Provider::OpenAI),
             "anthropic" => Some(Provider::Anthropic),
             "google" => Some(Provider::Google),
             "ollama" => Some(Provider::Ollama),
-            "perplexity" | "pplx" | "sonar" => Some(Provider::Perplexity),
+            "perplexity" | "pplx" => Some(Provider::Perplexity),
             "xai" | "grok" => Some(Provider::XAI),
             "deepseek" => Some(Provider::DeepSeek),
             "qwen" | "alibaba" => Some(Provider::Qwen),
@@ -745,6 +746,11 @@ impl Provider {
             "lmstudio" | "lm_studio" | "lm-studio" | "lm studio" => Some(Provider::LmStudio),
             "llamacpp" | "llama_cpp" | "llama-cpp" | "llama.cpp" => Some(Provider::LlamaCpp),
             "vllm" | "v_llm" | "v-llm" => Some(Provider::Vllm),
+            _ if models_config::get_provider_for_model(&normalized)
+                == Some(Provider::Perplexity) =>
+            {
+                Some(Provider::Perplexity)
+            }
             _ => None,
         }
     }

@@ -4,6 +4,13 @@ describe('AGI Desktop local model management', () => {
   it('installs a model through the configured Ollama runtime', async function () {
     this.timeout(120_000);
 
+    const modelToInstall = process.env['AGI_WDIO_OLLAMA_MODEL_ID'];
+    if (!modelToInstall) {
+      throw new Error(
+        'AGI_WDIO_OLLAMA_MODEL_ID must name the real model used by the local-install E2E test',
+      );
+    }
+
     await waitForDesktopShell();
 
     const nativeOllamaStatus = await browser.execute(async () => {
@@ -103,11 +110,11 @@ describe('AGI Desktop local model management', () => {
         `Models & Keys did not expose model installation: ${JSON.stringify(settingsState)}; ${String(error)}`,
       );
     }
-    await replaceInputValue(modelInput, 'smollm2:135m');
+    await replaceInputValue(modelInput, modelToInstall);
     await clickElement(await $('button[aria-label="Install model"]'));
 
     await browser.waitUntil(
-      async () => (await $('body').getText()).includes('smollm2:135m is ready to use'),
+      async () => (await $('body').getText()).includes(`${modelToInstall} is ready to use`),
       {
         timeout: 90_000,
         interval: 250,

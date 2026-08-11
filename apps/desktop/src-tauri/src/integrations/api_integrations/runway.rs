@@ -10,53 +10,54 @@ pub struct RunwayClient {
     api_key: String,
 }
 
-/// Video generation model options
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum RunwayVideoModel {
-    /// Gen-4 Turbo - image-to-video (5 credits/sec) - fastest, for drafts
-    #[default]
-    Gen4Turbo,
-    /// Gen-4 Aleph - higher quality (15 credits/sec)
-    Gen4Aleph,
-    /// Veo 3.1 - text-to-video (40 credits/sec) - best quality
-    Veo31,
-    /// Veo 3.1 Fast - text-to-video (15 credits/sec) - faster
-    Veo31Fast,
+#[derive(Debug, Clone)]
+struct CatalogRunwayVideoModel {
+    api_model_id: String,
+    accepts_image_input: bool,
+    cost_per_second: f64,
 }
 
-impl RunwayVideoModel {
-    pub fn as_api_str(&self) -> &'static str {
-        match self {
-            RunwayVideoModel::Gen4Turbo => "gen4_turbo",
-            RunwayVideoModel::Gen4Aleph => "gen4_aleph",
-            RunwayVideoModel::Veo31 => "veo3.1",
-            RunwayVideoModel::Veo31Fast => "veo3.1_fast",
-        }
+fn resolve_catalog_video_model(
+    selection: &str,
+    require_available: bool,
+) -> Result<CatalogRunwayVideoModel> {
+    let entry = crate::core::llm::models_config::get_all_model_entries()
+        .values()
+        .find(|entry| {
+            (entry.id == selection || entry.api_model_id.as_deref() == Some(selection))
+                && entry.provider == "runway"
+                && entry.model_type == "video"
+                && entry.capabilities.video_gen
+                && entry.deprecated != Some(true)
+        })
+        .ok_or_else(|| {
+            APIError::APIError(
+                "Selected Runway model is not addressable through the canonical catalog"
+                    .to_string(),
+            )
+        })?;
+
+    if require_available && entry.availability.as_deref() == Some("unavailable") {
+        return Err(APIError::APIError(
+            entry
+                .unavailable_reason
+                .clone()
+                .unwrap_or_else(|| "Selected Runway model is currently unavailable".to_string()),
+        ));
     }
 
-    /// Returns true if the model requires an input image
-    pub fn requires_image(&self) -> bool {
-        matches!(
-            self,
-            RunwayVideoModel::Gen4Turbo | RunwayVideoModel::Gen4Aleph
-        )
-    }
-
-    /// Cost per second in credits
-    pub fn credits_per_second(&self) -> f64 {
-        match self {
-            RunwayVideoModel::Gen4Turbo => 5.0,
-            RunwayVideoModel::Gen4Aleph => 15.0,
-            RunwayVideoModel::Veo31 => 40.0,
-            RunwayVideoModel::Veo31Fast => 15.0,
-        }
-    }
-
-    /// Cost per second in USD ($0.01 per credit)
-    pub fn cost_per_second(&self) -> f64 {
-        self.credits_per_second() * 0.01
-    }
+    Ok(CatalogRunwayVideoModel {
+        api_model_id: entry.api_model_id.clone().ok_or_else(|| {
+            APIError::APIError("Catalog Runway model has no provider wire ID".to_string())
+        })?,
+        accepts_image_input: entry
+            .input_modalities
+            .iter()
+            .any(|modality| modality == "image"),
+        cost_per_second: entry.video_per_second_cost.ok_or_else(|| {
+            APIError::APIError("Catalog Runway model has no per-second price".to_string())
+        })?,
+    })
 }
 
 /// Aspect ratio options for video generation
@@ -120,7 +121,8 @@ pub struct RunwayImageToVideoRequest {
 #[derive(Debug, Clone)]
 pub struct RunwayVideoRequest {
     pub prompt: String,
-    pub model: RunwayVideoModel,
+    /// Canonical model key (or its catalog-owned provider wire ID).
+    pub model: String,
     pub duration_secs: Option<u32>,
     pub aspect_ratio: Option<RunwayAspectRatio>,
     pub input_image_url: Option<String>,
@@ -191,13 +193,14 @@ impl RunwayClient {
         })
     }
 
-    /// Generate a video from text prompt (uses Veo models)
+    /// Generate a video from a text prompt using a catalog-addressed model.
     pub async fn generate_text_to_video(
         &self,
         request: &RunwayVideoRequest,
     ) -> Result<RunwayVideoResponse> {
+        let model = resolve_catalog_video_model(&request.model, true)?;
         let api_request = RunwayTextToVideoRequest {
-            model: request.model.as_api_str().to_string(),
+            model: model.api_model_id,
             prompt_text: request.prompt.clone(),
             ratio: request.aspect_ratio.map(|r| r.as_api_str().to_string()),
             duration: request.duration_secs.or(Some(5)),
@@ -218,17 +221,23 @@ impl RunwayClient {
         self.handle_task_response(response).await
     }
 
-    /// Generate a video from an image (uses Gen-4 models)
+    /// Generate a video from an image when catalog metadata permits image input.
     pub async fn generate_image_to_video(
         &self,
         request: &RunwayVideoRequest,
     ) -> Result<RunwayVideoResponse> {
+        let model = resolve_catalog_video_model(&request.model, true)?;
+        if !model.accepts_image_input {
+            return Err(APIError::APIError(
+                "Selected catalog model does not accept image input".to_string(),
+            ));
+        }
         let image_url = request.input_image_url.clone().ok_or_else(|| {
             APIError::APIError("Image URL required for image-to-video generation".to_string())
         })?;
 
         let api_request = RunwayImageToVideoRequest {
-            model: request.model.as_api_str().to_string(),
+            model: model.api_model_id,
             prompt_image: image_url,
             prompt_text: Some(request.prompt.clone()),
             ratio: request.aspect_ratio.map(|r| r.as_api_str().to_string()),
@@ -254,7 +263,7 @@ impl RunwayClient {
         &self,
         request: &RunwayVideoRequest,
     ) -> Result<RunwayVideoResponse> {
-        if request.model.requires_image() {
+        if request.input_image_url.is_some() {
             self.generate_image_to_video(request).await
         } else {
             self.generate_text_to_video(request).await
@@ -371,9 +380,10 @@ impl RunwayClient {
     }
 
     /// Estimate cost for a video generation request
-    pub fn estimate_cost(model: RunwayVideoModel, duration_secs: u32) -> f64 {
-        let cost = model.cost_per_second() * duration_secs as f64;
-        (cost * 100.0).round() / 100.0 // Round to 2 decimal places
+    pub fn estimate_cost(model: &str, duration_secs: u32) -> Result<f64> {
+        let model = resolve_catalog_video_model(model, false)?;
+        let cost = model.cost_per_second * duration_secs as f64;
+        Ok((cost * 100.0).round() / 100.0) // Round to 2 decimal places
     }
 }
 
@@ -382,32 +392,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_model_api_strings() {
-        assert_eq!(RunwayVideoModel::Gen4Turbo.as_api_str(), "gen4_turbo");
-        assert_eq!(RunwayVideoModel::Veo31.as_api_str(), "veo3.1");
-        assert_eq!(RunwayVideoModel::Veo31Fast.as_api_str(), "veo3.1_fast");
-    }
+    fn catalog_owns_model_identity_and_wire_mapping() {
+        let entry = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.provider == "runway" && entry.capabilities.video_gen)
+            .expect("catalog must contain a Runway video model");
+        let resolved = resolve_catalog_video_model(&entry.id, false).unwrap();
 
-    #[test]
-    fn test_model_requires_image() {
-        assert!(RunwayVideoModel::Gen4Turbo.requires_image());
-        assert!(RunwayVideoModel::Gen4Aleph.requires_image());
-        assert!(!RunwayVideoModel::Veo31.requires_image());
-        assert!(!RunwayVideoModel::Veo31Fast.requires_image());
-    }
-
-    #[test]
-    fn test_cost_estimation() {
-        // Gen4Turbo: 5 credits/sec * $0.01/credit = $0.05/sec
         assert_eq!(
-            RunwayClient::estimate_cost(RunwayVideoModel::Gen4Turbo, 10),
-            0.5
+            Some(resolved.api_model_id.as_str()),
+            entry.api_model_id.as_deref()
         );
+    }
 
-        // Veo31Fast: 15 credits/sec * $0.01/credit = $0.15/sec
+    #[test]
+    fn unavailable_catalog_model_fails_closed_for_generation() {
+        let entry = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| {
+                entry.provider == "runway"
+                    && entry.capabilities.video_gen
+                    && entry.availability.as_deref() == Some("unavailable")
+            })
+            .expect("catalog must retain the unavailable Runway entry");
+
+        assert!(resolve_catalog_video_model(&entry.id, true).is_err());
+    }
+
+    #[test]
+    fn test_cost_estimation_uses_catalog_rate() {
+        let entry = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.provider == "runway" && entry.capabilities.video_gen)
+            .expect("catalog must contain a Runway video model");
+        let expected = entry.video_per_second_cost.unwrap() * 10.0;
+
         assert_eq!(
-            RunwayClient::estimate_cost(RunwayVideoModel::Veo31Fast, 10),
-            1.5
+            RunwayClient::estimate_cost(&entry.id, 10).unwrap(),
+            expected
         );
     }
 
@@ -420,7 +442,7 @@ mod tests {
     #[test]
     fn test_request_serialization() {
         let request = RunwayTextToVideoRequest {
-            model: "veo3.1_fast".to_string(),
+            model: "fixture-video-wire-model".to_string(),
             prompt_text: "A beautiful sunset over the ocean".to_string(),
             ratio: Some("1920:1080".to_string()),
             duration: Some(8),
@@ -428,7 +450,7 @@ mod tests {
         };
 
         let json = serde_json::to_string(&request).unwrap();
-        assert!(json.contains("veo3.1_fast"));
+        assert!(json.contains("fixture-video-wire-model"));
         assert!(json.contains("sunset"));
         assert!(json.contains("1920:1080"));
     }

@@ -76,5 +76,13 @@
   "pageTitle": "价格",
   "freeLocalByok": "本地模型和自带 API 密钥，始终免费",
   "seatTotal_one": "{{count}} 个席位 · {{total}}/月",
-  "seatTotal_other": "{{count}} 个席位 · {{total}}/月"
+  "seatTotal_other": "{{count}} 个席位 · {{total}}/月",
+  "perSeatPrice": "{{price}}/席位/月",
+  "perSeatPriceAnnual": "{{price}}/席位/年",
+  "seatTotalAnnual_one": "{{count}} 个席位 · {{total}}/年",
+  "seatTotalAnnual_other": "{{count}} 个席位 · {{total}}/年",
+  "seatCadenceMonthly_one": "{{count}} 个席位 · 按月计费",
+  "seatCadenceMonthly_other": "{{count}} 个席位 · 按月计费",
+  "seatCadenceAnnual_one": "{{count}} 个席位 · 按年计费",
+  "seatCadenceAnnual_other": "{{count}} 个席位 · 按年计费"
 }

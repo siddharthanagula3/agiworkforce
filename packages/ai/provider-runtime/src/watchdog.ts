@@ -19,7 +19,7 @@
 /**
  * Default per-chunk idle timeout. Anthropic's reference implementation
  * uses 90s. Our reasonable upper bound is the same — long-thinking
- * Claude Opus 4 calls can go ~60s between content blocks during deep
+ * requests can go roughly a minute between content blocks during deep
  * reasoning; 90s gives plenty of headroom while still catching truly
  * dropped sockets. Override per request when needed.
  */

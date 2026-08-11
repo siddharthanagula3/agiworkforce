@@ -47,6 +47,10 @@ vi.mock('@/lib/server/neon-chat', () => ({
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
+
 import { POST as postBulkMessages } from '@/app/api/chat/conversations/[id]/messages/bulk/route';
 
 const ATTACKER = 'user_attacker';
@@ -101,6 +105,11 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — IDOR guard (#17)',
 
     expect(res.status).toBe(200);
     expect((await res.json()).messages[0]).not.toHaveProperty('cost_cents');
+    expect(mockQuery).toHaveBeenNthCalledWith(
+      1,
+      expect.stringMatching(/user_id = \$2[\s\S]*organization_id is not distinct from \$3/),
+      [ATTACKER_CONVERSATION_ID, ATTACKER, null],
+    );
     const [sql] = mockQuery.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('on conflict (id) do update');
     expect(sql).toContain('where web_messages.conversation_id = excluded.conversation_id');

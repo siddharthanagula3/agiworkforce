@@ -5,6 +5,7 @@
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@agiworkforce/utils';
+import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,6 +19,8 @@ export interface GeneratedImage {
 export interface ImageGenerationRequest {
   prompt: string;
   provider?: 'google' | 'openai' | 'stability';
+  aspect_ratio?: ManagedMediaImageAspectRatio;
+  /** Legacy Mobile/Desktop compatibility; new Web callers prefer `aspect_ratio`. */
   size?: string;
   style?: string;
   quality?: 'standard' | 'hd';
@@ -38,7 +41,7 @@ export interface VideoGenerationRequest {
   prompt: string;
   duration_secs?: number;
   resolution?: '720p' | '1080p' | '4k';
-  provider?: 'runway' | 'google';
+  provider?: 'runway' | 'google' | 'openrouter';
   /**
    * Catalog model id for the composer's video picker. The route validates it
    * (must be `modelType: 'video'`, live, and owned by an executable provider)
@@ -46,14 +49,21 @@ export interface VideoGenerationRequest {
    * omitted, so sending nothing preserves the previous behavior exactly.
    */
   model?: string;
+  /** Persisted Web chat owner; both ids are required together by the route. */
+  conversation_id?: string;
+  /** Pre-persisted assistant placeholder updated by the durable job owner. */
+  assistant_message_id?: string;
 }
 
 export interface VideoGenerationResponse {
   success: boolean;
   task_id: string;
-  status: 'queued' | 'processing';
+  status: 'queued' | 'processing' | 'completed' | 'failed';
   provider: string;
+  model: string;
   estimated_duration_secs: number;
+  video_url?: string;
+  error?: string;
 }
 
 export interface VideoStatusResponse {
@@ -78,11 +88,14 @@ async function requireAuthToken(): Promise<string> {
   return token;
 }
 
-function createWebMediaIdempotencyKey(operation: ManagedMediaOperation): string {
+function createWebMediaIdempotencyKey(
+  operation: ManagedMediaOperation,
+  operationId = crypto.randomUUID(),
+): string {
   return createManagedMediaIdempotencyKey({
     surface: 'web',
     operation,
-    operationId: crypto.randomUUID(),
+    operationId,
   });
 }
 
@@ -143,19 +156,44 @@ export class MediaApiError extends Error {
   readonly status: number | undefined;
   readonly code: string | undefined;
   readonly type: string | undefined;
+  readonly currentPlan: string | undefined;
+  readonly requiredPlans: readonly string[] | undefined;
+  readonly resetAt: string | undefined;
 
-  constructor(message: string, options: { status?: number; code?: string; type?: string } = {}) {
+  constructor(
+    message: string,
+    options: {
+      status?: number;
+      code?: string;
+      type?: string;
+      currentPlan?: string;
+      requiredPlans?: readonly string[];
+      resetAt?: string;
+    } = {},
+  ) {
     super(message);
     this.name = 'MediaApiError';
     this.status = options.status;
     this.code = options.code;
     this.type = options.type;
+    this.currentPlan = options.currentPlan;
+    this.requiredPlans = options.requiredPlans;
+    this.resetAt = options.resetAt;
   }
 }
 
 async function readApiError(response: Response, fallback: string): Promise<MediaApiError> {
   const body = (await response.json().catch(() => ({}))) as {
-    error?: string | { message?: string; code?: string; type?: string };
+    error?:
+      | string
+      | {
+          message?: string;
+          code?: string;
+          type?: string;
+          current_plan?: string;
+          required_plans?: unknown;
+          reset_at?: string;
+        };
     message?: string;
   };
   const errorField = body.error;
@@ -169,6 +207,15 @@ async function readApiError(response: Response, fallback: string): Promise<Media
     status: response.status,
     ...(nested?.code !== undefined ? { code: nested.code } : {}),
     ...(nested?.type !== undefined ? { type: nested.type } : {}),
+    ...(nested?.current_plan !== undefined ? { currentPlan: nested.current_plan } : {}),
+    ...(Array.isArray(nested?.required_plans)
+      ? {
+          requiredPlans: nested.required_plans.filter(
+            (plan: unknown): plan is string => typeof plan === 'string',
+          ),
+        }
+      : {}),
+    ...(nested?.reset_at !== undefined ? { resetAt: nested.reset_at } : {}),
   });
 }
 
@@ -178,7 +225,10 @@ async function readApiError(response: Response, fallback: string): Promise<Media
 export async function generateVideo(
   request: VideoGenerationRequest,
 ): Promise<VideoGenerationResponse> {
-  const idempotencyKey = createWebMediaIdempotencyKey('video');
+  // The pre-persisted assistant UUID is the stable user-action identity. If a
+  // POST response is lost, retrying that same placeholder replays the durable
+  // job instead of creating a second paid provider task.
+  const idempotencyKey = createWebMediaIdempotencyKey('video', request.assistant_message_id);
   const token = await requireAuthToken();
 
   const response = await fetch('/api/media/video/generate', {

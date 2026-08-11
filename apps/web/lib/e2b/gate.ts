@@ -23,6 +23,7 @@
 import 'server-only';
 
 import { isManagedComputePrivateBetaEnabled } from '@/lib/managed-compute-gate';
+import { sandboxComputeIsPriceable } from '@/lib/e2b/compute-metering';
 
 /** Cut-over flag: '1' enables the reachable E2B execution loop (tool-offering + loop entry). Off by default. */
 export const E2B_EXECUTION_ENV = 'AGI_E2B_EXECUTION';
@@ -67,13 +68,21 @@ export function e2bCutoverEnabled(): boolean {
 }
 
 /**
- * Code-session provisioning requires BOTH the deliberate operator cut-over and
- * a usable credential. This is stricter than the low-level executor gate so
- * the product never advertises an environment that cannot be created.
+ * Code-session provisioning requires the deliberate operator cut-over, a
+ * usable credential, and a deployment where every sandbox second can be
+ * priced. This is the shared readiness boundary for list/create/run APIs so
+ * the product never advertises an environment that the executor will later
+ * refuse. Development remains usable because `sandboxComputeIsPriceable()` is
+ * intentionally permissive outside a serving production runtime.
  */
 export function e2bProvisioningReady(): boolean {
   const key = process.env[E2B_API_KEY_ENV];
-  return e2bCutoverEnabled() && typeof key === 'string' && key.trim().length > 0;
+  return (
+    e2bCutoverEnabled() &&
+    typeof key === 'string' &&
+    key.trim().length > 0 &&
+    sandboxComputeIsPriceable()
+  );
 }
 
 /**

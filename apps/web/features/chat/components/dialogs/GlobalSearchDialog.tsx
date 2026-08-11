@@ -349,8 +349,9 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                     size="icon"
                     className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2"
                     onClick={handleClear}
+                    aria-label="Clear search"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-3.5 w-3.5" aria-hidden="true" />
                   </Button>
                 )}
               </div>

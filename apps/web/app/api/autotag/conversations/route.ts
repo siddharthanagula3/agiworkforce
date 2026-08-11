@@ -14,6 +14,7 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const VALID_TAGS = [
   'coding',
@@ -32,6 +33,7 @@ async function handleGetConversationsByTag(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   // Parse and validate the tag query parameter
   const { searchParams } = new URL(request.url);
@@ -47,12 +49,17 @@ async function handleGetConversationsByTag(request: NextRequest) {
 
   const rows = await db
     .query<{ conversation_id: string }>(
-      `select conversation_id
-     from conversation_tags
-     where user_id = $1 and tag = $2
-     order by classified_at desc
-     limit 200`,
-      [userId, tag],
+      `select ct.conversation_id
+         from conversation_tags ct
+         join public.web_conversations c
+           on c.id::text = ct.conversation_id
+          and c.user_id = $1
+          and c.organization_id is not distinct from $3::uuid
+          and c.deleted_at is null
+        where ct.user_id = $1 and ct.tag = $2
+        order by ct.classified_at desc
+        limit 200`,
+      [userId, tag, organizationId],
     )
     .catch((err: unknown) => {
       logger.error({ err, userId, tag }, 'Failed to fetch conversations by tag');

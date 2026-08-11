@@ -41,6 +41,7 @@ import {
   CircleAlert,
   CircleSlash,
   Brain,
+  BookOpen,
   Wrench,
   Clock,
   type LucideProps,
@@ -76,6 +77,7 @@ export type InlineToolKind =
   | 'image-gen'
   | 'browser'
   | 'mcp-custom'
+  | 'skill'
   | 'thinking'
   | 'done'
   | 'unknown';
@@ -138,6 +140,7 @@ const ICON_BY_KIND: Record<Exclude<InlineToolKind, 'auto'>, ComponentType<Lucide
   'image-gen': ImageIcon,
   browser: MousePointerClick,
   'mcp-custom': Plug,
+  skill: BookOpen,
   thinking: Brain,
   done: CircleCheck,
   unknown: Wrench,
@@ -171,6 +174,7 @@ export const KIND_TO_BADGE: Record<Exclude<InlineToolKind, 'auto'>, BadgeConfig>
   'image-gen': { kind: 'letter', letter: 'I' },
   browser: { kind: 'letter', letter: 'B' },
   'mcp-custom': { kind: 'letter', letter: 'M' },
+  skill: { kind: 'glyph', Icon: BookOpen },
   thinking: { kind: 'glyph', Icon: Clock },
   done: { kind: 'check' },
   unknown: { kind: 'letter', letter: '?' },
@@ -192,6 +196,7 @@ export function inferKindFromLabel(label: string): Exclude<InlineToolKind, 'auto
   if (l.includes('click') || l.includes('screenshot') || l.includes('typing')) return 'browser';
   if (l.includes('list') && (l.includes('dir') || l.includes('folder'))) return 'fs-list';
   if (l.includes('image') || l.includes('image_gen') || l.includes('imagegen')) return 'image-gen';
+  if (l.includes('skill')) return 'skill';
   if (l.includes('thinking') || l.includes('reason')) return 'thinking';
   if (l.includes('edit') || l.includes('patch')) return 'edit';
   if (l.includes('write') || l.includes('create')) return 'write';

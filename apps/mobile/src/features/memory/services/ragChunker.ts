@@ -38,10 +38,10 @@ function getContextWindow(modelId: string): number {
 /**
  * Compute chunking configuration for the given model.
  *
- * For Apple FM (4K context):
+ * For a small 4K-context model:
  *   targetTokens = 1024, overlapTokens = 102, maxChunksPerQuery = 4
  *
- * For Qwen3-4B (262K context):
+ * For a large 262K-context model:
  *   targetTokens = 65536, overlapTokens = 6553, maxChunksPerQuery = 16
  */
 export function getRagChunkingConfig(modelId: string): RagChunkingConfig {

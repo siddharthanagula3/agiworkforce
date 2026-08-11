@@ -2,24 +2,25 @@ import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
+import { ANTHROPIC_PREMIUM_MODEL_ID } from './model-fixtures';
 
 function baseReq(overrides: Partial<ChatRequest> = {}): ChatRequest {
   return {
-    model: 'claude-opus-5',
+    model: ANTHROPIC_PREMIUM_MODEL_ID,
     messages: [{ role: 'user', content: 'hi' }],
     ...overrides,
   };
 }
 
-const OPUS_CEILING = getModelMetadataById('claude-opus-5')?.maxOutputTokens;
+const MODEL_OUTPUT_CEILING = getModelMetadataById(ANTHROPIC_PREMIUM_MODEL_ID)?.maxOutputTokens;
 
 describe('translateChatRequest · max_tokens', () => {
   it('keeps a request inside the ceiling the registry records for the model', () => {
-    expect(OPUS_CEILING).toBeTypeOf('number');
+    expect(MODEL_OUTPUT_CEILING).toBeTypeOf('number');
     const out = translateChatRequest(
-      baseReq({ maxOutputTokens: (OPUS_CEILING as number) + 100_000 }),
+      baseReq({ maxOutputTokens: (MODEL_OUTPUT_CEILING as number) + 100_000 }),
     );
-    expect(out.max_tokens).toBe(OPUS_CEILING);
+    expect(out.max_tokens).toBe(MODEL_OUTPUT_CEILING);
   });
 
   it('passes a request through untouched when it fits', () => {
@@ -31,10 +32,10 @@ describe('translateChatRequest · max_tokens', () => {
   });
 
   it('leaves the default alone for a model the registry does not describe', () => {
-    expect(getModelMetadataById('claude-not-in-the-registry')).toBeNull();
+    expect(getModelMetadataById('fixture-anthropic-unknown-model')).toBeNull();
     expect(
       translateChatRequest(
-        baseReq({ model: 'claude-not-in-the-registry', maxOutputTokens: 64_000 }),
+        baseReq({ model: 'fixture-anthropic-unknown-model', maxOutputTokens: 64_000 }),
       ).max_tokens,
     ).toBe(64_000);
   });

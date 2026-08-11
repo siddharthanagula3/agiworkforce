@@ -10,6 +10,7 @@
  */
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { INTERACTIVE_CARDS_MAX_PER_MESSAGE } from '@agiworkforce/types';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
 import { useChatStream, __resetPendingTurnsForTests } from './useChatStream';
@@ -125,6 +126,18 @@ describe('useChatStream — interactive cards', () => {
     expect(cards[0]?.cardId).toBe('toolu_01abc');
   });
 
+  it('advertises only the interactive card kind this Web client can render', async () => {
+    mockSseStream([textEvent('Ready.')]);
+    await send();
+
+    const init = vi.mocked(fetch).mock.calls[0]?.[1];
+    const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+    expect(body['x_interactive_cards']).toEqual({
+      supported: ['map-search.v1'],
+      canRespond: false,
+    });
+  });
+
   it('keeps the prose of the same turn intact', async () => {
     // A card must never replace the answer it sits inside.
     mockSseStream([textEvent('Happy to help. '), cardEvent(CARD), textEvent('Tap through these:')]);
@@ -176,6 +189,21 @@ describe('useChatStream — interactive cards', () => {
     await send();
 
     expect(assistantMessage()?.metadata?.interactiveCards).toHaveLength(2);
+  });
+
+  it('caps live cards before the assistant metadata bag is built', async () => {
+    const cards = Array.from({ length: INTERACTIVE_CARDS_MAX_PER_MESSAGE + 2 }, (_, index) => {
+      const card = clone(CARD);
+      card.cardId = `toolu_fixture_${index}`;
+      card.producedBy.toolCallId = card.cardId;
+      return card;
+    });
+    mockSseStream(cards.map(cardEvent));
+    await send();
+
+    expect(assistantMessage()?.metadata?.interactiveCards).toHaveLength(
+      INTERACTIVE_CARDS_MAX_PER_MESSAGE,
+    );
   });
 
   it('ignores a delta that is not an envelope, without disturbing the turn', async () => {

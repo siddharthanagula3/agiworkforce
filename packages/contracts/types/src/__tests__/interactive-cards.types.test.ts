@@ -155,7 +155,11 @@ describe('the model cannot author place identity', () => {
 
 describe('kind allowlist', () => {
   it('recognizes exactly the kinds this build ships', () => {
-    expect([...KNOWN_INTERACTIVE_CARD_KINDS]).toEqual(['clarify.v1', 'itinerary.v1']);
+    expect([...KNOWN_INTERACTIVE_CARD_KINDS]).toEqual([
+      'clarify.v1',
+      'itinerary.v1',
+      'map-search.v1',
+    ]);
   });
 
   it('treats anything else as unknown rather than throwing', () => {

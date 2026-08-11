@@ -2,9 +2,202 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-04
+Last updated: 2026-08-11
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — Website demo readiness] — 2026-08-11
+
+### Added
+
+- **Reviewed Agent Skills are available in Web without granting hidden tools.**
+  Eight AGI-authored standard skill bundles ship from one canonical workspace
+  catalog: seven are included and downloadable, while the skill creator remains
+  visibly draft-only. Selected skills are validated server-side and emit a real
+  `Reading skill` action; document and presentation skills refuse execution
+  unless the existing office-file tool is genuinely offered. Settings reads
+  plugin lifecycle data from the database when available and otherwise presents
+  four reviewed read-only `Coming later` previews with no fake install path.
+
+### Fixed
+
+- **Paid upgrades now charge the confirmed prorated difference, and top-ups use
+  one public denomination.** Same-cadence upgrades preserve the existing
+  renewal date, preview and apply the same Stripe proration timestamp, and only
+  activate after the immediate invoice succeeds; cadence-changing requests are
+  refused because Stripe would reset the renewal date. Active Stripe-billed
+  plans can purchase 50 top-up units per $1 in whole-dollar amounts from $10 to
+  $100, with tax separated from usage balance, duplicate webhook grants and
+  refund carry-back prevented, and unused purchased balance carried for up to
+  12 months after migration 0111 is applied.
+- **Account settings no longer spin forever on stalled dependencies.** API-key
+  and active-session reads now have a bounded client deadline and render an
+  explicit Retry state. API-key transport/auth failures remain errors instead
+  of being silently converted into the misleading `No API keys yet` state, and
+  key creation stays disabled until the existing key list is known.
+- **Reflect now uses count-aware conversation copy.** Single multi-day results
+  read as `1 sampled conversation` instead of the visibly broken plural, while
+  larger recaps retain the plural form. A signed-in local pass generated the
+  real quota-free recap, verified the corrected text after reload, and restored
+  the account's original Memory-off state.
+- **Theme initialization no longer triggers React/Next development errors.**
+  The `next-themes` client-injected inline bootstrap is disabled through a
+  pinned pnpm patch, and the same persisted Light/Dark/System initialization
+  now runs from a CSP-compatible, same-origin `beforeInteractive` script. Fresh
+  localhost checks at desktop and 390×844 widths showed no framework issue
+  badge, preserved light/dark state across reloads, and no horizontal overflow;
+  only Clerk's expected development-key warning remained.
+- **Public-page heading structure is now complete and screen-reader safe.**
+  The Business hero now has one visible page-level heading, and all 31
+  split-line flagship heroes preserve a real word boundary in their accessible
+  names instead of exposing text such as `intoyour` or `onevery`. A repository
+  guard prevents that JSX seam from returning. Local browser checks covered
+  Business, Integrations, Agents, Downloads, and Security with exact headings,
+  no framework errors, and no horizontal overflow.
+- **Streamed marketing routes no longer hydrate against missing JSON-LD
+  siblings.** Route-local inline structured-data scripts were removed after
+  real browser traces showed React expecting each script where the initial DOM
+  already contained the page `<main>`. The root layout still publishes the
+  canonical Organization, WebSite, and SoftwareApplication schemas. A route
+  guard prevents page-level inline JSON-LD from recreating the mismatch;
+  Agents, FAQ, and Buildathon now load with zero browser errors.
+- **Terms acceptance is now explicit, current-version, and account-bound.**
+  Login and signup show AGI's Terms agreement and Privacy Policy
+  acknowledgement before Clerk authentication is mounted. Successful auth is
+  forced through an authenticated completion checkpoint; accounts without the
+  current durable revision must confirm it again, and a browser-only marker can
+  no longer authorize another account's record. Protected Web surfaces and
+  device approval, polling, and refresh reject outdated acceptance. Policy
+  pages now describe the actual Local/BYOK/Managed Cloud boundaries, provider
+  processing, workspace-scoped file delivery, and the remaining public-bucket
+  nuance for non-video media without claiming unsupported certifications,
+  retention jobs, provider training guarantees, or response deadlines.
+- **Workspace isolation now survives sync and unattended schedules.** Chat sync
+  rejects project references that do not belong to the authenticated owner and
+  exact active workspace, and repeats that scope predicate in the mutation to
+  close validation races. Claimed schedules retain their trusted user and
+  organisation scope through managed-usage reservation, execution, settlement,
+  and persistence, while the per-user schedule quota is counted across all of
+  that user's workspaces instead of resetting on every workspace switch.
+- **The active-workspace content boundary is now promoted to production.** A
+  recoverable Neon branch was created immediately before migration 0110, then
+  the canonical migration runner applied and verified the schema at 110 applied
+  / 0 pending / 0 drift. A rolled-back live probe confirmed exact Personal/org
+  visibility and fail-closed org writes, and the signed-in Website subsequently
+  reloaded existing Personal chats, projects, and Library files without loss.
+- **The primary Website composer now keeps ChatGPT-style surface hierarchy at
+  every viewport.** Empty input no longer inherits a stale 240px first-paint
+  measurement on narrow screens, the sticky footer uses the chat canvas color
+  instead of drawing a separate dark rectangle, and the composer pill uses the
+  shared theme-aware input surface so it remains visibly elevated in dark mode.
+  Signed-in localhost checks covered 390×844 dark mode and desktop light mode,
+  then restored the original System preference.
+- **Appearance theme choices now communicate their selected state.** The shared
+  Website settings control is an explicitly named button group with truthful
+  pressed-state semantics, while continuing to use the canonical persisted
+  theme store. Signed-in localhost verification switched to Light, reloaded a
+  saved map conversation without losing its action/card, and restored System.
+- **The primary chat model picker is now a named dialog.** Its visible `Models`
+  heading supplies the accessible name while search, catalog-derived rows,
+  reasoning controls, and the prompt-cache switch warning retain their existing
+  behavior. At phone width the picker stays inside the viewport, and the chat's
+  visually closed navigation drawer no longer exposes hidden controls to
+  assistive navigation. Opening it creates a focused named modal with Escape and
+  focus restoration. Local verification restored the original model without
+  sending a provider request.
+- **Global conversation search is now a real accessible modal on every Website
+  route.** The shared sidebar search traps focus, hides the background from
+  assistive navigation, has a stable dialog name and description, and retains
+  Escape/backdrop dismissal. A signed-in localhost flow searched real history,
+  opened the matching chat, and preserved its action status and map card after
+  reload.
+- **Signed-in secondary pages no longer impersonate an empty Free account while
+  authentication loads.** The shared Library waits for the host's settled auth
+  state, and the Web shell shows account, conversation, and file loading states
+  instead of briefly flashing fallback account and empty-state copy during
+  reload. Direct saved-chat reloads now select the transcript and sidebar
+  skeletons on their first route-owned frame, so they never flash the new-chat
+  greeting or claim there are no conversations before auth effects begin.
+- **Task details now look intentional before a task is selected.** The shared
+  Web/Electron empty-detail card no longer stretches to the full height of a
+  long task list and centers its guidance below the viewport; its icon, heading,
+  and explanation remain visible in the first desktop frame.
+- **Settings links now navigate inside the open modal instead of silently
+  bouncing through route stubs.** Reflect, Capabilities, Memory, Privacy,
+  archived/deleted chats, shared links, Team billing, and time-focus settings
+  share one section-navigation seam. A signed-in localhost flow verified
+  Reflect → Capabilities → Memory and Privacy → Shared links → Privacy; the
+  Memory preference persisted across reload and its original off state was
+  restored after verification.
+- **Team prices now scale with the selected licensed-seat quantity.** The Team
+  card shows the localized catalog unit price and a prominent `unit × seats`
+  monthly or annual total; changing the seat control updates that total, the
+  Checkout quantity, and the upgrade preview together. Organization admins are
+  authorized from the organization's active entitlement rather than their own
+  personal subscription, invitations report the persisted membership role, and
+  workspace members now have a safe leave/owner-transfer path. Deployments with
+  no live Team Stripe Price IDs continue to fail closed instead of offering a
+  checkout that cannot complete. Signed-out `Get Team` now carries the exact
+  seat quantity and Team anchor through authentication instead of resetting to
+  Individual pricing; the anchor also clears the sticky header on narrow
+  screens.
+- **Project-to-AGI-Work handoff is durable before model egress.** The Projects
+  composer carries the full selected intent and stable message IDs into the
+  project-scoped chat. Auth hydration, Strict Mode, storage failure, or a failed
+  user-message write can no longer lose the prompt or trigger a duplicate paid
+  turn; the provider is unreachable until the user row is durable.
+- **Map results are first-class, reload-safe chat cards.** Explicit map intents
+  can produce a visible `Preparing map` action followed by a validated
+  Google Maps/OpenStreetMap result card. Managed streams and durable workflows
+  persist the same capped contract, reload revalidates it, and arbitrary HTTPS
+  links cannot enter the map opener through stored metadata.
+- **Website landing and Projects marketing routes render without framework
+  failures.** The root route now runs through the Clerk-aware proxy, the
+  unsolicited waitlist auto-popup is gone, and the Projects feature page no
+  longer emits a streamed JSON-LD hydration mismatch.
+- **Grounded search keeps its real action trace after completion and refresh.**
+  Empty canonical activity envelopes no longer hide a persisted Web-search
+  tool record. The shared renderer falls back only when canonical tool entries
+  are absent; production now shows `Searched the web`, both source links, and a
+  terminal `Done` state without another provider request.
+- **Production deploy uploads exclude local build and review artifacts.** Vercel
+  source packaging now omits root temporary archives and the entire native
+  Desktop tree from Web-only uploads. A dry manifest is below the Hobby source
+  limit and includes all bundled skills. Hosted promotion is intentionally on
+  hold after the Hobby team exhausted its included Fluid Active CPU; the
+  in-progress unaliased deployment was cancelled and removed without changing
+  production.
+- **Run code now executes in the real production sandbox and reports an honest
+  persisted action status.** Corrected newline-corrupted E2B production
+  configuration, redeployed, and verified a signed-in calculation through the
+  owner-scoped sandbox. The expanded `Running code` activity shows its elapsed
+  time and `Done` state, the result and activity survive refresh, and no browser
+  warning/error was emitted.
+- **Signed-in chat attachments now have current production real-use evidence.**
+  A synthetic Markdown attachment showed its Managed destination, was read by a
+  catalog-selected model, and preserved its protected link plus both turns after
+  refresh with an empty warning/error console.
+- **Library files now have a complete recoverable delete lifecycle.** Web and
+  Desktop share the same owner-scoped Delete action, inline confirmation,
+  pending/error states, 30-day Recently-deleted bin, and Restore action. The
+  production signed-in flow was verified end to end against an existing asset.
+- **The signed-in model selector no longer exposes a retired OpenAI economy
+  model.** The active catalog, generated mirrors, economy roster, automatic
+  routing slot, and provider failover metadata now agree on the current
+  three-role OpenAI lineup. Production browser verification confirms the
+  retired entry is absent and the current roles remain selectable.
+- **Web and shared chat UI now use one i18n React context.** Dependency versions
+  are aligned so signed-in production pages no longer emit the missing-i18next-
+  instance warning.
+- **Marketing navigation is no longer interrupted by an automatic waitlist
+  capture.** Team and Enterprise interest remains available from deliberate
+  CTAs, and its visible close control now dismisses the modal directly. The
+  homepage and Teams flow were verified through the rendered Website with no
+  console errors.
+- **Model-neutral media choices across shared surfaces.** Removed retired image
+  adapter identities and dead provider choices from Desktop, Web contracts,
+  prompt routing, and tool descriptions. Current image choices continue to
+  resolve from the canonical model catalog instead of consumer literals.
 
 ## [Unreleased — enterprise directory sync (SCIM 2.0)] — 2026-08-05
 
@@ -298,7 +491,7 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
   regression case in the chat-sync contract test guards the fix above (proven to
   500 without it). Full DoD coverage ledger recorded in the web punchlist.
 
-## [Unreleased — model catalog: latest-family-only policy, kimi-k3, live-verified roster] — 2026-07-20
+## [Unreleased — model catalog: latest-family-only policy, Moonshot flagship, live-verified roster] — 2026-07-20
 
 ### Changed
 
@@ -307,24 +500,25 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
   (every ID/price/context scraped from official provider docs on 2026-07-20;
   full provenance in `packages/ai/model-registry/catalog/models.curation.json`
   verificationLog). Catalog is now 47 models, all current-generation.
-  Added: kimi-k3 (Moonshot flagship, $3/$15, 1,048,576 ctx, thinking
-  always-on, pro tier — restores the moonshot provider after kimi-k2.6's
-  retirement left it with zero models). Renamed/updated: grok-4.3→grok-4.5,
-  mistral-medium-3→3.5 (absorbs retired pixtral-large), mistral-small-3→
-  Small 4 (its wire id was ALREADY the current model but catalog pricing
-  was stale-wrong: $0.10/$0.30 vs actual $0.15/$0.60), codestral-2→
-  codestral-2508 (catalog id was invented; wire id was already correct),
-  veo-3→veo-3.1. Removed: gpt-5.5, gpt-5.4-mini/nano, gpt-4.1-nano, all
-  kimi-k2\*, imagen-4 family (deprecated upstream; gemini-image line is the
-  successor), sonar-reasoning (gone from Perplexity's lineup), whisper-1
-  (→ gpt-4o-transcribe/-mini), and all four OpenRouter :free entries that
-  no longer exist upstream (→ verified gemma-4-26b / nemotron-3-super-120b
-  frees). Auto-routing slots repointed (video→veo-3.1, voice transcription
-  →gpt-4o-transcribe); ~70 repo files of test pins, fixtures, production
+  Added: the Moonshot flagship entry ($3/$15, 1,048,576 ctx, thinking
+  always-on, pro tier — restores the Moonshot provider after its prior
+  generation retired with no successor in the catalog). Renamed/updated: the
+  xAI flagship, Mistral medium and small tiers, the current Codestral entry,
+  and the current Google video-generation entry. The Mistral small wire id was
+  already current, but catalog pricing was stale-wrong: $0.10/$0.30 vs actual
+  $0.15/$0.60; the Codestral catalog id was invented while its wire id was
+  already correct. Removed: prior compact/nano OpenAI records, the prior
+  Moonshot generation, the deprecated Google image family whose successor is
+  the current Gemini image line, Perplexity's retired reasoning-search entry,
+  the legacy Whisper generation (replaced by the current OpenAI transcription
+  family), and all four OpenRouter :free entries that
+  no longer exist upstream (replaced by catalog-verified free entries).
+  Auto-routing slots repointed to the current Google video-generation
+  and OpenAI transcription roles; ~70 repo files of test pins, fixtures, production
   constants (CLI STT default, desktop voice pipeline) swept across all six
-  surfaces, suites green. Held pending verification: gpt-4o-mini-tts
-  pricing (tts-1/-hd retained), NIM llama-4 pricing, Qwen3.8-Max (no API
-  id yet). (this slice, uncommitted)
+  surfaces, suites green. Held pending verification: the current OpenAI TTS entry's
+  pricing (catalog-current TTS entries retained), NIM open-model pricing, and
+  an unreleased provider model with no API id yet. (this slice, uncommitted)
 
 ## [Unreleased — desktop trust-boundary slice: AGI trust_mode end-to-end, fail-closed router, redaction] — 2026-07-20
 
@@ -381,8 +575,9 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
   MemoryCategory::as_str, dropping every section. Now matches lowercase
   keys, renders PascalCase labels, and covers skill/summary categories.
   (this slice, uncommitted)
-- Repaired the red-test families left by the claude-sonnet-4.6 retirement
-  (7a78ecbd0): desktop send_message_setup (7 pins → claude-sonnet-5),
+- Repaired the red-test families left by the retired Anthropic balanced-model
+  generation (7a78ecbd0): desktop send_message_setup (7 pins repointed to the
+  current Anthropic balanced reasoning role),
   models_config + routing_logic repoints, and the ~10-file apps/cli pin
   family (separate agent, in flight). Remaining passing-but-stale
   references tracked as MODEL-RETIRE-DRIFT-SONNET46 in known-flaws.
@@ -626,11 +821,11 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 - Completed the W10 mobile-SLM code side (device QA remains the external
   gate): most of the wave had already landed in prior commits (tier-3
   llama.rn initMultimodal, mmproj lifecycle, effectiveVisionIn gating,
-  the checksum-verified Qwen3-VL-2B catalog entry — checksums re-verified
-  against HuggingFace this pass). New this pass: the mislabeled
-  `lfm2-vl-1.6b` catalog entry was corrected to its TRUE identity —
-  `lfm2-vl-450m` (the stored artifact size/checksum were always the 450M
-  model's; the real 1.6B is a 2.4GB download that contradicts the
+  the checksum-verified Qwen vision catalog entry — checksums re-verified
+  against HuggingFace this pass). New this pass: the mislabeled Liquid AI
+  vision catalog entry was corrected to its true lower-parameter identity
+  (the stored artifact size/checksum always belonged to that smaller model;
+  the larger variant is a 2.4GB download that contradicts the
   low-RAM-tier intent) — with `visionIn` honestly false until tier-2
   image plumbing exists, plus a regression test pinning the old id dead;
   a pure, tested `hasSufficientRAMForMultimodal` (≥3.5GB) gate landed in
@@ -1017,7 +1212,7 @@ All notable changes to AGI Workforce. The format follows [Keep a Changelog](http
 - Fixed cross-surface media request drift: Web now resolves canonical catalog
   IDs, Desktop preserves selected model/provider/video settings and omits absent
   values, and the duplicate Desktop agent media HTTP client—including its
-  hardcoded `imagen3` and incorrect synchronous-video assumption—is removed.
+  hardcoded retired image-model fallback and incorrect synchronous-video assumption—is removed.
 
 ### Removed
 
@@ -1303,16 +1498,16 @@ Full synthesis at `docs/audit/2026-05-22-r25-summary.md`.
 
 ### Per-lane outcomes
 
-| Lane                          | Commit                                                | Outcome                                                                                                                                                 |
-| ----------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| V1 cli salvage                | `c8f5f95b9` + `e3a316d39` + `1960799ad` + `5c4e623c1` | ~118 orphan files removed; tui module ownership rule locked.                                                                                            |
-| V2 model-id drift             | `20bdd9cba`                                           | 4 corrections (hallucinated NVIDIA Nemotron, deprecated Mistral 2506, bare-slug codestral-2, mistral-small-3.1-24b context window); 8 regression tests. |
-| V3 cost-tracker E2E + wire    | `a48158798` + `36d39ae9e`                             | 7/7 E2E pass both OpenAI shapes; toOtelAttributes wired to prod.                                                                                        |
-| V4 BYOK negative tests        | `91068d33a`                                           | 38 NEGATIVE tests, no key-value leaks; PII + rate-limit notes for R26.                                                                                  |
-| V5 desktop sync silence       | `8d225f81a`                                           | 2 Rust integration tests; Privacy "Sync chat history" toggle removed; settings.rs coerces persisted `cloud` → `local`.                                  |
-| V6 random commit audit        | `a1f79472a`                                           | 8 commits sampled; 1×CRIT + 2×MAJ + 3×MIN + 2×CLEAN; 8-item R26 list.                                                                                   |
-| V7 desktop ToolCallCard dedup | `12f00467f`                                           | 2 dupes deleted (`features/chat/`, `features/tool-calling/`); canonical at `features/chat/MessageBubble/ToolCallCard.tsx`; 4 consumers migrated.        |
-| Synthesis                     | `9b80e801f`                                           | `docs/audit/2026-05-22-r25-summary.md`.                                                                                                                 |
+| Lane                          | Commit                                                | Outcome                                                                                                                                          |
+| ----------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| V1 cli salvage                | `c8f5f95b9` + `e3a316d39` + `1960799ad` + `5c4e623c1` | ~118 orphan files removed; tui module ownership rule locked.                                                                                     |
+| V2 model-id drift             | `20bdd9cba`                                           | 4 corrections across hallucinated, deprecated, and malformed provider model identities plus context metadata; 8 regression tests.                |
+| V3 cost-tracker E2E + wire    | `a48158798` + `36d39ae9e`                             | 7/7 E2E pass both OpenAI shapes; toOtelAttributes wired to prod.                                                                                 |
+| V4 BYOK negative tests        | `91068d33a`                                           | 38 NEGATIVE tests, no key-value leaks; PII + rate-limit notes for R26.                                                                           |
+| V5 desktop sync silence       | `8d225f81a`                                           | 2 Rust integration tests; Privacy "Sync chat history" toggle removed; settings.rs coerces persisted `cloud` → `local`.                           |
+| V6 random commit audit        | `a1f79472a`                                           | 8 commits sampled; 1×CRIT + 2×MAJ + 3×MIN + 2×CLEAN; 8-item R26 list.                                                                            |
+| V7 desktop ToolCallCard dedup | `12f00467f`                                           | 2 dupes deleted (`features/chat/`, `features/tool-calling/`); canonical at `features/chat/MessageBubble/ToolCallCard.tsx`; 4 consumers migrated. |
+| Synthesis                     | `9b80e801f`                                           | `docs/audit/2026-05-22-r25-summary.md`.                                                                                                          |
 
 ### Added
 
@@ -2061,7 +2256,7 @@ Documented as out-of-scope for v1 per `~/.claude/plans/v1-complete-wave5.md:103-
 
 ### Added
 
-- **Voice slot reopening for Hobby+ tiers** (`a8c5c92c7`) — `allowVoice` + `voiceMinutesPerMonth` fields added to `TierPolicy`. `voice_transcription` (Whisper-1) + `voice_rewrite` (Gemini Flash-Lite) slots added to allowedSlots of Hobby/Pro/Pro+/Max/Enterprise. Hobby 60 min/mo, Pro 300, Pro+ 1500, Max+Enterprise unlimited. Free stays text-only. Implements Wispr-Flow-style system-wide dictation per user's 2026-05-15 decision (supersedes Round 14 "voice deferred from v1").
+- **Voice slot reopening for Hobby+ tiers** (`a8c5c92c7`) — `allowVoice` + `voiceMinutesPerMonth` fields added to `TierPolicy`. Catalog-owned `voice_transcription` and `voice_rewrite` slots were added to allowedSlots of Hobby/Pro/Pro+/Max/Enterprise. Hobby 60 min/mo, Pro 300, Pro+ 1500, Max+Enterprise unlimited. Free stays text-only. Implements Wispr-Flow-style system-wide dictation per user's 2026-05-15 decision (supersedes Round 14 "voice deferred from v1").
 - **Brand-mark proposals** (`01e56f2a3`) — 3 SVG directions at `docs/design/brand-mark-proposals/` (connected nodes, angular A monogram, stacked layers prism) + HTML preview rendering all 3 at 5 sizes on dark+light + wordmark pair previews. User to pick direction.
 - `@next/bundle-analyzer` wired in `apps/web` (web-launch3, `f90519eac`).
 - Chrome ext ↔ desktop bridge :8787 pairing e2e test (integ-launch3, `dde2cc56a`).

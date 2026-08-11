@@ -1,11 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { assessModelSwitchCache } from '../model-switch-cache';
 
+const PRIMARY_MODEL_ID = 'fixture-primary-model';
+const NEXT_MODEL_ID = 'fixture-next-model';
+
 describe('assessModelSwitchCache', () => {
   it('does NOT warn for a brand-new conversation (no prior turns)', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-5',
-      nextModelId: 'gpt-5',
+      priorModelId: PRIMARY_MODEL_ID,
+      nextModelId: NEXT_MODEL_ID,
       priorTurnCount: 0,
     });
     expect(a.warn).toBe(false);
@@ -17,7 +20,7 @@ describe('assessModelSwitchCache', () => {
   it('does NOT warn when there is no known prior model', () => {
     const a = assessModelSwitchCache({
       priorModelId: null,
-      nextModelId: 'gpt-5',
+      nextModelId: NEXT_MODEL_ID,
       priorTurnCount: 3,
     });
     expect(a.warn).toBe(false);
@@ -26,8 +29,8 @@ describe('assessModelSwitchCache', () => {
 
   it('does NOT warn when re-selecting the same model', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-5',
-      nextModelId: 'claude-opus-5',
+      priorModelId: PRIMARY_MODEL_ID,
+      nextModelId: PRIMARY_MODEL_ID,
       priorTurnCount: 5,
     });
     expect(a.warn).toBe(false);
@@ -36,8 +39,8 @@ describe('assessModelSwitchCache', () => {
 
   it('WARNS when switching to a different model with prior turns (cache reset)', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-5',
-      nextModelId: 'gpt-5',
+      priorModelId: PRIMARY_MODEL_ID,
+      nextModelId: NEXT_MODEL_ID,
       priorTurnCount: 2,
     });
     expect(a.resetsCache).toBe(true);
@@ -49,21 +52,21 @@ describe('assessModelSwitchCache', () => {
 
   it('uses human labels in the message when provided', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-5',
-      nextModelId: 'gpt-5',
+      priorModelId: PRIMARY_MODEL_ID,
+      nextModelId: NEXT_MODEL_ID,
       priorTurnCount: 1,
-      priorModelLabel: 'Opus 5',
-      nextModelLabel: 'GPT-5',
+      priorModelLabel: 'Fixture primary',
+      nextModelLabel: 'Fixture next',
     });
-    expect(a.message).toContain('Opus 5');
-    expect(a.message).toContain('GPT-5');
-    expect(a.message).not.toContain('claude-opus-5');
+    expect(a.message).toContain('Fixture primary');
+    expect(a.message).toContain('Fixture next');
+    expect(a.message).not.toContain(PRIMARY_MODEL_ID);
   });
 
   it('treats same-provider different-model as a reset too (per-model cache key)', () => {
     const a = assessModelSwitchCache({
-      priorModelId: 'claude-opus-5',
-      nextModelId: 'claude-sonnet-5',
+      priorModelId: PRIMARY_MODEL_ID,
+      nextModelId: NEXT_MODEL_ID,
       priorTurnCount: 4,
     });
     expect(a.warn).toBe(true);

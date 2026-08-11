@@ -26,6 +26,8 @@ export interface ManagedPromptModerationInput {
   userId: string;
   /** Client-authored text from the turn. Each segment is classified alone. */
   segments: readonly string[];
+  /** Managed surface for privacy-preserving operational reporting. */
+  surface?: 'managed-chat' | 'managed-video';
 }
 
 export type ManagedPromptModeration =
@@ -61,6 +63,7 @@ const MAX_MODERATED_CHARS = 200_000;
 export function moderateManagedPrompt(
   input: ManagedPromptModerationInput,
 ): ManagedPromptModeration {
+  const surface = input.surface ?? 'managed-chat';
   const categories = new Set<ModerationCategory>();
   const ruleIds = new Set<string>();
   const suppressedRuleIds = new Set<string>();
@@ -86,7 +89,7 @@ export function moderateManagedPrompt(
 
   if (blocked) {
     recordModerationEvent({
-      surface: 'managed-chat',
+      surface,
       action: 'block',
       categories: [...categories],
       ruleIds: reportedRuleIds,
@@ -104,7 +107,7 @@ export function moderateManagedPrompt(
 
   if (flagged) {
     recordModerationEvent({
-      surface: 'managed-chat',
+      surface,
       action: 'flag',
       categories: [...categories],
       ruleIds: reportedRuleIds,

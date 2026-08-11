@@ -18,13 +18,20 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getNeonChatDb, requireCurrentUserId } from '@/lib/server/neon-chat';
+import { failUnboundVideoGenerationTranscript } from '@/lib/server/video-generation-transcript';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string; messageId: string }> };
 
-const PatchMessageSchema = z.object({
-  reaction: z.enum(['thumbsUp', 'thumbsDown']).nullable().optional(),
-});
+const PatchMessageSchema = z.union([
+  z.object({ reaction: z.enum(['thumbsUp', 'thumbsDown']).nullable() }).strict(),
+  z
+    .object({
+      videoStartFailure: z.object({ publicError: z.string().trim().min(1).max(500) }).strict(),
+    })
+    .strict(),
+]);
 
 async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   const userId = await requireCurrentUserId(request);
@@ -51,13 +58,38 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   const patch = result.data;
 
   const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
   const [conv] = await db.query<{ id: string }>(
-    'select id from web_conversations where id = $1 and user_id = $2 and deleted_at is null limit 1',
-    [conversationId, userId],
+    `select id
+       from web_conversations
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and deleted_at is null
+      limit 1`,
+    [conversationId, userId, organizationId],
   );
 
   if (!conv) {
     throw createError.notFound('Conversation not found');
+  }
+
+  if ('videoStartFailure' in patch) {
+    const projection = await failUnboundVideoGenerationTranscript({
+      db,
+      userId,
+      conversationId,
+      assistantMessageId: messageId,
+      publicError: patch.videoStartFailure.publicError,
+    });
+    if (projection.disposition === 'not_found') {
+      throw createError.notFound('Video placeholder not found');
+    }
+    return NextResponse.json({
+      ok: true,
+      applied: projection.disposition === 'updated',
+      message: projection.message,
+    });
   }
 
   // Fetch current metadata so we can merge (preserves existing fields)
@@ -96,11 +128,18 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
   const { id: conversationId, messageId } = await context.params;
 
   const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   // Verify conversation ownership first (mirrors PATCH pattern)
   const [conv] = await db.query<{ id: string }>(
-    'select id from web_conversations where id = $1 and user_id = $2 and deleted_at is null limit 1',
-    [conversationId, userId],
+    `select id
+       from web_conversations
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and deleted_at is null
+      limit 1`,
+    [conversationId, userId, organizationId],
   );
 
   if (!conv) {

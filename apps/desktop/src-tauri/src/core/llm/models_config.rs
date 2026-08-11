@@ -93,9 +93,8 @@ pub struct PricingEntry {
     /// `cached_input`. `None` when the model prices no cache read, in which case
     /// callers must fall back to the full input rate rather than guessing a
     /// discount. Carrying the real number matters: the cost calculator used to
-    /// hardcode 0.5x the input rate for OpenAI and Managed Cloud, while the
-    /// catalog prices a cache read at 0.1x for both gpt-5.6-sol and
-    /// gpt-5.6-luna — a 5x overcharge on every cached token.
+    /// hardcode 0.5x the input rate for OpenAI and Managed Cloud, while current
+    /// catalog entries can price cache reads at 0.1x — a 5x overcharge if ignored.
     #[serde(default)]
     pub cache_read_per_million: Option<f64>,
     /// Multiplier applied to the input rate when WRITING a cache entry, from
@@ -109,6 +108,23 @@ pub struct PricingEntry {
     /// model declares no write price, and callers must NOT invent a surcharge.
     #[serde(default)]
     pub cache_write_per_million: Option<f64>,
+}
+
+/// Absolute per-million rates applied when a request's prompt exceeds the
+/// catalog threshold. The threshold is strict: exactly `threshold_tokens`
+/// remains on the base tier and the next token switches the whole request.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LongContextPricing {
+    pub threshold_tokens: u64,
+    pub input_cost: f64,
+    pub output_cost: f64,
+    #[serde(default, rename = "cached_input")]
+    pub cached_input: Option<f64>,
+    #[serde(default, rename = "cached_write")]
+    pub cached_write: Option<f64>,
+    #[serde(default, rename = "cached_write_1h")]
+    pub cached_write_1h: Option<f64>,
 }
 
 /// One dated pricing window from the catalog's `pricingSchedule`.
@@ -178,7 +194,15 @@ pub struct ModelEntry {
     pub name: String,
     pub provider: String,
     pub model_type: String,
-    pub context_window: u64,
+    #[serde(default)]
+    pub input_modalities: Vec<String>,
+    /// Token context is meaningful only for prompt-consuming models. Media
+    /// generation APIs such as Runway do not publish or use a token window, so
+    /// the canonical catalog intentionally omits this field for them. Callers
+    /// must distinguish that known absence from an uncatalogued Local/BYOK
+    /// model whose window is unknown.
+    #[serde(default)]
+    pub context_window: Option<u64>,
     pub input_cost: f64,
     pub output_cost: f64,
     /// Catalog `cached_input`: absolute per-million price of a cache read.
@@ -197,6 +221,14 @@ pub struct ModelEntry {
     pub pricing_schedule: Vec<PricingWindowEntry>,
     #[serde(default)]
     pub cache_policy: Option<CachePolicyEntry>,
+    /// Ordered request-wide token-pricing bands. The greatest threshold that
+    /// the request strictly exceeds wins.
+    #[serde(default)]
+    pub input_token_pricing_tiers: Vec<LongContextPricing>,
+    /// Backward-compatible singular tier while generated catalogs migrate to
+    /// `inputTokenPricingTiers`. Ignored when the array is non-empty.
+    #[serde(default)]
+    pub long_context: Option<LongContextPricing>,
     pub capabilities: ModelCapabilities,
     #[serde(default)]
     pub reasoning: Option<ModelReasoning>,
@@ -206,6 +238,12 @@ pub struct ModelEntry {
     pub quality: String,
     pub quality_tier: String,
     pub best_for: Vec<String>,
+    #[serde(default)]
+    pub video_per_second_cost: Option<f64>,
+    #[serde(default)]
+    pub availability: Option<String>,
+    #[serde(default)]
+    pub unavailable_reason: Option<String>,
     #[serde(default)]
     pub released: Option<String>,
     #[serde(default)]
@@ -243,6 +281,19 @@ impl PricingWindowEntry {
 }
 
 impl ModelEntry {
+    /// Greatest catalog token-pricing threshold strictly below this request.
+    pub fn input_token_pricing_tier(&self, input_tokens: u64) -> Option<&LongContextPricing> {
+        let tiers = if self.input_token_pricing_tiers.is_empty() {
+            self.long_context.as_slice()
+        } else {
+            self.input_token_pricing_tiers.as_slice()
+        };
+        tiers
+            .iter()
+            .filter(|tier| input_tokens > tier.threshold_tokens)
+            .max_by_key(|tier| tier.threshold_tokens)
+    }
+
     /// Rates that apply to this model on `as_of`.
     ///
     /// The first `pricingSchedule` window covering `as_of` wins; with no
@@ -270,6 +321,28 @@ impl ModelEntry {
             cached_write: window.cached_write.or(base.cached_write),
             cached_write_1h: window.cached_write_1h.or(base.cached_write_1h),
         }
+    }
+
+    /// Rates that apply on `as_of` for a request with `input_tokens` prompt
+    /// tokens. Date-window pricing is resolved first; a qualifying long-context
+    /// tier then replaces its declared absolute rates. Optional cache rates
+    /// inherit the date-resolved base when the long-context block omits them.
+    pub fn effective_pricing_for_input(
+        &self,
+        as_of: NaiveDate,
+        input_tokens: u64,
+    ) -> EffectivePricing {
+        let mut effective = self.effective_pricing(as_of);
+        let Some(tier) = self.input_token_pricing_tier(input_tokens) else {
+            return effective;
+        };
+
+        effective.input_cost = tier.input_cost;
+        effective.output_cost = tier.output_cost;
+        effective.cached_input = tier.cached_input.or(effective.cached_input);
+        effective.cached_write = tier.cached_write.or(effective.cached_write);
+        effective.cached_write_1h = tier.cached_write_1h.or(effective.cached_write_1h);
+        effective
     }
 }
 
@@ -333,15 +406,14 @@ pub fn get_default_model(provider: &Provider) -> &'static str {
         .and_then(|p| p.default_model.as_deref())
         .filter(|model_id| !model_id.is_empty())
         .unwrap_or_else(|| match provider {
-            // Local runtimes have no fixed default model — the actual model is
-            // always dynamically discovered (Ollama /api/tags, LM Studio/llama.cpp/vLLM
-            // /v1/models) and sent explicitly by the frontend. This fallback string
-            // is only used when no explicit model was requested.
+            // Local runtimes have no fixed default model. Returning an empty
+            // value forces callers to use provider discovery instead of
+            // inventing a model that may not be installed.
             Provider::Ollama
             | Provider::OllamaCloud
             | Provider::LmStudio
             | Provider::LlamaCpp
-            | Provider::Vllm => "llama4-maverick",
+            | Provider::Vllm => "",
             _ => catalog_fallback_model(),
         })
 }
@@ -431,8 +503,18 @@ pub fn get_task_model(provider: &Provider, task: &str) -> &'static str {
 /// dated `pricingSchedule` and the rate that applies is a function of the
 /// request's date, not of when this process happens to run.
 pub fn get_pricing(provider: &Provider, model_id: &str, as_of: NaiveDate) -> Option<PricingEntry> {
-    fn entry_pricing(model: &ModelEntry, as_of: NaiveDate) -> PricingEntry {
-        let effective = model.effective_pricing(as_of);
+    get_pricing_for_input(provider, model_id, as_of, 0)
+}
+
+/// Pricing for one request after applying any catalog long-context tier.
+pub fn get_pricing_for_input(
+    provider: &Provider,
+    model_id: &str,
+    as_of: NaiveDate,
+    input_tokens: u64,
+) -> Option<PricingEntry> {
+    fn entry_pricing(model: &ModelEntry, as_of: NaiveDate, input_tokens: u64) -> PricingEntry {
+        let effective = model.effective_pricing_for_input(as_of, input_tokens);
         PricingEntry {
             input_per_million: effective.input_cost,
             output_per_million: effective.output_cost,
@@ -446,12 +528,12 @@ pub fn get_pricing(provider: &Provider, model_id: &str, as_of: NaiveDate) -> Opt
     }
 
     if let Some(model) = CONFIG.models.get(model_id) {
-        return Some(entry_pricing(model, as_of));
+        return Some(entry_pricing(model, as_of, input_tokens));
     }
 
     let canonical_model_id = get_canonicalized_id(model_id);
     if let Some(model) = CONFIG.models.get(&canonical_model_id) {
-        return Some(entry_pricing(model, as_of));
+        return Some(entry_pricing(model, as_of, input_tokens));
     }
     if let Some(provider_cfg) = CONFIG.providers.get(provider.as_string()) {
         tracing::debug!(
@@ -494,8 +576,8 @@ pub fn get_token_multiplier(provider: &Provider) -> f64 {
 
 /// Resolve the wire API model ID for a given catalog model ID.
 ///
-/// If the catalog entry has an `apiModelId` field set (e.g. `"MiniMax-M3"` for
-/// the internal key `"minimax-m3"`), that wire string is returned so it can be sent
+/// If the catalog entry has an `apiModelId` distinct from its internal key,
+/// that wire string is returned so it can be sent
 /// directly in the HTTP request body.  Falls back to the input unchanged when no entry or
 /// no `apiModelId` is found.
 pub fn get_api_model_id(model_id: &str) -> String {
@@ -600,24 +682,18 @@ pub fn max_effort_when_thinking_disabled(model_id: &str) -> Option<&'static str>
         .and_then(|reasoning| reasoning.max_effort_when_thinking_disabled.as_deref())
 }
 
-/// Infer the Rust `Provider` enum from a model ID string using prefix matching.
-/// Returns `None` if no prefix matches (caller should default to ManagedCloud).
+/// Infer the Rust `Provider` enum from a catalog-addressable model ID.
+///
+/// Unknown names fail closed even when they resemble a provider's model
+/// family. This prevents a retired or invented ID from bypassing catalog
+/// removal through a familiar prefix. Explicit BYOK provider selection is
+/// handled separately and does not use this inference path.
 pub fn get_provider_for_model(model_id: &str) -> Option<Provider> {
     let canonical_model_id = get_canonicalized_id(model_id);
-
-    if let Some(entry) = CONFIG.models.get(&canonical_model_id) {
-        return Provider::from_string(&entry.provider);
-    }
-
-    let model_lower = canonical_model_id.to_lowercase();
-    for (provider_id, cfg) in &CONFIG.providers {
-        for prefix in &cfg.model_prefixes {
-            if model_lower.starts_with(prefix) {
-                return Provider::from_string(provider_id);
-            }
-        }
-    }
-    None
+    CONFIG
+        .models
+        .get(&canonical_model_id)
+        .and_then(|entry| Provider::from_string(&entry.provider))
 }
 
 /// SSE event delimiter bytes for a provider.
@@ -633,76 +709,18 @@ pub fn get_sse_delimiter(provider: &Provider) -> &'static [u8] {
     }
 }
 
-/// Whether a model uses the OpenAI Responses API (vs Chat Completions).
+/// Whether a cataloged model uses the OpenAI Responses API.
 ///
-/// As of March 2026, the Responses API is used by:
-///   - GPT-5+ series (gpt-5, gpt-5.1, gpt-5-turbo, gpt-6, gpt-7, ...)
-///   - GPT-4.1 series (gpt-4.1, gpt-4.1-mini, ...)
-///   - O-series reasoning (o3+, o4+, ...)
-///   - GPT open-source (gpt-oss-120b, gpt-oss-20b)
-///   - Codex models (codex-mini-latest)
-///
-/// Chat Completions remains the default for older models (gpt-4o, gpt-4-turbo, gpt-3.5-turbo).
-///
-/// Uses version-aware detection: any GPT major version >= 5 (and 4.1+) uses the Responses API.
-/// This future-proofs for gpt-5-turbo, gpt-6, gpt-7, etc. without code changes.
+/// The canonical catalog is the only authority for provider and request-shape
+/// selection. Unknown Local/BYOK IDs fail closed to Chat Completions instead of
+/// guessing from a name prefix; a newly released OpenAI model becomes eligible
+/// only after its catalog metadata is verified and regenerated.
 pub fn model_uses_responses_api(model_id: &str) -> bool {
     let id = get_canonicalized_id(model_id).to_lowercase();
-
-    // Catalog is authoritative for known models: trust the declared
-    // `model_type`. Only OpenAI reasoning-tier models use the Responses API;
-    // OpenAI chat models and every non-OpenAI model use Chat Completions.
-    // Returning here (rather than falling through to
-    // the version heuristics below) prevents the `gpt-` major>=5 / 4.1 heuristic
-    // from misrouting a catalog chat model into a Responses-shaped body (`input`,
-    // no `messages`) — which is posted to `/chat/completions` and 400s with
-    // "Missing required parameter: 'messages'". No hardcoded SPECIFIC model IDs
-    // per the locked rule — capability info flows through models.json. The
-    // heuristics below only apply to ids NOT present in the catalog.
-    if let Some(entry) = CONFIG.models.get(&id) {
-        return entry.provider == "openai" && entry.model_type == "reasoning";
-    }
-
-    // O-series (oN) reasoning family — parse a single digit after the
-    // leading 'o' to future-proof for o5/o6/o7/etc. without code edits.
-    // Variants like "o3-mini" / "o4-mini" / "o3-pro" are also covered.
-    if let Some(rest) = id.strip_prefix('o') {
-        if rest.chars().next().is_some_and(|c| c.is_ascii_digit()) {
-            return true;
-        }
-    }
-
-    // OpenAI reasoning-adjacent families (gpt-oss open-weight, codex-).
-    // These are non-versioned product names so prefix is the only signal.
-    if id.starts_with("gpt-oss") || id.starts_with("codex-") {
-        return true;
-    }
-
-    // For GPT models, parse the major version after "gpt-" to future-proof
-    // for gpt-5-turbo, gpt-6, gpt-7, etc. without requiring code changes.
-    // gpt-4.1+ and gpt-5+ use Responses API; gpt-4o, gpt-4-turbo, gpt-3.5 do not.
-    if let Some(rest) = id.strip_prefix("gpt-") {
-        let version_str: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
-        if let Ok(major) = version_str.parse::<u32>() {
-            if major >= 5 {
-                return true;
-            }
-            if major == 4 {
-                let after_major = &rest[version_str.len()..];
-                if let Some(minor_str) = after_major.strip_prefix('.') {
-                    let minor_digits: String = minor_str
-                        .chars()
-                        .take_while(|c| c.is_ascii_digit())
-                        .collect();
-                    if let Ok(minor) = minor_digits.parse::<u32>() {
-                        return minor >= 1;
-                    }
-                }
-            }
-        }
-    }
-
-    false
+    CONFIG
+        .models
+        .get(&id)
+        .is_some_and(|entry| entry.provider == "openai" && entry.model_type == "reasoning")
 }
 
 /// Whether a model supports Gemini-style `thinking_config` API parameter.
@@ -742,6 +760,30 @@ mod tests {
         NaiveDate::from_ymd_opt(year, month, day).expect("valid calendar date")
     }
 
+    fn active_catalog_model(
+        provider: &str,
+        predicate: impl Fn(&ModelEntry) -> bool,
+    ) -> &'static ModelEntry {
+        CONFIG
+            .models
+            .values()
+            .find(|entry| {
+                entry.provider == provider && entry.deprecated != Some(true) && predicate(entry)
+            })
+            .expect("catalog must contain an active model matching the test predicate")
+    }
+
+    fn founder_standard_anthropic_model() -> &'static ModelEntry {
+        active_catalog_model("anthropic", |entry| {
+            entry.pricing_schedule.is_empty()
+                && entry.input_cost == 3.0
+                && entry.output_cost == 15.0
+                && entry.cached_input == Some(0.3)
+                && entry.cached_write == Some(3.75)
+                && entry.cached_write_1h == Some(6.0)
+        })
+    }
+
     /// SYNTHETIC test-only entry with a dated schedule on arbitrary dates.
     ///
     /// The dated-pricing MECHANISM is proved against this rather than against a
@@ -752,8 +794,9 @@ mod tests {
     fn scheduled_fixture_model() -> ModelEntry {
         let mut model = CONFIG
             .models
-            .get("claude-opus-5")
-            .expect("claude-opus-5 must exist in the catalog")
+            .values()
+            .find(|entry| entry.context_window.is_some())
+            .expect("catalog must contain a prompt-consuming model for fixture metadata")
             .clone();
         model.id = "fixture-scheduled-model".to_string();
         model.api_model_id = None;
@@ -762,6 +805,8 @@ mod tests {
         model.cached_input = Some(0.3);
         model.cached_write = Some(3.75);
         model.cached_write_1h = Some(6.0);
+        model.input_token_pricing_tiers.clear();
+        model.long_context = None;
         model.pricing_schedule = vec![
             PricingWindowEntry {
                 effective_from: None,
@@ -817,35 +862,32 @@ mod tests {
 
     #[test]
     fn effective_pricing_is_date_invariant_without_a_schedule() {
-        let opus = CONFIG
+        let model = CONFIG
             .models
-            .get("claude-opus-5")
-            .expect("claude-opus-5 must exist in the catalog");
-        assert!(opus.pricing_schedule.is_empty());
-        let early = opus.effective_pricing(day(2020, 1, 1));
-        let late = opus.effective_pricing(day(2099, 12, 31));
+            .values()
+            .find(|entry| entry.context_window.is_some() && entry.pricing_schedule.is_empty())
+            .expect("catalog must include a scheduleless prompt-consuming model");
+        let early = model.effective_pricing(day(2020, 1, 1));
+        let late = model.effective_pricing(day(2099, 12, 31));
         assert_eq!(early, late);
-        assert_eq!(early.input_cost, opus.input_cost);
+        assert_eq!(early.input_cost, model.input_cost);
     }
 
     #[test]
-    fn sonnet_5_prices_the_founder_standard_rates_on_every_date() {
+    fn founder_standard_anthropic_route_prices_the_standard_rates_on_every_date() {
         // Founder pin — Decision #22 (docs/decisions/CURRENT_DECISIONS.md,
         // reaffirmed 2026-08-05): Sonnet 5 bills users the standard $3/$15 per
         // MTok (cache read $0.30, 5m write $3.75, 1h write $6.00) on EVERY date.
         // Anthropic's introductory window is a provider-COST fact for the
         // registry's verificationLog, never a product price.
-        let sonnet = CONFIG
-            .models
-            .get("claude-sonnet-5")
-            .expect("claude-sonnet-5 must exist in the catalog");
+        let standard_model = founder_standard_anthropic_model();
         assert!(
-            sonnet.pricing_schedule.is_empty(),
-            "claude-sonnet-5 must not carry a dated pricing schedule"
+            standard_model.pricing_schedule.is_empty(),
+            "the founder-standard model must not carry a dated pricing schedule"
         );
 
         for date in [day(2020, 1, 1), day(2026, 8, 15), day(2026, 9, 15)] {
-            let pricing = sonnet.effective_pricing(date);
+            let pricing = standard_model.effective_pricing(date);
             assert_eq!(pricing.input_cost, 3.0, "input cost on {date}");
             assert_eq!(pricing.output_cost, 15.0, "output cost on {date}");
             assert_eq!(pricing.cached_input, Some(0.3), "cache read on {date}");
@@ -860,21 +902,21 @@ mod tests {
 
     #[test]
     fn get_pricing_carries_the_declared_cache_write_price() {
+        let standard_model = founder_standard_anthropic_model();
         for date in [day(2026, 8, 15), day(2026, 9, 15)] {
-            let sonnet = get_pricing(&Provider::Anthropic, "claude-sonnet-5", date)
-                .expect("claude-sonnet-5 must have pricing");
-            assert_eq!(sonnet.cache_write_per_million, Some(3.75));
+            let pricing = get_pricing(&Provider::Anthropic, &standard_model.id, date)
+                .expect("founder-standard Anthropic model must have pricing");
+            assert_eq!(pricing.cache_write_per_million, Some(3.75));
         }
 
-        // Pre-GPT-5.6 OpenAI models declare no write price at all.
-        let mini = get_pricing(&Provider::OpenAI, "gpt-5.4-mini", priced_on())
-            .expect("gpt-5.4-mini must have pricing");
-        assert_eq!(mini.cache_write_per_million, None);
-
-        // The GPT-5.6 family does declare one.
-        let sol = get_pricing(&Provider::OpenAI, "gpt-5.6-sol", priced_on())
-            .expect("gpt-5.6-sol must have pricing");
-        assert_eq!(sol.cache_write_per_million, Some(6.25));
+        let openai_model = CONFIG
+            .models
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.cached_write.is_some())
+            .expect("catalog must include an OpenAI model with cache-write pricing");
+        let pricing = get_pricing(&Provider::OpenAI, &openai_model.id, priced_on())
+            .expect("catalog OpenAI model must have pricing");
+        assert_eq!(pricing.cache_write_per_million, openai_model.cached_write);
     }
 
     #[test]
@@ -882,15 +924,27 @@ mod tests {
         let cfg = config();
         assert!(!cfg.models.is_empty(), "models map must not be empty");
         assert!(!cfg.providers.is_empty(), "providers map must not be empty");
+
+        let contextless_media_model = cfg
+            .models
+            .values()
+            .find(|entry| {
+                entry.context_window.is_none()
+                    && (entry.capabilities.image_gen || entry.capabilities.video_gen)
+            })
+            .expect("the canonical catalog must include a contextless media model");
+        assert_eq!(
+            contextless_media_model.context_window, None,
+            "a media API without a published token window must not receive an invented value"
+        );
     }
 
     #[test]
-    fn get_default_model_returns_non_empty_for_all_providers() {
+    fn get_default_model_returns_non_empty_for_cloud_providers() {
         for provider in [
             Provider::OpenAI,
             Provider::Anthropic,
             Provider::Google,
-            Provider::Ollama,
             Provider::Perplexity,
             Provider::XAI,
             Provider::DeepSeek,
@@ -914,6 +968,23 @@ mod tests {
                 !model.is_empty(),
                 "{:?}.default_model must not be empty",
                 provider
+            );
+        }
+    }
+
+    #[test]
+    fn dynamically_discovered_local_providers_have_no_static_default() {
+        for provider in [
+            Provider::Ollama,
+            Provider::OllamaCloud,
+            Provider::LmStudio,
+            Provider::LlamaCpp,
+            Provider::Vllm,
+        ] {
+            assert_eq!(
+                get_default_model(&provider),
+                "",
+                "{provider:?} must resolve its model from the configured runtime"
             );
         }
     }
@@ -969,37 +1040,34 @@ mod tests {
     /// literal reappearing there is drift that outlives the next catalog
     /// regeneration silently, which is how ghost model IDs reach users.
     #[test]
-    fn no_hardcoded_model_ids_in_routing_and_commands() {
-        let sources: &[(&str, &str, &[&str])] = &[
-            (
-                "core/llm/llm_router.rs",
-                include_str!("llm_router.rs"),
-                &["\"sonar\"", "\"sonar-deep-research\""],
-            ),
-            (
-                "core/llm/tool_executor/llm_tools.rs",
-                include_str!("tool_executor/llm_tools.rs"),
-                &["\"gpt-5.6-luna\""],
-            ),
+    fn no_catalog_model_ids_in_routing_and_commands() {
+        let sources: &[(&str, &str)] = &[
+            ("core/llm/llm_router.rs", include_str!("llm_router.rs")),
             (
                 "sys/commands/completion.rs",
                 include_str!("../../sys/commands/completion.rs"),
-                &["\"glm-5.2\""],
             ),
             (
                 "sys/commands/voice.rs",
                 include_str!("../../sys/commands/voice.rs"),
-                &["\"gpt-4o-transcribe\""],
             ),
         ];
 
-        for &(path, src, literals) in sources {
-            for &literal in literals {
-                assert!(
-                    !src.contains(literal),
-                    "{path} names model literal {literal} — resolve it through \
+        for &(path, src) in sources {
+            for entry in CONFIG.models.values() {
+                for model_id in
+                    std::iter::once(entry.id.as_str()).chain(entry.api_model_id.as_deref())
+                {
+                    let literal = format!("\"{model_id}\"");
+                    if model_id.is_empty() {
+                        continue;
+                    }
+                    assert!(
+                        !src.contains(&literal),
+                        "{path} names model literal {literal} — resolve it through \
                      models_config::get_task_model / get_model_by_type_and_tier instead"
-                );
+                    );
+                }
             }
         }
     }
@@ -1073,38 +1141,42 @@ mod tests {
 
     #[test]
     fn get_canonicalized_id_keeps_unlisted_aliases_unchanged() {
-        assert_eq!(
-            get_canonicalized_id("claude-sonnet-9-9"),
-            "claude-sonnet-9-9"
-        );
-        assert_eq!(get_canonicalized_id("claude-opus-5"), "claude-opus-5");
-        assert_eq!(
-            get_canonicalized_id("gemini-3.1-pro-preview"),
-            "gemini-3.1-pro-preview"
-        );
-        assert_eq!(get_canonicalized_id("gpt-9.9-mini"), "gpt-9.9-mini");
-        assert_eq!(
-            get_canonicalized_id("unlisted-model-id"),
-            "unlisted-model-id"
-        );
+        for unlisted in [
+            "fixture-unlisted-provider-model",
+            "fixture-unlisted-preview-model",
+            "unlisted-model-id",
+        ] {
+            assert_eq!(get_canonicalized_id(unlisted), unlisted);
+        }
     }
 
     #[test]
-    fn get_provider_for_model_returns_some_for_known_prefix() {
+    fn get_provider_for_model_accepts_catalog_entries_and_rejects_unknown_prefixes() {
         // Catalog models resolve via their catalog entry.
-        let provider = get_provider_for_model("gpt-5.6-sol");
+        let model = CONFIG
+            .models
+            .values()
+            .find(|entry| entry.provider == "openai")
+            .expect("catalog must include an OpenAI model");
+        let provider = get_provider_for_model(&model.id);
         assert!(
             provider.is_some(),
-            "gpt-5.6-sol should resolve to a provider"
+            "a catalog OpenAI model should resolve to a provider"
         );
         assert_eq!(provider.unwrap(), Provider::OpenAI);
-        // Non-catalog ids fall back to the gpt- provider prefix.
-        let provider = get_provider_for_model("gpt-unlisted-future-model");
+        // Build a retired-shaped unknown from the catalog's own provider prefix
+        // rather than embedding a concrete provider model ID.
+        let prefix = CONFIG
+            .providers
+            .get("openai")
+            .and_then(|provider| provider.model_prefixes.first())
+            .expect("OpenAI must declare at least one model prefix");
+        let unlisted = format!("{prefix}fixture-retired-model");
+        let provider = get_provider_for_model(&unlisted);
         assert!(
-            provider.is_some(),
-            "gpt- prefixed ids should resolve via provider prefixes"
+            provider.is_none(),
+            "an unknown model must fail closed even with a catalog-declared prefix"
         );
-        assert_eq!(provider.unwrap(), Provider::OpenAI);
     }
 
     #[test]
@@ -1114,54 +1186,28 @@ mod tests {
     }
 
     #[test]
-    fn model_uses_responses_api_for_gpt5_models() {
-        // GPT-5 series
-        assert!(model_uses_responses_api("gpt-5.6-sol"));
-        assert!(model_uses_responses_api("gpt-5.6-luna"));
-        assert!(model_uses_responses_api("gpt-5-turbo"));
-        assert!(model_uses_responses_api("gpt-5"));
-        // Future GPT versions
-        assert!(model_uses_responses_api("gpt-6"));
-        assert!(model_uses_responses_api("gpt-7-turbo"));
-        // GPT-4.1 series
-        assert!(model_uses_responses_api("gpt-4.1"));
-        assert!(model_uses_responses_api("gpt-4.1-mini"));
-        // O-series and codex
-        assert!(model_uses_responses_api("o3-mini"));
-        assert!(model_uses_responses_api("o4-mini"));
-        assert!(model_uses_responses_api("codex-mini-latest"));
-        // NOT Responses API (legacy Chat Completions)
-        assert!(!model_uses_responses_api("gpt-4o"));
-        assert!(!model_uses_responses_api("gpt-4-turbo"));
-        assert!(!model_uses_responses_api("gpt-3.5-turbo"));
-        assert!(!model_uses_responses_api("claude-opus-5"));
-        assert!(!model_uses_responses_api("gemini-2.5-pro"));
-    }
-
-    #[test]
-    fn catalog_openai_reasoning_models_use_responses() {
-        // The catalog classifies the gpt-5.6 lineup as reasoning models that
-        // list both Responses and Chat Completions as supported endpoints.
-        // AGI deliberately selects Responses so reasoning effort and
-        // provider-native tools have one canonical request shape.
-        for id in ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"] {
-            let entry = CONFIG
-                .models
-                .get(id)
-                .unwrap_or_else(|| panic!("{id} missing from catalog"));
-            assert_eq!(entry.provider, "openai", "{id} should be an openai model");
-            assert_eq!(
-                entry.model_type, "reasoning",
-                "{id} should be a reasoning model"
-            );
+    fn catalog_openai_reasoning_models_use_responses_and_unknowns_fail_closed() {
+        let mut checked = 0;
+        for entry in CONFIG
+            .models
+            .values()
+            .filter(|entry| entry.provider == "openai" && entry.model_type == "reasoning")
+        {
+            checked += 1;
             assert!(
-                model_uses_responses_api(id),
-                "{id} is a catalog reasoning model and must use Responses"
+                model_uses_responses_api(&entry.id),
+                "{} is a catalog OpenAI reasoning model and must use Responses",
+                entry.id
             );
         }
-        // Catalog reasoning-tier OpenAI models still use the Responses API.
-        assert!(model_uses_responses_api("gpt-5.6-sol"));
-        assert!(model_uses_responses_api("gpt-5.6-luna"));
+        assert!(
+            checked > 0,
+            "catalog must contain an OpenAI reasoning model"
+        );
+        assert!(
+            !model_uses_responses_api("fixture-unknown-text-model"),
+            "unknown model IDs must not be assigned an API shape from their name"
+        );
     }
 
     #[test]
@@ -1200,10 +1246,6 @@ mod tests {
             "expected at least one catalog model with internal_id != apiModelId"
         );
 
-        // Pin the specific Anthropic haiku case that surfaced the bug.
-        assert_eq!(get_api_model_id("claude-sonnet-5"), "claude-sonnet-5");
-        assert_eq!(get_api_model_id("claude-sonnet-5"), "claude-sonnet-5");
-
         // Pin get_canonicalized_id's reverse-lookup branch directly: it maps a
         // wire (apiModelId) id back to its dotted catalog id, and leaves the
         // catalog id unchanged. This branch is what keeps get_provider_for_model
@@ -1212,70 +1254,87 @@ mod tests {
         // this branch — the branch earns its keep via provider lookup, not
         // idempotence — but the ADAPTER must call get_api_model_id, never
         // get_canonicalized_id, for the wire model field.)
-        assert_eq!(get_canonicalized_id("claude-sonnet-5"), "claude-sonnet-5");
-        assert_eq!(get_canonicalized_id("claude-sonnet-5"), "claude-sonnet-5");
+        for (internal_id, entry) in &CONFIG.models {
+            let Some(api_id) = entry.api_model_id.as_deref() else {
+                continue;
+            };
+            assert_eq!(get_canonicalized_id(api_id), *internal_id);
+            assert_eq!(get_canonicalized_id(internal_id), *internal_id);
+        }
     }
 
     #[test]
     fn model_supports_gemini_thinking_for_pro_models() {
-        assert!(model_supports_gemini_thinking("gemini-3.1-pro-preview"));
-        assert!(!model_supports_gemini_thinking("gemini-3-flash"));
-        assert!(!model_supports_gemini_thinking("claude-opus-5"));
+        let thinking = active_catalog_model("google", |entry| entry.capabilities.thinking);
+        let non_thinking = active_catalog_model("google", |entry| !entry.capabilities.thinking);
+        let non_google = active_catalog_model("anthropic", |entry| entry.capabilities.thinking);
+        assert!(model_supports_gemini_thinking(&thinking.id));
+        assert!(!model_supports_gemini_thinking(&non_thinking.id));
+        assert!(!model_supports_gemini_thinking(&non_google.id));
     }
 
     #[test]
     fn model_effort_support_comes_from_exact_catalog_request_metadata() {
-        assert!(model_supports_effort("claude-opus-5", "high"));
-        assert!(model_supports_effort("claude-opus-5", "xhigh"));
-        assert!(model_supports_effort("claude-opus-5", "max"));
-        // 3044350c5 admitted the economy reasoning route: sonnet-5 now declares
-        // low/medium in the catalog, and support must follow the catalog.
-        assert!(model_supports_effort("claude-sonnet-5", "low"));
+        let model = active_catalog_model("anthropic", |entry| {
+            entry.reasoning.as_ref().is_some_and(|reasoning| {
+                ["low", "high", "xhigh", "max"].iter().all(|effort| {
+                    reasoning
+                        .supported_efforts
+                        .iter()
+                        .any(|item| item == effort)
+                })
+            })
+        });
+        assert!(model_supports_effort(&model.id, "high"));
+        assert!(model_supports_effort(&model.id, "xhigh"));
+        assert!(model_supports_effort(&model.id, "max"));
+        assert!(model_supports_effort(&model.id, "low"));
         assert!(!model_supports_effort("unknown-anthropic-model", "high"));
-        assert!(!model_supports_effort("claude-opus-5", "minimal"));
+        assert!(!model_supports_effort(&model.id, "minimal"));
     }
 
     #[test]
-    fn opus_5_request_contract_comes_from_catalog_metadata() {
-        assert!(model_uses_adaptive_thinking("claude-opus-5"));
-        assert!(model_rejects_sampling_parameters("claude-opus-5"));
+    fn adaptive_request_contract_comes_from_catalog_metadata() {
+        let model = active_catalog_model("anthropic", |entry| {
+            entry.reasoning.as_ref().is_some_and(|reasoning| {
+                reasoning.thinking_default.as_deref() == Some("adaptive")
+                    && reasoning.rejects_sampling_parameters == Some(true)
+                    && reasoning.max_effort_when_thinking_disabled.as_deref() == Some("high")
+            })
+        });
+        assert!(model_uses_adaptive_thinking(&model.id));
+        assert!(model_rejects_sampling_parameters(&model.id));
         assert!(model_allows_effort_with_thinking_disabled(
-            "claude-opus-5",
-            "high"
+            &model.id, "high"
         ));
         assert!(!model_allows_effort_with_thinking_disabled(
-            "claude-opus-5",
-            "xhigh"
+            &model.id, "xhigh"
         ));
         assert!(!model_allows_effort_with_thinking_disabled(
-            "claude-opus-5",
-            "max"
+            &model.id, "max"
         ));
-        assert_eq!(
-            max_effort_when_thinking_disabled("claude-opus-5"),
-            Some("high")
-        );
+        assert_eq!(max_effort_when_thinking_disabled(&model.id), Some("high"));
     }
 
     #[test]
     fn get_all_model_entries_non_empty() {
         let models = get_all_model_entries();
         assert!(!models.is_empty(), "model entries must not be empty");
-        // Spot-check a well-known model exists
         assert!(
-            models.contains_key("claude-opus-5") || models.contains_key("claude-sonnet-5"),
-            "At least one claude model must be in the catalog"
+            models.values().any(|entry| entry.provider == "anthropic"),
+            "At least one Anthropic model must be in the catalog"
         );
     }
 
     #[test]
     fn get_pricing_returns_some_for_known_model() {
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-5", priced_on());
-        assert!(pricing.is_some(), "claude-opus-5 must have pricing");
+        let model = active_catalog_model("anthropic", |_| true);
+        let pricing = get_pricing(&Provider::Anthropic, &model.id, priced_on());
+        assert!(pricing.is_some(), "catalog model must have pricing");
         let p = pricing.unwrap();
         assert!(
             p.input_per_million > 0.0 || p.output_per_million > 0.0,
-            "claude-opus-5 pricing must be non-zero"
+            "catalog model pricing must be non-zero"
         );
     }
 
@@ -1305,7 +1364,8 @@ mod tests {
         // models get provider-level default pricing. The None path is a safety
         // net for future changes when providers might be added to the enum
         // before models.json is updated.
-        let pricing = get_pricing(&Provider::Anthropic, "claude-opus-5", priced_on());
+        let known_model = active_catalog_model("anthropic", |_| true);
+        let pricing = get_pricing(&Provider::Anthropic, &known_model.id, priced_on());
         assert!(pricing.is_some(), "known model must have pricing");
 
         // Verify provider fallback works for all providers

@@ -63,10 +63,11 @@ describe('buildStatusBarText', () => {
   });
 
   it('keeps optional desktop connectivity out of the primary model status', () => {
-    const text = buildExtensionStatusBarText('gpt-5.6-sol', 'plan', true);
+    const fixtureModelId = 'fixture-status-model';
+    const text = buildExtensionStatusBarText(fixtureModelId, 'plan', true);
     expect(text).toContain('plan');
     expect(text).toContain('mcp');
-    expect(text).toContain('gpt-5.6-sol');
+    expect(text).toContain(fixtureModelId);
     expect(text).not.toContain('bridge');
   });
 });

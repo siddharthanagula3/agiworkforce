@@ -23,6 +23,7 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { useScheduleStore, type CreateScheduleInput } from '../store';
 import { requestsSubDailySchedule } from '../policy';
+import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 
 // ---------------------------------------------------------------------------
 // Natural language parser
@@ -238,7 +239,7 @@ export function QuickSchedule({ defaultPrompt = '', onCreated }: QuickSchedulePr
       const scheduleInput: CreateScheduleInput = {
         name: input.length > 40 ? input.slice(0, 40) + '...' : input,
         prompt: prompt.trim(),
-        model: 'auto',
+        model: DEFAULT_AUTO_MODE_ID,
         recurrence: parsed.recurrence,
         timeOfDay: parsed.timeOfDay,
         daysOfWeek: parsed.daysOfWeek,

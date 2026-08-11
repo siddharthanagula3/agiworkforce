@@ -33,11 +33,9 @@ const COMPANION_AND_METHODS = `
     private const val MAX_SHARED_TEXT_CHARS = 100 * 1024
   }
 
-  override fun onNewIntent(intent: Intent?) {
-    val rewritten = intent?.let { rewriteShareIntent(it) } ?: intent
-    if (rewritten != null) {
-      setIntent(rewritten)
-    }
+  override fun onNewIntent(intent: Intent) {
+    val rewritten = rewriteShareIntent(intent)
+    setIntent(rewritten)
     super.onNewIntent(rewritten)
   }
 

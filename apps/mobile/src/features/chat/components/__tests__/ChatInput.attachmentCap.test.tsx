@@ -81,7 +81,7 @@ jest.mock('@/src/features/chat/components/AttachmentPreview', () => {
 
 jest.mock('@/src/features/model-picker/store', () => ({
   useModelStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ selectedModel: 'claude-sonnet-5', thinkingEnabledPerModel: {} }),
+    selector({ selectedModel: 'fixture-cloud-model', thinkingEnabledPerModel: {} }),
 }));
 
 jest.mock('@/src/features/model-picker/service', () => ({

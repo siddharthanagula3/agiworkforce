@@ -1,4 +1,5 @@
 import * as Crypto from 'expo-crypto';
+import { requireAutoMode } from '../test-utils/modelFixtures';
 import { api } from '@/services/api';
 import {
   createSchedule,
@@ -24,6 +25,7 @@ jest.mock('expo-crypto', () => ({
 }));
 
 const apiMock = api as jest.Mocked<typeof api>;
+const AUTO_MODEL_ID = requireAutoMode().id;
 
 const serverSchedule = {
   id: 'schedule-1',
@@ -42,7 +44,7 @@ const serverSchedule = {
   actionType: 'agent' as const,
   actionConfig: null,
   prompt: 'Summarize my priorities.',
-  model: 'auto-balanced',
+  model: AUTO_MODEL_ID,
   status: 'active' as const,
   lastExecutedAt: '2026-07-17T14:00:00.000Z',
   nextExecutionAt: '2026-07-18T14:00:00.000Z',
@@ -59,7 +61,7 @@ const serverSchedule = {
 const scheduleInput = {
   name: 'Morning brief',
   prompt: 'Summarize my priorities.',
-  model: 'auto-balanced',
+  model: AUTO_MODEL_ID,
   recurrence: 'weekly' as const,
   scheduledAt: null,
   daysOfWeek: [1, 2, 3, 4, 5],
@@ -77,7 +79,7 @@ const serverRun = {
   startedAt: '2026-07-17T14:00:00.000Z',
   completedAt: '2026-07-17T14:00:40.000Z',
   durationMs: 40_000,
-  result: { text: 'Partial result', model: 'auto-balanced' },
+  result: { text: 'Partial result', model: AUTO_MODEL_ID },
   error: 'Execution timed out',
   idempotencyKey: 'request-12345678',
   leaseExpiresAt: null,
@@ -100,7 +102,7 @@ describe('mobile schedule service', () => {
         id: 'schedule-1',
         name: 'Morning brief',
         prompt: 'Summarize my priorities.',
-        model: 'auto-balanced',
+        model: AUTO_MODEL_ID,
         recurrence: 'weekly',
         cronExpression: '0 9 * * 1-5',
         scheduledAt: null,

@@ -12,10 +12,13 @@ import type { ChatRequest } from '@agiworkforce/types';
 
 import { translateChatRequest } from '../translate';
 
+const FIXTURE_MODEL_ID = 'fixture-ollama-model';
+const FIXTURE_VISION_MODEL_ID = 'fixture-ollama-vision-model';
+
 describe('Ollama tool_result split', () => {
   it('emits one tool message per tool_result, preserving order', () => {
     const req: ChatRequest = {
-      model: 'llama3.3',
+      model: FIXTURE_MODEL_ID,
       messages: [
         { role: 'user', content: 'Run two checks please.' },
         {
@@ -47,7 +50,7 @@ describe('Ollama tool_result split', () => {
 
   it('emits text body PLUS tool messages when both are present', () => {
     const req: ChatRequest = {
-      model: 'llama3.3',
+      model: FIXTURE_MODEL_ID,
       messages: [
         {
           role: 'user',
@@ -72,7 +75,7 @@ describe('Ollama tool_result split', () => {
 
   it('handles a message with image + text correctly', () => {
     const req: ChatRequest = {
-      model: 'llama3.3-vision',
+      model: FIXTURE_VISION_MODEL_ID,
       messages: [
         {
           role: 'user',
@@ -101,7 +104,7 @@ describe('Ollama tool_result split', () => {
 
   it('preserves a string-content message unchanged', () => {
     const req: ChatRequest = {
-      model: 'llama3.3',
+      model: FIXTURE_MODEL_ID,
       messages: [{ role: 'user', content: 'hello world' }],
     };
 
@@ -113,7 +116,7 @@ describe('Ollama tool_result split', () => {
     // Earlier `[0]`-style indexing would emit only the first; this asserts
     // every result reaches the wire, in submitted order.
     const req: ChatRequest = {
-      model: 'llama3.3',
+      model: FIXTURE_MODEL_ID,
       messages: [
         {
           role: 'user',
@@ -136,7 +139,7 @@ describe('Ollama tool_result split', () => {
     // TextBlock[] form must be joined per-result, not lost or merged
     // across results.
     const req: ChatRequest = {
-      model: 'llama3.3',
+      model: FIXTURE_MODEL_ID,
       messages: [
         {
           role: 'user',

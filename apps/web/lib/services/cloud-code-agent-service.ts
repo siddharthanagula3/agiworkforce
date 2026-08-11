@@ -15,7 +15,7 @@ import {
   type ManagedUsageRequestReservation,
 } from './managed-usage-request-service';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
-import { LLMCostCalculator } from './llm-cost-calculator';
+import { observedProviderUsageLedgerCents } from './managed-usage-accounting-service';
 import {
   runCloudCodeAgentTurn,
   type CloudCodeAgentEvent,
@@ -94,18 +94,10 @@ function settledTurnCostCents(provider: string, model: string, usage: CloudCodeT
     usage.inputTokens + usage.outputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
   if (reportedTokens <= 0) return ESTIMATED_TURN_COST_CENTS;
 
-  // calculateCost already returns whole cents, ceil'd with a one-cent floor,
-  // and its rounding is deliberately identical to the gateway's
-  // `dollarsToLedgerCents`. Re-rounding here would be the drift this is meant
-  // to avoid, so the only thing left to enforce is that a turn which reached
-  // the provider is never settled at zero.
-  const costCents = LLMCostCalculator.calculateCost(provider, model, {
-    promptTokens: usage.inputTokens,
-    completionTokens: usage.outputTokens,
-    totalTokens: usage.inputTokens + usage.outputTokens,
-    cacheReadInputTokens: usage.cacheReadTokens,
-    cacheCreationInputTokens: usage.cacheWriteTokens,
-  });
+  // Every provider request is priced independently before the exact dollar
+  // costs are added and rounded once for the ledger. This preserves nonlinear
+  // input-length tiers without charging each sub-cent step a separate cent.
+  const costCents = observedProviderUsageLedgerCents(usage, { provider, model });
   return Math.max(MINIMUM_BILLED_TURN_CENTS, costCents);
 }
 

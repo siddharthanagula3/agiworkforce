@@ -41,8 +41,10 @@ import { createError } from '@/lib/errors';
 import type {
   OrganizationInvitationRow,
   OrganizationInvitationStatus,
+  OrganizationMemberRow,
 } from '@/lib/server/neon-types';
 import { withSeatAccountingErrors } from './organization-seat-service';
+import { persistProvenActiveWorkspaceSelection } from './active-workspace-service';
 
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const MAX_INVITATION_RESENDS = 10;
@@ -334,7 +336,7 @@ export interface AcceptInvitationInput {
 
 export interface AcceptedInvitation {
   invitation: OrganizationInvitationRow;
-  role: InvitableRole;
+  role: OrganizationMemberRow['role'];
 }
 
 /**
@@ -377,14 +379,28 @@ export async function acceptInvitation(
         );
       }
 
+      // Serialize membership acceptance and the account's active-workspace
+      // selection. Accounts may belong to multiple workspaces; the exact
+      // invited organization is selected after the membership commits.
+      await tx.query(
+        `select pg_advisory_xact_lock(hashtextextended('agi:organization-owner:' || $1, 0))`,
+        [input.userId],
+      );
+
       await tx.query(
         `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
         [invitation.organization_id],
       );
 
-      const [existingMembership] = await tx.query<{ user_id: string }>(
-        `select user_id from public.organization_members
-          where organization_id = $1 and user_id = $2 limit 1`,
+      const [existingMembership] = await tx.query<{
+        organization_id: string;
+        user_id: string;
+        role: OrganizationMemberRow['role'];
+      }>(
+        `select organization_id, user_id, role
+           from public.organization_members
+          where organization_id = $1 and user_id = $2
+          limit 1`,
         [invitation.organization_id, input.userId],
       );
 
@@ -413,7 +429,13 @@ export async function acceptInvitation(
         );
       }
 
-      return { invitation: accepted, role: invitation.role };
+      await persistProvenActiveWorkspaceSelection(tx, input.userId, invitation.organization_id);
+
+      // An invitation cannot silently rewrite an existing membership. This
+      // race is possible when the person joins through another legitimate path
+      // before opening an older invitation. Report the role that is actually
+      // persisted rather than the stale role requested by the invitation.
+      return { invitation: accepted, role: existingMembership?.role ?? invitation.role };
     }),
   );
 }
@@ -423,22 +445,45 @@ export async function acceptInvitation(
  */
 export async function declineInvitation(
   db: DatabaseAdapter,
-  token: string,
+  input: Pick<AcceptInvitationInput, 'token' | 'userEmail'>,
 ): Promise<OrganizationInvitationRow> {
-  const tokenHash = hashInvitationToken(token);
+  const tokenHash = hashInvitationToken(input.token);
 
-  const [declined] = await db.query<OrganizationInvitationRow>(
-    `update public.organization_invitations
-        set status = 'declined'
-      where token_hash = $1 and status = 'pending'
-      returning ${INVITATION_COLUMNS}`,
-    [tokenHash],
-  );
+  return db.transaction(async (tx) => {
+    const [invitation] = await tx.query<OrganizationInvitationRow>(
+      `select ${INVITATION_COLUMNS}
+         from public.organization_invitations
+        where token_hash = $1
+          and status = 'pending'
+          and expires_at > now()
+        limit 1`,
+      [tokenHash],
+    );
 
-  if (!declined) {
-    throw createError.notFound('This invitation link is invalid, expired, or already used');
-  }
-  return declined;
+    if (!invitation) {
+      throw createError.notFound('This invitation link is invalid, expired, or already used');
+    }
+
+    const subjectEmail = input.userEmail ? normalizeInvitationEmail(input.userEmail) : null;
+    if (!subjectEmail || subjectEmail !== invitation.email) {
+      throw createError.forbidden(
+        'This invitation was issued to a different email address. Sign in with the invited address to decline it.',
+      );
+    }
+
+    const [declined] = await tx.query<OrganizationInvitationRow>(
+      `update public.organization_invitations
+          set status = 'declined'
+        where id = $1 and status = 'pending'
+        returning ${INVITATION_COLUMNS}`,
+      [invitation.id],
+    );
+
+    if (!declined) {
+      throw createError.conflict('This invitation changed while it was being declined');
+    }
+    return declined;
+  });
 }
 
 export const INVITATION_TERMINAL_STATUSES: readonly OrganizationInvitationStatus[] = [

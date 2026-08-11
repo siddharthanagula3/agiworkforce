@@ -4,8 +4,8 @@
  *
  * Covers:
  *   - 401 when unauthenticated.
- *   - 403 when the asset belongs to a different user (owner scoping).
- *   - 404 for unknown ids, non-UUID ids, soft-deleted assets, and missing bytes.
+ *   - One 404 for unknown, foreign, inactive-workspace, and deleted assets.
+ *   - 404 for non-UUID ids and missing bytes.
  *   - 200 serves the exact stored bytes (sha256 in == sha256 out) with the
  *     asset's Content-Type, an inline Content-Disposition carrying the original
  *     filename, and private cache headers — the properties the PDF/image
@@ -16,14 +16,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'crypto';
 
-const { mockGetClerkAuthUser, mockGetMediaAssetById, mockGetObject, mockIsConfigured } = vi.hoisted(
-  () => ({
-    mockGetClerkAuthUser: vi.fn(),
-    mockGetMediaAssetById: vi.fn(),
-    mockGetObject: vi.fn(),
-    mockIsConfigured: vi.fn(() => true),
-  }),
-);
+const {
+  mockGetClerkAuthUser,
+  mockGetActiveWorkspaceMediaAssetById,
+  mockGetObject,
+  mockStreamObject,
+  mockIsConfigured,
+} = vi.hoisted(() => ({
+  mockGetClerkAuthUser: vi.fn(),
+  mockGetActiveWorkspaceMediaAssetById: vi.fn(),
+  mockGetObject: vi.fn(),
+  mockStreamObject: vi.fn(),
+  mockIsConfigured: vi.fn(() => true),
+}));
 
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
@@ -38,11 +43,12 @@ vi.mock('@/lib/api-auth', () => ({
 }));
 
 vi.mock('@/lib/server/media-assets', () => ({
-  getMediaAssetById: mockGetMediaAssetById,
+  getActiveWorkspaceMediaAssetById: mockGetActiveWorkspaceMediaAssetById,
 }));
 
 vi.mock('@/lib/server/media-storage', () => ({
   readStoredMedia: mockGetObject,
+  streamStoredMedia: mockStreamObject,
   isMediaStorageConfigured: mockIsConfigured,
 }));
 
@@ -51,8 +57,8 @@ import { createError } from '@/lib/errors';
 
 const ASSET_ID = '22222222-2222-4222-8222-222222222222';
 
-function makeRequest(id: string, query = '') {
-  return new Request(`http://localhost:3000/api/files/${id}${query}`) as never;
+function makeRequest(id: string, query = '', headers?: Record<string, string>) {
+  return new Request(`http://localhost:3000/api/files/${id}${query}`, { headers }) as never;
 }
 
 function makeContext(id: string) {
@@ -88,16 +94,16 @@ describe('GET /api/files/[id]', () => {
     expect(mockGetObject).not.toHaveBeenCalled();
   });
 
-  it("returns 403 for another user's asset and never touches storage", async () => {
-    mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-intruder' });
-    mockGetMediaAssetById.mockResolvedValue(makeAsset());
+  it('returns the same 404 for an asset outside the active workspace and never touches storage', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(null);
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
+    expect(mockGetActiveWorkspaceMediaAssetById).toHaveBeenCalledWith('user-owner', ASSET_ID);
     expect(mockGetObject).not.toHaveBeenCalled();
   });
 
   it('returns 404 for an unknown asset id', async () => {
-    mockGetMediaAssetById.mockResolvedValue(null);
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(null);
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(404);
   });
@@ -105,17 +111,19 @@ describe('GET /api/files/[id]', () => {
   it('returns 404 for a non-UUID id without hitting the database', async () => {
     const res = await GET(makeRequest('../etc/passwd'), makeContext('../etc/passwd'));
     expect(res.status).toBe(404);
-    expect(mockGetMediaAssetById).not.toHaveBeenCalled();
+    expect(mockGetActiveWorkspaceMediaAssetById).not.toHaveBeenCalled();
   });
 
   it('returns 404 for a soft-deleted asset', async () => {
-    mockGetMediaAssetById.mockResolvedValue(makeAsset({ deletedAt: '2026-07-01T00:00:00Z' }));
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ deletedAt: '2026-07-01T00:00:00Z' }),
+    );
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(404);
   });
 
   it('returns 404 when the stored object is gone', async () => {
-    mockGetMediaAssetById.mockResolvedValue(makeAsset());
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(makeAsset());
     mockGetObject.mockResolvedValue(null);
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(404);
@@ -125,14 +133,16 @@ describe('GET /api/files/[id]', () => {
     // %PDF header + trailing bytes — enough to prove byte-for-byte integrity.
     const stored = Buffer.from('%PDF-1.7\n1 0 obj\nendobj\n%%EOF', 'utf8');
     const storedHash = createHash('sha256').update(stored).digest('hex');
-    mockGetMediaAssetById.mockResolvedValue(makeAsset({ byteSize: stored.byteLength }));
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ byteSize: stored.byteLength }),
+    );
     mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
 
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/pdf');
     expect(res.headers.get('content-disposition')).toBe('inline; filename="report.pdf"');
-    expect(res.headers.get('cache-control')).toContain('private');
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
 
     const served = Buffer.from(await res.arrayBuffer());
@@ -151,7 +161,7 @@ describe('GET /api/files/[id]', () => {
     ['text/xml', 'data.xml'],
   ])('serves %s as an opaque download, never as a document', async (mimeType, filename) => {
     const stored = Buffer.from('<svg onload="alert(document.cookie)"></svg>', 'utf8');
-    mockGetMediaAssetById.mockResolvedValue(
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({ mimeType, byteSize: stored.byteLength, metadata: { filename } }),
     );
     mockGetObject.mockResolvedValue({ data: stored, contentType: mimeType });
@@ -167,7 +177,7 @@ describe('GET /api/files/[id]', () => {
 
   it('leaves inert types inline so images and the PDF viewer keep working', async () => {
     const stored = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
-    mockGetMediaAssetById.mockResolvedValue(
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({
         mimeType: 'image/png',
         byteSize: stored.byteLength,
@@ -184,7 +194,9 @@ describe('GET /api/files/[id]', () => {
 
   it('allows the authenticated PDF preview to frame only PDF bytes from the same origin', async () => {
     const stored = Buffer.from('%PDF-1.7\n%%EOF', 'utf8');
-    mockGetMediaAssetById.mockResolvedValue(makeAsset({ byteSize: stored.byteLength }));
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ byteSize: stored.byteLength }),
+    );
     mockGetObject.mockResolvedValue({ data: stored, contentType: 'application/pdf' });
 
     const res = await GET(makeRequest(ASSET_ID, '?preview=pdf'), makeContext(ASSET_ID));
@@ -195,7 +207,7 @@ describe('GET /api/files/[id]', () => {
   });
 
   it('rejects the PDF frame exception for generated HTML without reading its bytes', async () => {
-    mockGetMediaAssetById.mockResolvedValue(
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({
         mimeType: 'text/html',
         storagePathname: 'media/file/user-owner/dashboard.html',
@@ -210,7 +222,7 @@ describe('GET /api/files/[id]', () => {
 
   it('sanitizes hostile filenames in Content-Disposition', async () => {
     const stored = Buffer.from('a,b\n1,2\n', 'utf8');
-    mockGetMediaAssetById.mockResolvedValue(
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
       makeAsset({
         mimeType: 'text/csv',
         byteSize: stored.byteLength,
@@ -228,15 +240,120 @@ describe('GET /api/files/[id]', () => {
   });
 
   it('returns 413 when the recorded size exceeds the serve cap', async () => {
-    mockGetMediaAssetById.mockResolvedValue(makeAsset({ byteSize: 31 * 1024 * 1024 }));
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ byteSize: 31 * 1024 * 1024 }),
+    );
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(413);
     expect(mockGetObject).not.toHaveBeenCalled();
   });
 
+  it('streams large video assets and advertises byte ranges without buffering', async () => {
+    const stored = Uint8Array.from([0, 0, 0, 1, 0x66, 0x74, 0x79, 0x70]);
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({
+        kind: 'video',
+        mimeType: 'video/mp4',
+        byteSize: 80 * 1024 * 1024,
+        metadata: { filename: 'video.mp4' },
+      }),
+    );
+    mockStreamObject.mockResolvedValue({
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(stored);
+          controller.close();
+        },
+      }),
+      contentType: 'video/mp4',
+      contentLength: 80 * 1024 * 1024,
+      contentRange: undefined,
+    });
+
+    const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('accept-ranges')).toBe('bytes');
+    expect(res.headers.get('content-type')).toBe('video/mp4');
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(mockGetObject).not.toHaveBeenCalled();
+    expect(mockStreamObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf', undefined);
+  });
+
+  it('serves a validated single video byte range as 206', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({
+        kind: 'video',
+        mimeType: 'video/mp4',
+        byteSize: 100,
+        metadata: { filename: 'video.mp4' },
+      }),
+    );
+    mockStreamObject.mockResolvedValue({
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([2, 3, 4, 5]));
+          controller.close();
+        },
+      }),
+      contentType: 'video/mp4',
+      contentLength: 4,
+      contentRange: 'bytes 2-5/100',
+    });
+
+    const res = await GET(makeRequest(ASSET_ID, '', { Range: 'bytes=2-5' }), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(206);
+    expect(res.headers.get('content-range')).toBe('bytes 2-5/100');
+    expect(res.headers.get('content-length')).toBe('4');
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(mockStreamObject).toHaveBeenCalledWith('media/file/user-owner/x.pdf', {
+      start: 2,
+      end: 5,
+    });
+  });
+
+  it('rejects malformed or multi-range video requests without touching storage', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ kind: 'video', mimeType: 'video/mp4', byteSize: 100 }),
+    );
+
+    const res = await GET(
+      makeRequest(ASSET_ID, '', { Range: 'bytes=0-1,5-6' }),
+      makeContext(ASSET_ID),
+    );
+
+    expect(res.status).toBe(416);
+    expect(res.headers.get('content-range')).toBe('bytes */100');
+    expect(res.headers.get('cache-control')).toBe('private, no-store');
+    expect(mockStreamObject).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when storage returns bytes outside the authenticated range', async () => {
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(
+      makeAsset({ kind: 'video', mimeType: 'video/mp4', byteSize: 100 }),
+    );
+    mockStreamObject.mockResolvedValue({
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(Uint8Array.from([0, 1, 2, 3, 4]));
+          controller.close();
+        },
+      }),
+      contentType: 'video/mp4',
+      contentLength: 5,
+      contentRange: 'bytes 2-6/100',
+    });
+
+    const res = await GET(makeRequest(ASSET_ID, '', { Range: 'bytes=2-5' }), makeContext(ASSET_ID));
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-range')).toBeNull();
+  });
+
   it('returns 404 when media storage is not configured', async () => {
     mockIsConfigured.mockReturnValue(false);
-    mockGetMediaAssetById.mockResolvedValue(makeAsset());
+    mockGetActiveWorkspaceMediaAssetById.mockResolvedValue(makeAsset());
     const res = await GET(makeRequest(ASSET_ID), makeContext(ASSET_ID));
     expect(res.status).toBe(404);
   });

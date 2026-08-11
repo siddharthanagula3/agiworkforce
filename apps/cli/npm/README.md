@@ -96,7 +96,7 @@ agi exec "what files are in this directory?"
 agi
 
 # 5. Multi-provider with fallback chain
-agi exec -m "claude-opus-5,gpt-5.6-terra,llama3.1:8b" "explain this code"
+agi exec -m "<primary-model>,<fallback-model>,<local-model>" "explain this code"
 ```
 
 ## 26 subcommands
@@ -120,11 +120,11 @@ Run `agi <command> --help` for any.
 
 ```bash
 # Install Ollama: https://ollama.com
-ollama pull llama3.1:8b
+ollama pull <local-model>
 
 # Use it via AGI Workforce
-agi -m llama3.1:8b exec "hello"
-agi -m "claude-sonnet-5,llama3.1:8b" exec "..."  # cloud first, fallback local
+agi -m "<local-model>" exec "hello"
+agi -m "<cloud-model>,<local-model>" exec "..."  # cloud first, fallback local
 ```
 
 ## MCP support

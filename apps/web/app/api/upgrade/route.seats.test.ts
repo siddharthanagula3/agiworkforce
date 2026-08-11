@@ -55,7 +55,18 @@ function teamSubscription(quantity: number) {
     status: 'active',
     currency: 'usd',
     metadata: { user_id: 'user_123', plan_tier: 'team' },
-    items: { data: [{ id: 'si_123', price: { id: 'price_team_usd' }, quantity }] },
+    items: {
+      data: [
+        {
+          id: 'si_123',
+          price: {
+            id: 'price_team_usd',
+            recurring: { interval: 'month', interval_count: 1 },
+          },
+          quantity,
+        },
+      ],
+    },
   };
 }
 
@@ -108,7 +119,17 @@ describe('POST /api/upgrade — Team seat quantity', () => {
     stripeMocks.updateSubscription.mockResolvedValue({
       id: 'sub_live123',
       pending_update: null,
-      items: { data: [{ price: { id: 'price_team_usd' }, quantity: 20 }] },
+      items: {
+        data: [
+          {
+            price: {
+              id: 'price_team_usd',
+              recurring: { interval: 'month', interval_count: 1 },
+            },
+            quantity: 20,
+          },
+        ],
+      },
     });
   });
 
@@ -188,11 +209,38 @@ describe('POST /api/upgrade — Team seat quantity', () => {
     expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
   });
 
+  it('refuses a cadence change before charging because Stripe would reset renewal', async () => {
+    const response = await POST(
+      request({
+        plan: 'team',
+        billingInterval: 'yearly',
+        seats: 20,
+        previewToken: tokenFor(20),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { message: expect.stringMatching(/keep your current monthly billing cadence/i) },
+    });
+    expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
+  });
+
   it('fails the upgrade when Stripe did not apply the requested seat count', async () => {
     stripeMocks.updateSubscription.mockResolvedValue({
       id: 'sub_live123',
       pending_update: null,
-      items: { data: [{ price: { id: 'price_team_usd' }, quantity: 5 }] },
+      items: {
+        data: [
+          {
+            price: {
+              id: 'price_team_usd',
+              recurring: { interval: 'month', interval_count: 1 },
+            },
+            quantity: 5,
+          },
+        ],
+      },
     });
 
     const response = await POST(

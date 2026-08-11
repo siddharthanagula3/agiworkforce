@@ -61,7 +61,7 @@ describe('L1 Security - Privacy Boundaries', () => {
   test('SECURITY: a conversation with no cloud model resolves to LOCAL execution', () => {
     const mode = executionModeForConversation({
       executionMode: undefined,
-      model: 'local-llama',
+      model: 'fixture-local-model',
       provider: undefined,
     });
     expect(mode).toBe('local');

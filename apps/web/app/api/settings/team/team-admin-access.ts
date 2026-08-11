@@ -10,6 +10,7 @@ import {
 import { AppError, type ErrorCodeValue } from '@/lib/errors';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 import { getOrganizationSeatState } from '@/lib/services/organization-seat-service';
+import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitlements';
 
 export interface TeamAdminAccess {
   plan: BillingPlanTier;
@@ -49,10 +50,14 @@ export async function getTeamAdminAccess(
   userId: string,
   organizationId?: string | null,
 ): Promise<TeamAdminAccess> {
-  const subscription = await SubscriptionService.getSubscription(db, userId);
-  const plan = normalizeBillingPlanTier(
-    effectivePlanTier(subscription?.plan_tier, subscription?.status),
-  );
+  const plan = organizationId
+    ? await resolveOrganizationEntitlementPlan(db, organizationId)
+    : await (async () => {
+        const subscription = await SubscriptionService.getSubscription(db, userId);
+        return normalizeBillingPlanTier(
+          effectivePlanTier(subscription?.plan_tier, subscription?.status),
+        );
+      })();
 
   const base: TeamAdminAccess = {
     plan,

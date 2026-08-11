@@ -37,6 +37,9 @@ describe('/signup terms clickwrap', () => {
     expect(screen.queryByTestId('clerk-sign-up')).not.toBeInTheDocument();
     expect(signUpProps).not.toHaveBeenCalled();
     expect(screen.getByTestId('terms-gate-blocked')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).toHaveAccessibleName(
+      /agree to the terms of service.*acknowledge the privacy policy/i,
+    );
   });
 
   it('mounts account creation once the box is ticked, and routes the new account through the recorder', async () => {

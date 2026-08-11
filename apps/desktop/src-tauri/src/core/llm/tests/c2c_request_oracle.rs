@@ -763,7 +763,7 @@ fn one_by_one_png() -> (Vec<u8>, String) {
 fn ollama_request(messages: Vec<ChatMessage>) -> LLMRequest {
     LLMRequest {
         messages,
-        model: "qwen-oracle-test".to_string(),
+        model: "fixture-provider-a-model".to_string(),
         temperature: Some(0.5),
         max_tokens: Some(1024),
         stream: true,
@@ -943,7 +943,7 @@ const ANTHROPIC_SYSTEM: &str =
 fn anthropic_request(messages: Vec<ChatMessage>) -> LLMRequest {
     LLMRequest {
         messages,
-        model: "claude-oracle-test".to_string(),
+        model: "fixture-provider-b-model".to_string(),
         temperature: Some(0.5),
         max_tokens: Some(1024),
         stream: true,
@@ -981,7 +981,7 @@ fn anthropic_minimal_parity_modulo_cache_breakpoints() {
     let old = anthropic_legacy(&request);
     let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
     let new = agiworkforce_llm::build_anthropic_request_body(&chat_request(
-        "claude-oracle-test",
+        "fixture-provider-b-model",
         &messages,
         1024,
         Some(0.5),
@@ -1015,7 +1015,7 @@ fn anthropic_tools_and_tool_choice_parity() {
         crate_tool("run_command", simple_schema()),
     ];
     let mut req = chat_request(
-        "claude-oracle-test",
+        "fixture-provider-b-model",
         &messages,
         1024,
         Some(0.5),
@@ -1054,7 +1054,7 @@ fn anthropic_tool_history_parity_modulo_is_error_and_breakpoints() {
     let old = anthropic_legacy(&request);
     let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
     let new = agiworkforce_llm::build_anthropic_request_body(&chat_request(
-        "claude-oracle-test",
+        "fixture-provider-b-model",
         &messages,
         1024,
         Some(0.5),
@@ -1085,7 +1085,14 @@ fn anthropic_thinking_is_byte_identical_after_crate_fixes() {
     };
     let old = anthropic_legacy(&request);
     let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
-    let mut req = chat_request("claude-oracle-test", &messages, 1024, Some(0.5), None, None);
+    let mut req = chat_request(
+        "fixture-provider-b-model",
+        &messages,
+        1024,
+        Some(0.5),
+        None,
+        None,
+    );
     req.anthropic_thinking = Some(agiworkforce_llm::AnthropicThinking::Enabled {
         budget_tokens: 8192,
     });
@@ -1116,7 +1123,14 @@ fn anthropic_adaptive_thinking_is_byte_identical() {
     };
     let old = anthropic_legacy(&request);
     let messages = crate_messages(Some(ANTHROPIC_SYSTEM), &request.messages);
-    let mut req = chat_request("claude-oracle-test", &messages, 1024, Some(0.5), None, None);
+    let mut req = chat_request(
+        "fixture-provider-b-model",
+        &messages,
+        1024,
+        Some(0.5),
+        None,
+        None,
+    );
     req.anthropic_thinking = Some(agiworkforce_llm::AnthropicThinking::Adaptive);
     let new = agiworkforce_llm::build_anthropic_request_body(&req);
     assert_eq!(new["thinking"], json!({"type": "adaptive"}));
@@ -1168,7 +1182,7 @@ fn anthropic_vision_parity_modulo_cache_breakpoints() {
         ),
     ];
     let new = agiworkforce_llm::build_anthropic_request_body(&chat_request(
-        "claude-oracle-test",
+        "fixture-provider-b-model",
         &messages,
         1024,
         Some(0.5),
@@ -1484,17 +1498,23 @@ fn openai_chat_tool_history_divergence() {
 // `adapt_responses_via_crate`; fallback (legacy arm) for structured outputs,
 // server tools, per-tool `strict`, multimodal input, and
 // audio/background/continuity. Reasoning-effort resolution (catalog thinking
-// capability + codex suffix override) stays desktop-side and feeds the
-// crate's new `reasoning_effort` field — it cannot be exercised here without
-// catalog models (fixture ids are deliberately non-catalog), so its wire
-// shape is pinned by the crate's own unit tests. Assistant tool-call turns
+// capability + catalog metadata) stays desktop-side and feeds the crate's
+// new `reasoning_effort` field. Assistant tool-call turns
 // split into a string-content assistant item + flat function_call items —
 // exactly the legacy shapes (typed input_text parts are user-input only).
 // ---------------------------------------------------------------------------
 
-/// Non-catalog o-series id: the desktop's version heuristic routes it to the
-/// Responses API without consulting the catalog.
-const RESPONSES_MODEL: &str = "o3-oracle-test";
+/// Resolve a current catalog-owned OpenAI reasoning model so this oracle also
+/// proves that Responses selection fails closed for unknown identifiers.
+fn responses_model() -> String {
+    crate::core::llm::models_config::get_all_model_entries()
+        .values()
+        .filter(|entry| entry.provider == "openai" && entry.model_type == "reasoning")
+        .min_by(|left, right| left.id.cmp(&right.id))
+        .expect("catalog must contain an OpenAI reasoning model")
+        .id
+        .clone()
+}
 
 /// OLD side for openai responses: the pre-c3 legacy arm (still in production
 /// as the fallback path).
@@ -1507,7 +1527,7 @@ fn responses_legacy(request: &LLMRequest) -> Value {
 fn responses_request(messages: Vec<ChatMessage>) -> LLMRequest {
     LLMRequest {
         messages,
-        model: RESPONSES_MODEL.to_string(),
+        model: responses_model(),
         temperature: Some(0.5),
         max_tokens: Some(1024),
         stream: true,
@@ -1521,8 +1541,9 @@ fn openai_responses_single_turn_parity_modulo_compact_input() {
     let request = responses_request(vec![msg("user", "Hello")]);
     let old = responses_legacy(&request);
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
+    let wire_model = crate::core::llm::models_config::get_api_model_id(&request.model);
     let new = agiworkforce_llm::build_openai_responses_body(&chat_request(
-        RESPONSES_MODEL,
+        &wire_model,
         &messages,
         1024,
         Some(0.5),
@@ -1590,8 +1611,9 @@ fn openai_responses_tool_history_is_byte_identical() {
         Message::text("user", "Summarize it."),
     ];
     let crate_tools = vec![crate_tool("read_file", simple_schema())];
+    let wire_model = crate::core::llm::models_config::get_api_model_id(&request.model);
     let mut req = chat_request(
-        RESPONSES_MODEL,
+        &wire_model,
         &messages,
         1024,
         Some(0.5),
@@ -1666,7 +1688,7 @@ fn openai_responses_inexpressible_shapes_fall_back_to_legacy() {
 fn gemini_request(messages: Vec<ChatMessage>) -> LLMRequest {
     LLMRequest {
         messages,
-        model: "gemini-oracle-test".to_string(),
+        model: "fixture-provider-c-model".to_string(),
         temperature: Some(0.5),
         max_tokens: Some(1024),
         stream: true,
@@ -1701,7 +1723,7 @@ fn gemini_minimal_is_byte_identical() {
     let old = gemini_legacy(&request);
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let new = agiworkforce_llm::build_gemini_request_body(&chat_request(
-        "gemini-oracle-test",
+        "fixture-provider-c-model",
         &messages,
         1024,
         Some(0.5),
@@ -1723,7 +1745,7 @@ fn gemini_tools_and_tool_choice_are_byte_identical() {
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let tools = vec![crate_tool("read_file", simple_schema())];
     let mut req = chat_request(
-        "gemini-oracle-test",
+        "fixture-provider-c-model",
         &messages,
         1024,
         Some(0.5),
@@ -1750,7 +1772,7 @@ fn gemini_unset_max_tokens_is_omitted_on_both_sides() {
     assert!(old.pointer("/generationConfig/maxOutputTokens").is_none());
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let new = agiworkforce_llm::build_gemini_request_body(&chat_request(
-        "gemini-oracle-test",
+        "fixture-provider-c-model",
         &messages,
         0,
         Some(0.5),
@@ -1792,7 +1814,7 @@ fn gemini_tool_result_divergence() {
 
     let messages = crate_messages(Some("You are AGI Workforce."), &request.messages);
     let new = agiworkforce_llm::build_gemini_request_body(&chat_request(
-        "gemini-oracle-test",
+        "fixture-provider-c-model",
         &messages,
         1024,
         Some(0.5),

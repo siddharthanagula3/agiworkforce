@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-08-07
+Last updated: 2026-08-09
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -43,6 +43,27 @@ Managed cloud is in public alpha and open by default (founder decision, 2026-06-
 
 Development is serial by surface, ordered shortest-remaining-work-first (founder decision 2026-08-05 — supersedes the prior fixed Website-first order here and Decision #20's earlier Mobile-first order): estimate the remaining Class-1 (partial/unwired/stub/broken) work per surface, complete the fastest surface first, then the next fastest, until all six surfaces are at zero. One surface is active at a time. A later surface does not become active until the founder advances the sequence or explicitly authorizes work during QA, review, or another waiting period. The routing substrate (registry dated pricing and cache-write billing, ExecutionPlan/CPST design, CPST telemetry, rules-based router) completes before surface closure begins.
 
+The founder explicitly authorized a cross-surface capability sequence on
+2026-08-09, which is the current exception to that one-surface rule: first make
+Max 15x image and video generation work end to end on Web, Mobile, and both
+Desktop shells; next prove the tool loop, artifact rendering, and web search on
+Web/Mobile/Desktop; then make skills, plugins, and connectors work on Web,
+Mobile, Desktop, CLI, and VS Code. The competitive floor for this sequence is
+the official ChatGPT product state from 2026-07-09 through 2026-08-09. This also
+supersedes the prior Mobile-only scope decision that represented plugins solely
+through Connectors.
+
+For Web capability closure, rendered behavior is a release requirement, not a
+later QA follow-up. Media proof must traverse the shipping composer and model
+picker with a real prompt and the cheapest currently live Google model, then
+prove terminal rendering, reload/resume, Library persistence, authorized
+download, and failure/retry behavior. Skills, plugins, and connectors require
+the same installed/connected-to-invoked UI proof. Popular open-source additions
+must have current popularity evidence, compatible licensing, pinned provenance,
+permission review, and working install/update/remove paths. Founder-only
+credential, billing, OAuth, signing, publication, and production configuration
+steps must be handed off explicitly rather than represented as complete.
+
 The parity ledger may track all six surfaces at all times, but tracking is not authorization to implement non-active surfaces.
 
 Managed Cloud is in public alpha and open by default (founder decision, 2026-06-27). The private-beta/waitlist launch gate has been removed; signed-in users can use managed compute. The `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains only as an incident-response kill-switch. The following controls must keep pace with public usage, but they no longer gate access:
@@ -82,7 +103,7 @@ The original Local thread remains Local forever. A BYOK continuation is a new re
 - Web, Mobile, and Desktop are adapters over one signed-in Cloud continuity domain for app chats, projects, Cloud memory, profile instructions/personalization, and synchronized settings. Surface-specific stores may cache or render that data, but they must not define competing schemas, merge policies, or server routes. Local Desktop/Mobile state remains inside the Local trust boundary.
 - CLI is the canonical local developer-session host and VS Code is a thin client over the same workspace runtime, transcript/session store, permission pipeline, and extension discovery service. Resuming a session appends to the same session ID; forking creates a new ID. Neither surface silently joins consumer app-chat history.
 - Developer extension discovery is folder-aware. `.agi` is the canonical AGI project configuration; compatibility loaders may read supported `.agents`, `.claude`, `AGENTS.md`, `CLAUDE.md`, skills, plugins, connectors/MCP, hooks, and agent definitions through one precedence-aware loader. CLI and VS Code must show the same discovered inventory for the same trusted workspace. Compatibility does not authorize moving, deleting, or rewriting another tool&rsquo;s files.
-- Managed usage UI is one percentage/reset-time contract. Web, Mobile, Desktop, CLI, and VS Code render percentage progress bars without exposing private allowance units, token-to-credit conversion, provider cost, or dollar value. Chrome has no usage dashboard; it still receives honest limit/upgrade errors from the shared server policy.
+- Managed usage UI is one percentage/reset-time contract. Web, Mobile, Desktop, CLI, and VS Code render percentage progress bars without exposing private plan-allowance units, token-to-credit conversion, or provider cost. The explicit top-up checkout is the narrow exception: it displays the founder-set public purchase denomination (50 top-up units per $1), not the private plan allowance. Chrome has no usage dashboard; it still receives honest limit/upgrade errors from the shared server policy.
 - Shared contracts own identity and behavior; each surface owns only transport, platform permissions, offline/cache policy, and presentation. New work must extend an existing owner before adding a surface-local duplicate.
 
 ## Competitive Baseline
@@ -216,7 +237,9 @@ Subscriptions are globally available (founder, 2026-08-05) — no country is exc
 
 Paid usage is enforced as overlapping billing-period, rolling seven-day, rolling five-hour, and flagship rolling-week windows. The five-hour allowance is 20% of that plan's weekly allowance and the flagship sub-limit is 30% of the weekly allowance. These are spend windows, not seven daily buckets: usage ages out from its original transaction timestamp. Rolling spend windows warn at 80% and hard-stop at 100%; there is no downgrade or 150% financial grace band. The server-owned reservation includes the estimated in-flight request before provider work and serializes concurrent reservations for one tenant.
 
-An immediate paid-plan upgrade starts a replacement billing cycle. Stripe charges the full target plan and credits only unused subscription time on the old plan. AGI carries already-consumed billing-period and rolling-window usage into the higher plan; usage never resets on upgrade, and purchased top-ups remain separate. If payment is incomplete or fails, the old plan and its counters remain active until the canonical paid webhook provisions the upgrade.
+An immediate paid-plan upgrade preserves the existing renewal date. Stripe previews and invoices only the prorated price/seat difference for the remaining time in the current period, using the exact same signed proration timestamp for preview and apply. AGI carries already-consumed billing-period and rolling-window usage into the higher plan; usage never resets on upgrade, and purchased top-ups remain separate. If payment is incomplete or fails, the old plan and its counters remain active until the canonical paid webhook provisions the upgrade.
+
+Self-serve top-ups are available only to active Stripe-billed paid plans. They are whole-dollar purchases at 50 public top-up units per $1, with a $10 minimum and $100 ordinary self-serve maximum. Stripe Checkout shows and collects tax separately; the managed-usage ledger receives only the pre-tax purchased balance. Unused purchased balance carries across subscription renewals and purchases older than 12 months are excluded from the next carry.
 
 Desktop app settings must include run on startup, quick access shortcut, voice shortcut, menu bar, keep computer awake, browser use, allow all browser actions, computer use, allowed/unhired apps, cloud/Linear-style finishing controls, accessibility, screen recording, extensions, filesystem, MCP servers, desktop commander, Apify, app notes, Excel-style local app connectors, configure/details/uninstall controls, and developer logs/config editing.
 

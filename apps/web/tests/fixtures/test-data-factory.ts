@@ -4,6 +4,9 @@
  */
 
 import type { Task } from '@shared/stores/mission-control-store';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
+
+const DEFAULT_TEST_MODEL = requireProviderDefaultModel('openai');
 
 // Counter for unique IDs
 let taskCounter = 0;
@@ -55,7 +58,7 @@ export function createMockEmployee(
     tools: overrides.tools ?? ['Read', 'Grep'],
     systemPrompt: overrides.systemPrompt ?? 'You are a helpful assistant.',
     expertise: [],
-    model: 'gpt-5.6-terra',
+    model: DEFAULT_TEST_MODEL,
   };
 }
 
@@ -82,7 +85,7 @@ export function createMockLLMResponse(content: string): {
 } {
   return {
     content,
-    model: 'gpt-5.6-terra',
+    model: DEFAULT_TEST_MODEL,
     tokens: { input: 100, output: 200, total: 300 },
   };
 }

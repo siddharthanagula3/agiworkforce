@@ -233,6 +233,37 @@ export async function startPlanCheckout(data: {
 }
 
 /**
+ * Start a one-time Stripe Checkout for separately purchased managed usage.
+ * The server owns the dollar-to-unit conversion and returns it for display;
+ * client input never decides how much balance the webhook grants.
+ */
+export async function startTopUpCheckout(amountUsd: number): Promise<void> {
+  const authToken = await getAuthToken();
+  if (!authToken) throw new Error('User not authenticated. Please log in to buy a top-up.');
+
+  const response = await fetch('/api/billing/top-up', {
+    method: 'POST',
+    headers: await addCsrfHeaders({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+      'Idempotency-Key': `agi.topup.web.${crypto.randomUUID()}`,
+    }),
+    body: JSON.stringify({ amountUsd }),
+  });
+  const result = (await response.json().catch(() => ({}))) as {
+    url?: unknown;
+    error?: unknown;
+  };
+  if (!response.ok) {
+    throw new Error(extractErrorMessage(result, 'Could not start top-up checkout.'));
+  }
+  if (typeof result.url !== 'string' || !result.url.startsWith('https://')) {
+    throw new Error('Top-up checkout returned an invalid payment URL.');
+  }
+  window.location.href = result.url;
+}
+
+/**
  * Start Team checkout for a chosen number of licensed seats. Team is billed per
  * seat, so the seat count is mandatory and is charged as the Stripe line-item
  * quantity.
@@ -320,9 +351,9 @@ export async function previewUpgrade(data: {
 }
 
 /**
- * Upgrade an active subscription immediately. The server applies unused-time
- * value to the new full-cycle invoice and activates entitlements only after
- * successful payment.
+ * Upgrade an active subscription immediately. The server preserves the current
+ * renewal date, invoices the prorated difference for the remaining period, and
+ * activates entitlements only after successful payment.
  */
 export async function upgradePlanMidCycle(data: {
   plan: SelfServePaidPlanTier;

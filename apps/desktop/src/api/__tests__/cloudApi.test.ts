@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getModelsForProvider } from '@agiworkforce/types';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import {
   CLOUD_MAX_CONVERSATIONS,
@@ -13,6 +14,14 @@ import {
   sendCloudApprovalResume,
   sendCloudMessage,
 } from '../cloudApi';
+
+const FIXTURE_MODEL_ID = 'fixture-model';
+const GOOGLE_IMAGE_MODEL_ID = getModelsForProvider('google', {
+  modelTypes: ['image'],
+})[0]?.id;
+if (!GOOGLE_IMAGE_MODEL_ID) {
+  throw new Error('Cloud image tests require a Google image model in the canonical catalog');
+}
 
 const RAW_CONVERSATION = {
   id: 'conv_1',
@@ -285,7 +294,7 @@ describe('cloudApi', () => {
         persisted: true,
         images: [{ url: '/api/files/image-asset-1' }],
         provider: 'google',
-        model: 'gemini-3.1-flash-image',
+        model: GOOGLE_IMAGE_MODEL_ID,
         latency_ms: 12_000,
       }),
     );
@@ -294,7 +303,7 @@ describe('cloudApi', () => {
     const result = await generateCloudImage({
       prompt: 'Create an image of a glass lighthouse',
       provider: 'google',
-      model: 'gemini-3.1-flash-image',
+      model: GOOGLE_IMAGE_MODEL_ID,
       idempotencyKey: 'agi.media.desktop.image.0190a000-0000-7000-8000-000000000001',
     });
 
@@ -309,7 +318,7 @@ describe('cloudApi', () => {
         body: JSON.stringify({
           prompt: 'Create an image of a glass lighthouse',
           provider: 'google',
-          model: 'gemini-3.1-flash-image',
+          model: GOOGLE_IMAGE_MODEL_ID,
           size: '1024x1024',
           n: 1,
           quality: 'standard',
@@ -325,7 +334,7 @@ describe('cloudApi', () => {
       id: 'image-asset-1',
       uri: expect.stringContaining('/api/files/image-asset-1'),
       provider: 'google',
-      model: 'gemini-3.1-flash-image',
+      model: GOOGLE_IMAGE_MODEL_ID,
     });
   });
 
@@ -338,7 +347,7 @@ describe('cloudApi', () => {
           persisted: false,
           images: [{ b64_json: 'inline-bytes' }],
           provider: 'google',
-          model: 'gemini-3.1-flash-image',
+          model: GOOGLE_IMAGE_MODEL_ID,
         }),
       ),
     );
@@ -347,7 +356,7 @@ describe('cloudApi', () => {
       generateCloudImage({
         prompt: 'Create an image',
         provider: 'google',
-        model: 'gemini-3.1-flash-image',
+        model: GOOGLE_IMAGE_MODEL_ID,
         idempotencyKey: 'agi.media.desktop.image.0190a000-0000-7000-8000-000000000002',
       }),
     ).rejects.toThrow('durable Cloud media storage is not configured');
@@ -398,7 +407,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_1',
       'Ping',
-      'claude-sonnet-5',
+      FIXTURE_MODEL_ID,
       (chunk) => chunks.push(chunk),
       onDone,
       onError,
@@ -421,7 +430,7 @@ describe('cloudApi', () => {
           'X-AGI-Surface': 'desktop',
         }),
         body: JSON.stringify({
-          model: 'claude-sonnet-5',
+          model: FIXTURE_MODEL_ID,
           messages: [{ role: 'user', content: 'Ping' }],
           conversation_id: 'conv_1',
           stream: true,
@@ -455,7 +464,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_done',
       'Continue',
-      'gpt-5.6-sol',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       onDone,
       onError,
@@ -485,7 +494,7 @@ describe('cloudApi', () => {
     const pending = sendCloudMessage(
       'conv_idle',
       'Continue',
-      'gpt-5.6-sol',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       onDone,
       onError,
@@ -526,7 +535,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_oversized',
       'Continue',
-      'gpt-5.6-sol',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       onError,
@@ -560,7 +569,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_aggregate',
       'Continue',
-      'gpt-5.6-sol',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       onError,
@@ -597,7 +606,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_bad_run',
       'Continue',
-      'gpt-5.6-sol',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       onDone,
       onError,
@@ -644,7 +653,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_retry',
       'Continue',
-      'gpt-5.6-sol',
+      FIXTURE_MODEL_ID,
       (chunk) => chunks.push(chunk),
       vi.fn(),
       vi.fn(),
@@ -677,7 +686,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_malformed',
       'Continue',
-      'gpt-5.6-sol',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       onDone,
       onError,
@@ -715,7 +724,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_error',
       'Continue',
-      'gpt-5.6-sol',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       onDone,
       onError,
@@ -747,7 +756,7 @@ describe('cloudApi', () => {
     await sendCloudMessage(
       'conv_research',
       'Investigate',
-      'claude-sonnet-5',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       vi.fn(),

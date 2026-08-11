@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { LLMCostCalculator } from '@/lib/services/llm-cost-calculator';
+import { LLMCostCalculator, type TokenUsage } from '@/lib/services/llm-cost-calculator';
 import type { CpstUsageFields } from '@/lib/cpst-telemetry';
 import {
   finalizeManagedUsageRequest,
@@ -21,6 +21,13 @@ export interface ObservedProviderUsage {
   cacheWriteTokens: number;
   cacheWrite1hTokens: number;
   reasoningTokens: number;
+  /**
+   * Exact provider cost accumulated at each request boundary. Optional for
+   * compatibility with historical durable receipts that only stored totals.
+   */
+  providerCostDollars?: number;
+  /** Per-request counters used by nonlinear input-length pricing tiers. */
+  providerCallObservations?: ProviderUsageObservation[];
 }
 
 export function createObservedProviderUsage(): ObservedProviderUsage {
@@ -35,24 +42,156 @@ export function createObservedProviderUsage(): ObservedProviderUsage {
   };
 }
 
-type ProviderUsageObservation = Partial<Omit<ObservedProviderUsage, 'providerCalls'>>;
+export interface ProviderUsageObservation {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  cacheWrite1hTokens: number;
+  reasoningTokens: number;
+  /** Serving identity at the provider boundary, including managed failover. */
+  provider?: string;
+  model?: string;
+  /** Exact call-time price, before ledger-cent or Free-microusd rounding. */
+  costDollars?: number;
+}
+
+type ProviderUsageObservationInput = Partial<
+  Omit<ProviderUsageObservation, 'provider' | 'model' | 'costDollars'>
+>;
+
+export interface ProviderUsagePricingContext {
+  provider: string;
+  model: string;
+}
 
 function nonNegative(value: number | undefined): number {
   return Number.isFinite(value) ? Math.max(0, value ?? 0) : 0;
 }
 
+function toTokenUsage(observation: ProviderUsageObservation): TokenUsage {
+  return {
+    promptTokens: observation.inputTokens,
+    completionTokens: observation.outputTokens,
+    totalTokens: observation.inputTokens + observation.outputTokens,
+    cacheReadInputTokens: observation.cacheReadTokens,
+    cacheCreationInputTokens: observation.cacheWriteTokens,
+    cacheCreation1hInputTokens: observation.cacheWrite1hTokens,
+  };
+}
+
+function normalizeObservation(
+  observation: ProviderUsageObservationInput,
+): ProviderUsageObservation {
+  return {
+    inputTokens: nonNegative(observation.inputTokens),
+    outputTokens: nonNegative(observation.outputTokens),
+    cacheReadTokens: nonNegative(observation.cacheReadTokens),
+    cacheWriteTokens: nonNegative(observation.cacheWriteTokens),
+    cacheWrite1hTokens: nonNegative(observation.cacheWrite1hTokens),
+    reasoningTokens: nonNegative(observation.reasoningTokens),
+  };
+}
+
 /** Add one provider call's final usage counters to a request accumulator. */
 export function accumulateObservedProviderUsage(
   target: ObservedProviderUsage,
-  observation: ProviderUsageObservation,
+  observation: ProviderUsageObservationInput,
+  pricing?: ProviderUsagePricingContext,
 ): void {
+  const normalized = normalizeObservation(observation);
   target.providerCalls += 1;
-  target.inputTokens += nonNegative(observation.inputTokens);
-  target.outputTokens += nonNegative(observation.outputTokens);
-  target.cacheReadTokens += nonNegative(observation.cacheReadTokens);
-  target.cacheWriteTokens += nonNegative(observation.cacheWriteTokens);
-  target.cacheWrite1hTokens += nonNegative(observation.cacheWrite1hTokens);
-  target.reasoningTokens += nonNegative(observation.reasoningTokens);
+  target.inputTokens += normalized.inputTokens;
+  target.outputTokens += normalized.outputTokens;
+  target.cacheReadTokens += normalized.cacheReadTokens;
+  target.cacheWriteTokens += normalized.cacheWriteTokens;
+  target.cacheWrite1hTokens += normalized.cacheWrite1hTokens;
+  target.reasoningTokens += normalized.reasoningTokens;
+
+  const priced = pricing
+    ? {
+        ...normalized,
+        provider: pricing.provider,
+        model: pricing.model,
+        costDollars: LLMCostCalculator.calculateCostDollars(
+          pricing.provider,
+          pricing.model,
+          toTokenUsage(normalized),
+        ),
+      }
+    : normalized;
+  (target.providerCallObservations ??= []).push(priced);
+  if (priced.costDollars !== undefined) {
+    target.providerCostDollars = nonNegative(target.providerCostDollars) + priced.costDollars;
+  }
+}
+
+/** Merge a completed provider step without losing its request boundaries. */
+export function mergeObservedProviderUsage(
+  target: ObservedProviderUsage | undefined,
+  source: ObservedProviderUsage,
+): void {
+  if (!target) return;
+  target.providerCalls += source.providerCalls;
+  target.inputTokens += source.inputTokens;
+  target.outputTokens += source.outputTokens;
+  target.cacheReadTokens += source.cacheReadTokens;
+  target.cacheWriteTokens += source.cacheWriteTokens;
+  target.cacheWrite1hTokens += source.cacheWrite1hTokens;
+  target.reasoningTokens += source.reasoningTokens;
+  if (source.providerCallObservations?.length) {
+    (target.providerCallObservations ??= []).push(
+      ...source.providerCallObservations.map((observation) => ({ ...observation })),
+    );
+  }
+  if (source.providerCostDollars !== undefined) {
+    target.providerCostDollars =
+      nonNegative(target.providerCostDollars) + nonNegative(source.providerCostDollars);
+  }
+}
+
+/**
+ * Exact request-boundary cost. Historical totals without observations retain
+ * the previous aggregate fallback; all newly observed calls take this path.
+ */
+export function calculateObservedProviderUsageCostDollars(
+  usage: ObservedProviderUsage,
+  fallbackPricing: ProviderUsagePricingContext,
+): number {
+  const observations = usage.providerCallObservations;
+  if (observations?.length === usage.providerCalls && observations.length > 0) {
+    return observations.reduce((total, observation) => {
+      const recordedCost = observation.costDollars;
+      if (Number.isFinite(recordedCost) && recordedCost !== undefined && recordedCost >= 0) {
+        return total + recordedCost;
+      }
+      return (
+        total +
+        LLMCostCalculator.calculateCostDollars(
+          observation.provider ?? fallbackPricing.provider,
+          observation.model ?? fallbackPricing.model,
+          toTokenUsage(observation),
+        )
+      );
+    }, 0);
+  }
+
+  return LLMCostCalculator.calculateCostDollars(fallbackPricing.provider, fallbackPricing.model, {
+    promptTokens: usage.inputTokens,
+    completionTokens: usage.outputTokens,
+    totalTokens: usage.inputTokens + usage.outputTokens,
+    cacheReadInputTokens: usage.cacheReadTokens,
+    cacheCreationInputTokens: usage.cacheWriteTokens,
+    cacheCreation1hInputTokens: usage.cacheWrite1hTokens,
+  });
+}
+
+export function observedProviderUsageLedgerCents(
+  usage: ObservedProviderUsage,
+  fallbackPricing: ProviderUsagePricingContext,
+): number {
+  const dollars = calculateObservedProviderUsageCostDollars(usage, fallbackPricing);
+  return dollars > 0 ? Math.max(1, Math.ceil(dollars * 100)) : 0;
 }
 
 export function hasObservedProviderUsage(usage: ObservedProviderUsage): boolean {
@@ -117,13 +256,9 @@ export function finalizeObservedManagedUsage(
   }
 
   const totalTokens = input.usage.inputTokens + input.usage.outputTokens;
-  const actualCostCents = LLMCostCalculator.calculateCost(input.provider, input.model, {
-    promptTokens: input.usage.inputTokens,
-    completionTokens: input.usage.outputTokens,
-    totalTokens,
-    cacheReadInputTokens: input.usage.cacheReadTokens,
-    cacheCreationInputTokens: input.usage.cacheWriteTokens,
-    cacheCreation1hInputTokens: input.usage.cacheWrite1hTokens,
+  const actualCostCents = observedProviderUsageLedgerCents(input.usage, {
+    provider: input.provider,
+    model: input.model,
   });
 
   return finalizeManagedUsageRequest({

@@ -17,45 +17,29 @@ static CAPABILITY_CACHE: LazyLock<RwLock<HashMap<String, ModelCapabilities>>> =
 pub struct ModelCapabilities {
     pub supports_tools: bool,
     pub supports_vision: bool,
+    pub supports_completion: bool,
+    pub supports_embedding: bool,
     pub context_length: usize,
 }
 
 #[derive(Deserialize)]
 struct OllamaShowResponse {
     template: Option<String>,
-    details: Option<OllamaModelDetails>,
+    #[serde(default)]
+    capabilities: Vec<String>,
     model_info: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
-struct OllamaModelDetails {
-    family: Option<String>,
+struct OllamaTagsResponse {
+    #[serde(default)]
+    models: Vec<OllamaTagModel>,
 }
 
-/// Known model families that support native function calling in Ollama.
-const TOOL_CAPABLE_FAMILIES: &[&str] = &[
-    "llama3.1",
-    "llama3.2",
-    "llama3.3",
-    "llama4",
-    "qwen2.5",
-    "qwen3",
-    "mistral",
-    "mixtral",
-    "mistral-nemo",
-    "command-r",
-    "command-r-plus",
-    "deepseek-v2",
-    "deepseek-v3",
-    "deepseek-r1",
-    "phi-3",
-    "phi-4",
-    "gemma2",
-    "gemma3",
-    "hermes3",
-    "firefunction",
-    "nemotron",
-];
+#[derive(Deserialize)]
+struct OllamaTagModel {
+    name: String,
+}
 
 /// Detect capabilities of an Ollama model by querying /api/show.
 ///
@@ -100,7 +84,7 @@ async fn detect_uncached(
     let http_future = async {
         let response = client
             .post(&url)
-            .json(&serde_json::json!({"name": model}))
+            .json(&serde_json::json!({"model": model}))
             .send()
             .await?;
         response.json::<OllamaShowResponse>().await
@@ -119,7 +103,19 @@ async fn detect_uncached(
             }
         };
 
-    // Check if the template contains tool-related tokens
+    capabilities_from_show(&show)
+}
+
+fn capabilities_from_show(show: &OllamaShowResponse) -> ModelCapabilities {
+    let declares = |capability: &str| {
+        show.capabilities
+            .iter()
+            .any(|item| item.eq_ignore_ascii_case(capability))
+    };
+
+    // Older Ollama releases did not expose the capability array consistently,
+    // so a provider-owned tool template remains a conservative compatibility
+    // signal. Model-family names are never used as capability declarations.
     let template_has_tools = show
         .template
         .as_deref()
@@ -132,51 +128,94 @@ async fn detect_uncached(
         })
         .unwrap_or(false);
 
-    // Check model family against known tool-capable families
-    let family = show
-        .details
-        .as_ref()
-        .and_then(|d| d.family.as_deref())
-        .unwrap_or("");
-    let family_supports_tools = TOOL_CAPABLE_FAMILIES.iter().any(|f| {
-        family.to_lowercase().contains(&f.to_lowercase())
-            || model.to_lowercase().contains(&f.to_lowercase())
-    });
-
-    // Check for vision support
-    let supports_vision = model.contains("vision")
-        || model.contains("llava")
-        || model.contains("bakllava")
-        || model.contains("moondream")
-        || (model.contains("llama3.2") && model.contains("vision"));
-
     // Context length from model_info or default
     let context_length = show
         .model_info
         .as_ref()
         .and_then(|info| {
             info.get("general.context_length")
-                .or_else(|| info.get("llama.context_length"))
+                .or_else(|| {
+                    info.as_object().and_then(|entries| {
+                        entries
+                            .iter()
+                            .find(|(key, value)| key.ends_with(".context_length") && value.is_u64())
+                            .map(|(_, value)| value)
+                    })
+                })
                 .and_then(|v| v.as_u64())
         })
         .unwrap_or(4096) as usize;
 
     ModelCapabilities {
-        supports_tools: template_has_tools || family_supports_tools,
-        supports_vision,
+        supports_tools: declares("tools") || template_has_tools,
+        supports_vision: declares("vision"),
+        supports_completion: declares("completion"),
+        supports_embedding: declares("embedding"),
         context_length,
     }
 }
 
-/// Fallback capabilities derived purely from the model name, used when
-/// the /api/show endpoint is unreachable or returns an unparseable response.
-pub fn default_capabilities(model: &str) -> ModelCapabilities {
-    let lower = model.to_lowercase();
+/// Fail-closed fallback used when `/api/show` is unreachable or invalid.
+/// A model name is an address, not a capability declaration.
+pub fn default_capabilities(_model: &str) -> ModelCapabilities {
     ModelCapabilities {
-        supports_tools: TOOL_CAPABLE_FAMILIES.iter().any(|f| lower.contains(*f)),
-        supports_vision: lower.contains("vision") || lower.contains("llava"),
+        supports_tools: false,
+        supports_vision: false,
+        supports_completion: false,
+        supports_embedding: false,
         context_length: 4096,
     }
+}
+
+/// Select an installed Ollama model from provider-reported capabilities.
+///
+/// The returned ID comes from `/api/tags`; repository code never guesses a
+/// local model name. Unknown capability labels fail closed.
+pub async fn find_installed_model_with_capability(
+    client: &reqwest::Client,
+    base_url: &str,
+    required_capability: &str,
+) -> Result<String, String> {
+    if !matches!(required_capability, "completion" | "embedding") {
+        return Err(format!(
+            "Unsupported Ollama capability selector: {required_capability}"
+        ));
+    }
+
+    let response = client
+        .get(format!("{}/api/tags", base_url.trim_end_matches('/')))
+        .send()
+        .await
+        .map_err(|error| format!("Failed to list installed Ollama models: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "Ollama model discovery returned status {}",
+            response.status()
+        ));
+    }
+
+    let mut models = response
+        .json::<OllamaTagsResponse>()
+        .await
+        .map_err(|error| format!("Failed to parse installed Ollama models: {error}"))?
+        .models;
+    models.sort_by(|left, right| left.name.cmp(&right.name));
+
+    for model in models {
+        let capabilities = detect_ollama_capabilities(client, base_url, &model.name).await;
+        let matches = match required_capability {
+            "completion" => capabilities.supports_completion,
+            "embedding" => capabilities.supports_embedding,
+            _ => false,
+        };
+        if matches {
+            return Ok(model.name);
+        }
+    }
+
+    Err(format!(
+        "No installed Ollama model declares the {required_capability} capability"
+    ))
 }
 
 /// Clear the in-memory capability cache.
@@ -192,186 +231,52 @@ pub async fn clear_capability_cache() {
 mod tests {
     use super::*;
 
-    // -----------------------------------------------------------------------
-    // TOOL_CAPABLE_FAMILIES content
-    // -----------------------------------------------------------------------
-
-    /// The list must contain every well-known function-calling family so that
-    /// capability detection does not silently drop tool support for a model.
     #[test]
-    fn tool_capable_families_contains_expected_entries() {
-        let expected = [
-            "llama3.1",
-            "llama3.2",
-            "llama3.3",
-            "llama4",
-            "qwen2.5",
-            "qwen3",
-            "mistral",
-            "mixtral",
-            "mistral-nemo",
-            "command-r",
-            "command-r-plus",
-            "deepseek-v2",
-            "deepseek-v3",
-            "deepseek-r1",
-            "phi-3",
-            "phi-4",
-            "gemma2",
-            "gemma3",
-            "hermes3",
-            "firefunction",
-            "nemotron",
-        ];
-        for entry in &expected {
-            assert!(
-                TOOL_CAPABLE_FAMILIES.contains(entry),
-                "TOOL_CAPABLE_FAMILIES is missing expected family: {entry}"
-            );
+    fn provider_capability_metadata_is_authoritative() {
+        let show = OllamaShowResponse {
+            template: None,
+            capabilities: vec![
+                "completion".to_string(),
+                "tools".to_string(),
+                "vision".to_string(),
+                "embedding".to_string(),
+            ],
+            model_info: Some(serde_json::json!({
+                "fixture.context_length": 32_768
+            })),
+        };
+        let caps = capabilities_from_show(&show);
+        assert!(caps.supports_tools);
+        assert!(caps.supports_vision);
+        assert!(caps.supports_completion);
+        assert!(caps.supports_embedding);
+        assert_eq!(caps.context_length, 32_768);
+    }
+
+    #[test]
+    fn provider_template_remains_a_conservative_tools_fallback() {
+        let show = OllamaShowResponse {
+            template: Some("{{.ToolCalls}}".to_string()),
+            capabilities: vec!["completion".to_string()],
+            model_info: None,
+        };
+        let caps = capabilities_from_show(&show);
+        assert!(caps.supports_tools);
+        assert!(!caps.supports_vision);
+        assert!(caps.supports_completion);
+        assert!(!caps.supports_embedding);
+    }
+
+    #[test]
+    fn missing_provider_metadata_fails_closed_independent_of_model_name() {
+        for model in ["fixture-local-model:tools", "fixture-local-model:vision"] {
+            let caps = default_capabilities(model);
+            assert!(!caps.supports_tools);
+            assert!(!caps.supports_vision);
+            assert!(!caps.supports_completion);
+            assert!(!caps.supports_embedding);
+            assert_eq!(caps.context_length, 4096);
         }
-    }
-
-    #[test]
-    fn tool_capable_families_has_no_duplicates() {
-        let mut seen = std::collections::HashSet::new();
-        for family in TOOL_CAPABLE_FAMILIES {
-            assert!(
-                seen.insert(*family),
-                "Duplicate entry in TOOL_CAPABLE_FAMILIES: {family}"
-            );
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // default_capabilities — pure name-based fallback (no network)
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn default_capabilities_llama31_supports_tools() {
-        let caps = default_capabilities("llama3.1:8b");
-        assert!(
-            caps.supports_tools,
-            "llama3.1 model must report supports_tools via name matching"
-        );
-        assert!(!caps.supports_vision, "llama3.1 is not a vision model");
-        assert_eq!(caps.context_length, 4096, "fallback context_length is 4096");
-    }
-
-    #[test]
-    fn default_capabilities_llama32_vision_supports_both() {
-        let caps = default_capabilities("llama3.2-vision:11b");
-        assert!(caps.supports_tools, "llama3.2 is a tool-capable family");
-        assert!(caps.supports_vision, "model name contains 'vision'");
-    }
-
-    #[test]
-    fn default_capabilities_llava_supports_vision() {
-        let caps = default_capabilities("llava:13b");
-        assert!(
-            caps.supports_vision,
-            "llava model must report supports_vision"
-        );
-        assert!(
-            !caps.supports_tools,
-            "plain llava is not a tool-capable family"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_qwen25_supports_tools() {
-        let caps = default_capabilities("qwen2.5-coder:7b");
-        assert!(
-            caps.supports_tools,
-            "qwen2.5 family must match via name substring"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_qwen3_supports_tools() {
-        let caps = default_capabilities("qwen3:14b");
-        assert!(
-            caps.supports_tools,
-            "qwen3 family must match via name substring"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_deepseek_r1_supports_tools() {
-        let caps = default_capabilities("deepseek-r1:70b");
-        assert!(
-            caps.supports_tools,
-            "deepseek-r1 family must be detected as tool-capable"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_phi4_supports_tools() {
-        let caps = default_capabilities("phi-4:latest");
-        assert!(
-            caps.supports_tools,
-            "phi-4 family must be detected as tool-capable"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_gemma3_supports_tools() {
-        let caps = default_capabilities("gemma3:27b");
-        assert!(
-            caps.supports_tools,
-            "gemma3 family must be detected as tool-capable"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_unknown_model_does_not_support_tools() {
-        let caps = default_capabilities("tinyllama:1.1b");
-        assert!(
-            !caps.supports_tools,
-            "unknown model family must not claim tool support"
-        );
-        assert!(
-            !caps.supports_vision,
-            "unknown model must not claim vision support"
-        );
-        assert_eq!(caps.context_length, 4096);
-    }
-
-    #[test]
-    fn default_capabilities_name_matching_is_case_insensitive() {
-        // The model name might arrive in any casing from the Ollama API.
-        let caps_lower = default_capabilities("mistral:7b");
-        let caps_upper = default_capabilities("Mistral:7b");
-        assert_eq!(
-            caps_lower.supports_tools, caps_upper.supports_tools,
-            "Family matching must be case-insensitive"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_command_r_supports_tools() {
-        let caps = default_capabilities("command-r-plus:latest");
-        assert!(
-            caps.supports_tools,
-            "command-r-plus must be detected as tool-capable"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_hermes3_supports_tools() {
-        let caps = default_capabilities("hermes3:8b");
-        assert!(
-            caps.supports_tools,
-            "hermes3 must be detected as tool-capable"
-        );
-    }
-
-    #[test]
-    fn default_capabilities_nemotron_supports_tools() {
-        let caps = default_capabilities("nemotron-mini:4b");
-        assert!(
-            caps.supports_tools,
-            "nemotron must be detected as tool-capable"
-        );
     }
 
     // -----------------------------------------------------------------------
@@ -384,7 +289,7 @@ mod tests {
     fn cache_key_format_includes_base_url() {
         let base_url_a = "http://localhost:11434";
         let base_url_b = "http://192.168.1.5:11434";
-        let model = "llama3.1:8b";
+        let model = "fixture-local-model:current";
 
         let key_a = format!("{}:{}", base_url_a, model);
         let key_b = format!("{}:{}", base_url_b, model);
@@ -406,8 +311,8 @@ mod tests {
     #[test]
     fn cache_key_format_includes_model_name() {
         let base_url = "http://localhost:11434";
-        let model_a = "llama3.1:8b";
-        let model_b = "mistral:7b";
+        let model_a = "fixture-local-model:a";
+        let model_b = "fixture-local-model:b";
 
         let key_a = format!("{}:{}", base_url, model_a);
         let key_b = format!("{}:{}", base_url, model_b);
@@ -434,6 +339,8 @@ mod tests {
                 ModelCapabilities {
                     supports_tools: true,
                     supports_vision: false,
+                    supports_completion: true,
+                    supports_embedding: false,
                     context_length: 8192,
                 },
             );
@@ -442,6 +349,8 @@ mod tests {
                 ModelCapabilities {
                     supports_tools: false,
                     supports_vision: true,
+                    supports_completion: true,
+                    supports_embedding: false,
                     context_length: 4096,
                 },
             );
@@ -486,11 +395,15 @@ mod tests {
         let original = ModelCapabilities {
             supports_tools: true,
             supports_vision: false,
+            supports_completion: true,
+            supports_embedding: false,
             context_length: 16384,
         };
         let cloned = original.clone();
         assert_eq!(original.supports_tools, cloned.supports_tools);
         assert_eq!(original.supports_vision, cloned.supports_vision);
+        assert_eq!(original.supports_completion, cloned.supports_completion);
+        assert_eq!(original.supports_embedding, cloned.supports_embedding);
         assert_eq!(original.context_length, cloned.context_length);
     }
 }

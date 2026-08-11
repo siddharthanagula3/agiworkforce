@@ -2,7 +2,37 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import { classifyPlanChange, currentSeatsFromStripeItem, isUpgrade } from '../stripe-plan-change';
+import {
+  assertSameCheckoutBillingInterval,
+  checkoutBillingIntervalFromStripePrice,
+  classifyPlanChange,
+  currentSeatsFromStripeItem,
+  isUpgrade,
+} from '../stripe-plan-change';
+
+describe('Stripe billing cadence', () => {
+  it('maps only one-month and one-year prices to self-serve cadences', () => {
+    expect(
+      checkoutBillingIntervalFromStripePrice({ interval: 'month', interval_count: 1 } as never),
+    ).toBe('monthly');
+    expect(
+      checkoutBillingIntervalFromStripePrice({ interval: 'year', interval_count: 1 } as never),
+    ).toBe('yearly');
+    expect(
+      checkoutBillingIntervalFromStripePrice({ interval: 'month', interval_count: 3 } as never),
+    ).toBeNull();
+    expect(checkoutBillingIntervalFromStripePrice(null)).toBeNull();
+  });
+
+  it('refuses a monthly-to-yearly switch on the prorated upgrade path', () => {
+    expect(() =>
+      assertSameCheckoutBillingInterval(
+        { interval: 'month', interval_count: 1 } as never,
+        'yearly',
+      ),
+    ).toThrow(/charged only the prorated difference/i);
+  });
+});
 
 describe('classifyPlanChange', () => {
   it('allows a strictly higher tier as a tier upgrade', () => {

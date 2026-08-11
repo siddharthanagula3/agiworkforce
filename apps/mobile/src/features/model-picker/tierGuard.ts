@@ -7,8 +7,8 @@
  *
  * Rule: switching to a different provider mid-thread requires `max` or higher
  * on this surface (see `PROVIDER_SWITCH_MIN_TIER`).
- * Auto-modes (ids starting with "auto-") are provider-agnostic and never
- * trigger the gate.  An identical provider switch is always allowed.
+ * Canonical Auto selections are provider-agnostic and never trigger the gate.
+ * An identical provider switch is always allowed.
  *
  * CANONICAL ALIGNMENT (2026-08-05, MOBILE-PROVIDER-SWITCH-GATE-DIVERGENCE-01) —
  * this guard now delegates to the shared `canSwitchProviderInThread()` in
@@ -29,6 +29,7 @@ import {
   type BillingPlanTier,
   type UIPlanTier,
   canSwitchProviderInThread,
+  isAutoModeModelId,
 } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
@@ -118,7 +119,7 @@ const PROVIDER_SWITCH_MIN_TIER: UIPlanTier = 'max';
  * Returns 'allow' when:
  *  - There is no established conversation provider (new thread)
  *  - The next provider is the same as the current provider
- *  - Either provider id starts with "auto-" (auto-mode switches are free)
+ *  - Either value is a canonical Auto selection (Auto switches are free)
  *  - The user's mapped tier passes the canonical `canSwitchProviderInThread`
  *    gate (max / max_15x / enterprise)
  *
@@ -132,8 +133,9 @@ export function guardProviderSwitch(
   // No established provider — new conversation, always allow.
   if (currentProvider === null) return 'allow';
 
-  // Auto-mode ids are provider-agnostic.
-  if (currentProvider.startsWith('auto-') || nextProvider.startsWith('auto-')) return 'allow';
+  // Canonical Auto selections are provider-agnostic. Unknown strings that only
+  // resemble an old alias must not bypass the provider-switch gate.
+  if (isAutoModeModelId(currentProvider) || isAutoModeModelId(nextProvider)) return 'allow';
 
   // Same provider — no cross-provider switch.
   if (currentProvider === nextProvider) return 'allow';

@@ -109,14 +109,14 @@ describe('ProjectHeader', () => {
         lastUsedAt: '2026-05-20T00:00:00Z',
       }),
       lastUsedRelativeLabel: '2h ago',
-      defaultModelLabel: 'Claude Sonnet 4.6',
+      defaultModelLabel: 'Default Model Fixture',
     });
     render(<ProjectHeader presentation={presentation} />);
     const meta = screen.getByTestId('project-header-meta-row');
     expect(meta.textContent).toContain('4 files');
     expect(meta.textContent).toContain('3 members');
     expect(meta.textContent).toContain('Last used 2h ago');
-    expect(meta.textContent).toContain('Default model: Claude Sonnet 4.6');
+    expect(meta.textContent).toContain('Default model: Default Model Fixture');
   });
 
   it('omits the meta row entirely when host has no counts / model / last-used', () => {
@@ -139,5 +139,18 @@ describe('ProjectHeader', () => {
     const presentation = buildPresentation({ allowedSurfaces: [] });
     render(<ProjectHeader presentation={presentation} />);
     expect(screen.queryByTestId('project-header-surface-chips')).toBeNull();
+  });
+
+  it('keeps trust and provenance context without repeating host-owned identity in compact mode', () => {
+    render(<ProjectHeader compact presentation={buildPresentation({ importedFrom: 'manual' })} />);
+
+    expect(screen.queryByRole('heading', { name: 'On-device research' })).toBeNull();
+    expect(screen.queryByText('On-device research')).toBeNull();
+    expect(screen.getByText('Stays on this Mac.')).toBeDefined();
+    expect(screen.getByTestId('project-header-imported-from').textContent).toContain(
+      'Created in AGI',
+    );
+    expect(screen.getByTestId('project-header-privacy-chip')).toBeDefined();
+    expect(screen.getByTestId('project-header-provider-chip')).toBeDefined();
   });
 });

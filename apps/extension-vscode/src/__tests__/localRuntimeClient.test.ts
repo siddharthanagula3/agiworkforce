@@ -3,6 +3,12 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
+import {
+  SYNTHETIC_LOCAL_MODEL_ID,
+  SYNTHETIC_LOCAL_MODEL_ID_SECONDARY,
+} from './catalogModelFixtures';
+
+const SYNTHETIC_RUNTIME_MODEL_ID = 'fixture-runtime-model';
 
 function fakeRuntime(
   protocolVersion = 7,
@@ -72,7 +78,7 @@ function fakeRuntime(
                 thread: {
                   id: 'thread-1',
                   title: 'Test',
-                  model: 'model-1',
+                  model: SYNTHETIC_RUNTIME_MODEL_ID,
                   cwd: '/workspace',
                   provider: options.provider ?? 'anthropic',
                   trustMode: 'byok',
@@ -85,8 +91,8 @@ function fakeRuntime(
             : method === 'model/list'
               ? {
                   models: [
-                    { id: 'gemma4:e4b', provider: 'ollama' },
-                    { id: 'qwen3-coder', provider: 'lmstudio' },
+                    { id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' },
+                    { id: SYNTHETIC_LOCAL_MODEL_ID_SECONDARY, provider: 'lmstudio' },
                   ],
                 }
               : method === 'thread/list'
@@ -95,7 +101,7 @@ function fakeRuntime(
                       {
                         id: 'thread-1',
                         title: 'Test',
-                        model: 'model-1',
+                        model: SYNTHETIC_RUNTIME_MODEL_ID,
                         cwd: '/workspace',
                         provider: options.provider ?? 'anthropic',
                         trustMode: 'byok',
@@ -111,7 +117,7 @@ function fakeRuntime(
                       thread: {
                         id: 'thread-1',
                         title: 'Test',
-                        model: 'model-1',
+                        model: SYNTHETIC_RUNTIME_MODEL_ID,
                         cwd: '/workspace',
                         provider: options.provider ?? 'anthropic',
                         trustMode: 'byok',
@@ -583,8 +589,8 @@ describe('LocalRuntimeClient', () => {
 
     await expect(client.listLocalModels()).resolves.toEqual({
       models: [
-        { id: 'gemma4:e4b', provider: 'ollama' },
-        { id: 'qwen3-coder', provider: 'lmstudio' },
+        { id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' },
+        { id: SYNTHETIC_LOCAL_MODEL_ID_SECONDARY, provider: 'lmstudio' },
       ],
     });
     expect(runtime.requests.map((request) => request.method)).toEqual(['initialize', 'model/list']);

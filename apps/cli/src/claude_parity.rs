@@ -1381,8 +1381,7 @@ mod tests {
             "/chrome must name the Desktop native-messaging host that owns page actions: {message}"
         );
         assert!(
-            message.contains("apps/extension")
-                && !message.contains("apps/extension-vscode"),
+            message.contains("apps/extension") && !message.contains("apps/extension-vscode"),
             "/chrome must point at the Chrome extension, not the VS Code extension: {message}"
         );
         for overclaim in ["--chrome", "--no-chrome", "Extension: Installed", "Status:"] {

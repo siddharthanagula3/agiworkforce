@@ -6,6 +6,7 @@ import {
   normalizeRequiredTier,
 } from '../InlinePaywallCard';
 import type { PaywallFeature, RequiredTier, UserTier } from '../InlinePaywallCard';
+import type { PaywallRecoveryAction } from '../InlinePaywallCard';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -17,6 +18,7 @@ function makeProps(
     currentTier: UserTier;
     requiredTier: RequiredTier;
     reason: string;
+    recoveryAction: PaywallRecoveryAction;
     onUpgrade: () => void;
     onDismiss: () => void;
   }> = {},
@@ -49,7 +51,6 @@ describe('InlinePaywallCard', () => {
       ['web_search', 'basic', 'Upgrade to Basic for web search'],
       ['video_generation', 'max_15x', 'Upgrade to Max 15x for video generation'],
       ['opus_5', 'max', 'Upgrade to Max 5x for Opus 5 access'],
-      ['gpt_5_5', 'max', 'Upgrade to Max 5x for GPT-5.5 access'],
       ['computer_use', 'pro', 'Upgrade to Pro for computer use'],
       ['deep_research', 'max', 'Upgrade to Max 5x for deep research'],
       ['image_quota', 'pro', 'Upgrade to Pro for more image generation'],
@@ -103,6 +104,60 @@ describe('InlinePaywallCard', () => {
       fireEvent.click(upgradeButton);
 
       expect(onUpgrade).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers subscription copy for an account with no active plan', () => {
+      render(
+        <InlinePaywallCard
+          {...makeProps({
+            feature: 'video_generation',
+            requiredTier: 'max_15x',
+            recoveryAction: 'subscribe',
+          })}
+        />,
+      );
+
+      expect(
+        screen.getByText('Subscribe to Max 15x for video generation', { exact: false }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Subscribe to Max 15x' })).toBeInTheDocument();
+    });
+
+    it('offers billing repair instead of an upgrade to an inactive subscriber', () => {
+      const onUpgrade = vi.fn();
+      render(
+        <InlinePaywallCard
+          {...makeProps({
+            feature: 'video_generation',
+            requiredTier: 'max_15x',
+            recoveryAction: 'manage_billing',
+            reason: 'Your subscription is past_due. Please update your payment method.',
+            onUpgrade,
+          })}
+        />,
+      );
+
+      expect(screen.getByText('Update billing to continue video generation')).toBeInTheDocument();
+      expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Manage billing' }));
+      expect(onUpgrade).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers usage details without advertising a same-tier upgrade', () => {
+      render(
+        <InlinePaywallCard
+          {...makeProps({
+            feature: 'token_cap',
+            currentTier: 'max_15x',
+            requiredTier: 'max_15x',
+            recoveryAction: 'view_usage',
+            reason: 'Your Max 15x usage for this billing period is used up.',
+          })}
+        />,
+      );
+
+      expect(screen.getByRole('button', { name: 'View usage' })).toBeInTheDocument();
+      expect(screen.queryByText('Upgrade to Max 15x', { exact: false })).toBeNull();
     });
 
     it('does not render a pricing navigation link for the upgrade action', () => {

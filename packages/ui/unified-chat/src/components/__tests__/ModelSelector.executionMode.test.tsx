@@ -1,15 +1,18 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { getProviderDefaultModel } from '@agiworkforce/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelSelector } from '../ModelSelector';
 import { useChatStore } from '../../stores/chatStore';
 import { CLOUD_FALLBACK_MODELS, useModelStore } from '../../stores/modelStore';
 import { HostBridgeContext } from '../../lib/hostBridge';
+import { createChatModelInfo } from '../../lib/modelInfo';
+import { requireCatalogModel } from '../../test/modelCatalogFixtures';
 import type { ChatExecutionMode } from '@agiworkforce/types';
 import type { ModelInfo } from '../../lib/types';
 
 const localModel: ModelInfo = {
-  id: 'llama-local',
-  name: 'Llama Local',
+  id: 'fixture-local-model',
+  name: 'Local Model Fixture',
   provider: 'ollama',
   tier: 'standard',
   supportsThinking: false,
@@ -21,8 +24,8 @@ const localModel: ModelInfo = {
 };
 
 const byokModel: ModelInfo = {
-  id: 'gpt-direct',
-  name: 'GPT Direct',
+  id: 'fixture-direct-model',
+  name: 'Direct Provider Fixture',
   provider: 'openai',
   tier: 'standard',
   supportsThinking: true,
@@ -33,26 +36,41 @@ const byokModel: ModelInfo = {
   isByok: true,
 };
 
-const sonnetModel: ModelInfo = {
-  ...byokModel,
-  id: 'claude-sonnet-5',
-  name: 'Claude Sonnet 5',
-  provider: 'anthropic',
-};
+const switchableHighDefaultMetadata = requireCatalogModel(
+  (model) =>
+    model.reasoning?.canDisableThinking === true && model.reasoning.defaultEffort === 'high',
+  'a switchable reasoning model whose default effort is high',
+);
+const switchableHighDefaultModel = createChatModelInfo({
+  id: switchableHighDefaultMetadata.id,
+  name: 'stale test host label',
+  provider: switchableHighDefaultMetadata.provider,
+  isLocal: false,
+  isByok: true,
+});
 
-const fableModel: ModelInfo = {
-  ...byokModel,
-  id: 'claude-fable-5',
-  name: 'Claude Fable 5',
-  provider: 'anthropic',
-};
+const mandatoryReasoningMetadata = requireCatalogModel(
+  (model) =>
+    model.reasoning?.canDisableThinking === false && model.reasoning.defaultEffort === 'high',
+  'a mandatory reasoning model whose default effort is high',
+);
+const mandatoryReasoningModel = createChatModelInfo({
+  id: mandatoryReasoningMetadata.id,
+  name: 'stale test host label',
+  provider: mandatoryReasoningMetadata.provider,
+  isLocal: false,
+  isByok: true,
+});
 
-const solModel: ModelInfo = {
-  ...byokModel,
-  id: 'gpt-5.6-sol',
-  name: 'GPT-5.6 Sol',
+const currentOpenAIModelId = getProviderDefaultModel('openai');
+if (!currentOpenAIModelId) throw new Error('The catalog must expose a default OpenAI text model');
+const currentOpenAIModel = createChatModelInfo({
+  id: currentOpenAIModelId,
+  name: 'stale test host label',
   provider: 'openai',
-};
+  isLocal: false,
+  isByok: true,
+});
 
 const managedModel: ModelInfo = {
   id: 'auto-balanced',
@@ -120,8 +138,8 @@ describe('ModelSelector execution-boundary admission', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
 
-    expect(screen.getAllByText('Llama Local').length).toBeGreaterThan(0);
-    expect(screen.queryByText('GPT Direct')).toBeNull();
+    expect(screen.getAllByText(localModel.name).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Direct Provider Fixture')).toBeNull();
     expect(screen.queryByText('Auto Balanced')).toBeNull();
   });
 
@@ -132,8 +150,8 @@ describe('ModelSelector execution-boundary admission', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
 
     expect(screen.getByText('Local')).toBeTruthy();
-    expect(screen.getAllByText('Llama Local').length).toBeGreaterThan(0);
-    expect(screen.queryByText('GPT Direct')).toBeNull();
+    expect(screen.getAllByText(localModel.name).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Direct Provider Fixture')).toBeNull();
     expect(screen.queryByText('Auto Balanced')).toBeNull();
   });
 
@@ -156,8 +174,8 @@ describe('ModelSelector execution-boundary admission', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
 
-    expect(screen.getAllByText('GPT Direct').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Llama Local')).toBeNull();
+    expect(screen.getAllByText('Direct Provider Fixture').length).toBeGreaterThan(0);
+    expect(screen.queryByText(localModel.name)).toBeNull();
     expect(screen.queryByText('Auto Balanced')).toBeNull();
   });
 
@@ -198,7 +216,7 @@ describe('ModelSelector execution-boundary admission', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
-    fireEvent.click(screen.getByRole('button', { name: /GPT Direct/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Direct Provider Fixture/i }));
 
     await waitFor(() => {
       expect(setConversationModel).toHaveBeenCalledWith('conversation-1', byokModel.id);
@@ -208,8 +226,8 @@ describe('ModelSelector execution-boundary admission', () => {
   it('shows but never auto-selects or permits a non-live registry model', async () => {
     const comingSoonModel: ModelInfo = {
       ...managedModel,
-      id: 'future-preview-model',
-      name: 'Future Preview Model',
+      id: 'fixture-future-preview-model',
+      name: 'Future Preview Model Fixture',
       provider: 'openai',
       availability: 'coming_soon',
     };
@@ -227,19 +245,26 @@ describe('ModelSelector execution-boundary admission', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
     expect(
-      screen.getByRole('button', { name: /Future Preview Model/i }).hasAttribute('disabled'),
+      screen
+        .getByRole('button', { name: /Future Preview Model Fixture/i })
+        .hasAttribute('disabled'),
     ).toBe(true);
     expect(screen.getByText('Coming soon')).toBeTruthy();
   });
 
-  it('shows GPT-5.6 Sol as a live selectable current model', () => {
-    useModelStore.setState({ models: [solModel], selectedModelId: solModel.id });
-    seedConversation('byok', solModel.id);
+  it('shows the current catalog OpenAI model as live and selectable', () => {
+    useModelStore.setState({
+      models: [currentOpenAIModel],
+      selectedModelId: currentOpenAIModel.id,
+    });
+    seedConversation('byok', currentOpenAIModel.id);
     render(<ModelSelector />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
 
-    const row = screen.getByRole('button', { name: /GPT-5\.6 Sol/i });
+    const row = screen.getByRole('button', {
+      name: (accessibleName) => accessibleName.includes(currentOpenAIModel.name),
+    });
     expect(row.hasAttribute('disabled')).toBe(false);
     expect(row.getAttribute('aria-pressed')).toBe('true');
     expect(screen.queryByText('Coming soon')).toBeNull();
@@ -248,8 +273,8 @@ describe('ModelSelector execution-boundary admission', () => {
   it('labels an unknown dynamic-model context window honestly', () => {
     const unknownByokModel: ModelInfo = {
       ...byokModel,
-      id: 'private-gateway/custom-model',
-      name: 'Custom Model',
+      id: 'fixture-private-gateway-model',
+      name: 'Custom Model Fixture',
       contextWindow: 0,
       metadataSource: 'unknown',
     };
@@ -273,8 +298,11 @@ describe('ModelSelector execution-boundary admission', () => {
 
   it('enables a current model at its catalog default effort', () => {
     const onEffortChange = vi.fn();
-    seedConversation('byok', sonnetModel.id);
-    useModelStore.setState({ models: [sonnetModel], selectedModelId: sonnetModel.id });
+    seedConversation('byok', switchableHighDefaultModel.id);
+    useModelStore.setState({
+      models: [switchableHighDefaultModel],
+      selectedModelId: switchableHighDefaultModel.id,
+    });
     render(<ModelSelector effort={null} onEffortChange={onEffortChange} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
@@ -283,14 +311,17 @@ describe('ModelSelector execution-boundary admission', () => {
     expect(onEffortChange).toHaveBeenCalledWith('high');
   });
 
-  // Removed with Haiku 4.5 (retired 2026-07-27). It was the only catalog
-  // model without an effort ladder, so 'hides the effort control' has no
-  // model left to demonstrate it. Restore when one exists again.
+  // The current catalog has no model without an effort ladder, so there is no
+  // entry that can demonstrate the hidden-control state. Restore the test when
+  // that capability shape exists again.
 
-  it('represents Fable mandatory reasoning without an off toggle', async () => {
+  it('represents mandatory catalog reasoning without an off toggle', async () => {
     const onEffortChange = vi.fn();
-    seedConversation('byok', fableModel.id);
-    useModelStore.setState({ models: [fableModel], selectedModelId: fableModel.id });
+    seedConversation('byok', mandatoryReasoningModel.id);
+    useModelStore.setState({
+      models: [mandatoryReasoningModel],
+      selectedModelId: mandatoryReasoningModel.id,
+    });
     render(<ModelSelector effort={null} onEffortChange={onEffortChange} />);
 
     await waitFor(() => expect(onEffortChange).toHaveBeenCalledWith('high'));

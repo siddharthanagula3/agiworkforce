@@ -75,6 +75,7 @@ import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
 describe('DSAR export local stores', () => {
   beforeEach(() => {
@@ -88,7 +89,7 @@ describe('DSAR export local stores', () => {
           updatedAt: '2026-06-11T10:01:00.000Z',
           messageCount: 1,
           pinned: false,
-          model: 'qwen3-4b-instruct-2507',
+          model: SYNTHETIC_LOCAL_MODEL_ID,
           provider: 'local',
           executionMode: 'local',
         },
@@ -102,7 +103,7 @@ describe('DSAR export local stores', () => {
             role: 'user',
             content: 'hello from local',
             createdAt: '2026-06-11T10:01:00.000Z',
-            model: 'qwen3-4b-instruct-2507',
+            model: SYNTHETIC_LOCAL_MODEL_ID,
           },
         ],
       },

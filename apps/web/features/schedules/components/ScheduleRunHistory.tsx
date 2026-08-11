@@ -8,6 +8,7 @@ import {
   formatDateTime,
   formatDuration,
   formatTokenCount,
+  scheduleModelLabel,
   scheduleResultText,
   scheduleRunUsage,
 } from '../types';
@@ -76,7 +77,7 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
               className="inline-flex items-center gap-1 tabular-nums"
               title={
                 usage.model
-                  ? `${formatCostCents(usage.costCents)} on ${usage.model}`
+                  ? `${formatCostCents(usage.costCents)} on ${scheduleModelLabel(usage.model)}`
                   : formatCostCents(usage.costCents)
               }
             >
@@ -94,7 +95,7 @@ function RunRow({ run, timezone }: { run: ScheduleRun; timezone: string }) {
         {usage?.model && (
           <>
             <span aria-hidden="true">·</span>
-            <span className="truncate">{usage.model}</span>
+            <span className="truncate">{scheduleModelLabel(usage.model)}</span>
           </>
         )}
       </div>

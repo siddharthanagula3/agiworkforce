@@ -41,22 +41,29 @@ logger = get_logger(__name__)
 
 
 @functools.cache
-def _load(yaml_path: str) -> dict[str, dict[str, Any]]:
-    """Read *yaml_path* and return its ``models`` map (cached).
-
-    Returns an empty dict if the path is empty, missing, or unreadable —
-    callers fall through to the default token-budget logic in that case.
-    """
+def _load_document(yaml_path: str) -> dict[str, Any]:
+    """Read and validate a provider registry document (cached)."""
     if not yaml_path:
         return {}
 
     try:
         raw = Path(yaml_path).read_text(encoding="utf-8")
         data = yaml.safe_load(raw) or {}
-        return data.get("models") or {}
+        return data if isinstance(data, dict) else {}
     except Exception:
         logger.warning("Could not load model registry at %s", yaml_path, exc_info=True)
         return {}
+
+
+@functools.cache
+def _load(yaml_path: str) -> dict[str, dict[str, Any]]:
+    """Read *yaml_path* and return its ``models`` map (cached).
+
+    Returns an empty dict if the path is empty, missing, or unreadable —
+    callers fall through to the default token-budget logic in that case.
+    """
+    models = _load_document(yaml_path).get("models") or {}
+    return models if isinstance(models, dict) else {}
 
 
 def _resolve_path(default_yaml_path: str) -> str:
@@ -79,6 +86,16 @@ def lookup_max_output_tokens(default_yaml_path: str, model: str) -> int | None:
     if entry and entry.get("max_output_tokens"):
         return int(entry["max_output_tokens"])
     return None
+
+
+def lookup_default_model(default_yaml_path: str) -> str | None:
+    """Return the generated provider default, honoring the registry override."""
+    resolved_path = _resolve_path(default_yaml_path)
+    document = _load_document(resolved_path)
+    configured = document.get("default_model")
+    if isinstance(configured, str) and configured.strip():
+        return configured.strip()
+    return next(iter(_load(resolved_path)), None)
 
 
 # Back-compat alias for tests that previously called ``_load_registry``.

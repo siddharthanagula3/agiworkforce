@@ -571,7 +571,7 @@ async fn budget_cap_trips_and_emits_event() {
         completion("more", vec![tc("t2", "run_command")]),
     ])
     .result("run_command", true, "ok");
-    host.cost = 5.0; // exceeds the $1 cap after the first continuation
+    host.cost = 5.0; // exceeds the $1 cap after the first completion
 
     drive(&mut host, params(25, Some(1.0))).await.unwrap();
 
@@ -583,8 +583,31 @@ async fn budget_cap_trips_and_emits_event() {
         _ => None,
     });
     assert_eq!(budget, Some((5.0, 1.0)));
-    // Loop broke after the budget check, so only one dispatch iteration ran.
-    assert_eq!(host.committed.len(), 1);
+    // The paid first completion is kept, but no tool side effect or
+    // continuation may run after it exhausted the budget.
+    assert_eq!(host.committed.len(), 0);
+    assert_eq!(host.completions.len(), 1);
+}
+
+#[tokio::test]
+async fn budget_cap_reports_no_tool_first_completion() {
+    let mut host = ScriptedHost::new(vec![completion("done", vec![])]);
+    host.cost = 2.0;
+
+    drive(&mut host, params(25, Some(1.0))).await.unwrap();
+
+    assert!(host.events.iter().any(|event| matches!(
+        event,
+        TurnEvent::TurnComplete { response, .. } if response == "done"
+    )));
+    assert!(host.events.iter().any(|event| matches!(
+        event,
+        TurnEvent::BudgetExceeded {
+            cumulative_usd: 2.0,
+            cap_usd: 1.0
+        }
+    )));
+    assert!(host.committed.is_empty());
 }
 
 #[tokio::test]

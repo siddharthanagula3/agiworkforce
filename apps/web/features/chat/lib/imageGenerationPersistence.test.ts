@@ -16,15 +16,27 @@ import {
   isTemporaryConversationById,
   persistImageGenerationUserMessage,
   persistImageGenerationAssistantMessage,
+  requireImageMessagePersistence,
 } from './imageGenerationPersistence';
 import { EMPTY_ASSISTANT_CONTENT_PLACEHOLDER } from '@/lib/hooks/useChatStream';
 import type { MessageMetadata } from '@shared/stores/web-chat-store';
+import { getModels, isExecutableImageModel, isModelLive } from '@agiworkforce/types';
 
 const TOK = async () => 'tok';
 const USER_MESSAGE_ID = '00000000-0000-4000-8000-000000000101';
 const SAVED_USER_MESSAGE_ID = '00000000-0000-4000-8000-000000000102';
 const ASSISTANT_MESSAGE_ID = '00000000-0000-4000-8000-000000000201';
 const SAVED_ASSISTANT_MESSAGE_ID = '00000000-0000-4000-8000-000000000202';
+const IMAGE_MODEL_ID = getModels({
+  modelTypes: ['image'],
+  requireCapabilities: { imageGen: true },
+}).find(isExecutableImageModel)?.id;
+const VIDEO_MODEL_ID = getModels({
+  modelTypes: ['video'],
+  requireCapabilities: { videoGen: true },
+}).find((model) => isModelLive(model) && model.deprecated !== true)?.id;
+if (!IMAGE_MODEL_ID) throw new Error('Canonical image model fixture is missing');
+if (!VIDEO_MODEL_ID) throw new Error('Canonical video model fixture is missing');
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -68,7 +80,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationUserMessage', () 
     vi.stubGlobal('fetch', fetchMock);
     const updateMessage = vi.fn();
 
-    await persistImageGenerationUserMessage({
+    const result = await persistImageGenerationUserMessage({
       conversationId: 'conv-1',
       messageId: USER_MESSAGE_ID,
       content: 'a watercolor fox in a forest',
@@ -87,22 +99,23 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationUserMessage', () 
     });
     // Server assigned a different id — the store must reconcile to it.
     expect(updateMessage).toHaveBeenCalledWith(USER_MESSAGE_ID, { id: SAVED_USER_MESSAGE_ID });
+    expect(result).toEqual({ ok: true, messageId: SAVED_USER_MESSAGE_ID });
   });
 
-  it('does not reject and surfaces a toast when the save fails (fire-and-forget contract)', async () => {
+  it('returns an explicit failure and surfaces a toast when the save fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(500, { error: 'boom' })));
     const updateMessage = vi.fn();
 
-    await expect(
-      persistImageGenerationUserMessage({
-        conversationId: 'conv-1',
-        messageId: '00000000-0000-4000-8000-000000000103',
-        content: 'prompt',
-        getAuthToken: TOK,
-        updateMessage,
-      }),
-    ).resolves.toBeUndefined();
+    const result = await persistImageGenerationUserMessage({
+      conversationId: 'conv-1',
+      messageId: '00000000-0000-4000-8000-000000000103',
+      content: 'prompt',
+      getAuthToken: TOK,
+      updateMessage,
+    });
 
+    expect(result).toMatchObject({ ok: false });
+    expect(() => requireImageMessagePersistence(result)).toThrow(/save message to DB/i);
     expect(toastError).toHaveBeenCalledTimes(1);
     expect(String(toastError.mock.calls[0]?.[0])).toMatch(/save your message/i);
     expect(updateMessage).not.toHaveBeenCalled();
@@ -120,7 +133,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     imageUrl: 'https://blob.example/generated/fox.png',
     imageGenPrompt: 'a watercolor fox in a forest',
     imageGenAspect: 'square',
-    imageGenModel: 'gemini-3.1-flash-image',
+    imageGenModel: IMAGE_MODEL_ID,
   };
 
   it('persists the image card with the zero-width placeholder content (not empty string)', async () => {
@@ -130,10 +143,10 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     vi.stubGlobal('fetch', fetchMock);
     const updateMessage = vi.fn();
 
-    await persistImageGenerationAssistantMessage({
+    const result = await persistImageGenerationAssistantMessage({
       conversationId: 'conv-1',
       messageId: ASSISTANT_MESSAGE_ID,
-      model: 'gemini-3.1-flash-image',
+      model: IMAGE_MODEL_ID,
       metadata,
       getAuthToken: TOK,
       updateMessage,
@@ -159,11 +172,12 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     // the saved payload must carry that same shape verbatim.
     expect(body['metadata']).toEqual(metadata);
     expect(body['role']).toBe('assistant');
-    expect(body['model']).toBe('gemini-3.1-flash-image');
+    expect(body['model']).toBe(IMAGE_MODEL_ID);
 
     expect(updateMessage).toHaveBeenCalledWith(ASSISTANT_MESSAGE_ID, {
       id: SAVED_ASSISTANT_MESSAGE_ID,
     });
+    expect(result).toEqual({ ok: true, messageId: SAVED_ASSISTANT_MESSAGE_ID });
   });
 
   it('upserts via the same message id on regenerate-in-place (idempotent, no duplicate row)', async () => {
@@ -179,7 +193,7 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     await persistImageGenerationAssistantMessage({
       conversationId: 'conv-1',
       messageId: ASSISTANT_MESSAGE_ID,
-      model: 'gemini-3.1-flash-image',
+      model: IMAGE_MODEL_ID,
       metadata: { ...metadata, imageUrl: 'https://blob.example/generated/fox-v2.png' },
       getAuthToken: TOK,
       updateMessage,
@@ -194,21 +208,80 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     expect(updateMessage).not.toHaveBeenCalled();
   });
 
-  it('does not reject and surfaces a toast when the save fails (fire-and-forget contract)', async () => {
+  it('persists a media billing refusal and its exact recovery metadata for reload/cross-device', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { message: { id: ASSISTANT_MESSAGE_ID } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const updateMessage = vi.fn();
+    const refusalMetadata: MessageMetadata = {
+      toolType: 'video-generation',
+      paywall: {
+        feature: 'video_generation',
+        requiredTier: 'max_15x',
+        reason: 'Video generation requires Max 15x.',
+        recoveryAction: 'upgrade',
+        showUpgradeCta: true,
+        showResetTime: false,
+        suggestStandardModel: false,
+      },
+    };
+
+    await persistImageGenerationAssistantMessage({
+      conversationId: 'conv-1',
+      messageId: ASSISTANT_MESSAGE_ID,
+      model: VIDEO_MODEL_ID,
+      metadata: refusalMetadata,
+      content: '',
+      getAuthToken: TOK,
+      updateMessage,
+    });
+
+    const body = lastRequestBody(fetchMock);
+    expect(body).toMatchObject({
+      id: ASSISTANT_MESSAGE_ID,
+      role: 'assistant',
+      content: EMPTY_ASSISTANT_CONTENT_PLACEHOLDER,
+      metadata: refusalMetadata,
+    });
+  });
+
+  it('persists visible terminal media failure copy instead of replacing it with a placeholder', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(200, { message: { id: ASSISTANT_MESSAGE_ID } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await persistImageGenerationAssistantMessage({
+      conversationId: 'conv-1',
+      messageId: ASSISTANT_MESSAGE_ID,
+      model: undefined,
+      metadata: { toolType: 'video-generation' },
+      content: 'Video generation failed: provider unavailable',
+      getAuthToken: TOK,
+      updateMessage: vi.fn(),
+    });
+
+    expect(lastRequestBody(fetchMock)['content']).toBe(
+      'Video generation failed: provider unavailable',
+    );
+  });
+
+  it('returns an explicit failure and surfaces a toast when the save fails', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(500, { error: 'boom' })));
     const updateMessage = vi.fn();
 
-    await expect(
-      persistImageGenerationAssistantMessage({
-        conversationId: 'conv-1',
-        messageId: '00000000-0000-4000-8000-000000000203',
-        model: 'gemini-3.1-flash-image',
-        metadata,
-        getAuthToken: TOK,
-        updateMessage,
-      }),
-    ).resolves.toBeUndefined();
+    const result = await persistImageGenerationAssistantMessage({
+      conversationId: 'conv-1',
+      messageId: '00000000-0000-4000-8000-000000000203',
+      model: IMAGE_MODEL_ID,
+      metadata,
+      getAuthToken: TOK,
+      updateMessage,
+    });
 
+    expect(result).toMatchObject({ ok: false });
+    expect(() => requireImageMessagePersistence(result)).toThrow(/save message to DB/i);
     expect(toastError).toHaveBeenCalledTimes(1);
     expect(String(toastError.mock.calls[0]?.[0])).toMatch(/save this response/i);
   });

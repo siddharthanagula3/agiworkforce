@@ -1,0 +1,420 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-08-10",
+  "replacements": [
+    {
+      "previousId": "es_ES-carlfm-medium",
+      "replacementId": "es_ES-sharvard-medium",
+      "reason": "The upstream repository has no medium carlfm artifact; sharvard is a verified Spanish medium voice.",
+      "evidenceUrl": "https://huggingface.co/rhasspy/piper-voices/tree/ea046e8458f6acd997706d6e6066a022b42f6fb1/es/es_ES",
+      "verifiedAt": "2026-08-10"
+    }
+  ],
+  "whisperModels": [
+    {
+      "id": "tiny",
+      "filename": "ggml-tiny.bin",
+      "description": "Tiny (~78 MB) - fastest, basic accuracy",
+      "approximateSizeBytes": 77691713,
+      "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.bin",
+      "sha256": "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/ggerganov/whisper.cpp",
+        "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+        "artifactPath": "ggml-tiny.bin",
+        "modelCardPath": "README.md",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "base",
+      "filename": "ggml-base.bin",
+      "description": "Base (~148 MB) - good balance of speed and accuracy",
+      "approximateSizeBytes": 147951465,
+      "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-base.bin",
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/ggerganov/whisper.cpp",
+        "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+        "artifactPath": "ggml-base.bin",
+        "modelCardPath": "README.md",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "small",
+      "filename": "ggml-small.bin",
+      "description": "Small (~488 MB) - better accuracy",
+      "approximateSizeBytes": 487601967,
+      "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin",
+      "sha256": "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/ggerganov/whisper.cpp",
+        "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+        "artifactPath": "ggml-small.bin",
+        "modelCardPath": "README.md",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "medium",
+      "filename": "ggml-medium.bin",
+      "description": "Medium (~1.53 GB) - best accuracy, slower",
+      "approximateSizeBytes": 1533763059,
+      "downloadUrl": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-medium.bin",
+      "sha256": "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/ggerganov/whisper.cpp",
+        "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+        "artifactPath": "ggml-medium.bin",
+        "modelCardPath": "README.md",
+        "verifiedAt": "2026-08-10"
+      }
+    }
+  ],
+  "piperVoices": [
+    {
+      "id": "en_US-lessac-medium",
+      "modelFilename": "en_US-lessac-medium.onnx",
+      "configFilename": "en_US-lessac-medium.onnx.json",
+      "modelUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+      "configUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+      "modelSha256": "5efe09e69902187827af646e1a6e9d269dee769f9877d17b16b1b46eeaaf019f",
+      "configSha256": "efe19c417bed055f2d69908248c6ba650fa135bc868b0e6abb3da181dab690a0",
+      "name": "Lessac (US English)",
+      "language": "en_US",
+      "quality": "medium",
+      "sampleRate": 22050,
+      "sizeBytes": 63201294,
+      "description": "Natural-sounding US English voice",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": "https://www.cstr.ed.ac.uk/projects/blizzard/2013/lessac_blizzard2013/license.html"
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/rhasspy/piper-voices",
+        "revision": "ea046e8458f6acd997706d6e6066a022b42f6fb1",
+        "artifactPath": "en/en_US/lessac/medium/en_US-lessac-medium.onnx",
+        "configPath": "en/en_US/lessac/medium/en_US-lessac-medium.onnx.json",
+        "modelCardPath": "en/en_US/lessac/medium/MODEL_CARD",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "en_US-amy-medium",
+      "modelFilename": "en_US-amy-medium.onnx",
+      "configFilename": "en_US-amy-medium.onnx.json",
+      "modelUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/en/en_US/amy/medium/en_US-amy-medium.onnx",
+      "configUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/en/en_US/amy/medium/en_US-amy-medium.onnx.json",
+      "modelSha256": "b3a6e47b57b8c7fbe6a0ce2518161a50f59a9cdd8a50835c02cb02bdd6206c18",
+      "configSha256": "95a23eb4d42909d38df73bb9ac7f45f597dbfcde2d1bf9526fdeaf5466977d77",
+      "name": "Amy (US English)",
+      "language": "en_US",
+      "quality": "medium",
+      "sampleRate": 22050,
+      "sizeBytes": 63201294,
+      "description": "Female US English voice",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": "https://github.com/MycroftAI/mimic3-voices"
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/rhasspy/piper-voices",
+        "revision": "ea046e8458f6acd997706d6e6066a022b42f6fb1",
+        "artifactPath": "en/en_US/amy/medium/en_US-amy-medium.onnx",
+        "configPath": "en/en_US/amy/medium/en_US-amy-medium.onnx.json",
+        "modelCardPath": "en/en_US/amy/medium/MODEL_CARD",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "en_GB-alan-medium",
+      "modelFilename": "en_GB-alan-medium.onnx",
+      "configFilename": "en_GB-alan-medium.onnx.json",
+      "modelUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/en/en_GB/alan/medium/en_GB-alan-medium.onnx",
+      "configUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/en/en_GB/alan/medium/en_GB-alan-medium.onnx.json",
+      "modelSha256": "0a309668932205e762801f1efc2736cd4b0120329622adf62be09e56339d3330",
+      "configSha256": "c0f0d124e5895c00e7c03b35dcc8287f319a6998a365b182deb5c8e752ee8c1e",
+      "name": "Alan (British English)",
+      "language": "en_GB",
+      "quality": "medium",
+      "sampleRate": 22050,
+      "sizeBytes": 63201294,
+      "description": "Male British English voice",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": "https://github.com/MycroftAI/mimic3-voices/blob/master/voices/en_UK/apope_low"
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/rhasspy/piper-voices",
+        "revision": "ea046e8458f6acd997706d6e6066a022b42f6fb1",
+        "artifactPath": "en/en_GB/alan/medium/en_GB-alan-medium.onnx",
+        "configPath": "en/en_GB/alan/medium/en_GB-alan-medium.onnx.json",
+        "modelCardPath": "en/en_GB/alan/medium/MODEL_CARD",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "en_US-ryan-medium",
+      "modelFilename": "en_US-ryan-medium.onnx",
+      "configFilename": "en_US-ryan-medium.onnx.json",
+      "modelUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/en/en_US/ryan/medium/en_US-ryan-medium.onnx",
+      "configUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/en/en_US/ryan/medium/en_US-ryan-medium.onnx.json",
+      "modelSha256": "abf4c274862564ed647ba0d2c47f8ee7c9b717d27bdad9219100eb310db4047a",
+      "configSha256": "44034c056cb15681b2ad494307c7f3f2e4499d1253c700c711fa0a4607ffe78d",
+      "name": "Ryan (US English)",
+      "language": "en_US",
+      "quality": "medium",
+      "sampleRate": 22050,
+      "sizeBytes": 63201294,
+      "description": "Male US English voice",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": "CC BY-NC-SA 4.0",
+        "trainingDataLicenseUrl": "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/rhasspy/piper-voices",
+        "revision": "ea046e8458f6acd997706d6e6066a022b42f6fb1",
+        "artifactPath": "en/en_US/ryan/medium/en_US-ryan-medium.onnx",
+        "configPath": "en/en_US/ryan/medium/en_US-ryan-medium.onnx.json",
+        "modelCardPath": "en/en_US/ryan/medium/MODEL_CARD",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "de_DE-thorsten-medium",
+      "modelFilename": "de_DE-thorsten-medium.onnx",
+      "configFilename": "de_DE-thorsten-medium.onnx.json",
+      "modelUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx",
+      "configUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json",
+      "modelSha256": "7e64762d8e5118bb578f2eea6207e1a35a8e0c30595010b666f983fc87bb7819",
+      "configSha256": "974adee790533adb273a1ac88f49027d2a1b8f0f2cf4905954a4791e79264e85",
+      "name": "Thorsten (German)",
+      "language": "de_DE",
+      "quality": "medium",
+      "sampleRate": 22050,
+      "sizeBytes": 63201294,
+      "description": "German male voice",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": "CC0-1.0",
+        "trainingDataLicenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/"
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/rhasspy/piper-voices",
+        "revision": "ea046e8458f6acd997706d6e6066a022b42f6fb1",
+        "artifactPath": "de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx",
+        "configPath": "de/de_DE/thorsten/medium/de_DE-thorsten-medium.onnx.json",
+        "modelCardPath": "de/de_DE/thorsten/medium/MODEL_CARD",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "es_ES-sharvard-medium",
+      "modelFilename": "es_ES-sharvard-medium.onnx",
+      "configFilename": "es_ES-sharvard-medium.onnx.json",
+      "modelUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
+      "configUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json",
+      "modelSha256": "40febfb1679c69a4505ff311dc136e121e3419a13a290ef264fdf43ddedd0fb1",
+      "configSha256": "7438c9b699c72b0c3388dae1b68d3f364dc66a2150fe554a1c11f03372957b2c",
+      "name": "Sharvard (Spanish)",
+      "language": "es_ES",
+      "quality": "medium",
+      "sampleRate": 22050,
+      "sizeBytes": 76733615,
+      "description": "Two-speaker Spanish voice",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": "CC BY 3.0",
+        "trainingDataLicenseUrl": "https://creativecommons.org/licenses/by/3.0/"
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/rhasspy/piper-voices",
+        "revision": "ea046e8458f6acd997706d6e6066a022b42f6fb1",
+        "artifactPath": "es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx",
+        "configPath": "es/es_ES/sharvard/medium/es_ES-sharvard-medium.onnx.json",
+        "modelCardPath": "es/es_ES/sharvard/medium/MODEL_CARD",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "fr_FR-siwis-medium",
+      "modelFilename": "fr_FR-siwis-medium.onnx",
+      "configFilename": "fr_FR-siwis-medium.onnx.json",
+      "modelUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx",
+      "configUrl": "https://huggingface.co/rhasspy/piper-voices/resolve/ea046e8458f6acd997706d6e6066a022b42f6fb1/fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json",
+      "modelSha256": "641d1ab097da2b81128c076810edb052b385decc8be3381814802a64a73baf99",
+      "configSha256": "39479916c2db192b5ac9764daddd0c744d83e023ad890c6976c0633ae4df8959",
+      "name": "Siwis (French)",
+      "language": "fr_FR",
+      "quality": "medium",
+      "sampleRate": 22050,
+      "sizeBytes": 63201294,
+      "description": "French voice",
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": "CC BY 4.0",
+        "trainingDataLicenseUrl": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "provenance": {
+        "repository": "https://huggingface.co/rhasspy/piper-voices",
+        "revision": "ea046e8458f6acd997706d6e6066a022b42f6fb1",
+        "artifactPath": "fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx",
+        "configPath": "fr/fr_FR/siwis/medium/fr_FR-siwis-medium.onnx.json",
+        "modelCardPath": "fr/fr_FR/siwis/medium/MODEL_CARD",
+        "verifiedAt": "2026-08-10"
+      }
+    }
+  ],
+  "piperBinaries": [
+    {
+      "id": "piper-macos-aarch64",
+      "os": "macos",
+      "arch": "aarch64",
+      "archiveFilename": "piper_macos_aarch64.tar.gz",
+      "archiveFormat": "tar.gz",
+      "executablePath": "piper/piper",
+      "requiredFiles": ["piper/piper", "piper/libtashkeel_model.ort"],
+      "requiredDirectories": ["piper/espeak-ng-data"],
+      "downloadUrl": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_aarch64.tar.gz",
+      "sha256": "6b1eb03b3735946cb35216e063e7eebcc33a6bbf5dd96ec0217959bf1cdcb0cc",
+      "approximateSizeBytes": 19146957,
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://github.com/rhasspy/piper",
+        "revision": "2023.11.14-2",
+        "artifactPath": "piper_macos_aarch64.tar.gz",
+        "modelCardPath": "LICENSE.md",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "piper-macos-x86_64",
+      "os": "macos",
+      "arch": "x86_64",
+      "archiveFilename": "piper_macos_x64.tar.gz",
+      "archiveFormat": "tar.gz",
+      "executablePath": "piper/piper",
+      "requiredFiles": ["piper/piper", "piper/libtashkeel_model.ort"],
+      "requiredDirectories": ["piper/espeak-ng-data"],
+      "downloadUrl": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz",
+      "sha256": "ced85c0a3df13945b1e623b878a48fdc2854d5c485b4b67f62857cf551deaf8b",
+      "approximateSizeBytes": 19146927,
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://github.com/rhasspy/piper",
+        "revision": "2023.11.14-2",
+        "artifactPath": "piper_macos_x64.tar.gz",
+        "modelCardPath": "LICENSE.md",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "piper-linux-x86_64",
+      "os": "linux",
+      "arch": "x86_64",
+      "archiveFilename": "piper_linux_x86_64.tar.gz",
+      "archiveFormat": "tar.gz",
+      "executablePath": "piper/piper",
+      "requiredFiles": ["piper/piper", "piper/libtashkeel_model.ort"],
+      "requiredDirectories": ["piper/espeak-ng-data"],
+      "downloadUrl": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz",
+      "sha256": "a50cb45f355b7af1f6d758c1b360717877ba0a398cc8cbe6d2a7a3a26e225992",
+      "approximateSizeBytes": 26460462,
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://github.com/rhasspy/piper",
+        "revision": "2023.11.14-2",
+        "artifactPath": "piper_linux_x86_64.tar.gz",
+        "modelCardPath": "LICENSE.md",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "piper-linux-aarch64",
+      "os": "linux",
+      "arch": "aarch64",
+      "archiveFilename": "piper_linux_aarch64.tar.gz",
+      "archiveFormat": "tar.gz",
+      "executablePath": "piper/piper",
+      "requiredFiles": ["piper/piper", "piper/libtashkeel_model.ort"],
+      "requiredDirectories": ["piper/espeak-ng-data"],
+      "downloadUrl": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz",
+      "sha256": "fea0fd2d87c54dbc7078d0f878289f404bd4d6eea6e7444a77835d1537ab88eb",
+      "approximateSizeBytes": 26004717,
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://github.com/rhasspy/piper",
+        "revision": "2023.11.14-2",
+        "artifactPath": "piper_linux_aarch64.tar.gz",
+        "modelCardPath": "LICENSE.md",
+        "verifiedAt": "2026-08-10"
+      }
+    },
+    {
+      "id": "piper-windows-x86_64",
+      "os": "windows",
+      "arch": "x86_64",
+      "archiveFilename": "piper_windows_amd64.zip",
+      "archiveFormat": "zip",
+      "executablePath": "piper/piper.exe",
+      "requiredFiles": ["piper/piper.exe", "piper/libtashkeel_model.ort"],
+      "requiredDirectories": ["piper/espeak-ng-data"],
+      "downloadUrl": "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip",
+      "sha256": "f3c58906402b24f3a96d92145f58acba6d86c9b5db896d207f78dc80811efcea",
+      "approximateSizeBytes": 22477236,
+      "license": {
+        "repositoryLicense": "MIT",
+        "trainingDataLicense": null,
+        "trainingDataLicenseUrl": null
+      },
+      "provenance": {
+        "repository": "https://github.com/rhasspy/piper",
+        "revision": "2023.11.14-2",
+        "artifactPath": "piper_windows_amd64.zip",
+        "modelCardPath": "LICENSE.md",
+        "verifiedAt": "2026-08-10"
+      }
+    }
+  ]
+}

@@ -4,6 +4,7 @@ import type { OpenAICompletionsCompatDefaults } from '@agiworkforce/provider-pro
 import { summarizeOpenAIResponsesRequest } from '../index';
 import { translateChatRequest } from '../translate';
 import { translateChatRequestToResponses } from '../translate-responses';
+import { OPENAI_DEFAULT_MODEL_ID } from './model-fixtures';
 
 const compat: OpenAICompletionsCompatDefaults = {
   supportsStore: true,
@@ -17,7 +18,7 @@ const compat: OpenAICompletionsCompatDefaults = {
 };
 
 const request: ChatRequest = {
-  model: 'gpt-5.6-sol',
+  model: OPENAI_DEFAULT_MODEL_ID,
   messages: [{ role: 'user', content: 'Hello' }],
 };
 
@@ -94,7 +95,7 @@ describe('translateChatRequestToResponses', () => {
     const params = translateChatRequestToResponses(
       {
         ...request,
-        model: 'gpt-5.6-sol',
+        model: OPENAI_DEFAULT_MODEL_ID,
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
       { compat },
@@ -107,7 +108,7 @@ describe('translateChatRequestToResponses', () => {
     const params = translateChatRequestToResponses(
       {
         ...request,
-        model: 'gpt-5.1',
+        model: 'fixture-model',
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
       { compat },
@@ -122,7 +123,7 @@ describe('translateChatRequestToResponses', () => {
     const params = translateChatRequestToResponses(
       {
         ...request,
-        model: 'gpt-5.6-sol',
+        model: OPENAI_DEFAULT_MODEL_ID,
         effort: 'medium',
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
@@ -147,7 +148,7 @@ describe('translateChatRequestToResponses', () => {
     const params = translateChatRequestToResponses(
       {
         ...request,
-        model: 'gpt-5.6-sol',
+        model: OPENAI_DEFAULT_MODEL_ID,
         effort: 'high',
         // thinking deliberately omitted entirely.
       },
@@ -157,10 +158,10 @@ describe('translateChatRequestToResponses', () => {
     expect(params.reasoning?.effort).toBe('high');
   });
 
-  it('sends the managed GPT-5.4 Mini tool step with required tools, low effort, and its output limit', () => {
+  it('sends a managed tool step with required tools, low effort, and its output limit', () => {
     const params = translateChatRequestToResponses(
       {
-        model: 'gpt-5.4-mini',
+        model: request.model,
         messages: [{ role: 'user', content: 'Use the sandbox tools.' }],
         tools: [
           {
@@ -190,7 +191,7 @@ describe('translateChatRequestToResponses', () => {
     );
 
     expect(params).toMatchObject({
-      model: 'gpt-5.4-mini',
+      model: request.model,
       tool_choice: 'required',
       max_output_tokens: 8192,
       reasoning: { effort: 'low', summary: 'auto' },
@@ -201,7 +202,7 @@ describe('translateChatRequestToResponses', () => {
 
     const diagnostics = summarizeOpenAIResponsesRequest(params);
     expect(diagnostics).toEqual({
-      model: 'gpt-5.4-mini',
+      model: request.model,
       inputItemTypes: { message: 1 },
       inputContentTypes: {},
       toolTypes: { function: 2 },
@@ -245,7 +246,7 @@ describe('translateChatRequest', () => {
     const params = translateChatRequest(
       {
         ...request,
-        model: 'gpt-5.6-sol',
+        model: OPENAI_DEFAULT_MODEL_ID,
         thinking: { type: 'enabled', budgetTokens: 32000 },
       },
       { compat, provider: 'openai' },
@@ -258,7 +259,7 @@ describe('translateChatRequest', () => {
     const params = translateChatRequest(
       {
         ...request,
-        model: 'gpt-5.6-sol',
+        model: OPENAI_DEFAULT_MODEL_ID,
         thinking: { type: 'enabled', budgetTokens: Number.MAX_SAFE_INTEGER },
       },
       { compat, provider: 'openai' },

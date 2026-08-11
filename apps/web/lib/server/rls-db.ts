@@ -5,6 +5,11 @@ import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-l
 import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
 import { assertAccountActive, getClerkAuthUser } from '@/lib/api-auth';
+import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  resolveActiveOrganizationId,
+  resolveOrganizationMembershipId,
+} from '@/lib/services/active-workspace-service';
 
 let rlsDb: DatabaseAdapter | null = null;
 
@@ -36,24 +41,33 @@ export interface UserScopedDb {
 }
 
 /**
- * Header carrying the workspace the client is currently acting in. Surfaces set
- * it when the user has switched into an organization.
+ * Optional header carrying the workspace the client is currently acting in.
+ * When absent, the server resolves the account's durable workspace selection.
  *
- * This is a SCOPE SELECTOR, not a grant. Migration 0073 resolves the caller's
- * role from `organization_members` inside the database, so a client that sends
- * an organization it does not belong to gets exactly personal scope: the role
- * lookup returns NULL, org visibility denies, and `app_row_is_writable` refuses
- * the write. The value is still shape-validated here so a malformed header
- * cannot reach a uuid cast in a policy.
+ * This is a SCOPE SELECTOR, not a grant. An explicit organization is re-proven
+ * against `organization_members` before it reaches the RLS GUC. A stale or
+ * forged selection degrades to Personal, and the database independently reads
+ * membership again for admin visibility and org writes.
  */
 export const ACTIVE_ORG_HEADER = 'x-agi-organization-id';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function readActiveOrgId(request: NextRequest): string | null {
+function readExplicitActiveOrgId(request: NextRequest): string | null | undefined {
   const raw = request.headers.get(ACTIVE_ORG_HEADER)?.trim();
-  if (!raw) return null;
+  if (!raw) return undefined;
   return UUID_RE.test(raw) ? raw : null;
+}
+
+async function resolveRequestOrganizationId(
+  request: NextRequest,
+  userId: string,
+): Promise<string | null> {
+  const explicit = readExplicitActiveOrgId(request);
+  if (explicit !== undefined) {
+    return explicit ? resolveOrganizationMembershipId(getNeonDb(), userId, explicit) : null;
+  }
+  return resolveActiveOrganizationId(getNeonDb(), userId);
 }
 
 /**
@@ -81,7 +95,7 @@ export async function getUserScopedDb(request: NextRequest): Promise<UserScopedD
       throw createError.unauthorized();
     }
     const { userId } = await getClerkAuthUser(request);
-    const organizationId = readActiveOrgId(request);
+    const organizationId = await resolveRequestOrganizationId(request, userId);
     return {
       db: getRlsCapableDb().withUser(token).withOrg(organizationId),
       userId,
@@ -95,7 +109,7 @@ export async function getUserScopedDb(request: NextRequest): Promise<UserScopedD
     const token = await getToken();
     if (token) {
       await assertAccountActive(userId);
-      const organizationId = readActiveOrgId(request);
+      const organizationId = await resolveRequestOrganizationId(request, userId);
       return {
         db: getRlsCapableDb().withUser(token).withOrg(organizationId),
         userId,

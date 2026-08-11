@@ -112,7 +112,7 @@ export default function CustomersPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Customers</p>
           <h1 id="agi-customers-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">No logos.</span>
+            <span className="agi-fl-h1-line">No logos.</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">Worked examples instead.</em>
             </span>

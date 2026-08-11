@@ -1,6 +1,4 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@shared/components/seo/JsonLd';
-import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -24,13 +22,6 @@ const PLAN_ROWS = MARKETING_FEATURE_MATRIX.individual.map((plan) => ({
 export default function StartupsPage() {
   return (
     <div data-design="agi">
-      <JsonLd
-        data={breadcrumbSchema([
-          { name: 'Home', path: '/' },
-          { name: 'Use Cases', path: '/use-cases' },
-          { name: 'Startups', path: '/use-cases/startups' },
-        ])}
-      />
       <main className="agi-shell">
         <Header />
 
@@ -38,7 +29,7 @@ export default function StartupsPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Use case · startups</p>
           <h1 id="agi-startups-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Ship faster.</span>
+            <span className="agi-fl-h1-line">Ship faster.</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">Spend deliberately.</em>
             </span>

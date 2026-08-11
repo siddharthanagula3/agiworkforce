@@ -72,7 +72,7 @@ describe('providerSupportsWebSearch (composer toggle native gate)', () => {
     expect(providerSupportsWebSearch('google')).toBe(true);
   });
 
-  it('is true for perplexity (native Sonar search) and managed_cloud (Auto resolves)', () => {
+  it('is true for perplexity (native provider search) and managed_cloud (Auto resolves)', () => {
     expect(providerSupportsWebSearch('perplexity')).toBe(true);
     expect(providerSupportsWebSearch('managed_cloud')).toBe(true);
   });

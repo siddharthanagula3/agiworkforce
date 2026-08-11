@@ -476,7 +476,9 @@ mod tests {
             .step_by(2)
             .filter(|span| {
                 let mut chars = span.chars();
-                chars.next().is_some_and(|first| first.is_ascii_alphabetic())
+                chars
+                    .next()
+                    .is_some_and(|first| first.is_ascii_alphabetic())
                     && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
             })
             .collect()

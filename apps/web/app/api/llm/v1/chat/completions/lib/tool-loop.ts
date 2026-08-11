@@ -51,7 +51,7 @@ import type {
   AgentEventToolCategory,
   AgentTaskState,
 } from '@agiworkforce/types/protocol';
-import type { ThinkingBlock } from '@agiworkforce/types';
+import type { InteractiveCard, ThinkingBlock } from '@agiworkforce/types';
 import { buildToolLoopStream, type ToolLoopStepSink } from './tool-loop-anthropic';
 import {
   getWebMcpCatalog,
@@ -98,7 +98,9 @@ import {
 } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
 import {
+  calculateObservedProviderUsageCostDollars,
   createObservedProviderUsage,
+  mergeObservedProviderUsage,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import {
@@ -117,13 +119,18 @@ import {
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
-import { executeManagedSkillTool } from '@/lib/services/skill-catalog-service';
+import {
+  executeManagedSkillTool,
+  executeManagedSkillToolForPlugins,
+} from '@/lib/services/skill-catalog-service';
+import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
 import { functionToolName } from './tool-loop-routing';
 import {
   generateManagedOfficeFile,
   isManagedOfficeFileTool,
   MANAGED_OFFICE_FILE_TOOL_NAME,
 } from '@/lib/services/managed-office-file-service';
+import { executeMapSearchTool, isMapSearchTool } from '@/lib/services/map-search-tool-service';
 import { applyFreeTrialProviderBudget } from '@/lib/services/free-trial-service';
 import {
   reserveManagedUsageProviderStep,
@@ -294,6 +301,7 @@ export type ToolLoopProviderExecutor = (
 export interface ToolLoopToolResult {
   content: string;
   isError: boolean;
+  interactiveCard?: InteractiveCard;
   source?: FetchedSource;
   sources?: FetchedSource[];
   pngResults?: string[];
@@ -436,21 +444,22 @@ export type CloudAgentToolRetrySafety = 'safe' | 'unsafe';
  * and MCP, connector, and sandbox tools can mutate despite a read-looking name.
  */
 export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySafety {
-  return isUrlFetchTool(toolName) || toolName === SKILL_TOOL_NAME ? 'safe' : 'unsafe';
+  return isUrlFetchTool(toolName) || isMapSearchTool(toolName) || toolName === SKILL_TOOL_NAME
+    ? 'safe'
+    : 'unsafe';
 }
 
-function mergeObservedUsage(
-  target: ObservedProviderUsage | undefined,
-  source: ObservedProviderUsage,
-): void {
-  if (!target) return;
-  target.providerCalls += source.providerCalls;
-  target.inputTokens += source.inputTokens;
-  target.outputTokens += source.outputTokens;
-  target.cacheReadTokens += source.cacheReadTokens;
-  target.cacheWriteTokens += source.cacheWriteTokens;
-  target.cacheWrite1hTokens += source.cacheWrite1hTokens;
-  target.reasoningTokens += source.reasoningTokens;
+function isForcedSkillToolChoice(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const choice = value as Record<string, unknown>;
+  const fn = choice['function'];
+  return (
+    choice['type'] === 'function' &&
+    Boolean(fn) &&
+    typeof fn === 'object' &&
+    !Array.isArray(fn) &&
+    (fn as Record<string, unknown>)['name'] === SKILL_TOOL_NAME
+  );
 }
 
 /** One SSE line ready to be flushed to the client. */
@@ -484,6 +493,7 @@ const TOOL_STATUS_PHRASES: [pattern: RegExp, phrase: string][] = [
   [/\bdb_query|sql_query|database/i, 'Querying database'],
   [/\bskill/i, 'Reading skill'],
   [/\bcreate_office_file\b/i, 'Creating Office file'],
+  [/\bsearch_maps\b/i, 'Preparing map'],
 ];
 
 /** Derive a playful status phrase for a tool name, or return undefined. */
@@ -521,6 +531,7 @@ function canonicalToolCategory(
   if (isWebSearchTool(toolName)) return 'web-search';
   if (isUrlFetchTool(toolName)) return 'web-fetch';
   if (isManagedOfficeFileTool(toolName)) return 'artifact';
+  if (isMapSearchTool(toolName)) return 'web-search';
   if (toolName === 'execute_code') return 'code-execution';
   if (toolName === 'write_file' || toolName === 'create_folder') return 'filesystem';
 
@@ -681,6 +692,13 @@ function toolApprovalRequestEvent(
         index: 0,
       },
     ],
+    model: responseModel,
+  });
+}
+
+function interactiveCardEvent(card: InteractiveCard, responseModel: string): SseLine {
+  return sseData({
+    choices: [{ delta: { x_interactive_card: { card } }, index: 0 }],
     model: responseModel,
   });
 }
@@ -1181,13 +1199,24 @@ async function runMcpTool(
   e2bExecutor: () => Promise<E2BExecutor | null>,
   availableTools: ReadonlySet<string>,
   connectorExecutor?: ConnectorToolExecutor,
-  executionContext?: { userId?: string; model: string; webSearchMaxResults?: number },
+  executionContext?: {
+    userId?: string;
+    organizationId: string | null;
+    model: string;
+    webSearchMaxResults?: number;
+  },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
     if (!availableTools.has(SKILL_TOOL_NAME)) {
       return { content: `Unknown tool: ${SKILL_TOOL_NAME}`, isError: true };
     }
-    const result = await executeManagedSkillTool(toolCall.args, { availableTools });
+    const result = executionContext?.userId
+      ? await executeManagedSkillToolForPlugins(
+          await listEnabledPluginIdsForUser(executionContext.userId),
+          toolCall.args,
+          { availableTools },
+        )
+      : await executeManagedSkillTool(toolCall.args, { availableTools });
     return { content: result.content, isError: result.isError };
   }
 
@@ -1204,6 +1233,7 @@ async function runMcpTool(
     }
     const persisted = await persistGeneratedFileBytes({
       userId: executionContext.userId,
+      organizationId: executionContext.organizationId,
       data: generated.data,
       mimeType: generated.mimeType,
       filename: generated.filename,
@@ -1228,6 +1258,16 @@ async function runMcpTool(
       isError: false,
       generatedFiles: [persisted.file],
     };
+  }
+
+  if (isMapSearchTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = executeMapSearchTool(toolCall.args, { toolCallId: toolCall.id });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : { content: outcome.content, isError: true };
   }
 
   // Platform url_fetch: read-only page fetch, SSRF-guarded (see lib/url-fetch/).
@@ -1407,7 +1447,8 @@ export function isToolOffered(
   if (
     isExecutionTool(qualifiedName) ||
     isUrlFetchTool(qualifiedName) ||
-    isWebSearchTool(qualifiedName)
+    isWebSearchTool(qualifiedName) ||
+    isMapSearchTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
   }
@@ -1492,6 +1533,12 @@ export async function* runToolLoop(
     // Ensure streaming for the loop.
     stream: true,
   };
+  // A map card is already the complete user-facing result of search_maps.
+  // Keep the tool available for the model's first batch (which may contain
+  // multiple distinct map requests), then withdraw it from later provider
+  // steps after any successful card. Otherwise some providers repeatedly call
+  // the same read-only tool until the global agent-step limit is exhausted.
+  let mapSearchBatchCompleted = false;
   const observedUsage = options.usage ?? createObservedProviderUsage();
 
   // Mutable message thread for re-invocations.
@@ -1753,6 +1800,7 @@ export async function* runToolLoop(
       try {
         const persisted = await persistGeneratedFiles({
           userId: options.userId,
+          organizationId: processed.organizationId ?? null,
           refs: [...providerGeneratedFileRefs.values()],
           model: responseModel,
         });
@@ -1770,6 +1818,7 @@ export async function* runToolLoop(
           executor: e2bExecutor,
           baseline: e2bBaseline,
           userId: options.userId,
+          organizationId: processed.organizationId ?? null,
           model: responseModel,
           ...(conversationId ? { conversationId } : {}),
         });
@@ -1786,6 +1835,7 @@ export async function* runToolLoop(
       try {
         const outcome = await persistGeneratedFileBytes({
           userId: options.userId,
+          organizationId: processed.organizationId ?? null,
           data: Buffer.from(png, 'base64'),
           mimeType: 'image/png',
           filename: turnPngResults.length === 1 ? 'chart.png' : `chart-${index + 1}.png`,
@@ -1933,12 +1983,14 @@ export async function* runToolLoop(
       sources?: FetchedSource[];
       pngResults?: string[];
       generatedFiles?: GeneratedFileWire[];
+      interactiveCard?: InteractiveCard;
     }[] = [];
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
       const execute = () =>
         runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor, {
           userId: options.userId,
+          organizationId: processed.organizationId ?? null,
           model: responseModel,
           webSearchMaxResults: processed.freeTrial ? WEB_SEARCH_FREE_MAX_RESULTS : undefined,
         });
@@ -1992,7 +2044,15 @@ export async function* runToolLoop(
     // Emit status + result events, and append tool result messages.
     let sourcesAdded = false;
     let searchSourcesAdded = false;
-    for (const { tc, content, isError, source, sources, generatedFiles } of results) {
+    for (const {
+      tc,
+      content,
+      isError,
+      source,
+      sources,
+      generatedFiles,
+      interactiveCard,
+    } of results) {
       // AUDIT-FIX CON-19: a SUCCESSFUL call to a tool that returns third-party
       // content has just put attacker-authorable text into the model context.
       // Raise the `U` term for every later call in this turn.
@@ -2017,6 +2077,9 @@ export async function* runToolLoop(
             }),
           );
         }
+      }
+      if (interactiveCard) {
+        yield encoder.encode(interactiveCardEvent(interactiveCard, responseModel));
       }
       yield encoder.encode(
         toolResultEvent(tc.id, tc.qualifiedName, content, isError, responseModel),
@@ -2074,6 +2137,9 @@ export async function* runToolLoop(
         content,
         tool_call_id: tc.id,
       });
+      if (!isError && interactiveCard && isMapSearchTool(tc.qualifiedName)) {
+        mapSearchBatchCompleted = true;
+      }
     }
 
     if (sourcesAdded) {
@@ -2131,7 +2197,7 @@ export async function* runToolLoop(
         });
         // The planning turn is a real billed provider call — meter it exactly
         // like every loop step so its tokens are never free.
-        mergeObservedUsage(observedUsage, planTurn.usage);
+        mergeObservedProviderUsage(observedUsage, planTurn.usage);
         if (await shouldStopForCancellation()) {
           yield* flushTerminal('cancelled');
           return;
@@ -2368,9 +2434,13 @@ export async function* runToolLoop(
       // Build the request for this step. Free turns re-fit at every provider
       // boundary so earlier model/tool work cannot spend the same allowance
       // again on a later step.
+      const stepTools = mapSearchBatchCompleted
+        ? llmRequest.tools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
+        : llmRequest.tools;
       const stepRequest = {
         ...llmRequest,
         messages,
+        ...(stepTools && stepTools.length > 0 ? { tools: stepTools } : { tools: undefined }),
         // `required` is derived for the FIRST step of an explicit managed-code
         // request so a model cannot silently ignore the user's Run code mode.
         // Once a tool has run, restore auto selection so the model can either
@@ -2383,23 +2453,25 @@ export async function* runToolLoop(
         llmRequest.tool_choice === 'required'
           ? { tool_choice: 'auto' as const }
           : {}),
+        // A composer-selected Skill is forced only on the first provider step
+        // so the user's explicit selection cannot be ignored. Once the real
+        // Skill tool has run, restore automatic choice and allow a final answer
+        // or another user-enabled tool instead of repeatedly loading the Skill.
+        ...(step > 1 &&
+        processed.chatRequest?.skill_name &&
+        isForcedSkillToolChoice(llmRequest.tool_choice)
+          ? { tool_choice: 'auto' as const }
+          : {}),
       };
       if (processed.freeTrial) {
         const fitted = applyFreeTrialProviderBudget({
           reservation: processed.freeTrial,
           provider: processed.provider,
           request: stepRequest,
-          observedUsage: {
-            promptTokens: observedUsage.inputTokens,
-            completionTokens: observedUsage.outputTokens + observedUsage.reasoningTokens,
-            totalTokens:
-              observedUsage.inputTokens +
-              observedUsage.outputTokens +
-              observedUsage.reasoningTokens,
-            cacheReadInputTokens: observedUsage.cacheReadTokens,
-            cacheCreationInputTokens: observedUsage.cacheWriteTokens,
-            cacheCreation1hInputTokens: observedUsage.cacheWrite1hTokens,
-          },
+          priorCostDollars: calculateObservedProviderUsageCostDollars(observedUsage, {
+            provider: servingProcessed.provider,
+            model: servingProcessed.chatRequest?.model ?? servingProcessed.llmRequest.model,
+          }),
         });
         if (!fitted.ok) {
           yield encoder.encode(
@@ -2469,7 +2541,7 @@ export async function* runToolLoop(
       let providerStep: ToolLoopProviderStepResult;
       try {
         providerStep = await runProviderStepWithFailover(step, stepRequest);
-        mergeObservedUsage(observedUsage, providerStep.usage);
+        mergeObservedProviderUsage(observedUsage, providerStep.usage);
         for (const ref of providerStep.generatedFileRefs ?? []) {
           if (ref.fileId) providerGeneratedFileRefs.set(`${ref.provider}:${ref.fileId}`, ref);
         }
@@ -2691,6 +2763,17 @@ export async function* runToolLoop(
 
       if (autoRunCalls.length > 0) {
         yield* runAndStreamToolCalls(autoRunCalls);
+        if (
+          mapSearchBatchCompleted &&
+          autoRunCalls.every((call) => isMapSearchTool(call.qualifiedName))
+        ) {
+          // search_maps already emitted the complete, validated result card.
+          // Asking the model for another step makes some providers repeatedly
+          // call search_maps or try to fetch its intentionally non-readable
+          // provider URL, leaving the composer locked until the step cap.
+          yield* flushTerminal('end-turn');
+          return;
+        }
       }
 
       if (approvalCalls.length > 0) {

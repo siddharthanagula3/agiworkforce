@@ -7,14 +7,17 @@ import {
   GetObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import type { Readable } from 'node:stream';
 
 /**
  * Cloudflare R2 object storage (S3-compatible API).
  *
  * R2 has zero egress fees, unlike Vercel Blob's per-GB bandwidth charges, which
  * matters for a chat product serving generated images/attachments repeatedly.
- * Public bucket + permanent URLs, matching the trust model of the prior Vercel
- * Blob usage (all objects were `access: 'public'`).
+ * Existing images/files use the public bucket + permanent URLs, matching the
+ * trust model of the prior Vercel Blob usage. Generated videos use a distinct
+ * private bucket and are readable only through the authenticated `/api/files`
+ * route; the private path never constructs or returns a public URL.
  *
  * Once the CLOUDFLARE_R2_* env vars below are set, run
  * `node apps/web/scripts/verify-r2-connection.mjs` for an end-to-end smoke
@@ -25,14 +28,31 @@ function env(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;
 }
 
-/** True when R2 is configured (account id, keys, bucket, and public base URL present). */
-export function isObjectStorageConfigured(): boolean {
+function hasR2Credentials(): boolean {
   return Boolean(
     env('CLOUDFLARE_R2_ACCOUNT_ID') &&
     env('CLOUDFLARE_R2_ACCESS_KEY_ID') &&
-    env('CLOUDFLARE_R2_SECRET_ACCESS_KEY') &&
-    env('CLOUDFLARE_R2_BUCKET_NAME') &&
-    env('CLOUDFLARE_R2_PUBLIC_BASE_URL'),
+    env('CLOUDFLARE_R2_SECRET_ACCESS_KEY'),
+  );
+}
+
+/** True when R2 is configured (account id, keys, bucket, and public base URL present). */
+export function isObjectStorageConfigured(): boolean {
+  return Boolean(
+    hasR2Credentials() && env('CLOUDFLARE_R2_BUCKET_NAME') && env('CLOUDFLARE_R2_PUBLIC_BASE_URL'),
+  );
+}
+
+/**
+ * True only when a separate R2 bucket is configured for private objects.
+ * Reusing the public bucket is rejected even if an operator supplies the same
+ * name under both env vars: a hidden URL is not an access-control boundary.
+ */
+export function isPrivateObjectStorageConfigured(): boolean {
+  const privateBucket = env('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME');
+  const publicBucket = env('CLOUDFLARE_R2_BUCKET_NAME');
+  return Boolean(
+    hasR2Credentials() && privateBucket && (!publicBucket || privateBucket !== publicBucket),
   );
 }
 
@@ -59,9 +79,19 @@ function getR2Client(): S3Client {
   return cachedClient;
 }
 
-function getBucketName(): string {
+function getPublicBucketName(): string {
   const bucket = env('CLOUDFLARE_R2_BUCKET_NAME');
   if (!bucket) throw new Error('CLOUDFLARE_R2_BUCKET_NAME is not configured.');
+  return bucket;
+}
+
+function getPrivateBucketName(): string {
+  const bucket = env('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME');
+  const publicBucket = env('CLOUDFLARE_R2_BUCKET_NAME');
+  if (!bucket) throw new Error('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME is not configured.');
+  if (publicBucket && bucket === publicBucket) {
+    throw new Error('The private R2 bucket must be distinct from the public R2 bucket.');
+  }
   return bucket;
 }
 
@@ -129,22 +159,36 @@ export function objectKeyFromStorageUri(value: string): string | null {
   return objectKeyFromPublicUrl(value);
 }
 
-/** Upload bytes directly to R2 from server-side code (no client body-size constraint). */
-export async function putObject(params: {
+interface PutObjectParams {
   key: string;
-  data: Buffer | Uint8Array;
+  data: Buffer | Uint8Array | Readable;
   contentType: string;
-}): Promise<{ url: string }> {
+  contentLength?: number;
+}
+
+async function putObjectInBucket(bucket: string, params: PutObjectParams): Promise<void> {
   const client = getR2Client();
   await client.send(
     new PutObjectCommand({
-      Bucket: getBucketName(),
+      Bucket: bucket,
       Key: params.key,
       Body: params.data,
       ContentType: params.contentType,
+      ContentLength: params.contentLength,
     }),
   );
+}
+
+/** Upload bytes directly to the public R2 bucket. */
+export async function putObject(params: PutObjectParams): Promise<{ url: string }> {
+  await putObjectInBucket(getPublicBucketName(), params);
   return { url: publicUrlForKey(params.key) };
+}
+
+/** Upload bytes to the private R2 bucket without creating a public locator. */
+export async function putPrivateObject(params: PutObjectParams): Promise<{ key: string }> {
+  await putObjectInBucket(getPrivateBucketName(), params);
+  return { key: params.key };
 }
 
 /**
@@ -154,12 +198,13 @@ export async function putObject(params: {
  * accept `data:`, `blob:`, and same-origin sources, never the raw R2 public
  * URL. Returns null when the object does not exist.
  */
-export async function getObject(
+async function getObjectFromBucket(
+  bucket: string,
   key: string,
 ): Promise<{ data: Buffer; contentType: string | undefined } | null> {
   const client = getR2Client();
   try {
-    const res = await client.send(new GetObjectCommand({ Bucket: getBucketName(), Key: key }));
+    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
     if (!res.Body) return null;
     const bytes = await res.Body.transformToByteArray();
     return { data: Buffer.from(bytes), contentType: res.ContentType };
@@ -170,10 +215,69 @@ export async function getObject(
   }
 }
 
+export function getObject(
+  key: string,
+): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+  return getObjectFromBucket(getPublicBucketName(), key);
+}
+
+export function getPrivateObject(
+  key: string,
+): Promise<{ data: Buffer; contentType: string | undefined } | null> {
+  return getObjectFromBucket(getPrivateBucketName(), key);
+}
+
+export interface StoredObjectStream {
+  body: ReadableStream<Uint8Array>;
+  contentType: string | undefined;
+  contentLength: number | undefined;
+  contentRange: string | undefined;
+}
+
+/** Stream an object (optionally one HTTP byte range) without buffering it. */
+async function getObjectStreamFromBucket(
+  bucket: string,
+  key: string,
+  range?: string,
+): Promise<StoredObjectStream | null> {
+  const client = getR2Client();
+  try {
+    const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key, Range: range }));
+    if (!res.Body) return null;
+    return {
+      body: res.Body.transformToWebStream(),
+      contentType: res.ContentType,
+      contentLength: res.ContentLength,
+      contentRange: res.ContentRange,
+    };
+  } catch (error) {
+    const name = (error as { name?: string } | null)?.name;
+    if (name === 'NoSuchKey' || name === 'NotFound') return null;
+    throw error;
+  }
+}
+
+export function getObjectStream(key: string, range?: string): Promise<StoredObjectStream | null> {
+  return getObjectStreamFromBucket(getPublicBucketName(), key, range);
+}
+
+export function getPrivateObjectStream(
+  key: string,
+  range?: string,
+): Promise<StoredObjectStream | null> {
+  return getObjectStreamFromBucket(getPrivateBucketName(), key, range);
+}
+
 /** Delete an object from R2 by key (best-effort cleanup). */
 export async function deleteObject(key: string): Promise<void> {
   const client = getR2Client();
-  await client.send(new DeleteObjectCommand({ Bucket: getBucketName(), Key: key }));
+  await client.send(new DeleteObjectCommand({ Bucket: getPublicBucketName(), Key: key }));
+}
+
+/** Delete an object from the private R2 bucket. */
+export async function deletePrivateObject(key: string): Promise<void> {
+  const client = getR2Client();
+  await client.send(new DeleteObjectCommand({ Bucket: getPrivateBucketName(), Key: key }));
 }
 
 /**
@@ -188,7 +292,7 @@ export async function getPresignedUploadUrl(params: {
 }): Promise<{ uploadUrl: string; publicUrl: string }> {
   const client = getR2Client();
   const command = new PutObjectCommand({
-    Bucket: getBucketName(),
+    Bucket: getPublicBucketName(),
     Key: params.key,
     ContentType: params.contentType,
   });

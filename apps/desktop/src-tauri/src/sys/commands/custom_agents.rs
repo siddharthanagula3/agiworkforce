@@ -32,7 +32,7 @@ struct AgentFrontmatter {
 /// Format:
 /// ---
 /// name: my-agent
-/// model: claude-sonnet-5
+/// model: fixture-catalog-model
 /// description: Does things
 /// ---
 ///

@@ -26,6 +26,7 @@ jest.mock('../src/features/model-picker/service', () => ({
 }));
 
 import { ScheduleForm } from '../src/features/schedules/components/ScheduleForm';
+import { DEFAULT_AUTO_MODE_ID } from '../lib/models';
 
 describe('Mobile schedule form', () => {
   beforeEach(() => {
@@ -39,7 +40,7 @@ describe('Mobile schedule form', () => {
         initialData={{
           name: 'Investor follow-up',
           prompt: 'Summarize the launch feedback.',
-          model: 'auto',
+          model: DEFAULT_AUTO_MODE_ID,
           recurrence: 'once',
           scheduledAt: '2030-07-15T13:30:00.000Z',
           timeOfDay: '09:30',
@@ -82,7 +83,7 @@ describe('Mobile schedule form', () => {
           id: 'schedule-1',
           name: 'Legacy hourly task',
           prompt: 'Check the queue.',
-          model: 'auto',
+          model: DEFAULT_AUTO_MODE_ID,
           recurrence: 'interval',
           intervalMs: 60 * 60_000,
           timeOfDay: '09:00',

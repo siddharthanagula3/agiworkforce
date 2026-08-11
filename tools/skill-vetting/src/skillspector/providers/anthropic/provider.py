@@ -13,13 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Anthropic provider — Claude models via api.anthropic.com.
+"""Anthropic provider via api.anthropic.com.
 
 Reads ``ANTHROPIC_API_KEY`` for credentials and constructs
-``langchain_anthropic.ChatAnthropic`` directly. Defaults to Opus 4.6 for
-analyzers and Sonnet 4.6 for ``meta_analyzer`` (cheaper for the
-high-volume filter pass), mirroring the policy used by
-``NvInferenceProvider``.
+``langchain_anthropic.ChatAnthropic`` directly. Model defaults and limits come
+from the registry artifact generated from AGI's canonical model catalog.
 """
 
 from __future__ import annotations
@@ -42,10 +40,8 @@ REGISTRY_PATH = str(Path(__file__).with_name("model_registry.yaml"))
 class AnthropicProvider:
     """Anthropic credentials + bundled-YAML metadata provider."""
 
-    DEFAULT_MODEL = "claude-opus-4-6"
-    SLOT_DEFAULTS: dict[str, str] = {
-        "meta_analyzer": "claude-sonnet-4-6",
-    }
+    DEFAULT_MODEL = registry.lookup_default_model(REGISTRY_PATH) or ""
+    SLOT_DEFAULTS: dict[str, str] = {}
 
     def resolve_credentials(self) -> tuple[str, str | None] | None:
         """Return ``(api_key, base_url)`` from ``ANTHROPIC_API_KEY``."""

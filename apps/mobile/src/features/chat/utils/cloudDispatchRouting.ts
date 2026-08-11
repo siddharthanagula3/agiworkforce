@@ -8,6 +8,10 @@ import {
   type SelectedAutoRoute,
   type UnavailableAutoRoute,
 } from '@agiworkforce/routing';
+import {
+  canAccessCloudModelForTier,
+  isCloudManagedModelId,
+} from '@/src/features/model-picker/service';
 
 export interface MobileCloudDispatchRequest {
   selection: string;
@@ -36,6 +40,21 @@ export function resolveMobileCloudDispatch(
 ): MobileCloudDispatchDecision {
   const history = request.history ?? [];
   let classifier = classifyTaskLocally(request.message, history, request.attachments);
+
+  if (
+    isCloudManagedModelId(request.selection) &&
+    !canAccessCloudModelForTier(request.selection, request.subscriptionTier ?? 'free')
+  ) {
+    return {
+      status: 'unavailable',
+      code: 'explicit_model_ineligible',
+      requestedSelection: request.selection,
+      requestedProfile: null,
+      effectiveProfile: null,
+      taskType: classifier.type,
+      reasons: ['The selected model is not available on the current plan.'],
+    };
+  }
 
   // Conversation continuity: apply the SAME 5-turn sticky pivot + >50K
   // long-context guard the web server path applies in

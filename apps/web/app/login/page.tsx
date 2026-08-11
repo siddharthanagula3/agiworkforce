@@ -2,6 +2,7 @@ import { SignIn } from '@clerk/nextjs';
 import { AuthShell } from '@/features/marketing/components/AuthShell';
 import { getSafeRedirectUrl } from '../../lib/safe-redirect';
 import { agiClerkAppearance } from '../auth/clerkAppearance';
+import { TermsGate } from '../signup/TermsGate';
 
 const getAppUrl = () => process.env['NEXT_PUBLIC_APP_URL'] ?? 'https://agiworkforce.com';
 
@@ -26,6 +27,9 @@ export default async function LoginPage({
   // `signUpFallbackRedirectUrl` loses to a `?redirect_url=` that Clerk itself
   // preserves when the user moves between its SignIn and SignUp cards.
   const signUpCompleteUrl = `/signup/complete?redirectTo=${encodeURIComponent(redirectTo)}`;
+  const loginCompleteUrl = `/login/complete?redirectTo=${encodeURIComponent(redirectTo)}${
+    isDesktopSurface ? '&surface=desktop' : ''
+  }`;
 
   return (
     <AuthShell
@@ -38,13 +42,15 @@ export default async function LoginPage({
         'Your route is visible before work leaves a device',
       ]}
     >
-      <SignIn
-        routing="hash"
-        signUpUrl={signUpUrl}
-        fallbackRedirectUrl={redirectTo}
-        signUpForceRedirectUrl={signUpCompleteUrl}
-        appearance={agiClerkAppearance}
-      />
+      <TermsGate blockedMessage="Accept the terms above to sign in to your account.">
+        <SignIn
+          routing="hash"
+          signUpUrl={signUpUrl}
+          forceRedirectUrl={loginCompleteUrl}
+          signUpForceRedirectUrl={signUpCompleteUrl}
+          appearance={agiClerkAppearance}
+        />
+      </TermsGate>
     </AuthShell>
   );
 }

@@ -128,7 +128,9 @@ fn resolve_existing_prefix(path: &Path) -> PathBuf {
         let Ok(canonical) = ancestor.canonicalize() else {
             continue;
         };
-        let below = path.strip_prefix(ancestor).unwrap_or_else(|_| Path::new(""));
+        let below = path
+            .strip_prefix(ancestor)
+            .unwrap_or_else(|_| Path::new(""));
         return if below.as_os_str().is_empty() {
             canonical
         } else {
@@ -421,11 +423,9 @@ mod agent_instruction_denylist_tests {
         fs::create_dir_all(&rules).expect("create rules dir");
         let target = rules.join("injected.md");
 
-        let err = validate_workspace_write_path_with_cwd(
-            target.to_str().expect("utf8 path"),
-            tmp.path(),
-        )
-        .expect_err("writing into .agiworkforce/rules must be refused");
+        let err =
+            validate_workspace_write_path_with_cwd(target.to_str().expect("utf8 path"), tmp.path())
+                .expect_err("writing into .agiworkforce/rules must be refused");
         assert!(err.contains("trusted"), "unexpected message: {err}");
     }
 
@@ -488,11 +488,8 @@ mod agent_instruction_denylist_tests {
         assert!(!link.exists(), "fixture must be a DANGLING link");
 
         assert!(
-            validate_workspace_write_path_with_cwd(
-                link.to_str().expect("utf8 path"),
-                tmp.path()
-            )
-            .is_err(),
+            validate_workspace_write_path_with_cwd(link.to_str().expect("utf8 path"), tmp.path())
+                .is_err(),
             "a dangling link into the rules directory must be refused; \
              fs::write follows it and materializes the target"
         );

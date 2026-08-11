@@ -1,13 +1,5 @@
-/**
- * Catalog SSOT regression: ANTHROPIC_MODEL_CATALOG must derive from
- * `models.json` and surface every Anthropic-provider entry, including the
- * latest Opus generation (`claude-opus-*`). Earlier implementations were
- * hardcoded and lagged models.json by a generation — see
- * `rule-models-json.md` (NEVER hardcode model IDs). The assertions stay
- * version-agnostic so they don't re-break on the next Opus bump.
- */
-
 import { describe, expect, it } from 'vitest';
+import { listCanonicalModels } from '@agiworkforce/types';
 
 import { ANTHROPIC_MODEL_CATALOG } from '../catalog';
 
@@ -16,9 +8,12 @@ describe('ANTHROPIC_MODEL_CATALOG', () => {
     expect(ANTHROPIC_MODEL_CATALOG.length).toBeGreaterThan(0);
   });
 
-  it('surfaces an Opus-tier model from models.json', () => {
-    const ids = ANTHROPIC_MODEL_CATALOG.map((m) => m.id);
-    expect(ids.some((id) => id.startsWith('claude-opus-'))).toBe(true);
+  it('surfaces every provider entry from models.json', () => {
+    const expectedIds = listCanonicalModels()
+      .filter((model) => model.provider === 'anthropic')
+      .map((model) => model.id)
+      .sort();
+    expect(ANTHROPIC_MODEL_CATALOG.map((model) => model.id).sort()).toEqual(expectedIds);
   });
 
   it('only contains models with provider === "anthropic"', () => {

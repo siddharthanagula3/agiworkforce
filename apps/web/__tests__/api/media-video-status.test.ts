@@ -74,8 +74,38 @@ vi.mock('@/lib/video-task-store', () => ({
   // Article 50(2) marker); ownership still comes from the same double.
   getVideoTask: async (...args: unknown[]) => {
     const userId = await mockGetVideoTaskOwner(...args);
-    return userId ? { userId, model: 'veo-3.1' } : undefined;
+    return userId ? { userId, model: 'synthetic-google-video-model' } : undefined;
   },
+}));
+
+const durableMocks = vi.hoisted(() => ({
+  scoped: vi.fn(),
+  get: vi.fn(),
+  reconcile: vi.fn(),
+  delivered: vi.fn(),
+  incidentAlert: vi.fn(),
+}));
+
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: (...args: unknown[]) => durableMocks.scoped(...args),
+}));
+vi.mock('@/lib/server/video-generation-jobs', () => ({
+  getVideoGenerationJob: (...args: unknown[]) => durableMocks.get(...args),
+}));
+vi.mock('@/lib/services/video-job-reconciliation-service', () => ({
+  reconcileVideoGenerationJob: (...args: unknown[]) => durableMocks.reconcile(...args),
+  publicVideoJobStatus: (job: Record<string, unknown>) => ({
+    success: true,
+    task_id: job['id'],
+    status: job['status'],
+    ...(job['assetId'] ? { video_url: `/api/files/${String(job['assetId'])}` } : {}),
+  }),
+}));
+vi.mock('@/lib/services/managed-usage-request-service', () => ({
+  markManagedUsageClientDelivered: (...args: unknown[]) => durableMocks.delivered(...args),
+}));
+vi.mock('@/lib/services/video-incident-alert-service', () => ({
+  deliverPendingVideoIncidentAlert: (...args: unknown[]) => durableMocks.incidentAlert(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -95,6 +125,42 @@ import { GET, OPTIONS } from '@/app/api/media/video/status/route';
 const BASE_URL = 'http://localhost/api/media/video/status';
 
 const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
+const DURABLE_JOB_ID = '11111111-1111-4111-8111-111111111111';
+
+function durableJob(overrides: Record<string, unknown> = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: DURABLE_JOB_ID,
+    userId: TEST_USER.userId,
+    organizationId: null,
+    idempotencyKey: 'agi.media.web.video.operation-123',
+    requestHash: 'a'.repeat(64),
+    billingLeaseToken: 'lease-video',
+    provider: 'google',
+    model: 'synthetic-google-video-model',
+    workflowRunId: 'wrun-video-1',
+    providerTaskId: 'operations/provider-task',
+    prompt: 'a sunset',
+    durationSecs: 6,
+    resolution: '720p',
+    sourceSurface: 'web',
+    estimatedCostCents: 240,
+    estimatedDurationSecs: 180,
+    status: 'processing',
+    progress: 50,
+    assetId: null,
+    publicError: null,
+    billingOutcome: null,
+    reconcileFailures: 0,
+    nextAttemptAt: now,
+    reconcileClaimToken: null,
+    reconcileClaimExpiresAt: null,
+    createdAt: now,
+    updatedAt: now,
+    terminalAt: null,
+    ...overrides,
+  };
+}
 
 function makeRequest(
   taskId: string | null,
@@ -126,10 +192,70 @@ describe('GET /api/media/video/status', () => {
     // Happy-path defaults — Clerk auth succeeds
     mockGetClerkAuthUser.mockResolvedValue(TEST_USER);
     mockGetVideoTaskOwner.mockReturnValue(TEST_USER.userId);
+    durableMocks.scoped.mockResolvedValue({
+      db: {},
+      userId: TEST_USER.userId,
+      organizationId: null,
+    });
+    durableMocks.get.mockResolvedValue(durableJob());
+    durableMocks.reconcile.mockImplementation(async (_db, job) => job);
+    durableMocks.delivered.mockResolvedValue(undefined);
+    durableMocks.incidentAlert.mockResolvedValue(true);
 
     // Set env vars
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     process.env['GOOGLE_API_KEY'] = 'test-google-key';
+  });
+
+  describe('durable tenant-owned jobs', () => {
+    it('returns only the authenticated same-origin asset URL after reconciliation', async () => {
+      const completed = durableJob({
+        status: 'completed',
+        progress: 100,
+        assetId: DURABLE_JOB_ID,
+        billingOutcome: 'completed',
+        terminalAt: new Date().toISOString(),
+      });
+      durableMocks.get.mockResolvedValue(completed);
+      durableMocks.reconcile.mockResolvedValue(completed);
+
+      const response = await GET(makeRequest(DURABLE_JOB_ID));
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.video_url).toBe(`/api/files/${DURABLE_JOB_ID}`);
+      expect(data.video_url).not.toMatch(/^https?:|^data:/);
+      expect(durableMocks.delivered).toHaveBeenCalledTimes(1);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('denies a cross-tenant opaque job without provider polling', async () => {
+      durableMocks.get.mockResolvedValue(null);
+
+      const response = await GET(makeRequest(DURABLE_JOB_ID));
+
+      expect(response.status).toBe(403);
+      expect(durableMocks.reconcile).not.toHaveBeenCalled();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it('retries an owed terminal billing alert without exposing provider data', async () => {
+      const failed = durableJob({
+        status: 'outcome_unknown',
+        publicError: 'The incident was recorded.',
+        billingSettlementStatus: 'terminal',
+        incidentAlertStatus: 'pending',
+        terminalAt: new Date().toISOString(),
+      });
+      durableMocks.get.mockResolvedValue(failed);
+      durableMocks.reconcile.mockResolvedValue(failed);
+
+      const response = await GET(makeRequest(DURABLE_JOB_ID));
+
+      expect(response.status).toBe(200);
+      expect(durableMocks.incidentAlert).toHaveBeenCalledWith(expect.anything(), failed);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   afterEach(() => {
@@ -349,7 +475,7 @@ describe('GET /api/media/video/status', () => {
       expect(data.progress).toBe(50);
     });
 
-    it('should return 200 with completed status and video_url when Runway task SUCCEEDED', async () => {
+    it('does not expose an expiring Runway URL for a pre-durable legacy task', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -364,8 +490,9 @@ describe('GET /api/media/video/status', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.status).toBe('completed');
-      expect(data.video_url).toBe('https://cdn.example.com/video.mp4');
+      expect(data.status).toBe('failed');
+      expect(data.video_url).toBeUndefined();
+      expect(data.error).toContain('legacy video task');
     });
 
     it('should return 200 with failed status when Runway task FAILED', async () => {
@@ -451,7 +578,7 @@ describe('GET /api/media/video/status', () => {
       expect(data.progress).toBe(60);
     });
 
-    it('should return 200 with completed and video_url from generatedSamples when done', async () => {
+    it('does not expose a Google provider URI for a pre-durable legacy task', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -470,11 +597,11 @@ describe('GET /api/media/video/status', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.status).toBe('completed');
-      expect(data.video_url).toBe('https://storage.googleapis.com/bucket/video.mp4');
+      expect(data.status).toBe('failed');
+      expect(data.video_url).toBeUndefined();
     });
 
-    it('should embed base64 video as data URI when Google returns bytesBase64Encoded', async () => {
+    it('does not expose inline provider bytes as a data URI for a legacy task', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -491,11 +618,11 @@ describe('GET /api/media/video/status', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.status).toBe('completed');
-      expect(data.video_url).toBe('data:video/mp4;base64,abc123base64==');
+      expect(data.status).toBe('failed');
+      expect(data.video_url).toBeUndefined();
     });
 
-    it('should fall back to videos[] response shape when generatedSamples is absent', async () => {
+    it('does not expose an alternate-shape provider URI for a legacy task', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -512,8 +639,8 @@ describe('GET /api/media/video/status', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.status).toBe('completed');
-      expect(data.video_url).toBe('https://storage.googleapis.com/bucket/alt-video.mp4');
+      expect(data.status).toBe('failed');
+      expect(data.video_url).toBeUndefined();
     });
 
     it('should return 200 with failed status when Google operation has an error', async () => {
@@ -722,7 +849,7 @@ describe('GET /api/media/video/status', () => {
       const data = await response.json();
 
       expect(response.status).toBe(200);
-      expect(data.status).toBe('completed');
+      expect(data.status).toBe('failed');
       expect(data.video_url).toBeUndefined();
     });
   });

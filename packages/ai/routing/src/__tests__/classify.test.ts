@@ -19,7 +19,11 @@
  *   §14 detectIndicScript        - Unicode ranges + ratio gate.
  */
 
-import { getModelMetadataById } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  getModelsForProvider,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
 import { describe, it, expect } from 'vitest';
 
 import {
@@ -40,6 +44,18 @@ import {
 
 const NO_HISTORY: RoutingMessage[] = [];
 const NO_ATTACHMENTS: RoutingAttachment[] = [];
+const OPENAI_MODEL_ID = requireProviderDefaultModel('openai');
+const ANTHROPIC_MODELS = getModelsForProvider('anthropic');
+const ANTHROPIC_MODEL_ID = requireProviderDefaultModel('anthropic');
+const ANTHROPIC_COMPARISON_MODEL_ID = ANTHROPIC_MODELS.find(
+  (model) => model.id !== ANTHROPIC_MODEL_ID,
+)?.id;
+const GOOGLE_MODEL_ID = requireProviderDefaultModel('google');
+const DEEPSEEK_MODEL_ID = requireProviderDefaultModel('deepseek');
+
+if (!ANTHROPIC_COMPARISON_MODEL_ID) {
+  throw new Error('The canonical Anthropic comparison fixture must exist');
+}
 
 function ctx(
   cumulativeTokens: number,
@@ -921,13 +937,13 @@ describe('estimateTokens — provider multipliers', () => {
     expect(estimateTokens('a'.repeat(35))).toBe(10);
   });
 
-  it('uses GPT tokenizer for gpt-5.6-sol', () => {
+  it('uses the OpenAI tokenizer for the canonical default', () => {
     // 38 chars / 3.8 = 10 tokens.
-    expect(estimateTokens('a'.repeat(38), 'gpt-5.6-sol')).toBe(10);
+    expect(estimateTokens('a'.repeat(38), OPENAI_MODEL_ID)).toBe(10);
   });
 
-  it('uses the standard Claude estimate for Opus 5 when no drift is declared', () => {
-    const metadata = getModelMetadataById('claude-opus-5');
+  it('uses the standard Anthropic estimate when no drift is declared', () => {
+    const metadata = getModelMetadataById(ANTHROPIC_MODEL_ID);
     expect(metadata).not.toBeNull();
 
     const expected = Math.ceil(100 * (1 / 3.5) * tokenizerDriftFactor(metadata!.id));
@@ -935,43 +951,43 @@ describe('estimateTokens — provider multipliers', () => {
     expect(tokenizerDriftFactor(metadata!.id)).toBe(1);
   });
 
-  it('uses the same catalog metadata for the Opus provider ID', () => {
-    const metadata = getModelMetadataById('claude-opus-5');
+  it('uses the same catalog metadata for the Anthropic provider ID', () => {
+    const metadata = getModelMetadataById(ANTHROPIC_MODEL_ID);
     expect(metadata).not.toBeNull();
 
     const expected = Math.ceil(100 * (1 / 3.5) * tokenizerDriftFactor(metadata!.id));
-    expect(estimateTokens('a'.repeat(100), 'claude-opus-5')).toBe(expected);
+    expect(estimateTokens('a'.repeat(100), metadata!.apiModelId ?? metadata!.id)).toBe(expected);
   });
 
-  it('uses regular Claude tokenizer for non-opus claude (claude-sonnet-4.6)', () => {
+  it('uses the regular Anthropic tokenizer for another canonical model', () => {
     // 35 chars / 3.5 = 10 tokens.
-    expect(estimateTokens('a'.repeat(35), 'claude-sonnet-4.6')).toBe(10);
+    expect(estimateTokens('a'.repeat(35), ANTHROPIC_COMPARISON_MODEL_ID)).toBe(10);
   });
 
-  it('does not invent tokenizer inflation for claude-opus-5', () => {
-    expect(estimateTokens('a'.repeat(35), 'claude-opus-5')).toBe(
-      estimateTokens('a'.repeat(35), 'claude-sonnet-4.6'),
+  it('does not invent tokenizer inflation between Anthropic models', () => {
+    expect(estimateTokens('a'.repeat(35), ANTHROPIC_MODEL_ID)).toBe(
+      estimateTokens('a'.repeat(35), ANTHROPIC_COMPARISON_MODEL_ID),
     );
   });
 
-  it('uses Gemini tokenizer for gemini-3.5-flash-lite', () => {
+  it('uses the Google tokenizer for the canonical default', () => {
     // 40 chars / 4.0 = 10 tokens.
-    expect(estimateTokens('a'.repeat(40), 'gemini-3.5-flash-lite')).toBe(10);
+    expect(estimateTokens('a'.repeat(40), GOOGLE_MODEL_ID)).toBe(10);
   });
 
-  it('uses DeepSeek tokenizer for deepseek-v4-flash', () => {
+  it('uses the DeepSeek tokenizer for the canonical default', () => {
     // 34 chars / 3.4 = 10 tokens.
-    expect(estimateTokens('a'.repeat(34), 'deepseek-v4-flash')).toBe(10);
+    expect(estimateTokens('a'.repeat(34), DEEPSEEK_MODEL_ID)).toBe(10);
   });
 
   it('falls back to default for unknown model', () => {
     // 35 chars / 3.5 = 10.
-    expect(estimateTokens('a'.repeat(35), 'unknown-model-id')).toBe(10);
+    expect(estimateTokens('a'.repeat(35), 'fixture-unknown-model')).toBe(10);
   });
 
   it('matches case-insensitively on model id', () => {
-    expect(estimateTokens('a'.repeat(38), 'GPT-5.6-SOL')).toBe(10);
-    expect(estimateTokens('a'.repeat(34), 'DeepSeek-V4-Flash')).toBe(10);
+    expect(estimateTokens('a'.repeat(38), OPENAI_MODEL_ID.toUpperCase())).toBe(10);
+    expect(estimateTokens('a'.repeat(34), DEEPSEEK_MODEL_ID.toUpperCase())).toBe(10);
   });
 
   it('always returns at least 1 token for non-empty input', () => {
@@ -979,33 +995,33 @@ describe('estimateTokens — provider multipliers', () => {
     expect(estimateTokens('a')).toBe(1);
   });
 
-  it('keeps Opus and other Claude estimates equal without catalog drift metadata', () => {
+  it('keeps Anthropic estimates equal without catalog drift metadata', () => {
     const txt = 'a'.repeat(1000);
-    const opus = estimateTokens(txt, 'claude-opus-5');
-    const sonnet = estimateTokens(txt, 'claude-sonnet-4.6');
-    expect(opus).toBe(sonnet);
+    const defaultEstimate = estimateTokens(txt, ANTHROPIC_MODEL_ID);
+    const comparisonEstimate = estimateTokens(txt, ANTHROPIC_COMPARISON_MODEL_ID);
+    expect(defaultEstimate).toBe(comparisonEstimate);
   });
 
-  it('Gemini is the lightest tokenizer per char', () => {
+  it('Google is the lightest tokenizer per char', () => {
     const txt = 'a'.repeat(1000);
-    const gemini = estimateTokens(txt, 'gemini-3.5-flash-lite');
-    const gpt = estimateTokens(txt, 'gpt-5.6-sol');
-    const claude = estimateTokens(txt, 'claude-sonnet-4.6');
-    expect(gemini).toBeLessThanOrEqual(gpt);
-    expect(gemini).toBeLessThanOrEqual(claude);
+    const google = estimateTokens(txt, GOOGLE_MODEL_ID);
+    const openai = estimateTokens(txt, OPENAI_MODEL_ID);
+    const anthropic = estimateTokens(txt, ANTHROPIC_MODEL_ID);
+    expect(google).toBeLessThanOrEqual(openai);
+    expect(google).toBeLessThanOrEqual(anthropic);
   });
 
   it('DeepSeek is the heaviest non-drifted tokenizer', () => {
     const txt = 'a'.repeat(1000);
-    const deepseek = estimateTokens(txt, 'deepseek-v4-flash');
-    const claude = estimateTokens(txt, 'claude-sonnet-4.6');
-    const gpt = estimateTokens(txt, 'gpt-5.6-sol');
-    expect(deepseek).toBeGreaterThanOrEqual(claude);
-    expect(deepseek).toBeGreaterThan(gpt);
+    const deepseek = estimateTokens(txt, DEEPSEEK_MODEL_ID);
+    const anthropic = estimateTokens(txt, ANTHROPIC_MODEL_ID);
+    const openai = estimateTokens(txt, OPENAI_MODEL_ID);
+    expect(deepseek).toBeGreaterThanOrEqual(anthropic);
+    expect(deepseek).toBeGreaterThan(openai);
   });
 
   it('handles long input deterministically', () => {
-    expect(estimateTokens('a'.repeat(10_000), 'gpt-5.6-sol')).toBe(Math.ceil(10_000 / 3.8));
+    expect(estimateTokens('a'.repeat(10_000), OPENAI_MODEL_ID)).toBe(Math.ceil(10_000 / 3.8));
   });
 
   it('handles unicode content (counts code units, not codepoints)', () => {

@@ -31,3 +31,4 @@ export * from './tool-approval-resume';
 export * from './connectors';
 export * from './capability-handshake';
 export * from './schedules';
+export * from './skills';

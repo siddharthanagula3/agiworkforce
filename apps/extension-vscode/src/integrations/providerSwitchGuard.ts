@@ -16,14 +16,16 @@
  * providers implicitly.
  *
  * Design notes:
- *   - "Provider" is derived from model ID prefix, not from the full model catalog,
- *     so this works even with unknown/future model IDs.
+ *   - Provider identity comes from the canonical model catalog, including its
+ *     alias normalization. Unknown/future IDs stay unknown until the catalog
+ *     admits them; this guard never guesses identity from a vendor-like prefix.
  *   - Auto-mode model IDs ('auto-*') are treated as provider-agnostic and never
  *     trigger the guard regardless of tier.
  *   - Switching within the same provider is always allowed (any tier).
  *   - Switching to/from an auto-mode model is always allowed (any tier).
  */
 
+import { getModelMetadataById } from '@agiworkforce/types';
 import type { Tier } from './tierResolver';
 import { tierAtLeast } from './tierResolver';
 
@@ -35,52 +37,23 @@ import { tierAtLeast } from './tierResolver';
  * Rules (in order):
  *   1. Auto-mode IDs ('auto-balanced', 'auto-economy', 'auto-premium', 'auto-*')
  *      → special sentinel 'auto' (never triggers cross-provider gate).
- *   2. Known prefix patterns → canonical provider name.
+ *   2. Catalog model/alias → canonical provider name.
  *   3. Unknown → 'unknown' (treated as same provider as anything else, so the
  *      guard does not fire on ambiguous IDs).
  *
- * This function intentionally does NOT import the full model catalog to keep
- * the guard lightweight and dependency-free.
+ * Provider-looking unknown strings intentionally remain unknown. Adding or
+ * replacing a provider model is a catalog operation, not a consumer edit.
  */
 export function extractProvider(modelId: string): string {
   if (!modelId || modelId.trim() === '') return 'unknown';
 
-  const id = modelId.toLowerCase().trim();
+  const id = modelId.trim();
+  const normalizedId = id.toLowerCase();
 
   // Auto-mode — never cross-provider
-  if (id.startsWith('auto-') || id === 'auto') return 'auto';
+  if (normalizedId.startsWith('auto-') || normalizedId === 'auto') return 'auto';
 
-  // Anthropic: claude-*
-  if (id.startsWith('claude-')) return 'anthropic';
-
-  // OpenAI: gpt-*, o1-*, o3-*, o4-*
-  if (id.startsWith('gpt-') || /^o[1-9]-/.test(id)) return 'openai';
-
-  // Google: gemini-*
-  if (id.startsWith('gemini-')) return 'google';
-
-  // xAI: grok-*
-  if (id.startsWith('grok-')) return 'xai';
-
-  // DeepSeek: deepseek-*
-  if (id.startsWith('deepseek-')) return 'deepseek';
-
-  // Perplexity: sonar-*, pplx-*
-  if (id.startsWith('sonar-') || id.startsWith('pplx-')) return 'perplexity';
-
-  // Qwen: qwen-*
-  if (id.startsWith('qwen-')) return 'qwen';
-
-  // Moonshot / Kimi: kimi-*, moonshot-*
-  if (id.startsWith('kimi-') || id.startsWith('moonshot-')) return 'moonshot';
-
-  // Zhipu: glm-*
-  if (id.startsWith('glm-')) return 'zhipu';
-
-  // Ollama local: typically bare names like 'llama3', 'mistral', 'phi3'
-  // No reliable prefix pattern — leave as 'unknown'
-
-  return 'unknown';
+  return String(getModelMetadataById(normalizedId)?.provider ?? 'unknown');
 }
 
 // ─── Guard result ─────────────────────────────────────────────────────────────

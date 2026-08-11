@@ -5,6 +5,7 @@ import { useChatStore } from '../../stores/chatStore';
 import type { ChatRuntime, StreamCallback } from '../../lib/runtime';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000099';
+const APPROVAL_MODEL_FIXTURE = 'fixture-approval-model';
 
 function makeRuntime() {
   let callback: StreamCallback | null = null;
@@ -51,7 +52,7 @@ describe('useChat durable tool approval projection', () => {
             id: 'assistant-1',
             role: 'assistant',
             content: 'Before approval.',
-            model: 'gpt-5',
+            model: APPROVAL_MODEL_FIXTURE,
             metadata: {
               cloudAgentRun: {
                 runId: RUN_ID,
@@ -87,7 +88,7 @@ describe('useChat durable tool approval projection', () => {
           lastSequence: 3,
           state: 'awaiting_input',
         },
-        model: 'gpt-5',
+        model: APPROVAL_MODEL_FIXTURE,
         assistantContent: 'Before approval.',
         calls: [
           {

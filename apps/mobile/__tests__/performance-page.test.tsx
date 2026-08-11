@@ -51,62 +51,41 @@ jest.mock('../lib/mmkv', () => ({
 }));
 
 jest.mock('@agiworkforce/local-llm', () => {
-  const actual = jest.requireActual('@agiworkforce/local-llm');
+  const actual = jest.requireActual(
+    '@agiworkforce/local-llm',
+  ) as typeof import('@agiworkforce/local-llm');
   return {
-  ...actual,
-  isThermallyThrottled: jest.fn().mockReturnValue(false),
-  getCapabilities: jest.fn().mockResolvedValue({
-    totalRAMMB: 8192,
-    osVersion: '18.0',
-    thermalThrottled: false,
-    tier1Available: true,
-    tier1Runtime: 'foundation_models',
-    tier2Available: true,
-    tier3Available: true,
-  }),
-  detectCapabilities: jest.fn().mockResolvedValue({
-    totalRAMMB: 8192,
-    osVersion: '18.0',
-    thermalThrottled: false,
-    tier1Available: true,
-    tier1Runtime: 'foundation_models',
-    tier2Available: true,
-    tier3Available: true,
-  }),
-  refreshCapabilities: jest.fn().mockResolvedValue({}),
-  getModelById: jest.fn().mockImplementation((id: string) => {
-    if (id === 'qwen3-4b-instruct-2507') {
-      return {
-        id: 'qwen3-4b-instruct-2507',
-        displayName: 'AGI Standard',
-        family: 'qwen3',
-        paramCountB: 4.0,
-        fileSizeBytes: 2_147_483_648,
-        supportedRuntimes: ['executorch', 'llama-rn'],
-        contextWindow: 262_144,
-        capabilities: {
-          text: true,
-          visionIn: false,
-          audioIn: false,
-          toolCalls: true,
-          structuredOutput: true,
-        },
-        license: 'Apache-2.0',
-        role: 'default',
-        shipsInV1: true,
-      };
-    }
-    return undefined;
-  }),
-  localGenerate: jest
-    .fn()
-    .mockImplementation(async (_path: unknown, opts: { onToken?: (t: string) => void }) => {
-      for (let i = 0; i < 10; i++) {
-        opts.onToken?.('tok');
-      }
-      return { text: 'benchmark result', runtime: 'foundation_models', aborted: false };
+    ...actual,
+    isThermallyThrottled: jest.fn().mockReturnValue(false),
+    getCapabilities: jest.fn().mockResolvedValue({
+      totalRAMMB: 8192,
+      osVersion: '18.0',
+      thermalThrottled: false,
+      tier1Available: true,
+      tier1Runtime: 'foundation_models',
+      tier2Available: true,
+      tier3Available: true,
     }),
-  selectTier: jest.fn().mockResolvedValue({ tier: 1, runtime: 'foundation_models' }),
+    detectCapabilities: jest.fn().mockResolvedValue({
+      totalRAMMB: 8192,
+      osVersion: '18.0',
+      thermalThrottled: false,
+      tier1Available: true,
+      tier1Runtime: 'foundation_models',
+      tier2Available: true,
+      tier3Available: true,
+    }),
+    refreshCapabilities: jest.fn().mockResolvedValue({}),
+    getModelById: jest.fn(actual.getModelById),
+    localGenerate: jest
+      .fn()
+      .mockImplementation(async (_path: unknown, opts: { onToken?: (t: string) => void }) => {
+        for (let i = 0; i < 10; i++) {
+          opts.onToken?.('tok');
+        }
+        return { text: 'benchmark result', runtime: 'foundation_models', aborted: false };
+      }),
+    selectTier: jest.fn().mockResolvedValue({ tier: 1, runtime: 'foundation_models' }),
   };
 });
 
@@ -214,9 +193,13 @@ import {
   runBenchmark,
   getThermalState,
 } from '../services/performanceMonitor';
+import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
-const mockIsThermallyThrottled = require('@agiworkforce/local-llm')
-  .isThermallyThrottled as jest.MockedFunction<() => boolean>;
+const mockLocalLlm = require('@agiworkforce/local-llm') as typeof import('@agiworkforce/local-llm');
+const mockIsThermallyThrottled = mockLocalLlm.isThermallyThrottled as jest.MockedFunction<
+  () => boolean
+>;
+const DEFAULT_LOCAL_MODEL_ID = mockLocalLlm.getDefaultModel().id;
 
 describe('performanceMonitor service', () => {
   beforeEach(() => {
@@ -259,7 +242,7 @@ describe('performanceMonitor service', () => {
   it('recordBenchmark persists and getBenchmarkHistory returns results newest-first', () => {
     const r1: import('../services/performanceMonitor').BenchmarkResult = {
       ts: 1000,
-      modelId: 'qwen3-4b-instruct-2507',
+      modelId: DEFAULT_LOCAL_MODEL_ID,
       backend: 'foundation_models',
       tokensPerSecond: 25,
       firstTokenLatencyMs: 180,
@@ -283,7 +266,7 @@ describe('performanceMonitor service', () => {
     recordPerfEvent(makePerfEvent());
     recordBenchmark({
       ts: Date.now(),
-      modelId: 'test',
+      modelId: SYNTHETIC_LOCAL_MODEL_ID,
       backend: 'llama_rn',
       tokensPerSecond: 10,
       firstTokenLatencyMs: 200,
@@ -307,19 +290,19 @@ describe('performanceMonitor service', () => {
       });
 
     const result = await runBenchmark({
-      modelId: 'qwen3-4b-instruct-2507',
+      modelId: DEFAULT_LOCAL_MODEL_ID,
       backend: 'foundation_models',
       generate,
     });
 
-    expect(result.modelId).toBe('qwen3-4b-instruct-2507');
+    expect(result.modelId).toBe(DEFAULT_LOCAL_MODEL_ID);
     expect(result.outputTokens).toBe(20);
     expect(result.tokensPerSecond).toBeGreaterThan(0);
     expect(result.firstTokenLatencyMs).toBeGreaterThanOrEqual(0);
     expect(result.thermalState).toBe('nominal');
 
     const history = getBenchmarkHistory();
-    expect(history[0]!.modelId).toBe('qwen3-4b-instruct-2507');
+    expect(history[0]!.modelId).toBe(DEFAULT_LOCAL_MODEL_ID);
   });
 
   // 7. getThermalState returns a valid state

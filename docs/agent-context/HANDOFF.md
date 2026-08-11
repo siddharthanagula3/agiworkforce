@@ -45,6 +45,23 @@ Recorded 2026-08-09. These set scope and override any default you would otherwis
    encryption, IP allowlists. Currently **zero migrations** back any of it.
 4. **All release proof, including the load suite**: load/stress/soak baseline, clean-machine install
    test, upgrade-from-previous-version test, mobile store release automation.
+5. **ChatGPT parity snapshot, ordered by release risk** (founder decision, 2026-08-09): use the
+   official ChatGPT product state from 2026-07-09 through 2026-08-09 as the competitive floor.
+   First make Max 15x image/video generation work end to end on Web, Mobile, and both Desktop
+   shells. Next prove the tool loop, artifact rendering, and web search on Web/Mobile/Desktop.
+   Then make skills, plugins, and connectors work on Web, Mobile, Desktop, CLI, and VS Code. This
+   supersedes the earlier decision that Mobile plugins are permanently represented only by the
+   Connectors surface; the three capability classes now need explicit, working Mobile outcomes.
+6. **Rendered Web acceptance is mandatory** (founder decision, 2026-08-09): a mocked route test or
+   provider-unit test does not close a Web capability. For image and video, enter a real prompt in
+   the shipping chat composer, open Create image/video, select the cheapest live Google model proven
+   by the current catalog and official provider documentation, submit, wait for the terminal result,
+   render it, reload, reopen it from Library, and verify authorized download plus failure/retry states.
+   Apply the same click-through standard to skills, plugins, and connectors. Add popular open-source
+   skills/plugins only after current popularity, compatible license, provenance, permissions, and
+   install/update/removal behavior are verified; pin the reviewed source/version. Record exact
+   founder-only steps for credentials, billing, OAuth consent, marketplace publication, signing, or
+   production configuration that an agent cannot perform.
 
 Earlier decisions still in force: merge without waiting for CI when production is broken; triage
 security findings before making a gate blocking; build the enterprise identity subset.

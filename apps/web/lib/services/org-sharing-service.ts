@@ -7,6 +7,7 @@ import {
   getSharedProjectLimitErrorMessage,
   isOrgResourceLimitError,
 } from '@/lib/services/org-entitlements';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 /**
  * Org-scoped sharing of projects (migration 0086).
@@ -62,23 +63,22 @@ export interface SharedProjectSummary {
 /**
  * The caller's membership, resolved from the database.
  *
- * Matches the org selection `/api/settings/organization` already uses (first
- * membership by `joined_at`) so the two surfaces cannot disagree about which
- * organization "the user's org" means. One-org-per-user is enforced in app code
- * at organization creation; when explicit org selection lands, this is the one
- * function that changes.
+ * Uses the durable account workspace selection. The selected id is joined back
+ * to the membership table before it is returned, so stale or forged settings
+ * resolve to no organization rather than widening access.
  */
 export async function resolveOrgMembership(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<OrgMembership | null> {
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  if (!organizationId) return null;
   const [row] = await db.query<{ organization_id: string; role: OrgRole }>(
     `select organization_id, role
        from public.organization_members
-      where user_id = $1
-      order by joined_at asc
+      where organization_id = $1 and user_id = $2
       limit 1`,
-    [userId],
+    [organizationId, userId],
   );
   if (!row) return null;
   return { organizationId: row.organization_id, role: row.role };

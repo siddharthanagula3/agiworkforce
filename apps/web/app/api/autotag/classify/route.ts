@@ -16,6 +16,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { classifyConversationText } from '@/lib/services/conversation-classification-service';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 async function handleClassify(request: NextRequest) {
   // AUDIT-008-006: Enforce CSRF protection for DB-writing endpoint
@@ -27,6 +28,7 @@ async function handleClassify(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let body: { conversationId?: string };
   try {
@@ -44,8 +46,11 @@ async function handleClassify(request: NextRequest) {
   const convRows = await db.query<{ id: string }>(
     `select id
      from web_conversations
-     where id = $1 and user_id = $2 and deleted_at is null`,
-    [conversationId, userId],
+     where id = $1
+       and user_id = $2
+       and organization_id is not distinct from $3::uuid
+       and deleted_at is null`,
+    [conversationId, userId, organizationId],
   );
   if (convRows.length === 0) {
     throw createError.notFound('Conversation not found');

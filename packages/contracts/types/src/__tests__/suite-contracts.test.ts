@@ -54,6 +54,9 @@ import {
 } from '../suite-contracts';
 import type { ConversationId } from '../conversation';
 
+const FIXTURE_LOCAL_MODEL_LABEL = 'Fixture Local Model';
+const FIXTURE_BYOK_MODEL_LABEL = 'Fixture BYOK Model';
+
 describe('suite contracts — trust boundaries', () => {
   it('locks the public privacy and provider mode vocabularies', () => {
     expect(PRIVACY_MODES).toEqual(['local', 'byok', 'managed']);
@@ -66,7 +69,7 @@ describe('suite contracts — trust boundaries', () => {
       id: 'conversation-1',
       user_id: 'user-1',
       title: 'Web sync compatibility',
-      model: 'gpt-5.1',
+      model: 'fixture-model',
       is_active: true,
       synced_from: 'mobile',
       metadata: { source: 'test' },
@@ -80,7 +83,7 @@ describe('suite contracts — trust boundaries', () => {
       conversation_id: conversation.id,
       role: 'assistant',
       content: 'ok',
-      model: 'gpt-5.1',
+      model: 'fixture-model',
       input_tokens: 1,
       output_tokens: 2,
       cost_cents: 0,
@@ -237,7 +240,7 @@ describe('suite contracts — records', () => {
       privacyMode: 'managed',
       providerMode: 'ManagedGateway',
       provider: 'openai',
-      model: 'gpt-5.1',
+      model: 'fixture-model',
       prompt: 'Create a board update deck',
       projectId: 'project-1',
       skillIds: ['presentations'],
@@ -825,7 +828,7 @@ describe('summarizeSendPreview', () => {
   it('produces a privacy-positive banner for Local turns', () => {
     const out = summarizeSendPreview({
       providerMode: 'Local',
-      modelLabel: 'Llama 3.2 8B',
+      modelLabel: FIXTURE_LOCAL_MODEL_LABEL,
       messageBody: 'hello',
     });
     expect(out.staysLocal).toBe(true);
@@ -833,14 +836,14 @@ describe('summarizeSendPreview', () => {
     expect(out.privacyShortLabel).toBe('Local');
     expect(out.destinationLabel).toBe('Stays on this device');
     expect(out.bannerCopy).toMatch(/nothing is uploaded/i);
-    expect(out.modelLabel).toBe('Llama 3.2 8B');
+    expect(out.modelLabel).toBe(FIXTURE_LOCAL_MODEL_LABEL);
   });
 
   it('names the BYOK destination host when supplied', () => {
     const out = summarizeSendPreview({
       providerMode: 'DirectByok',
       destinationHost: 'api.anthropic.com',
-      modelLabel: 'Claude Sonnet 4.6',
+      modelLabel: FIXTURE_BYOK_MODEL_LABEL,
       messageBody: 'hi',
     });
     expect(out.staysLocal).toBe(false);
@@ -1055,11 +1058,11 @@ describe('summarizeProjectHeader', () => {
 
   it('passes through optional default model id + label', () => {
     const out = summarizeProjectHeader({
-      project: { ...baseProject, defaultModelId: 'claude-sonnet-4-6' },
-      defaultModelLabel: 'Claude Sonnet 4.6',
+      project: { ...baseProject, defaultModelId: 'fixture-project-model' },
+      defaultModelLabel: 'Fixture Project Model',
     });
-    expect(out.defaultModelId).toBe('claude-sonnet-4-6');
-    expect(out.defaultModelLabel).toBe('Claude Sonnet 4.6');
+    expect(out.defaultModelId).toBe('fixture-project-model');
+    expect(out.defaultModelLabel).toBe('Fixture Project Model');
   });
 });
 
@@ -1101,7 +1104,7 @@ describe('assertGeneratedFileTrustBoundary', () => {
       privacyMode: 'local',
       providerMode: 'Local',
       provider: 'ollama',
-      model: 'llama3.2:8b',
+      model: 'fixture-local-model',
       status: 'completed',
       workdirUri: 'file:///tmp/assert',
       createdAt: '2026-05-22T00:00:00.000Z',

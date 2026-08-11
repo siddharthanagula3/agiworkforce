@@ -50,7 +50,7 @@ describe('provider contract · surface classification', () => {
       }
     }
     // Pin the known boundary cases so a reclassification is caught explicitly.
-    expect(getProviderSurface('open_router')).toBe('byok');
+    expect(getProviderSurface('open_router')).toBe('managed_cloud');
     expect(getProviderSurface('nvidia_nim')).toBe('byok');
     expect(getProviderSurface('ollama')).toBe('local');
     expect(getProviderSurface('openai')).toBe('managed_cloud');

@@ -38,13 +38,10 @@ REGISTRY_PATH = str(Path(__file__).with_name("model_registry.yaml"))
 class NvBuildProvider:
     """build.nvidia.com credentials + bundled-YAML metadata provider."""
 
-    # General default — DeepSeek v4 flash for the high-volume per-file
-    # analyzer calls.  meta_analyzer is upgraded to v4 pro for the
-    # aggregation/filter pass where precision matters more.
-    DEFAULT_MODEL = "deepseek-ai/deepseek-v4-flash"
-    SLOT_DEFAULTS: dict[str, str] = {
-        "meta_analyzer": "deepseek-ai/deepseek-v4-pro",
-    }
+    # NVIDIA endpoints expose a workspace-specific roster. Fail closed unless
+    # the operator supplies SKILLSPECTOR_MODEL and optional registry metadata.
+    DEFAULT_MODEL = registry.lookup_default_model(REGISTRY_PATH) or ""
+    SLOT_DEFAULTS: dict[str, str] = {}
 
     def resolve_credentials(self) -> tuple[str, str | None] | None:
         """Return ``(api_key, base_url)`` from ``NVIDIA_INFERENCE_KEY``."""

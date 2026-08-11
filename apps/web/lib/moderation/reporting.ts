@@ -24,7 +24,7 @@ import type { ModerationCategory } from './text-classifier';
  * queue is real work with a recipient behind it, and it is not done.
  */
 
-export type ModerationSurface = 'managed-chat' | 'upload';
+export type ModerationSurface = 'managed-chat' | 'managed-video' | 'upload';
 
 export interface ModerationEvent {
   surface: ModerationSurface;

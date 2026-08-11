@@ -28,6 +28,11 @@ describe('subscription owner guard', () => {
     expect(getSubscriptionOwnerGuard('unknown', 'active').blocked).toBe(true);
   });
 
+  it('keeps a past-due subscription locked to its recorded owner', () => {
+    expect(getSubscriptionOwnerGuard('apple', 'past_due').blocked).toBe(true);
+    expect(getSubscriptionOwnerGuard('stripe', 'past_due').blocked).toBe(true);
+  });
+
   it('blocks a store-sourced subscription without claiming the store', () => {
     // No verified listing exists for either store, so the guard must not name
     // one and must not hand out a store link — but it still blocks.

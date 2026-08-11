@@ -15,25 +15,19 @@ import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 
 import { withErrorHandler } from '@/lib/error-handler';
-import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { recordTermsAcceptance } from '@/lib/server/terms';
+import { CURRENT_TERMS_VERSION, recordTermsAcceptance } from '@/lib/server/terms';
 
 const AcceptTermsSchema = z.object({
-  surface: z.literal('web-signup'),
+  surface: z.enum(['web-signup', 'web-login']),
+  version: z.string().min(1).max(32),
 });
 
 async function handleAcceptTerms(request: NextRequest) {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
-
-  // Shares the per-user `me` bucket: this is a profile write, and it must not
-  // fail closed — a limiter that blocks the call loses the record of an
-  // acceptance the user has already given.
-  const rateLimitResponse = await withRateLimit(request, 'me');
-  if (rateLimitResponse) return rateLimitResponse;
 
   const { userId } = await auth();
   if (!userId) {
@@ -43,6 +37,18 @@ async function handleAcceptTerms(request: NextRequest) {
   const parsed = AcceptTermsSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     throw createError.badRequest('Invalid terms acceptance payload', parsed.error.flatten());
+  }
+  if (parsed.data.version !== CURRENT_TERMS_VERSION) {
+    return NextResponse.json(
+      {
+        error: {
+          code: 'TERMS_VERSION_OUTDATED',
+          message: 'The Terms of Service changed after this page loaded.',
+        },
+        currentVersion: CURRENT_TERMS_VERSION,
+      },
+      { status: 409 },
+    );
   }
 
   try {

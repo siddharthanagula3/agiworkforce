@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import {
+  getAllowedModelsForTier,
+  getModelMetadataById,
+  listCanonicalModels,
+  requireProviderDefaultModel,
+} from '@agiworkforce/types';
 
 vi.mock('@/lib/services/free-trial-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/free-trial-service')>();
@@ -52,6 +58,29 @@ import {
   WEB_SEARCH_INJECTION_PROVIDERS,
   providerInjectsWebSearchTool,
 } from '@/lib/web-search-support';
+
+const GENERIC_SEARCH_FALLBACK_MODEL = requireProviderDefaultModel('deepseek');
+const ANTHROPIC_PLATFORM_FETCH_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) =>
+      candidate.provider === 'anthropic' &&
+      candidate.providerCompatibility?.nativeWebFetch === false,
+  );
+  if (!model) throw new Error('Canonical Anthropic platform-fetch fixture is missing');
+  return model.id;
+})();
+const FREE_NATIVE_SEARCH_MODEL = (() => {
+  const model = getAllowedModelsForTier('economy')
+    .map((modelId) => getModelMetadataById(modelId))
+    .find(
+      (candidate) =>
+        candidate?.provider === 'google' &&
+        candidate.tierPolicy?.minTier === 'free' &&
+        candidate.capabilities.search === true,
+    );
+  if (!model) throw new Error('Canonical Free native-search fixture is missing');
+  return model.id;
+})();
 
 describe('applyWorkMode', () => {
   it('turns AGI Work into a real tool-using managed-cloud request', () => {
@@ -162,7 +191,7 @@ describe('getWorkModeEntitlementError', () => {
   });
 
   it('rejects non-streaming web_search on a generic-fallback provider before reserving credits', async () => {
-    // deepseek has no native web-search branch, so search would only run via the
+    // This catalog provider has no native web-search branch, so search would only run via the
     // generic fallback tool, which requires streaming. A non-streaming request
     // must be rejected (not silently answered without browsing).
     const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
@@ -173,7 +202,7 @@ describe('getWorkModeEntitlementError', () => {
         'x-agi-surface': 'web',
       },
       body: JSON.stringify({
-        model: 'deepseek-v4-flash',
+        model: GENERIC_SEARCH_FALLBACK_MODEL,
         messages: [{ role: 'user', content: 'What is the latest news today?' }],
         web_search: true,
         stream: false,
@@ -236,7 +265,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'gemini-3.5-flash-lite',
+          model: FREE_NATIVE_SEARCH_MODEL,
           messages: [{ role: 'user', content: 'What is the latest news today?' }],
           web_search: true,
           stream: false,
@@ -253,7 +282,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'gemini-3.5-flash-lite',
+          model: FREE_NATIVE_SEARCH_MODEL,
           messages: [{ role: 'user', content: 'What are the latest AI headlines today?' }],
           stream: false,
         },
@@ -277,7 +306,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'gemini-3.5-flash-lite',
+          model: FREE_NATIVE_SEARCH_MODEL,
           messages: [{ role: 'user', content: 'What are the latest AI headlines today?' }],
           web_search: false,
           stream: false,
@@ -299,7 +328,7 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'gemini-3.5-flash-lite',
+          model: FREE_NATIVE_SEARCH_MODEL,
           messages: [{ role: 'user', content: 'Explain how a binary search works.' }],
           stream: false,
         },
@@ -317,20 +346,23 @@ describe('free-trial capability gate — model-agnostic web search', () => {
   });
 
   it('refuses a free-trial capability the selected model lacks, naming the way out', async () => {
-    // The gate was unreachable while every Free model supported all four gated
-    // capabilities, and the previous test asserted exactly that. Adding
-    // gpt-5.6-luna to the Free roster on 2026-08-04 made it live again: Luna
-    // carries codeExecution:false while gpt-5.4-mini and gemini-3.5-flash-lite
-    // carry true. This is the rejection path that assertion was holding a place for.
+    const unsupportedModel = getAllowedModelsForTier('economy').find((modelId) => {
+      const metadata = getModelMetadataById(modelId);
+      return (
+        metadata?.tierPolicy?.minTier === 'free' && metadata.capabilities.codeExecution !== true
+      );
+    });
+    expect(unsupportedModel).toBeDefined();
+
     const result = await processRequest(
       freeTrialRequest(
         {
-          model: 'gpt-5.6-luna',
+          model: unsupportedModel!,
           messages: [{ role: 'user', content: 'Run this snippet and show the output.' }],
           code_execution: true,
           stream: false,
         },
-        'free-cap-luna-code-exec-1',
+        'free-cap-code-exec-1',
       ),
       { ok: true, userId: 'user-free', token: 'session-token', subscription: freeSubscription },
     );
@@ -349,13 +381,13 @@ describe('free-trial capability gate — model-agnostic web search', () => {
   });
 
   it('keeps the other Free models able to satisfy every gated capability', async () => {
-    // Narrower than the old blanket assertion, and it still fails loudly if a
-    // future roster change quietly strands a capability the composer offers.
-    const { getModelMetadataById } = await import('@agiworkforce/types');
     const GATED = ['search', 'codeExecution', 'thinking', 'vision'] as const;
+    const freeModels = getAllowedModelsForTier('economy').filter(
+      (modelId) => getModelMetadataById(modelId)?.tierPolicy?.minTier === 'free',
+    );
 
     for (const cap of GATED) {
-      const supported = ['gemini-3.5-flash-lite', 'gpt-5.4-mini', 'gpt-5.6-luna'].filter(
+      const supported = freeModels.filter(
         (modelId) =>
           (getModelMetadataById(modelId)?.capabilities as Record<string, boolean> | undefined)?.[
             cap
@@ -489,7 +521,7 @@ describe('resolveWebFetchTools', () => {
     stream: boolean | undefined;
   }) => unknown[] | undefined;
 
-  it('uses AGI url_fetch instead of the unavailable Anthropic native tool for Opus 5', () => {
+  it('uses AGI url_fetch when catalog metadata disables the Anthropic native tool', () => {
     const resolveWebFetchTools = (
       requestProcessorModule as unknown as {
         resolveWebFetchTools?: ResolveWebFetchTools;
@@ -499,7 +531,7 @@ describe('resolveWebFetchTools', () => {
     expect(resolveWebFetchTools).toBeTypeOf('function');
     const tools = resolveWebFetchTools?.({
       providerLower: 'anthropic',
-      model: 'claude-opus-5',
+      model: ANTHROPIC_PLATFORM_FETCH_MODEL,
       tools: undefined,
       toolsCapable: true,
       stream: true,
@@ -618,7 +650,7 @@ describe('processRequest CPST route identity', () => {
           'x-agi-surface': 'web',
         },
         body: JSON.stringify({
-          model: 'gemini-3.5-flash-lite',
+          model: FREE_NATIVE_SEARCH_MODEL,
           messages: [{ role: 'user', content: 'Say hello.' }],
           stream: false,
         }),

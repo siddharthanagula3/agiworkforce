@@ -107,7 +107,7 @@ describe('Mobile shared-primitive snapshots', () => {
         lastUsedAt: '2026-05-20T00:00:00Z',
       }),
       lastUsedRelativeLabel: '2h ago',
-      defaultModelLabel: 'Llama 3.2 8B',
+      defaultModelLabel: 'Fixture Local Model',
     });
     const { toJSON } = render(<ProjectHeader presentation={presentation} />);
     expect(toJSON()).toMatchSnapshot();

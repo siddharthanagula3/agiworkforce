@@ -14,11 +14,13 @@ const {
   mockNeonQuery,
   mockExtractProjectKnowledgeFile,
   MockProjectKnowledgeExtractionError,
+  mockResolveActiveOrganizationId,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
   mockExtractProjectKnowledgeFile: vi.fn(),
   MockProjectKnowledgeExtractionError: class ProjectKnowledgeExtractionError extends Error {},
+  mockResolveActiveOrganizationId: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -54,6 +56,9 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+}));
 vi.mock('@/lib/server/project-knowledge-extraction', () => ({
   extractProjectKnowledgeFile: mockExtractProjectKnowledgeFile,
   ProjectKnowledgeExtractionError: MockProjectKnowledgeExtractionError,
@@ -80,6 +85,7 @@ const CHECKSUM = 'a'.repeat(64);
 
 function wireAuth() {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
+  mockResolveActiveOrganizationId.mockResolvedValue(null);
 }
 
 function makeGetRequest(projectId: string): NextRequest {

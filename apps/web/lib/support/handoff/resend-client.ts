@@ -48,6 +48,8 @@ export interface SendEmailInput {
   html: string;
   /** So a human can hit reply and reach the user. Half the async channel. */
   replyTo?: string;
+  /** Resend deduplicates the same payload/key for 24 hours (max 256 chars). */
+  idempotencyKey?: string;
 }
 
 /** `SendEmailInput` plus the sender identity, for callers outside support. */
@@ -63,6 +65,7 @@ function isRetryable(status: number): boolean {
 async function postOnce(
   apiKey: string,
   payload: Record<string, unknown>,
+  idempotencyKey?: string,
 ): Promise<{ ok: true; id: string | null } | { ok: false; retryable: boolean; detail: string }> {
   try {
     const response = await fetch(RESEND_ENDPOINT, {
@@ -70,6 +73,7 @@ async function postOnce(
       headers: {
         authorization: `Bearer ${apiKey}`,
         'content-type': 'application/json',
+        ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
       },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -129,6 +133,14 @@ export async function sendTransactionalEmail(
       detail: 'recipient is not a valid address',
     };
   }
+  const idempotencyKey = input.idempotencyKey?.trim();
+  if (idempotencyKey && (idempotencyKey.length > 256 || !/^[\x21-\x7e]+$/u.test(idempotencyKey))) {
+    return {
+      delivered: false,
+      reason: 'rejected',
+      detail: 'idempotency key must be 1-256 visible ASCII characters',
+    };
+  }
 
   const payload: Record<string, unknown> = {
     from: input.from,
@@ -139,12 +151,12 @@ export async function sendTransactionalEmail(
     ...(isValidEmail(input.replyTo) ? { reply_to: [input.replyTo] } : {}),
   };
 
-  let last = await postOnce(apiKey, payload);
+  let last = await postOnce(apiKey, payload, idempotencyKey);
   if (!last.ok && last.retryable) {
     // One retry with jitter. More than one and a slow provider turns into a
     // hung request handler.
     await new Promise((resolve) => setTimeout(resolve, 250 + Math.floor(Math.random() * 500)));
-    last = await postOnce(apiKey, payload);
+    last = await postOnce(apiKey, payload, idempotencyKey);
   }
 
   if (last.ok) return { delivered: true, providerMessageId: last.id };

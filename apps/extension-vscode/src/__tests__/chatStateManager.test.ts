@@ -27,6 +27,7 @@ import {
   HOST_CUSTOM_INSTRUCTIONS_KEY,
   WORKSPACE_CUSTOM_INSTRUCTIONS_KEY,
 } from '../features/instructions';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -217,12 +218,12 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('rejects a non-Local start response before prompt and attachment egress', async () => {
     const harness = makeHarness({
-      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+      localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
     });
     await harness.manager.handleMessage({ type: 'openModelPopover' });
     await harness.manager.handleMessage({
       type: 'selectModel',
-      payload: { modelId: 'gemma4:e4b' },
+      payload: { modelId: SYNTHETIC_LOCAL_MODEL_ID },
     });
     await harness.manager.handleMessage({
       type: 'attachFiles',
@@ -238,7 +239,7 @@ describe('ChatStateManager local turn lifecycle', () => {
       },
     });
     harness.runtime.startThread.mockResolvedValueOnce(
-      threadSummary({ model: 'gemma4:e4b', provider: 'anthropic', trustMode: 'byok' }),
+      threadSummary({ model: SYNTHETIC_LOCAL_MODEL_ID, provider: 'anthropic', trustMode: 'byok' }),
     );
 
     await harness.manager.handleMessage({
@@ -1424,13 +1425,13 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('fails closed when a Local session is aimed at catalog or Auto routing', async () => {
     const harness = makeHarness({
-      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+      localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
     });
     await harness.context.globalState.update('tierStatus.cachedTier', 'max');
     await harness.manager.handleMessage({ type: 'openModelPopover' });
     await harness.manager.handleMessage({
       type: 'selectModel',
-      payload: { modelId: 'gemma4:e4b' },
+      payload: { modelId: SYNTHETIC_LOCAL_MODEL_ID },
     });
     const first = harness.manager.handleMessage({
       type: 'sendMessage',
@@ -1520,7 +1521,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
     await harness.manager.handleMessage({
       type: 'selectModel',
-      payload: { modelId: 'gemma4:e4b' },
+      payload: { modelId: SYNTHETIC_LOCAL_MODEL_ID },
     });
     harness.runtime.startTurn.mockResolvedValueOnce({ id: 'turn-2' });
     const localFollowUp = harness.manager.handleMessage({
@@ -1530,7 +1531,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
     expect(harness.runtime.startThread).toHaveBeenCalledOnce();
     expect(harness.runtime.startTurn).toHaveBeenLastCalledWith(
-      expect.objectContaining({ threadId: 'thread-1', model: 'gemma4:e4b' }),
+      expect.objectContaining({ threadId: 'thread-1', model: SYNTHETIC_LOCAL_MODEL_ID }),
     );
     harness.emit({
       type: 'turn_completed',
@@ -1546,7 +1547,7 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('shows CLI-discovered local models in the inline picker', async () => {
     const harness = makeHarness({
-      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+      localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
     });
 
     await harness.manager.handleMessage({ type: 'openModelPopover' });
@@ -1559,8 +1560,8 @@ describe('ChatStateManager local turn lifecycle', () => {
             label: 'Local',
             models: [
               {
-                id: 'gemma4:e4b',
-                label: 'gemma4:e4b',
+                id: SYNTHETIC_LOCAL_MODEL_ID,
+                label: SYNTHETIC_LOCAL_MODEL_ID,
                 description: 'Ollama · On device',
               },
             ],
@@ -1601,12 +1602,12 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('passes the trusted discovered provider with a selected local model', async () => {
     const harness = makeHarness({
-      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+      localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
     });
     await harness.manager.handleMessage({ type: 'openModelPopover' });
     await harness.manager.handleMessage({
       type: 'selectModel',
-      payload: { modelId: 'gemma4:e4b' },
+      payload: { modelId: SYNTHETIC_LOCAL_MODEL_ID },
     });
 
     const send = harness.manager.handleMessage({
@@ -1615,7 +1616,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
     await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
     expect(harness.runtime.startThread).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gemma4:e4b', provider: 'ollama' }),
+      expect.objectContaining({ model: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }),
     );
     harness.emit({
       type: 'turn_completed',
@@ -1631,12 +1632,12 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('preserves a selected local model when the webview native select has no dynamic option', async () => {
     const harness = makeHarness({
-      localModels: [{ id: 'gemma4:e4b', provider: 'ollama' }],
+      localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
     });
     await harness.manager.handleMessage({ type: 'openModelPopover' });
     await harness.manager.handleMessage({
       type: 'selectModel',
-      payload: { modelId: 'gemma4:e4b' },
+      payload: { modelId: SYNTHETIC_LOCAL_MODEL_ID },
     });
 
     const send = harness.manager.handleMessage({
@@ -1646,10 +1647,10 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
     expect(harness.runtime.startThread).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gemma4:e4b', provider: 'ollama' }),
+      expect.objectContaining({ model: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }),
     );
     expect(harness.runtime.startTurn).toHaveBeenCalledWith(
-      expect.objectContaining({ model: 'gemma4:e4b' }),
+      expect.objectContaining({ model: SYNTHETIC_LOCAL_MODEL_ID }),
     );
     harness.emit({
       type: 'turn_completed',

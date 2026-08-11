@@ -184,6 +184,8 @@ const CATALOG: OnDeviceModel[] = [
       modelSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/lfm2_5_vl_450m_8da4w_xnnpack.pte`,
       tokenizerSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/tokenizer.json`,
       tokenizerConfigSource: `${ET_URL_PREFIX}-lfm-2.5/${ET_VERSION_TAG}/lfm2.5-VL-450M/tokenizer_config.json`,
+      capabilities: ['vision'],
+      generationConfig: { temperature: 0.1, minP: 0.15, repetitionPenalty: 1.05 },
     },
   },
   {
@@ -232,7 +234,11 @@ const CATALOG: OnDeviceModel[] = [
     },
   },
   {
-    id: 'apple-foundation-models',
+    // Keep the catalog identity distinct from the runtime protocol name. The
+    // OS runtime may stay stable while Apple replaces the underlying model,
+    // and consumers must select this row through capabilities rather than by
+    // duplicating a runtime-shaped model ID.
+    id: 'apple-system-language-model',
     displayName: 'Apple Intelligence',
     family: 'apple-fm',
     paramCountB: 3.0, // ~3B system model
@@ -252,12 +258,15 @@ const CATALOG: OnDeviceModel[] = [
   },
   {
     id: 'gemini-nano-aicore',
-    displayName: 'Gemini Nano',
-    family: 'gemini-nano',
-    paramCountB: 1.8, // Nano v2 approximate
+    displayName: 'Google on-device AI (Gemma-based)',
+    family: 'google-system-model',
+    // The model generation and parameter count are device/OS managed. Google's
+    // current Gemini Nano generation is based on Gemma, but older supported
+    // devices must not be mislabeled as one downloadable checkpoint.
+    paramCountB: 0,
     fileSizeBytes: 0, // OS-resident via AICore — not downloaded
     supportedRuntimes: ['aicore'],
-    contextWindow: 1_024, // AICore Prompt API limit on Nano
+    contextWindow: 4_000, // ML Kit Prompt API input guidance; device runtime owns the model
     capabilities: {
       text: true,
       visionIn: true,
@@ -265,7 +274,7 @@ const CATALOG: OnDeviceModel[] = [
       toolCalls: false,
       structuredOutput: false,
     },
-    license: 'Google AICore',
+    license: 'Google system service',
     role: 'system-multimodal',
     shipsInV1: true,
   },
@@ -290,8 +299,23 @@ const CATALOG: OnDeviceModel[] = [
   },
 ];
 
+/**
+ * Read-only canonical on-device catalog projection for policy checks and
+ * catalog-derived consumers. Callers must not mutate the returned records.
+ */
+export function getLocalModelCatalog(): readonly OnDeviceModel[] {
+  return CATALOG;
+}
+
+const LOCAL_MODEL_ID_ALIASES: Readonly<Record<string, string>> = {
+  // Persisted selections from releases that reused the runtime discriminator
+  // as the catalog model identity migrate through this owner-only alias.
+  'apple-foundation-models': 'apple-system-language-model',
+};
+
 export function getModelById(id: string): OnDeviceModel | undefined {
-  return CATALOG.find((m) => m.id === id);
+  const canonicalId = LOCAL_MODEL_ID_ALIASES[id] ?? id;
+  return CATALOG.find((m) => m.id === canonicalId);
 }
 
 export function getModelsForRole(role: OnDeviceModel['role']): OnDeviceModel[] {

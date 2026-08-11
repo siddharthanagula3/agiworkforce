@@ -53,13 +53,24 @@ function requestedUrls(): string[] {
 
 describe('settings preference paths come from the cloud contract', () => {
   it('reads and writes namespaces through the relocated contract path', async () => {
-    const { fetchStoredPreferenceNamespace, savePreferenceNamespace } =
-      await import('./preferences-client');
+    const {
+      fetchStoredPreferenceNamespace,
+      savePreferenceNamespace,
+      PREFERENCE_NAMESPACE_SAVED_EVENT,
+    } = await import('./preferences-client');
+
+    const saved = vi.fn();
+    window.addEventListener(PREFERENCE_NAMESPACE_SAVED_EVENT, saved);
 
     await fetchStoredPreferenceNamespace('time focus');
     await savePreferenceNamespace('general', { chatFont: 'system' });
 
     expect(requestedUrls()).toEqual([`${RELOCATED}?namespace=time%20focus`, RELOCATED]);
+    expect(saved).toHaveBeenCalledOnce();
+    expect(saved.mock.calls[0]?.[0]).toMatchObject({
+      detail: { namespace: 'general', value: { chatFont: 'system' } },
+    });
+    window.removeEventListener(PREFERENCE_NAMESPACE_SAVED_EVENT, saved);
   });
 
   it('routes settingsService reads and writes through the relocated contract path', async () => {

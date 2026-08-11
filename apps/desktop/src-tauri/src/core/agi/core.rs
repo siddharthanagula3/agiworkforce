@@ -732,7 +732,7 @@ impl AGICore {
     ///
     /// Key features:
     /// - Automatic task decomposition via LLM analysis
-    /// - Dynamic agent spawning with frozen weights (Kimi K2.5 pattern)
+    /// - Dynamic agent spawning with frozen weights
     /// - Circuit breaker pattern for fault tolerance
     /// - Critical path optimization for minimum execution time
     /// - Result aggregation with multiple strategies

@@ -186,11 +186,13 @@ export function collectGeneratedFileRefs(
  */
 export async function persistGeneratedFile(params: {
   userId: string;
+  /** Workspace captured when the provider request was admitted. */
+  organizationId: string | null;
   ref: GeneratedFileRef;
   prompt?: string;
   model?: string;
 }): Promise<PersistedGeneratedFile | null> {
-  const { userId, ref, prompt, model } = params;
+  const { userId, organizationId, ref, prompt, model } = params;
   if (!isMediaStorageConfigured()) return null;
   if (!ref.fileId) return null;
 
@@ -213,6 +215,7 @@ export async function persistGeneratedFile(params: {
     const mimeType = mimeForFilename(filename, fetched.contentType);
     const outcome = await persistGeneratedFileBytes({
       userId,
+      organizationId,
       data: fetched.data,
       mimeType,
       filename,
@@ -253,6 +256,8 @@ export interface PersistGeneratedFilesResult {
 /** Persist many generated files concurrently; failures are counted, not silent. */
 export async function persistGeneratedFiles(params: {
   userId: string;
+  /** Workspace captured when the provider request was admitted. */
+  organizationId: string | null;
   refs: GeneratedFileRef[];
   prompt?: string;
   model?: string;
@@ -261,6 +266,7 @@ export async function persistGeneratedFiles(params: {
     params.refs.map((ref) =>
       persistGeneratedFile({
         userId: params.userId,
+        organizationId: params.organizationId,
         ref,
         prompt: params.prompt,
         model: params.model,

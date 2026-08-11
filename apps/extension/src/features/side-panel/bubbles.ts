@@ -476,26 +476,38 @@ function buildAgentActivityEl(
 ): HTMLElement {
   const details = el('details', { class: 'sp-agent-activity' });
   const summary = document.createElement('summary');
-  const terminal = ['completed', 'failed', 'cancelled'].includes(activity.status);
   const elapsed = Math.max(
     0,
     (activity.completedAtMs ?? activity.updatedAtMs) - activity.startedAtMs,
   );
+  const elapsedLabel = formatElapsed(elapsed);
+  const statusLabel =
+    activity.status === 'completed'
+      ? `Worked for ${elapsedLabel}`
+      : activity.status === 'failed'
+        ? `Failed after ${elapsedLabel}`
+        : activity.status === 'cancelled'
+          ? `Cancelled after ${elapsedLabel}`
+          : activity.status === 'paused'
+            ? `Paused after ${elapsedLabel}`
+            : activity.status === 'awaiting-approval'
+              ? `Needs approval · ${elapsedLabel}`
+              : `Working for ${elapsedLabel}`;
   summary.appendChild(
     renderIcon(
       activity.status === 'failed' || activity.status === 'cancelled'
         ? CircleX
-        : terminal
+        : activity.status === 'completed'
           ? CircleCheck
-          : Loader2,
+          : activity.status === 'paused' || activity.status === 'awaiting-approval'
+            ? Clock
+            : Loader2,
       14,
     ),
   );
   summary.appendChild(
     document.createTextNode(
-      `${terminal ? 'Worked' : 'Working'} for ${formatElapsed(elapsed)}${
-        activity.entries.length ? ` · ${activity.entries.length} steps` : ''
-      }`,
+      `${statusLabel}${activity.entries.length ? ` · ${activity.entries.length} steps` : ''}`,
     ),
   );
   summary.appendChild(renderIcon(ChevronRight, 12, 'sp-agent-activity__chevron'));

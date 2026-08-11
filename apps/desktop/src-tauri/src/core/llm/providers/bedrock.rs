@@ -1084,10 +1084,10 @@ mod tests {
             "secret".to_string(),
             "us-west-2".to_string(),
         );
-        let url = provider.endpoint("anthropic.claude-3-haiku-20240307-v1:0", false);
+        let url = provider.endpoint("fixture-bedrock-model-v1:0", false);
         assert_eq!(
             url,
-            "https://bedrock-runtime.us-west-2.amazonaws.com/model/anthropic.claude-3-haiku-20240307-v1%3A0/converse"
+            "https://bedrock-runtime.us-west-2.amazonaws.com/model/fixture-bedrock-model-v1%3A0/converse"
         );
     }
 
@@ -1098,10 +1098,10 @@ mod tests {
             "secret".to_string(),
             "us-east-1".to_string(),
         );
-        let url = provider.endpoint("anthropic.claude-3-5-sonnet-20241022-v2:0", true);
+        let url = provider.endpoint("fixture-bedrock-model-v2:0", true);
         assert_eq!(
             url,
-            "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-3-5-sonnet-20241022-v2%3A0/converse-stream"
+            "https://bedrock-runtime.us-east-1.amazonaws.com/model/fixture-bedrock-model-v2%3A0/converse-stream"
         );
     }
 
@@ -1158,7 +1158,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "anthropic.claude-3-haiku-20240307-v1:0".to_string(),
+            model: "fixture-bedrock-model-v1:0".to_string(),
             max_tokens: Some(1024),
             temperature: Some(0.7),
             system: Some("You are helpful.".to_string()),
@@ -1197,7 +1197,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "anthropic.claude-3-5-sonnet-20241022-v2:0".to_string(),
+            model: "fixture-bedrock-model-v2:0".to_string(),
             tools: Some(vec![crate::core::llm::ToolDefinition {
                 name: "get_weather".to_string(),
                 description: "Get current weather".to_string(),
@@ -1363,8 +1363,8 @@ mod tests {
     #[test]
     fn url_encode_path_segment_encodes_colon() {
         assert_eq!(
-            url_encode_path_segment("anthropic.claude-3-haiku-20240307-v1:0"),
-            "anthropic.claude-3-haiku-20240307-v1%3A0"
+            url_encode_path_segment("fixture-bedrock-model-v1:0"),
+            "fixture-bedrock-model-v1%3A0"
         );
     }
 

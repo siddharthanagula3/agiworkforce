@@ -10,14 +10,14 @@
         "updatedAt": "2026-07-02T00:00:00.000Z",
         "messageCount": 2,
         "pinned": true,
-        "model": "gpt-5.4",
+        "model": "fixture-model",
         "projectId": "018f6f2a-0000-7000-8000-000000000099",
         "serverVersion": "12"
       },
       "expectedWireItem": {
         "id": "018f6f2a-0000-7000-8000-000000000001",
         "title": "Quarterly plan",
-        "model": "gpt-5.4",
+        "model": "fixture-model",
         "projectId": "018f6f2a-0000-7000-8000-000000000099",
         "pinned": true,
         "baseVersion": "12"
@@ -70,7 +70,7 @@
         "id": "018f6f2a-0000-7000-8000-000000000010",
         "role": "assistant",
         "content": "Here is the plan",
-        "model": "gpt-5.4",
+        "model": "fixture-model",
         "provider": "openai",
         "metadata": { "cloudApproval": null },
         "serverVersion": "12"
@@ -80,7 +80,7 @@
         "conversationId": "018f6f2a-0000-7000-8000-000000000001",
         "role": "assistant",
         "content": "Here is the plan",
-        "model": "gpt-5.4",
+        "model": "fixture-model",
         "provider": "openai",
         "metadata": { "cloudApproval": null },
         "baseVersion": "12"

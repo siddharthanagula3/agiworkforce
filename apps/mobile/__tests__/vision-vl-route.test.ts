@@ -7,7 +7,7 @@
 
 import { runVisionQuery, resolveVisionRoute } from '../src/features/image/services/vision';
 import { listInstalledModels } from '@/storage/installedModels';
-import { localGenerate } from '@agiworkforce/local-llm';
+import { getModelsForRole, localGenerate } from '@agiworkforce/local-llm';
 
 jest.mock('@/storage/installedModels', () => ({
   listInstalledModels: jest.fn(),
@@ -24,18 +24,28 @@ jest.mock('@agiworkforce/local-llm', () => {
   return { ...actual, localGenerate: jest.fn() };
 });
 
+const VISION_CATALOG_MODEL = getModelsForRole('premium-vision-pack').find(
+  (model) => model.format === 'gguf' && model.mmprojUrl && model.capabilities.visionIn,
+);
+
+if (!VISION_CATALOG_MODEL) {
+  throw new Error('Local catalog has no GGUF vision model with a projector');
+}
+
+const VISION_MODEL_PATH = `file:///models/${VISION_CATALOG_MODEL.id}/model.gguf`;
+
 describe('runVisionQuery on-device VL route', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (listInstalledModels as jest.Mock).mockResolvedValue([
       {
-        id: 'qwen3-vl-2b-instruct',
-        display_name: 'AGI Vision Pack',
+        id: VISION_CATALOG_MODEL.id,
+        display_name: VISION_CATALOG_MODEL.displayName,
         runtime: 'local',
         format: 'gguf',
-        size_bytes: 1_107_409_952,
+        size_bytes: VISION_CATALOG_MODEL.fileSizeBytes,
         sha256: null,
-        local_path: 'file:///models/qwen3-vl.gguf',
+        local_path: VISION_MODEL_PATH,
         installed_at: 1,
         last_used_at: null,
         capabilities: null,
@@ -52,8 +62,8 @@ describe('runVisionQuery on-device VL route', () => {
     const route = await resolveVisionRoute();
     expect(route).toEqual({
       kind: 'vl-pack',
-      modelId: 'qwen3-vl-2b-instruct',
-      displayName: 'AGI Vision Pack',
+      modelId: VISION_CATALOG_MODEL.id,
+      displayName: VISION_CATALOG_MODEL.displayName,
     });
   });
 
@@ -64,12 +74,12 @@ describe('runVisionQuery on-device VL route', () => {
     });
 
     expect(localGenerate).toHaveBeenCalledWith(
-      'file:///models/qwen3-vl.gguf',
+      VISION_MODEL_PATH,
       expect.objectContaining({
-        modelId: 'qwen3-vl-2b-instruct',
+        modelId: VISION_CATALOG_MODEL.id,
         prompt: 'What breed is this dog?',
         images: ['file:///tmp/photo.jpg'],
-        mmprojPath: 'file:///models/qwen3-vl.gguf.mmproj.gguf',
+        mmprojPath: `${VISION_MODEL_PATH}.mmproj.gguf`,
       }),
     );
     expect(result.route.kind).toBe('vl-pack');

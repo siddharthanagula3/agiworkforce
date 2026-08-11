@@ -34,7 +34,7 @@ import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 export const CURRENT_TERMS_VERSION: string = POLICY_LAST_UPDATED.terms;
 
 /** Where an acceptance was collected. Stored verbatim for reconstruction. */
-export type TermsAcceptanceSurface = 'web-signup';
+export type TermsAcceptanceSurface = 'web-signup' | 'web-login';
 
 export interface TermsAcceptance {
   /** Revision of /terms that was accepted. */
@@ -78,6 +78,12 @@ async function readTermsAcceptance(userId: string): Promise<TermsAcceptance | nu
     [userId],
   );
   return toAcceptance(rows[0]);
+}
+
+/** Whether the account has already accepted the exact revision currently shown. */
+export async function hasAcceptedCurrentTerms(userId: string): Promise<boolean> {
+  const acceptance = await readTermsAcceptance(userId);
+  return acceptance?.version === CURRENT_TERMS_VERSION;
 }
 
 /**

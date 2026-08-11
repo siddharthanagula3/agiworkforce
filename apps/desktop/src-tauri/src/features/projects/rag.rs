@@ -187,7 +187,7 @@ impl RAGEngine {
     /// Generate a semantic embedding for the given text.
     ///
     /// When an `EmbeddingGenerator` is available (via `with_embeddings`), this
-    /// produces real semantic embeddings (Ollama nomic-embed-text or similar).
+    /// produces real semantic embeddings through a configured local model.
     /// Falls back to a hash-based bag-of-words vector when no generator is
     /// configured or when the generator fails.
     pub async fn generate_embedding(&self, text: &str) -> Result<Vec<f32>> {

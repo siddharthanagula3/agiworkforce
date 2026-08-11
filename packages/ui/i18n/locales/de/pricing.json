@@ -76,5 +76,13 @@
   "pageTitle": "Preise",
   "freeLocalByok": "Lokale Modelle und eigene API-Schlüssel, immer kostenlos",
   "seatTotal_one": "{{count}} Platz · {{total}}/Mon.",
-  "seatTotal_other": "{{count}} Plätze · {{total}}/Mon."
+  "seatTotal_other": "{{count}} Plätze · {{total}}/Mon.",
+  "perSeatPrice": "{{price}}/Platz/Mon.",
+  "perSeatPriceAnnual": "{{price}}/Platz/Jahr",
+  "seatTotalAnnual_one": "{{count}} Platz · {{total}}/Jahr",
+  "seatTotalAnnual_other": "{{count}} Plätze · {{total}}/Jahr",
+  "seatCadenceMonthly_one": "{{count}} Platz · monatliche Abrechnung",
+  "seatCadenceMonthly_other": "{{count}} Plätze · monatliche Abrechnung",
+  "seatCadenceAnnual_one": "{{count}} Platz · jährliche Abrechnung",
+  "seatCadenceAnnual_other": "{{count}} Plätze · jährliche Abrechnung"
 }

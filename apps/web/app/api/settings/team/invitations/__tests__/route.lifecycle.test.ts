@@ -349,7 +349,8 @@ describe('organization invitation lifecycle routes', () => {
       mockQuery
         .mockResolvedValueOnce([{ id: 'invitee-user', email: 'invitee@example.com' }]) // profile
         .mockResolvedValueOnce([invitation()]) // token lookup
-        .mockResolvedValueOnce([]) // advisory lock
+        .mockResolvedValueOnce([]) // user advisory lock
+        .mockResolvedValueOnce([]) // organization advisory lock
         .mockResolvedValueOnce([]) // existing membership probe
         .mockResolvedValueOnce([
           invitation({ status: 'accepted', accepted_by_user_id: 'org-a-admin' }),
@@ -391,7 +392,10 @@ describe('organization invitation lifecycle routes', () => {
     });
 
     it('declines by token and frees the seat without creating a membership', async () => {
-      mockQuery.mockResolvedValueOnce([invitation({ status: 'declined' })]);
+      mockQuery
+        .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'invitee@example.com' }])
+        .mockResolvedValueOnce([invitation()])
+        .mockResolvedValueOnce([invitation({ status: 'declined' })]);
 
       const response = await ACCEPT(
         jsonRequest('http://localhost:3000/api/settings/team/invitations/accept', 'POST', {
@@ -401,9 +405,30 @@ describe('organization invitation lifecycle routes', () => {
       );
 
       expect(response.status).toBe(200);
-      const update = mockQuery.mock.calls[0]!;
+      const update = mockQuery.mock.calls.find(([sql]) =>
+        String(sql).includes("set status = 'declined'"),
+      )!;
       expect(String(update[0])).toContain("set status = 'declined'");
-      expect(update[1]).toEqual([hashInvitationToken(token)]);
+      expect(update[1]).toEqual([INVITE_ID]);
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+
+    it('refuses a leaked decline link opened by an account with a different email', async () => {
+      mockQuery
+        .mockResolvedValueOnce([{ id: 'org-a-admin', email: 'someone-else@example.com' }])
+        .mockResolvedValueOnce([invitation()]);
+
+      const response = await ACCEPT(
+        jsonRequest('http://localhost:3000/api/settings/team/invitations/accept', 'POST', {
+          token,
+          action: 'decline',
+        }),
+      );
+
+      expect(response.status).toBe(403);
+      expect(
+        mockQuery.mock.calls.some(([sql]) => String(sql).includes("set status = 'declined'")),
+      ).toBe(false);
       expect(mockExecute).not.toHaveBeenCalled();
     });
 

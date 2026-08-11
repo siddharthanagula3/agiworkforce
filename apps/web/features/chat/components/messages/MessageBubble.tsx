@@ -56,6 +56,8 @@ import type { ArtifactManifest, ComputeSession, GeneratedFile } from '@agiworkfo
 import {
   AgentActivityTimeline,
   BranchNavigator,
+  getManagedModelPresentationLabel,
+  hasCanonicalToolActivity,
   type BranchItem,
 } from '@agiworkforce/unified-chat';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
@@ -211,7 +213,7 @@ interface Message {
   content: string;
   role: 'user' | 'assistant';
   timestamp: Date;
-  /** Provider/model string set by useChatStream (e.g. "anthropic/claude-sonnet-5"). */
+  /** Provider/model string set by useChatStream (for example, `provider/model-id`). */
   model?: string;
   employeeId?: string;
   employeeName?: string;
@@ -282,9 +284,18 @@ interface Message {
     imageGenAspect?: string;
     /** Model id used for image generation. */
     imageGenModel?: string;
+    /** Bounded provider/gateway retry instant for explicit image regeneration. */
+    imageRetryAt?: string;
     imageData?: MediaGenerationResult;
     videoUrl?: string;
     thumbnailUrl?: string;
+    videoTaskId?: string;
+    videoStatus?: 'queued' | 'processing' | 'completed' | 'failed';
+    videoProvider?: 'google' | 'runway' | 'openrouter';
+    videoModel?: string;
+    videoProgress?: number;
+    videoError?: string;
+    videoRetryable?: boolean;
     videoData?: MediaGenerationResult;
     documentData?: GeneratedDocument;
     computeSession?: ComputeSession;
@@ -320,7 +331,11 @@ interface Message {
     /** Persisted thumbs-up/down reaction from the user (stored in cloud messages.metadata). */
     reaction?: 'thumbsUp' | 'thumbsDown' | null;
     /** Paywall feature that triggered a capability gate message. */
-    paywall?: { feature: string; requiredTier: string };
+    paywall?: {
+      feature: string;
+      requiredTier: string;
+      recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
+    };
     /**
      * Parsed interactive cards. The union already encodes whether a body was
      * validated, so this renderer never sees an unvalidated payload — an
@@ -366,6 +381,10 @@ interface MessageBubbleProps {
     aspectRatio: ImageAspectRatio;
     modelId?: string;
   }) => Promise<string>;
+  /** Resume status observation for an already-started durable video task. */
+  onResumeVideo?: (messageId: string) => void;
+  /** Start a new generation only after a durable video task is terminally failed. */
+  onRetryVideo?: (messageId: string) => void;
   /**
    * When provided and the parent renders a motion container with
    * `messageListVariants`, this prop is unused (stagger is driven by the
@@ -393,6 +412,8 @@ const MessageBubbleComponent = function MessageBubble({
   hasBranches,
   animationIndex = 0,
   onRegenerateImage,
+  onResumeVideo,
+  onRetryVideo,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [showThinking, setShowThinking] = useState(false);
@@ -843,8 +864,9 @@ const MessageBubbleComponent = function MessageBubble({
     message.metadata?.collaborationMessages &&
     message.metadata.collaborationMessages.length > 0;
   const canonicalActivity = !isUser ? message.metadata?.agentActivity : undefined;
+  const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const toolTimeline =
-    !isUser && !canonicalActivity && message.metadata?.tools ? message.metadata.tools : [];
+    !isUser && !canonicalOwnsToolActivity && message.metadata?.tools ? message.metadata.tools : [];
 
   // Collect web-search sources from metadata (searchResults and/or citations).
   // These are passed INTO the ToolTimeline so they render inside the web-search step box
@@ -1010,7 +1032,7 @@ const MessageBubbleComponent = function MessageBubble({
             (() => {
               const segments = message.metadata?.thinkingSegments;
               const tools =
-                !isUser && !canonicalActivity && message.metadata?.tools
+                !isUser && !canonicalOwnsToolActivity && message.metadata?.tools
                   ? message.metadata.tools
                   : [];
 
@@ -1321,6 +1343,7 @@ const MessageBubbleComponent = function MessageBubble({
                 prompt={message.metadata.imageGenPrompt as string | undefined}
                 aspectRatio={message.metadata.imageGenAspect as ImageAspectRatio | undefined}
                 modelId={message.metadata.imageGenModel as string | undefined}
+                retryAt={message.metadata.imageRetryAt as string | undefined}
                 onRegenerate={onRegenerateImage}
               />
             </div>
@@ -1367,6 +1390,98 @@ const MessageBubbleComponent = function MessageBubble({
                   <Video className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                   <span className="text-[13px] text-muted-foreground">Generating your video…</span>
                 </div>
+              </div>
+            )}
+
+          {!isUser &&
+            message.metadata?.toolType === 'video-generation' &&
+            !message.isStreaming &&
+            !message.metadata?.videoUrl &&
+            typeof message.metadata?.videoTaskId === 'string' &&
+            (message.metadata?.videoStatus === 'queued' ||
+              message.metadata?.videoStatus === 'processing') && (
+              <div
+                className="mt-4 flex w-full max-w-lg items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/35 p-4"
+                role="status"
+                aria-live="polite"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    Your video is still being generated
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {message.metadata.videoError
+                      ? 'Status checking paused. The durable task is still safe to resume.'
+                      : 'You can leave this chat and come back later.'}
+                    {typeof message.metadata.videoProgress === 'number'
+                      ? ` ${message.metadata.videoProgress}% complete.`
+                      : ''}
+                  </p>
+                </div>
+                {onResumeVideo && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onResumeVideo(message.id)}
+                    className="shrink-0"
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    Resume checking
+                  </Button>
+                )}
+              </div>
+            )}
+
+          {!isUser &&
+            message.metadata?.toolType === 'video-generation' &&
+            !message.isStreaming &&
+            !message.metadata?.videoUrl &&
+            message.metadata?.videoStatus === 'failed' && (
+              <div
+                className="mt-4 flex w-full max-w-lg items-center justify-between gap-4 rounded-xl border border-border/60 bg-muted/35 p-4"
+                role="status"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">Video generation ended</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {message.metadata.videoRetryable === true
+                      ? 'This task is terminally failed. Trying again starts a new generation.'
+                      : 'Resend the prompt to start a new generation. This older attempt cannot be replayed safely.'}
+                  </p>
+                </div>
+                {message.metadata.videoRetryable === true && onRetryVideo && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onRetryVideo(message.id)}
+                    className="shrink-0"
+                  >
+                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+                    Try video again
+                  </Button>
+                )}
+              </div>
+            )}
+
+          {!isUser &&
+            message.metadata?.toolType === 'video-generation' &&
+            !message.isStreaming &&
+            !message.metadata?.videoUrl &&
+            !message.metadata?.videoTaskId &&
+            (message.metadata?.videoStatus === 'queued' ||
+              message.metadata?.videoStatus === 'processing') && (
+              <div
+                className="mt-4 w-full max-w-lg rounded-xl border border-border/60 bg-muted/35 p-4"
+                role="status"
+                aria-live="polite"
+              >
+                <p className="text-sm font-medium text-foreground">Video start was not confirmed</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Reload this chat once to recover a task that was accepted. If this message
+                  remains, the video did not start and you can safely try again.
+                </p>
               </div>
             )}
 
@@ -1538,14 +1653,7 @@ const MessageBubbleComponent = function MessageBubble({
               back to message.metadata.model (set on messages loaded from DB). */}
           {!isUser && !message.isStreaming && (message.model ?? message.metadata?.model) && (
             <div className="mt-1.5 text-[11px] text-[var(--chat-text-muted)] opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-              {
-                (message.model ?? message.metadata?.model ?? '')
-                  .replace(
-                    /^(anthropic|openai|google|xai|deepseek|perplexity|qwen|moonshot|zhipu|ollama|lmstudio)\//i,
-                    '',
-                  )
-                  .replace(/-(\d{8})$/, '') /* strip date suffixes like -20250219 */
-              }
+              {getManagedModelPresentationLabel(message.model ?? message.metadata?.model)}
             </div>
           )}
 
@@ -1720,22 +1828,25 @@ const MessageBubbleComponent = function MessageBubble({
                 )}
 
                 {/* Regenerate — primary action for assistant messages */}
-                {!isUser && onRegenerate && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={ACTION_BUTTON_SIZE}
-                        onClick={() => onRegenerate(message.id)}
-                        aria-label="Regenerate response"
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Regenerate</TooltipContent>
-                  </Tooltip>
-                )}
+                {!isUser &&
+                  onRegenerate &&
+                  message.metadata?.toolType !== 'image-generation' &&
+                  message.metadata?.toolType !== 'video-generation' && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={ACTION_BUTTON_SIZE}
+                          onClick={() => onRegenerate(message.id)}
+                          aria-label="Regenerate response"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Regenerate</TooltipContent>
+                    </Tooltip>
+                  )}
 
                 {/* More actions menu */}
                 <DropdownMenu>
@@ -1974,7 +2085,15 @@ function metadataEqual(prev: Message['metadata'], next: Message['metadata']): bo
     prev?.imageGenPrompt === next?.imageGenPrompt &&
     prev?.imageGenAspect === next?.imageGenAspect &&
     prev?.imageGenModel === next?.imageGenModel &&
+    prev?.imageRetryAt === next?.imageRetryAt &&
     prev?.videoUrl === next?.videoUrl &&
+    prev?.videoTaskId === next?.videoTaskId &&
+    prev?.videoStatus === next?.videoStatus &&
+    prev?.videoProvider === next?.videoProvider &&
+    prev?.videoModel === next?.videoModel &&
+    prev?.videoProgress === next?.videoProgress &&
+    prev?.videoError === next?.videoError &&
+    prev?.videoRetryable === next?.videoRetryable &&
     prev?.videoData === next?.videoData &&
     prev?.thumbnailUrl === next?.thumbnailUrl &&
     prev?.toolResult === next?.toolResult &&
@@ -2032,6 +2151,8 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.onBranch !== next.onBranch) return false;
   if (prev.onReadAloud !== next.onReadAloud) return false;
   if (prev.onRegenerateImage !== next.onRegenerateImage) return false;
+  if (prev.onResumeVideo !== next.onResumeVideo) return false;
+  if (prev.onRetryVideo !== next.onRetryVideo) return false;
 
   // Check flags
   if (prev.isBranching !== next.isBranching) return false;

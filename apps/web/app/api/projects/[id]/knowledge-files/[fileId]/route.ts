@@ -16,8 +16,13 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { deleteObject, getObject, objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import { objectKeyFromStorageUri } from '@/lib/server/object-storage';
+import {
+  deleteProjectKnowledgeObject,
+  getProjectKnowledgeObject,
+} from '@/lib/server/project-knowledge-object-storage';
 import { servedByteHeaders } from '@/lib/security/served-bytes';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
@@ -42,7 +47,9 @@ async function ownedKnowledgeFile(
 }> {
   const { userId } = await getClerkAuthUser(request);
   const { id: projectId, fileId } = await context.params;
-  const [file] = await getNeonDb().query<{
+  const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const [file] = await db.query<{
     mime_type: string | null;
     file_name: string;
     storage_uri: string | null;
@@ -54,9 +61,10 @@ async function ownedKnowledgeFile(
         and f.project_id = $2
         and f.deleted_at is null
         and p.user_id = $3
+        and p.organization_id is not distinct from $4::uuid
         and p.deleted_at is null
       limit 1`,
-    [fileId, projectId, userId],
+    [fileId, projectId, userId, organizationId],
   );
   if (!file?.storage_uri) throw createError.notFound('Knowledge file not found');
   return {
@@ -74,7 +82,7 @@ async function handleGetKnowledgeFile(request: NextRequest, context: RouteContex
   const file = await ownedKnowledgeFile(request, context);
   const objectKey = objectKeyFromStorageUri(file.storageUri);
   if (!objectKey) throw createError.notFound('Knowledge file not found');
-  const object = await getObject(objectKey);
+  const object = await getProjectKnowledgeObject(objectKey);
   if (!object) throw createError.notFound('Knowledge file not found');
   // `.html`, `.xml` and `.svg` are all accepted knowledge-file types, and this
   // response is served from the app's own origin — echoing the stored type
@@ -109,6 +117,7 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
 
   const db = getNeonDb();
   const { id: projectId, fileId } = await context.params;
+  const organizationId = await resolveActiveOrganizationId(db, userId);
   let file: { storage_uri: string | null } | undefined;
   try {
     [file] = await db.query<{ storage_uri: string | null }>(
@@ -119,10 +128,11 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
           and f.project_id = $2
           and f.deleted_at is null
           and p.user_id = $3
+          and p.organization_id is not distinct from $4::uuid
           and p.is_archived = false
           and p.deleted_at is null
         limit 1`,
-      [fileId, projectId, userId],
+      [fileId, projectId, userId, organizationId],
     );
   } catch (error) {
     if (isSchemaNotReady(error)) {
@@ -162,7 +172,7 @@ async function handleDeleteKnowledgeFile(request: NextRequest, context: RouteCon
 
   if (objectKey) {
     try {
-      await deleteObject(objectKey);
+      await deleteProjectKnowledgeObject(objectKey);
     } catch (error) {
       logger.error({ error, projectId, fileId, objectKey }, 'Failed to delete knowledge object');
       try {

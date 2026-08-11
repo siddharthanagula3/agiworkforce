@@ -21,6 +21,9 @@ vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
 
 vi.mock('@/lib/logger', () => ({
   logger: {

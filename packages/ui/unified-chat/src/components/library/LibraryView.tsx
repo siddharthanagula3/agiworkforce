@@ -21,7 +21,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FolderOpen, Loader2, RotateCcw, Search } from 'lucide-react';
+import { FolderOpen, Loader2, RotateCcw, Search, Trash2 } from 'lucide-react';
 import {
   LibraryListResponseSchema,
   LIBRARY_DEFAULT_PAGE_SIZE,
@@ -118,6 +118,11 @@ export function generatedFileFromLibraryItem(item: LibraryItem): GeneratedFile {
  * one place here.
  */
 export interface LibraryTransport {
+  /** Whether the host has finished determining auth state. When false, the
+   *  Library renders a loading state instead of misreporting a signed-in
+   *  account as empty during session hydration. Hosts without an async auth
+   *  bootstrap may omit this (ready by default). */
+  isAuthReady?: boolean;
   /** Whether an authenticated session exists. Gates the first fetch so a
    *  signed-out visit never fires an authenticated request. */
   isSignedIn: boolean;
@@ -125,6 +130,10 @@ export interface LibraryTransport {
   listPage(params: URLSearchParams): Promise<Response>;
   /** GET one asset's bytes, for the download blob. */
   fetchAsset(uri: string): Promise<Response>;
+  /** DELETE one live asset into the recoverable Recently-deleted bin. */
+  deleteItem(id: string): Promise<Response>;
+  /** Permanently erase one soft-deleted asset and its stored bytes. */
+  permanentlyDeleteItem(id: string): Promise<Response>;
   /** POST a restore for a soft-deleted asset id. */
   restoreItem(id: string): Promise<Response>;
   /** Show the asset to the user however this host does that. */
@@ -144,6 +153,12 @@ interface PageState {
   nextOffset: number | null;
 }
 
+async function requireSuccessfulMutation(response: Response): Promise<void> {
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const body = (await response.json()) as { success?: unknown };
+  if (body.success !== true) throw new Error('The file is no longer available');
+}
+
 export interface LibraryViewProps {
   transport: LibraryTransport;
   /** Host-provided deep-link query, used by cross-surface global search. */
@@ -152,16 +167,26 @@ export interface LibraryViewProps {
 
 export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) {
   const { isSignedIn } = transport;
+  const isAuthReady = transport.isAuthReady !== false;
   const [origin, setOrigin] = useState<OriginFilter>('all');
   const [kind, setKind] = useState<KindFilter>('all');
   const [searchInput, setSearchInput] = useState(initialQuery);
   const [query, setQuery] = useState(initialQuery.trim());
   const [page, setPage] = useState<PageState>({ items: [], hasMore: false, nextOffset: null });
   const [loading, setLoading] = useState(false);
+  const [hasResolvedPage, setHasResolvedPage] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
+  const [mutationErrors, setMutationErrors] = useState<Record<string, string>>({});
+  const [unavailableIds, setUnavailableIds] = useState<ReadonlySet<string>>(() => new Set());
   const [viewDeleted, setViewDeleted] = useState(false);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [confirmingPermanentDeleteId, setConfirmingPermanentDeleteId] = useState<string | null>(
+    null,
+  );
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [permanentlyDeletingId, setPermanentlyDeletingId] = useState<string | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const requestSeq = useRef(0);
 
@@ -194,7 +219,10 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
     async (offset: number, append: boolean) => {
       const seq = ++requestSeq.current;
       if (append) setLoadingMore(true);
-      else setLoading(true);
+      else {
+        setLoading(true);
+        setHasResolvedPage(false);
+      }
       setError(null);
       try {
         const res = await transport.listPage(buildParams(offset));
@@ -214,24 +242,40 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
         if (seq === requestSeq.current) {
           setLoading(false);
           setLoadingMore(false);
+          if (!append) setHasResolvedPage(true);
         }
       }
     },
     [buildParams, transport],
   );
 
-  // (Re)load the first page whenever the filters change. Gated on isSignedIn
-  // so a signed-out visit never fires an authenticated fetch.
+  // (Re)load the first page whenever the filters change. Gated on settled
+  // auth so an auth-pending visit neither fires a request nor renders a fake
+  // empty account. Clear prior account data when the settled host signs out.
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!isAuthReady) return;
+    if (!isSignedIn) {
+      requestSeq.current += 1;
+      setPage({ items: [], hasMore: false, nextOffset: null });
+      setError(null);
+      setLoading(false);
+      setLoadingMore(false);
+      setHasResolvedPage(false);
+      return;
+    }
     void loadPage(0, false);
-  }, [isSignedIn, loadPage]);
+  }, [isAuthReady, isSignedIn, loadPage]);
 
   const handleDownload = useCallback(
     async (item: LibraryItem) => {
       try {
         const res = await transport.fetchAsset(item.uri);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          if (res.status === 404 || res.status === 410) {
+            setUnavailableIds((current) => new Set(current).add(item.id));
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -255,19 +299,98 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
     [transport],
   );
 
+  const handleThumbnailError = useCallback(
+    async (item: LibraryItem) => {
+      try {
+        // The browser's image error event does not expose HTTP status. Probe
+        // through the host's authenticated transport only after an actual
+        // thumbnail failure so valid images pay no duplicate request cost.
+        const response = await transport.fetchAsset(item.uri);
+        if (response.status === 404 || response.status === 410) {
+          setUnavailableIds((current) => new Set(current).add(item.id));
+        }
+      } catch {
+        // A transient transport error is not proof that durable bytes are
+        // gone. The card already falls back to its kind icon for this mount.
+      }
+    },
+    [transport],
+  );
+
   // Restore a soft-deleted asset from the Recently-deleted bin. On success the
   // row leaves the bin view immediately (it is live again). CSRF-guarded POST.
   const handleRestore = useCallback(
     async (id: string) => {
       setRestoringId(id);
+      setMutationErrors((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       try {
         const res = await transport.restoreItem(id);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        await requireSuccessfulMutation(res);
         setPage((prev) => ({ ...prev, items: prev.items.filter((it) => it.id !== id) }));
-      } catch {
-        // Non-fatal: leave the item in the bin so the user can retry.
+      } catch (err) {
+        setMutationErrors((prev) => ({
+          ...prev,
+          [id]: err instanceof Error ? err.message : String(err),
+        }));
       } finally {
         setRestoringId(null);
+      }
+    },
+    [transport],
+  );
+
+  // Deletion is deliberately recoverable: the server only soft-deletes the
+  // owner-scoped row, and the Recently-deleted bin keeps it restorable for 30
+  // days. Confirmation stays inline so every host inherits the same flow.
+  const handleDelete = useCallback(
+    async (id: string) => {
+      setDeletingId(id);
+      setMutationErrors((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      try {
+        const res = await transport.deleteItem(id);
+        await requireSuccessfulMutation(res);
+        setPage((prev) => ({ ...prev, items: prev.items.filter((it) => it.id !== id) }));
+        setConfirmingDeleteId(null);
+      } catch (err) {
+        setMutationErrors((prev) => ({
+          ...prev,
+          [id]: err instanceof Error ? err.message : String(err),
+        }));
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [transport],
+  );
+
+  const handlePermanentDelete = useCallback(
+    async (id: string) => {
+      setPermanentlyDeletingId(id);
+      setMutationErrors((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      try {
+        const res = await transport.permanentlyDeleteItem(id);
+        await requireSuccessfulMutation(res);
+        setPage((prev) => ({ ...prev, items: prev.items.filter((it) => it.id !== id) }));
+        setConfirmingPermanentDeleteId(null);
+      } catch (err) {
+        setMutationErrors((prev) => ({
+          ...prev,
+          [id]: err instanceof Error ? err.message : String(err),
+        }));
+      } finally {
+        setPermanentlyDeletingId(null);
       }
     },
     [transport],
@@ -284,15 +407,20 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
 
   const cards = useMemo(
     () =>
-      page.items.map((item) => ({
-        item,
-        presentation: summarizeGeneratedFileBundle({
-          generatedFile: generatedFileFromLibraryItem(item),
-          // Library rows exist only after the server persisted the bytes.
-          fallbackStatus: 'completed',
-        }),
-      })),
-    [page.items],
+      page.items.map((item) => {
+        const isUnavailable = unavailableIds.has(item.id);
+        return {
+          item,
+          isUnavailable,
+          presentation: summarizeGeneratedFileBundle({
+            generatedFile: generatedFileFromLibraryItem(item),
+            // Older development rows can outlive their former disposable
+            // local byte cache. A confirmed 404/410 must not remain Ready.
+            fallbackStatus: isUnavailable ? 'failed' : 'completed',
+          }),
+        };
+      }),
+    [page.items, unavailableIds],
   );
 
   return (
@@ -368,7 +496,7 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
         </div>
       ) : null}
 
-      {loading && cards.length === 0 ? (
+      {(!isAuthReady || (isSignedIn && (!hasResolvedPage || loading))) && cards.length === 0 ? (
         <div
           data-testid="library-loading"
           className="flex items-center gap-2 py-16 text-sm text-[var(--chat-text-muted)]"
@@ -378,8 +506,17 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
         </div>
       ) : null}
 
-      {!loading && !error && cards.length === 0 ? (
-        <EmptyState origin={origin} hasQuery={query.length > 0} startChat={transport.startChat} />
+      {isAuthReady &&
+      (!isSignedIn || hasResolvedPage) &&
+      !loading &&
+      !error &&
+      cards.length === 0 ? (
+        <EmptyState
+          origin={origin}
+          hasQuery={query.length > 0}
+          viewDeleted={viewDeleted}
+          startChat={transport.startChat}
+        />
       ) : null}
 
       {cards.length > 0 ? (
@@ -387,7 +524,7 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
           data-testid="library-grid"
           className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {cards.map(({ item, presentation }) => (
+          {cards.map(({ item, isUnavailable, presentation }) => (
             <div key={item.id} className="flex h-full flex-col gap-1">
               <GeneratedFileCard
                 presentation={{
@@ -395,23 +532,136 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
                   // Inline thumbnail through the authed serve route for
                   // previewable images; other kinds keep the icon tile.
                   previewUri:
-                    item.previewable && item.mime_type.toLowerCase().startsWith('image/')
+                    !isUnavailable &&
+                    item.previewable &&
+                    item.mime_type.toLowerCase().startsWith('image/')
                       ? transport.inlinePreviewUri?.(item.uri)
                       : undefined,
-                  canPreview: item.previewable,
+                  canPreview: !isUnavailable && item.previewable,
                 }}
-                onDownload={() => void handleDownload(item)}
-                onPreview={item.previewable ? () => handlePreview(item) : undefined}
+                onDownload={isUnavailable ? undefined : () => void handleDownload(item)}
+                onPreview={
+                  !isUnavailable && item.previewable ? () => handlePreview(item) : undefined
+                }
+                onPreviewError={() => void handleThumbnailError(item)}
               />
+              {isUnavailable ? (
+                <p className="px-1 text-xs text-[var(--chat-destructive)]" role="status">
+                  Stored file bytes are no longer available. You can remove this stale Library
+                  entry.
+                </p>
+              ) : null}
               {viewDeleted ? (
+                confirmingPermanentDeleteId === item.id ? (
+                  <div
+                    className="rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-2"
+                    role="group"
+                    aria-label={`Permanently delete ${item.file_name}`}
+                  >
+                    <p className="text-xs text-[var(--chat-text-secondary)]">
+                      Delete permanently? This file cannot be restored.
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingPermanentDeleteId(null)}
+                        disabled={permanentlyDeletingId === item.id}
+                        className="text-xs font-medium text-[var(--chat-text-secondary)] underline underline-offset-2 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handlePermanentDelete(item.id)}
+                        disabled={permanentlyDeletingId === item.id}
+                        className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2 disabled:opacity-50"
+                      >
+                        {permanentlyDeletingId === item.id ? 'Deleting…' : 'Delete permanently'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => void handleRestore(item.id)}
+                      disabled={restoringId === item.id}
+                      className="text-xs font-medium text-primary underline underline-offset-2 disabled:opacity-50"
+                    >
+                      {restoringId === item.id ? 'Restoring…' : 'Restore'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingPermanentDeleteId(item.id)}
+                      className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
+                    >
+                      Delete permanently
+                    </button>
+                  </div>
+                )
+              ) : confirmingDeleteId === item.id ? (
+                <div
+                  className="rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-2"
+                  role="group"
+                  aria-label={`Delete ${item.file_name}`}
+                >
+                  <p className="text-xs text-[var(--chat-text-secondary)]">
+                    Move to Recently deleted? You can restore it for 30 days.
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDeleteId(null)}
+                      disabled={deletingId === item.id}
+                      className="text-xs font-medium text-[var(--chat-text-secondary)] underline underline-offset-2 disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(item.id)}
+                      disabled={deletingId === item.id}
+                      className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2 disabled:opacity-50"
+                    >
+                      {deletingId === item.id ? 'Deleting…' : 'Move to Recently deleted'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
                 <button
                   type="button"
-                  onClick={() => void handleRestore(item.id)}
-                  disabled={restoringId === item.id}
-                  className="self-start text-xs font-medium text-primary underline underline-offset-2 disabled:opacity-50"
+                  onClick={() => setConfirmingDeleteId(item.id)}
+                  className="flex self-start items-center gap-1 text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
+                  aria-label={`Delete ${item.file_name}`}
                 >
-                  {restoringId === item.id ? 'Restoring…' : 'Restore'}
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                  Delete
                 </button>
+              )}
+              {mutationErrors[item.id] ? (
+                <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
+                  <span>
+                    {viewDeleted && confirmingPermanentDeleteId === item.id
+                      ? 'Permanent delete'
+                      : viewDeleted
+                        ? 'Restore'
+                        : 'Delete'}{' '}
+                    failed ({mutationErrors[item.id]}).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void (viewDeleted
+                        ? confirmingPermanentDeleteId === item.id
+                          ? handlePermanentDelete(item.id)
+                          : handleRestore(item.id)
+                        : handleDelete(item.id))
+                    }
+                    className="font-medium underline underline-offset-2"
+                  >
+                    Retry
+                  </button>
+                </div>
               ) : null}
               {downloadErrors[item.id] ? (
                 <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
@@ -478,33 +728,41 @@ function FilterChip({
 function EmptyState({
   origin,
   hasQuery,
+  viewDeleted,
   startChat,
 }: {
   origin: OriginFilter;
   hasQuery: boolean;
+  viewDeleted: boolean;
   startChat?: () => void;
 }) {
   // Honest copy: search miss vs. genuinely empty buckets. Uploads are not
   // cataloged into the Library today (chat uploads stay with their
   // conversation), so the Uploaded bucket says exactly that.
+  const title = viewDeleted ? 'Recently deleted is empty' : 'Nothing here yet';
   const copy = hasQuery
-    ? 'No files match your search.'
-    : origin === 'uploaded'
-      ? 'Uploaded files aren’t cataloged in the Library yet — files you upload stay with their conversation. Generated files appear under Generated.'
-      : 'Files created in your conversations — images, documents, spreadsheets — will appear here.';
+    ? viewDeleted
+      ? 'No deleted files match your search.'
+      : 'No files match your search.'
+    : viewDeleted
+      ? 'Files you delete stay here for 30 days so you can restore them before they are permanently removed.'
+      : origin === 'uploaded'
+        ? 'Uploaded files aren’t cataloged in the Library yet — files you upload stay with their conversation. Generated files appear under Generated.'
+        : 'Files created in your conversations — images, documents, spreadsheets — will appear here.';
+  const EmptyIcon = viewDeleted ? Trash2 : FolderOpen;
   return (
     <div
       data-testid="library-empty-state"
       className="flex flex-col items-center gap-3 py-20 text-center"
     >
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--chat-accent-primary)]/15">
-        <FolderOpen className="h-7 w-7 text-[var(--chat-accent-primary)]" aria-hidden />
+        <EmptyIcon className="h-7 w-7 text-[var(--chat-accent-primary)]" aria-hidden />
       </div>
-      <p className="text-base font-semibold text-[var(--chat-text-primary)]">Nothing here yet</p>
+      <p className="text-base font-semibold text-[var(--chat-text-primary)]">{title}</p>
       <p className="max-w-md text-sm text-[var(--chat-text-muted)]">{copy}</p>
       {/* A search miss has an obvious way out (clear the query); a genuinely
           empty Library does not, so only that case gets the CTA. */}
-      {startChat && !hasQuery ? (
+      {startChat && !hasQuery && !viewDeleted ? (
         <Button size="sm" className="mt-1" onClick={startChat}>
           Start a chat
         </Button>

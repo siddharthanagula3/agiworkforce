@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
 import { NextRequest, NextResponse } from 'next/server';
 
 const clerkState = vi.hoisted(() => ({
@@ -59,18 +60,54 @@ describe('web proxy', () => {
   it('keeps Workflow SDK callbacks outside the global proxy matcher', async () => {
     const { config } = await import('../proxy');
     const matchesProxy = (pathname: string) =>
-      config.matcher.some((pattern) => new RegExp(`^${pattern}$`, 'u').test(pathname));
+      unstable_doesMiddlewareMatch({ config, url: `http://localhost${pathname}` });
 
     expect(matchesProxy('/.well-known/workflow/v1/flow')).toBe(false);
     expect(matchesProxy('/.well-known/workflow/v1/step')).toBe(false);
     expect(matchesProxy('/chat')).toBe(true);
   });
 
-  it('keeps public marketing pages out of Clerk session middleware while preserving CSP', async () => {
+  it('keeps signed raw-body video webhooks outside every proxy matcher', async () => {
+    const { config } = await import('../proxy');
+    const matchesProxy = (pathname: string) =>
+      unstable_doesMiddlewareMatch({ config, url: `http://localhost${pathname}` });
+
+    expect(matchesProxy('/api/media/video/openrouter-webhook')).toBe(false);
+    expect(matchesProxy('/api/stripe-webhook')).toBe(false);
+    expect(matchesProxy('/api/mobile/iap/apple-notifications')).toBe(false);
+    expect(matchesProxy('/api/mobile/iap/google-notifications')).toBe(false);
+    expect(matchesProxy('/api/llm/v1/audio/transcriptions')).toBe(false);
+    expect(matchesProxy('/api/media/video/status')).toBe(true);
+    expect(matchesProxy('/api/files/example.png')).toBe(true);
+  });
+
+  it('runs the auth-aware root page through Clerk session middleware while preserving CSP', async () => {
     clerkState.clerkPaths = [];
     const { proxy } = await import('../proxy');
 
     const response = await proxy(new NextRequest('http://localhost/'), {} as never);
+
+    expect(clerkState.clerkPaths).toEqual(['/']);
+    expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
+  });
+
+  it('runs the post-login acceptance checkpoint through Clerk session middleware', async () => {
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(
+      new NextRequest('http://localhost/login/complete?redirectTo=%2Fchat'),
+      {} as never,
+    );
+
+    expect(clerkState.clerkPaths).toEqual(['/login/complete']);
+    expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
+  });
+
+  it('keeps ordinary public marketing pages outside Clerk session middleware', async () => {
+    clerkState.clerkPaths = [];
+    const { proxy } = await import('../proxy');
+
+    const response = await proxy(new NextRequest('http://localhost/about'), {} as never);
 
     expect(clerkState.clerkPaths).toEqual([]);
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");

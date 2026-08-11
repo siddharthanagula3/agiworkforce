@@ -610,7 +610,7 @@ function createStyles(colors: ColorScheme) {
 
     // Processing overlay
     processingOverlay: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       backgroundColor: colors.scrim,
       alignItems: 'center',
       justifyContent: 'center',

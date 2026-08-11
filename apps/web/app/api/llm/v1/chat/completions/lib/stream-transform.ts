@@ -865,6 +865,7 @@ export async function buildAdapterStreamResponse(
         try {
           const { files, failedCount } = await persistGeneratedFiles({
             userId,
+            organizationId: processed.organizationId ?? null,
             refs: [...generatedFileRefs.values()],
             model: modelUsed,
           });

@@ -16,7 +16,7 @@
  * Round-7 autonomous suite-transformation slice, 2026-05-21.
  */
 
-import type { ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import {
   AlertTriangle,
   Archive,
@@ -47,6 +47,10 @@ export interface GeneratedFileCardProps {
   onOpenSourceSession?: () => void;
   /** Optional preview affordance — hidden when omitted or canPreview is false. */
   onPreview?: () => void;
+  /** Reports that the inline thumbnail could not be loaded. Hosts can probe
+   * the authenticated asset route and distinguish missing bytes from an
+   * image-decoding-only failure. */
+  onPreviewError?: () => void;
   /** Optional extra className for host-layout integration. */
   className?: string;
 }
@@ -121,12 +125,22 @@ export function GeneratedFileCard({
   onShare,
   onOpenSourceSession,
   onPreview,
+  onPreviewError,
   className,
 }: GeneratedFileCardProps) {
+  const [previewFailed, setPreviewFailed] = useState(false);
+
+  useEffect(() => {
+    setPreviewFailed(false);
+  }, [presentation.previewUri]);
+
   const downloadEnabled = presentation.canDownload && presentation.isComplete && !!onDownload;
   const shareEnabled = presentation.canShare && presentation.isComplete && !!onShare;
   const previewEnabled =
-    presentation.canPreview && !!onPreview && (presentation.previewUri ?? presentation.primaryUri);
+    !previewFailed &&
+    presentation.canPreview &&
+    !!onPreview &&
+    (presentation.previewUri ?? presentation.primaryUri);
 
   return (
     <div
@@ -144,11 +158,15 @@ export function GeneratedFileCard({
     >
       <div className="flex items-start gap-3">
         {/* Preview thumbnail when available; falls back to a kind icon. */}
-        {presentation.previewUri ? (
+        {presentation.previewUri && !previewFailed ? (
           <img
             src={presentation.previewUri}
             alt={`${presentation.title} preview`}
             className="h-12 w-12 shrink-0 rounded-md object-cover"
+            onError={() => {
+              setPreviewFailed(true);
+              onPreviewError?.();
+            }}
           />
         ) : (
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-[var(--chat-surface-overlay)]">
@@ -165,6 +183,7 @@ export function GeneratedFileCard({
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-[var(--chat-text-muted)]">
             <span>{presentation.kindLabel}</span>
+            {previewFailed ? <span>· Preview unavailable</span> : null}
             {presentation.byteCountLabel ? <span>· {presentation.byteCountLabel}</span> : null}
             {presentation.checksumShort ? (
               <span title="SHA-256 (first 12 hex chars)">· {presentation.checksumShort}</span>

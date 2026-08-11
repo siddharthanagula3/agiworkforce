@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import type { InteractiveCard } from '@agiworkforce/types';
 import type { AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { FatalError, RetryableError, getWritable } from 'workflow';
@@ -31,6 +33,20 @@ import {
   type WorkflowTerminalOutcome,
 } from './steps/settle-workflow-invocation';
 
+const ProviderCallObservationSchema = z
+  .object({
+    inputTokens: z.number().nonnegative(),
+    outputTokens: z.number().nonnegative(),
+    cacheReadTokens: z.number().nonnegative(),
+    cacheWriteTokens: z.number().nonnegative(),
+    cacheWrite1hTokens: z.number().nonnegative(),
+    reasoningTokens: z.number().nonnegative(),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    costDollars: z.number().finite().nonnegative().optional(),
+  })
+  .strict();
+
 const UsageSchema = z
   .object({
     providerCalls: z.number().int().nonnegative(),
@@ -40,6 +56,8 @@ const UsageSchema = z
     cacheWriteTokens: z.number().int().nonnegative(),
     cacheWrite1hTokens: z.number().int().nonnegative(),
     reasoningTokens: z.number().int().nonnegative(),
+    providerCostDollars: z.number().finite().nonnegative().optional(),
+    providerCallObservations: z.array(ProviderCallObservationSchema).optional(),
   })
   .strict();
 
@@ -94,6 +112,9 @@ const ToolResultSchema = z
   .object({
     content: z.string(),
     isError: z.boolean(),
+    interactiveCard: z
+      .custom<InteractiveCard>((value) => parseInteractiveCardDelta({ card: value }) !== null)
+      .optional(),
     source: SourceSchema.optional(),
     sources: z.array(SourceSchema).optional(),
     pngResults: z.array(z.string()).optional(),
@@ -147,7 +168,7 @@ export async function executeCloudAgentWorkflowInvocation(
     managedUsage: { db, ...input.billing },
   } as ProcessedRequest;
   const connectorExecutor = input.mcpTools.some((tool) => tool.origin === 'connector')
-    ? makeUserConnectorExecutor(input.userId)
+    ? makeUserConnectorExecutor(input.userId, input.processed.organizationId ?? null)
     : undefined;
   let nextInput: CloudAgentWorkflowInput | null = null;
   let approvalCheckpointSaved = false;
@@ -222,14 +243,16 @@ export async function executeCloudAgentWorkflowInvocation(
         // Write first. If journal persistence then fails, the step retry may
         // replay this sequence; all clients suppress duplicate envelopes.
         await writer.write(new TextEncoder().encode(projected.sse));
-        await appendCloudAgentEvent(db, {
-          userId: input.userId,
-          runId: input.runId,
-          envelope: projected.envelope,
-        });
-        if (projected.envelope.event.type === 'error') reportedFailure = true;
-        if (projected.envelope.event.type === 'task-state-changed') {
-          lastTaskState = projected.envelope.event.state;
+        if (projected.envelope) {
+          await appendCloudAgentEvent(db, {
+            userId: input.userId,
+            runId: input.runId,
+            envelope: projected.envelope,
+          });
+          if (projected.envelope.event.type === 'error') reportedFailure = true;
+          if (projected.envelope.event.type === 'task-state-changed') {
+            lastTaskState = projected.envelope.event.state;
+          }
         }
       }
     }

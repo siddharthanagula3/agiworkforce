@@ -46,7 +46,7 @@ def _resolve_openai_project_headers() -> dict[str, str] | None:
 class OpenAIProvider:
     """Stock OpenAI credentials + bundled-YAML metadata provider."""
 
-    DEFAULT_MODEL = "gpt-5.4"
+    DEFAULT_MODEL = registry.lookup_default_model(REGISTRY_PATH) or ""
     SLOT_DEFAULTS: dict[str, str] = {}
 
     def resolve_credentials(self) -> tuple[str, str | None] | None:

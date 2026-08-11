@@ -16,7 +16,10 @@ pub struct CanvasStateManager {
 /// about mutations it did not make itself (A2UI writes driven by the agent,
 /// or a second window) from this event.
 fn emit_canvas_updated(app: &AppHandle, canvas_id: &str) {
-    if let Err(e) = app.emit("canvas:updated", serde_json::json!({ "canvasId": canvas_id })) {
+    if let Err(e) = app.emit(
+        "canvas:updated",
+        serde_json::json!({ "canvasId": canvas_id }),
+    ) {
         tracing::error!("[Canvas] Failed to emit canvas:updated: {}", e);
     }
 }

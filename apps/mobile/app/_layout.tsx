@@ -56,6 +56,8 @@ import { getAuthToken } from '@/services/authSession';
 import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLinks';
 import { restoreStoredLanguage } from '@/src/i18n';
 import { subscribeToIOSShareInbox } from '@/src/features/share-preview/iosShareInbox';
+import { clearPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import { completePendingPostAuthIntentForLoadedSession } from '@/src/features/auth/actions/postAuthIntent';
 
 // Expo Router only wires up a route's error boundary when the route file
 // itself has a named `ErrorBoundary` export — a separate ./error.tsx file is
@@ -166,12 +168,25 @@ function ClerkTokenBridge() {
         () => getToken({ skipCache: true }),
       );
       setClerkUserId(userId);
-      setClerkSignedIn(true);
       // Public alpha: the signed-in entitlement IS the Managed Cloud gate. Reflect it
       // in cloudUnlocked so every UI consumer (mode toggle, model picker, settings)
       // opens Cloud for a signed-in user — no invite, no waitlist.
       setCloudAccess(true);
+      // Consume the transient intent only after Clerk has confirmed the owner and
+      // Cloud access is unlocked (model-store selection validates that gate), but
+      // before publishing isClerkSignedIn. The auth guard redirects on that final
+      // signal, so the first app frame already has the requested mode + catalog
+      // default model instead of flashing/falling back to Local.
+      completePendingPostAuthIntentForLoadedSession({
+        isLoaded,
+        isSignedIn,
+        userId,
+        cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
+        subscriptionTier: useTierStore.getState().tier,
+      });
+      setClerkSignedIn(true);
     } else {
+      clearPostAuthIntent();
       setClerkTokenGetter(null, null, null);
       setClerkUserId(null);
       setClerkSignedIn(false);
@@ -193,6 +208,7 @@ function ClerkTokenBridge() {
 
   useEffect(() => {
     return () => {
+      clearPostAuthIntent();
       setClerkTokenGetter(null, null, null);
       useAuthStore.getState().setClerkUserId(null);
       useAuthStore.getState().setClerkSignedIn(false);

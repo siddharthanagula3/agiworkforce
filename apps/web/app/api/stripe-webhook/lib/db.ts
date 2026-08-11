@@ -17,6 +17,7 @@ import { WEBHOOK_MAX_RETRIES, WEBHOOK_RETRY_BASE_DELAY_MS } from '@/lib/constant
 import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-types';
 import { getPlanUsageBudgetCents } from '@/lib/server/managed-usage-policy';
 import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { isValidTopUpPurchase } from '@agiworkforce/types';
 import { describeSessionTax } from '@/lib/billing/tax-policy';
 import {
   buildPurchasedSeatRecord,
@@ -64,13 +65,34 @@ export async function handleCreditTopUp(
 ): Promise<void> {
   const userId = session.metadata?.['user_id'];
   const creditAmountCents = parseInt(session.metadata?.['credit_amount_cents'] || '0', 10);
+  const topUpUnits = parseInt(session.metadata?.['top_up_units'] || '0', 10);
 
-  if (!userId || !creditAmountCents) {
+  if (!userId || !isValidTopUpPurchase({ amountCents: creditAmountCents, units: topUpUnits })) {
     logger.error(
-      { sessionId: session.id, userId, creditAmountCents },
-      'Missing required metadata for credit top-up',
+      { sessionId: session.id, userId, creditAmountCents, topUpUnits },
+      'Invalid required metadata for credit top-up',
     );
-    throw new Error('Missing user_id or credit_amount_cents in session metadata');
+    throw new Error('Invalid credit top-up metadata');
+  }
+
+  if (session.currency !== 'usd' || session.amount_subtotal !== creditAmountCents) {
+    throw new Error('Credit top-up session amount or currency does not match its purchase');
+  }
+
+  // checkout.session.completed and checkout.session.async_payment_succeeded
+  // are distinct Stripe events for one async Checkout Session. Event-level
+  // idempotency cannot stop both from granting balance, so the purchase itself
+  // carries a stable session receipt in the credit transaction.
+  const transactionDescription = `Credit top-up purchase ${session.id}`;
+  const existingPurchase = await db.query<{ id: string }>(
+    `select id from credit_transactions
+     where user_id = $1 and transaction_type = 'purchase' and description = $2
+     limit 1`,
+    [userId, transactionDescription],
+  );
+  if (existingPurchase.length > 0) {
+    logger.info({ sessionId: session.id, userId }, 'Credit top-up was already applied');
+    return;
   }
 
   // M7: Validate credit amount against actual Stripe PaymentIntent amount
@@ -92,24 +114,33 @@ export async function handleCreditTopUp(
       );
     }
 
-    if (paymentIntent.amount_received !== creditAmountCents) {
+    if (
+      paymentIntent.currency !== 'usd' ||
+      typeof session.amount_total !== 'number' ||
+      paymentIntent.amount_received !== session.amount_total
+    ) {
       logger.error(
         {
           sessionId: session.id,
           userId,
           paymentIntentId,
-          metadataAmount: creditAmountCents,
+          purchasedBalanceAmount: creditAmountCents,
+          checkoutTotal: session.amount_total,
           actualAmountReceived: paymentIntent.amount_received,
         },
         'SECURITY: Credit top-up amount mismatch - metadata does not match PaymentIntent amount_received',
       );
-      throw new Error(
-        `Credit amount mismatch: metadata says ${creditAmountCents} cents but PaymentIntent received ${paymentIntent.amount_received} cents`,
-      );
+      throw new Error(`Credit top-up payment mismatch for Checkout Session ${session.id}`);
     }
 
     logger.info(
-      { sessionId: session.id, userId, paymentIntentId, amountVerified: creditAmountCents },
+      {
+        sessionId: session.id,
+        userId,
+        paymentIntentId,
+        purchasedBalanceAmount: creditAmountCents,
+        chargedTotal: session.amount_total,
+      },
       'Credit top-up: PaymentIntent amount verified successfully',
     );
   } else {
@@ -121,9 +152,26 @@ export async function handleCreditTopUp(
   }
 
   logger.info(
-    { sessionId: session.id, userId, creditAmountCents },
+    { sessionId: session.id, userId, creditAmountCents, topUpUnits },
     'Processing credit top-up purchase',
   );
+
+  const taxOutcome = describeSessionTax(session);
+  const taxLog = {
+    sessionId: session.id,
+    userId,
+    taxStatus: taxOutcome.status,
+    taxAmountMinor: taxOutcome.taxAmountMinor,
+    taxIdTypes: taxOutcome.taxIdTypes,
+  };
+  if (taxOutcome.calculated) {
+    logger.info(taxLog, 'Credit top-up tax calculated by Stripe Tax');
+  } else {
+    logger.error(
+      taxLog,
+      'TAX NOT COLLECTED: Stripe did not calculate tax for a completed credit top-up',
+    );
+  }
 
   try {
     const subscriptions = await db.query<{
@@ -142,8 +190,11 @@ export async function handleCreditTopUp(
     }
 
     const creditAccounts = await db.query<{ id: string }>(
-      'select id from token_credits where user_id = $1 and subscription_id = $2 limit 1',
-      [userId, subscription.id],
+      `select id from token_credits
+       where user_id = $1 and subscription_id = $2
+         and period_start = $3 and period_end = $4
+       limit 1`,
+      [userId, subscription.id, subscription.current_period_start, subscription.current_period_end],
     );
     const creditAccount = creditAccounts[0];
 
@@ -166,7 +217,7 @@ export async function handleCreditTopUp(
       userId,
       creditAccount.id,
       creditAmountCents,
-      'Credit top-up purchase',
+      transactionDescription,
       'purchase',
     ]);
 

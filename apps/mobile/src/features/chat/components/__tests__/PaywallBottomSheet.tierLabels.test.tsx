@@ -6,7 +6,12 @@
  * user their feature "requires the a higher plan". `max` was also labelled
  * "Max" while checkout sells "Max 5x".
  */
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
+
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
 
 // @gorhom/bottom-sheet drives its layout through Reanimated shared values that
 // the repo-wide Reanimated mock does not implement, so the real sheet cannot
@@ -30,12 +35,20 @@ jest.mock('@gorhom/bottom-sheet', () => {
 });
 
 import { PaywallBottomSheet } from '../PaywallBottomSheet';
+import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
 
-function renderSheet(requiredTier: string, feature = 'video_generation') {
+function renderSheet(
+  requiredTier: string,
+  feature = 'video_generation',
+  recoveryAction: PaywallRecoveryAction = 'upgrade',
+  reason?: string,
+) {
   return render(
     <PaywallBottomSheet
       feature={feature}
       requiredTier={requiredTier}
+      recoveryAction={recoveryAction}
+      reason={reason}
       onDismiss={() => {
         /* not exercised here */
       }}
@@ -44,6 +57,8 @@ function renderSheet(requiredTier: string, feature = 'video_generation') {
 }
 
 describe('PaywallBottomSheet tier labels', () => {
+  beforeEach(() => mockPush.mockClear());
+
   it('names Max 15x when the server gates a feature to it', () => {
     const { getByText } = renderSheet('max_15x');
 
@@ -61,5 +76,39 @@ describe('PaywallBottomSheet tier labels', () => {
     const { getByText } = renderSheet('platinum');
 
     expect(getByText('Upgrade to a higher')).toBeTruthy();
+  });
+
+  it('renders billing recovery without falsely telling an inactive subscriber to upgrade', () => {
+    const { getByText, queryByText } = renderSheet(
+      'pro',
+      'image_generation',
+      'manage_billing',
+      'Your subscription is past_due. Please update your payment method.',
+    );
+
+    expect(getByText('Update billing')).toBeTruthy();
+    expect(
+      getByText('AI image generation is unavailable until your subscription is active.'),
+    ).toBeTruthy();
+    expect(getByText('Manage billing')).toBeTruthy();
+    expect(queryByText('Upgrade to Pro')).toBeNull();
+    expect(queryByText('AI image generation requires the Pro plan.')).toBeNull();
+
+    fireEvent.press(getByText('Manage billing'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+  });
+
+  it('asks a user without a subscription to choose a plan instead of update billing', () => {
+    const { getByText, queryByText } = renderSheet(
+      'pro',
+      'image_generation',
+      'subscribe',
+      'No active subscription found.',
+    );
+
+    expect(getByText('Choose a plan')).toBeTruthy();
+    expect(getByText('AI image generation requires an active subscription.')).toBeTruthy();
+    expect(getByText('View plans')).toBeTruthy();
+    expect(queryByText('Update billing')).toBeNull();
   });
 });

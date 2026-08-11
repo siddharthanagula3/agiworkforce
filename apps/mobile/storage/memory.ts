@@ -1,5 +1,5 @@
 /**
- * Memory facts + sqlite-vec vector index (768-dim, nomic-embed-text-v1.5).
+ * Memory facts plus a 768-dimensional sqlite-vec index.
  * Vector operations degrade gracefully when sqlite-vec is not loaded.
  */
 

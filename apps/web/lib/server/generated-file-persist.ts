@@ -188,6 +188,8 @@ function mediaKindFor(mime: string): MediaKind {
  */
 export async function persistGeneratedFileBytes(params: {
   userId: string;
+  /** Workspace captured when the generating request was admitted. */
+  organizationId: string | null;
   data: Buffer;
   mimeType: string;
   filename: string;
@@ -204,7 +206,8 @@ export async function persistGeneratedFileBytes(params: {
   conversationId?: string;
   extraMetadata?: Record<string, unknown>;
 }): Promise<PersistGeneratedFileOutcome> {
-  const { userId, data, mimeType, filename, provider, origin, model, prompt } = params;
+  const { userId, organizationId, data, mimeType, filename, provider, origin, model, prompt } =
+    params;
 
   if (!isMediaStorageConfigured()) return { ok: false, reason: 'not_configured' };
   if (data.byteLength > MAX_GENERATED_FILE_BYTES) {
@@ -222,6 +225,7 @@ export async function persistGeneratedFileBytes(params: {
     const stored = await storeMedia({ userId, kind, data, contentType: mimeType });
     const assetId = await insertMediaAsset({
       userId,
+      organizationId,
       kind,
       mimeType,
       byteSize: stored.byteSize,

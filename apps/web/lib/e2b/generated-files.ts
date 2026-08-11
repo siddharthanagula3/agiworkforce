@@ -128,12 +128,14 @@ export async function harvestGeneratedFiles(params: {
   executor: E2BExecutor;
   baseline: SandboxSnapshot;
   userId: string;
+  /** Workspace captured when the generating turn was admitted. */
+  organizationId: string | null;
   model?: string;
   prompt?: string;
   /** Conversation provenance for the Library (migration 0081). */
   conversationId?: string;
 }): Promise<HarvestResult> {
-  const { executor, baseline, userId, model, prompt, conversationId } = params;
+  const { executor, baseline, userId, organizationId, model, prompt, conversationId } = params;
   const canPersist = Boolean(executor.readFileBytes) && isMediaStorageConfigured();
 
   let files: SandboxFileEntry[];
@@ -179,6 +181,7 @@ export async function harvestGeneratedFiles(params: {
       }
       const outcome = await persistGeneratedFileBytes({
         userId,
+        organizationId,
         data: Buffer.from(bytes),
         mimeType: mimeFor(f.name),
         filename: f.name,

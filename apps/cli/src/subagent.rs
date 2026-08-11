@@ -784,7 +784,7 @@ mod tests {
     fn manager_refreshes_parent_authority_before_spawn() {
         let mut manager = SubagentManager::new(
             CliConfig::default(),
-            "llama3".to_string(),
+            "fixture-local-model:latest".to_string(),
             crate::context::gather_system_context(),
             false,
             crate::cli_options::PermissionMode::Default,
@@ -793,14 +793,14 @@ mod tests {
         );
 
         manager.sync_parent_authority(
-            "claude-sonnet-5".to_string(),
+            "fixture-subagent-model".to_string(),
             true,
             crate::cli_options::PermissionMode::AcceptEdits,
             Some(vec!["read_file".to_string()]),
             vec!["web_fetch".to_string()],
         );
 
-        assert_eq!(manager.model, "claude-sonnet-5");
+        assert_eq!(manager.model, "fixture-subagent-model");
         assert!(manager.skip_permissions);
         assert_eq!(
             manager.permission_mode,
@@ -814,7 +814,7 @@ mod tests {
     async fn manager_shutdown_cancels_and_joins_background_threads() {
         let manager = SubagentManager::new(
             CliConfig::default(),
-            "llama3".to_string(),
+            "fixture-local-model:latest".to_string(),
             crate::context::gather_system_context(),
             false,
             crate::cli_options::PermissionMode::Default,

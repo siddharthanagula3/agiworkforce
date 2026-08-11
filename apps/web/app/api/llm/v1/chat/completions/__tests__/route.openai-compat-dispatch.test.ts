@@ -19,6 +19,31 @@
 
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+import { listCanonicalModels, requireProviderDefaultModel } from '@agiworkforce/types';
+
+const COMPAT_PROVIDER_CASES = [
+  { provider: 'minimax', content: 'MiniMax says hi.' },
+  { provider: 'zhipu', content: 'Zhipu says hi.' },
+  { provider: 'qwen', content: 'Qwen says hi.' },
+  { provider: 'deepseek', content: 'DeepSeek says hi.' },
+  { provider: 'xai', content: 'XAI says hi.' },
+  { provider: 'perplexity', content: 'Perplexity says hi.' },
+] as const;
+
+const COMPAT_CASES = COMPAT_PROVIDER_CASES.map(({ provider, content }) => ({
+  provider,
+  model: requireProviderDefaultModel(provider),
+  content,
+}));
+
+const MINIMAX_MODEL_ID = requireProviderDefaultModel('minimax');
+const PERPLEXITY_TOOLLESS_MODEL_ID = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) => candidate.provider === 'perplexity' && candidate.capabilities.tools === false,
+  );
+  if (!model) throw new Error('A catalog-backed tool-less search fixture is required');
+  return model.id;
+})();
 
 // GOV-3: route.ts now acquires a per-plan concurrent-turn slot from this module,
 // so the mock must provide it or the handler crashes on an undefined import.
@@ -312,15 +337,6 @@ function makeSubscription() {
   };
 }
 
-const COMPAT_CASES: Array<{ provider: string; model: string; content: string }> = [
-  { provider: 'minimax', model: 'minimax-m3', content: 'MiniMax says hi.' },
-  { provider: 'zhipu', model: 'glm-5.2', content: 'Zhipu says hi.' },
-  { provider: 'qwen', model: 'qwen-3.7-plus', content: 'Qwen says hi.' },
-  { provider: 'deepseek', model: 'deepseek-v4-flash', content: 'DeepSeek says hi.' },
-  { provider: 'xai', model: 'grok-4.5', content: 'XAI says hi.' },
-  { provider: 'perplexity', model: 'sonar', content: 'Perplexity says hi.' },
-];
-
 describe.each(COMPAT_CASES)(
   'POST /api/llm/v1/chat/completions — $provider adapter dispatch (task #34)',
   ({ provider, model, content }) => {
@@ -365,8 +381,8 @@ describe.each(COMPAT_CASES)(
 
 describe('Managed Web provider admission', () => {
   it.each([
-    ['groq', 'groq-llama-3.3-70b'],
-    ['openrouter', 'nvidia/nemotron-3-super-120b-a12b:free'],
+    ['groq', 'fixture-unroutable-groq-model'],
+    ['openrouter', 'fixture-unroutable-openrouter-model'],
   ])('rejects %s when it has no selectable Managed Web route', async (provider, model) => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
@@ -396,7 +412,9 @@ describe('Managed Web conversation ownership', () => {
     rlsMocks.getUserScopedDb.mockResolvedValue({ db: { query }, userId: 'attacker-user' });
     mockGetProviderFromModel.mockReturnValue('minimax');
 
-    const response = await POST(makeRequest('minimax-m3', '0190a000-0000-7000-8000-0000000000cc'));
+    const response = await POST(
+      makeRequest(MINIMAX_MODEL_ID, '0190a000-0000-7000-8000-0000000000cc'),
+    );
 
     expect(response.status).toBe(404);
     await expect(response.json()).resolves.toMatchObject({
@@ -456,7 +474,7 @@ describe('Managed Web AGI Work dispatch', () => {
       originSurface: 'web',
       workMode: 'agiwork',
       provider: 'minimax',
-      model: 'minimax-m3',
+      model: MINIMAX_MODEL_ID,
       createdAt: '2026-07-18T00:00:00.000Z',
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
@@ -478,9 +496,10 @@ describe('Managed Web AGI Work dispatch', () => {
 
   it('runs a paid agentic turn on the durable transport so it survives the client', async () => {
     arrangePaidAgenticTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeAgiWorkRequest('minimax-m3'));
+    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
@@ -504,7 +523,7 @@ describe('Managed Web AGI Work dispatch', () => {
     vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '0');
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeAgiWorkRequest('minimax-m3'));
+    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
 
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
@@ -515,9 +534,10 @@ describe('Managed Web AGI Work dispatch', () => {
 
   it('degrades to the request-scoped stream instead of failing the turn when the workflow will not start', async () => {
     arrangePaidAgenticTurn();
+    vi.stubEnv('AGI_DURABLE_INITIAL_TURNS', '1');
     workflowRouteMocks.start.mockRejectedValue(new Error('workflow storage unavailable'));
 
-    const response = await POST(makeAgiWorkRequest('minimax-m3'));
+    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
 
     // Nothing was generated or consumed before the start attempt, so the inline
     // path picks the turn up whole — the user loses detachability, not the turn.
@@ -530,7 +550,7 @@ describe('Managed Web AGI Work dispatch', () => {
     arrangePaidAgenticTurn();
     workflowRouteMocks.start.mockResolvedValue(durableWorkflowStream());
 
-    const response = await POST(makeRequest('minimax-m3', undefined, true));
+    const response = await POST(makeRequest(MINIMAX_MODEL_ID, undefined, true));
 
     expect(response.status).toBe(200);
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
@@ -578,12 +598,12 @@ describe('Managed Web conversation run concurrency guard', () => {
       originSurface: 'web',
       workMode: 'agiwork',
       provider: 'minimax',
-      model: 'minimax-m3',
+      model: MINIMAX_MODEL_ID,
       createdAt: '2026-07-18T00:00:00.000Z',
       updatedAt: '2026-07-18T00:00:00.000Z',
     });
 
-    const response = await POST(makeAgiWorkRequest('minimax-m3', conversationId));
+    const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID, conversationId));
 
     expect(response.status, await response.clone().text()).toBe(409);
     await expect(response.json()).resolves.toMatchObject({
@@ -607,7 +627,7 @@ describe('Managed Web conversation run concurrency guard', () => {
 });
 
 describe('Per-model tools capability gate', () => {
-  it('does not load MCP/connector tools for a tools:false model (perplexity sonar)', async () => {
+  it('does not load MCP/connector tools for a catalog tools:false search model', async () => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'u@example.com' });
     mockGetSubscription.mockResolvedValue({ ...makeSubscription(), plan_tier: 'max' });
@@ -631,7 +651,7 @@ describe('Per-model tools capability gate', () => {
       estimatedCostCents: input.estimatedCostCents,
     }));
     mockGetProviderFromModel.mockReturnValue('perplexity');
-    // If the gate were absent, these would be loaded and shipped to sonar,
+    // If the gate were absent, these would be loaded and shipped to the model,
     // which cannot do function calling — the provider would reject the request.
     workflowRouteMocks.loadMcpTools.mockResolvedValue([{ name: 'op_tool' }]);
     workflowRouteMocks.loadConnectorTools.mockResolvedValue({
@@ -640,8 +660,7 @@ describe('Per-model tools capability gate', () => {
       limit: 32,
     });
 
-    // sonar is search-native but capabilities.tools === false in the registry.
-    const response = await POST(makeRequest('sonar', undefined, true));
+    const response = await POST(makeRequest(PERPLEXITY_TOOLLESS_MODEL_ID, undefined, true));
 
     // The gate skips tool loading entirely for a tools:false model.
     expect(workflowRouteMocks.loadMcpTools).not.toHaveBeenCalled();

@@ -7,13 +7,7 @@ import { invoke } from '@/lib/tauri-mock';
 import { McpClient } from '@/api/mcp';
 import { Button } from '@/ui/Button';
 import { Label } from '@/ui/Label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
 
 const LazyCustomModelsSettings = lazy(() =>
@@ -446,7 +440,7 @@ export function ModelsKeysTab({
                                 installModel();
                               }
                             }}
-                            placeholder="e.g. qwen2.5-coder:7b"
+                            placeholder="e.g. model-name:tag"
                             disabled={installingOllamaModel}
                             className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-60"
                           />

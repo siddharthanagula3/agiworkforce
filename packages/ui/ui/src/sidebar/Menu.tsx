@@ -38,6 +38,11 @@ export interface MenuProps {
   className?: string;
   menuClassName?: string;
   /**
+   * Portal to document.body by default. Disable only inside modal layers that
+   * intentionally block pointer interaction outside their content boundary.
+   */
+  portalled?: boolean;
+  /**
    * Fires on every open/close transition (trigger toggle, outside click,
    * Escape, item select). Lets hover-revealed trigger rows stay visible while
    * their menu is open without duplicating open-state tracking.
@@ -52,6 +57,7 @@ export function Menu({
   side = 'bottom',
   className,
   menuClassName,
+  portalled = true,
   onOpenChange,
 }: MenuProps) {
   const [open, setOpen] = useState(false);
@@ -105,12 +111,21 @@ export function Menu({
     if (!open) return;
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as Node;
+      const eventPath = e.composedPath();
       // The panel is portalled to document.body, so it is NOT inside
       // containerRef any more. Checking the container alone would treat every
       // click on a menu item as an outside click and close the menu before the
-      // item's handler could run.
-      const insideTrigger = containerRef.current?.contains(target) ?? false;
-      const insidePanel = panelRef.current?.contains(target) ?? false;
+      // item's handler could run. `composedPath` is also required for browser
+      // accessibility/automation clicks whose retargeted event node is not
+      // reported as a direct descendant by `Node.contains`.
+      const insideTrigger = Boolean(
+        containerRef.current &&
+        (containerRef.current.contains(target) || eventPath.includes(containerRef.current)),
+      );
+      const insidePanel = Boolean(
+        panelRef.current &&
+        (panelRef.current.contains(target) || eventPath.includes(panelRef.current)),
+      );
       if (!insideTrigger && !insidePanel) {
         setOpen(false);
       }
@@ -136,9 +151,16 @@ export function Menu({
     <div
       ref={panelRef}
       role="menu"
-      style={menuStyle}
+      style={portalled ? menuStyle : undefined}
       className={cn(
-        'fixed z-[9999] min-w-[12rem] overflow-hidden rounded-md border p-1 shadow-lg',
+        portalled
+          ? 'fixed z-[9999]'
+          : cn(
+              'absolute z-50 mt-1',
+              side === 'top' ? 'bottom-full mb-1 mt-0' : 'top-full',
+              align === 'end' ? 'right-0' : 'left-0',
+            ),
+        'min-w-[12rem] overflow-hidden rounded-md border p-1 shadow-lg',
         'border-[hsl(var(--border))] bg-[hsl(var(--popover))] text-[hsl(var(--popover-foreground))]',
         menuClassName,
       )}
@@ -152,7 +174,7 @@ export function Menu({
       {trigger({ open, toggle })}
       {/* Portal only once mounted: document does not exist during SSR, and this
           package is consumed by the Next.js app. */}
-      {mounted && panel ? createPortal(panel, document.body) : null}
+      {mounted && panel ? (portalled ? createPortal(panel, document.body) : panel) : null}
     </div>
   );
 }

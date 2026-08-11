@@ -2,14 +2,23 @@ use super::*;
 
 impl ToolExecutor {
     /// Normalize LLM-generated provider names to the canonical IDs expected
-    /// by the web API (e.g. "gpt-image" -> "openai", "imagen" -> "google").
+    /// by the web API. Exact model IDs resolve through catalog capabilities;
+    /// the small match below accepts provider-name aliases only.
     pub(super) fn normalize_media_provider(provider: &str) -> String {
-        match provider.to_lowercase().trim() {
-            "gpt-image" | "gpt-image-2" | "openai-image" => "openai".to_string(),
-            "imagen" | "imagen3" | "imagen4" | "google_imagen" | "imagen-4.0-generate-001" => {
-                "google".to_string()
+        let normalized = provider.to_lowercase();
+        let normalized = normalized.trim();
+        let canonical = crate::core::llm::models_config::get_canonicalized_id(normalized);
+        if let Some(entry) =
+            crate::core::llm::models_config::get_all_model_entries().get(&canonical)
+        {
+            if entry.capabilities.image_gen {
+                return entry.provider.clone();
             }
-            "sdxl" | "stable-diffusion" | "stability" => "stability".to_string(),
+        }
+
+        match normalized {
+            "openai" | "openai-image" => "openai".to_string(),
+            "google" | "imagen" => "google".to_string(),
             other => other.to_string(),
         }
     }
@@ -268,5 +277,27 @@ impl ToolExecutor {
                 metadata: HashMap::new(),
             })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolExecutor;
+
+    #[test]
+    fn media_model_provider_resolution_uses_catalog_capabilities() {
+        let openai_image_model = crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.capabilities.image_gen)
+            .expect("catalog must contain an OpenAI image model");
+
+        assert_eq!(
+            ToolExecutor::normalize_media_provider(&openai_image_model.id),
+            "openai"
+        );
+        assert_eq!(
+            ToolExecutor::normalize_media_provider("fixture-unknown-media-model"),
+            "fixture-unknown-media-model"
+        );
     }
 }

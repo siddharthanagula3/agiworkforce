@@ -13,6 +13,8 @@ function adapter(
 }
 
 describe('replaceProjectConversationMembership', () => {
+  const organizationId = '11111111-1111-4111-8111-111111111111';
+
   it('rejects unavailable conversations before changing any membership', async () => {
     const query = vi.fn().mockResolvedValue([{ id: 'chat-1' }]);
     const execute = vi.fn();
@@ -20,6 +22,7 @@ describe('replaceProjectConversationMembership', () => {
     await expect(
       replaceProjectConversationMembership(adapter(query, execute), {
         userId: 'user-1',
+        organizationId,
         projectId: 'project-1',
         conversationIds: ['chat-1', 'chat-2'],
       }),
@@ -35,23 +38,26 @@ describe('replaceProjectConversationMembership', () => {
 
     await replaceProjectConversationMembership(db, {
       userId: 'user-1',
+      organizationId,
       projectId: 'project-1',
       conversationIds: ['chat-1', 'chat-2', 'chat-1'],
     });
 
-    expect(query).toHaveBeenCalledWith(expect.stringContaining('user_id = $1'), [
-      'user-1',
-      ['chat-1', 'chat-2'],
-    ]);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('organization_id is not distinct from $3::uuid'),
+      ['user-1', ['chat-1', 'chat-2'], organizationId],
+    );
     expect(execute).toHaveBeenNthCalledWith(1, expect.stringContaining('set project_id = null'), [
       'user-1',
       'project-1',
       ['chat-1', 'chat-2'],
+      organizationId,
     ]);
     expect(execute).toHaveBeenNthCalledWith(2, expect.stringContaining('set project_id = $2'), [
       'user-1',
       'project-1',
       ['chat-1', 'chat-2'],
+      organizationId,
     ]);
   });
 
@@ -61,6 +67,7 @@ describe('replaceProjectConversationMembership', () => {
 
     await replaceProjectConversationMembership(adapter(query, execute), {
       userId: 'user-1',
+      organizationId: null,
       projectId: 'project-1',
       conversationIds: [],
     });
@@ -71,6 +78,7 @@ describe('replaceProjectConversationMembership', () => {
       'user-1',
       'project-1',
       [],
+      null,
     ]);
   });
 });

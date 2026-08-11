@@ -15,6 +15,7 @@ import {
   ManagedCloudDeleteConversationResponseSchema,
   // PER-33: the real runtime validator for loaded message metadata.
   ManagedCloudMessageMetadataSchema,
+  readPersistedInteractiveCards,
   ManagedCloudUpdateConversationRequestSchema,
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
@@ -38,14 +39,18 @@ import {
  * `MessageMetadata`'s fields are all optional, so the validated
  * `Record<string, unknown>` is a structurally sound source for it.
  */
-function readLoadedMessageMetadata(value: unknown): Message['metadata'] {
+export function readLoadedMessageMetadata(value: unknown): Message['metadata'] {
   if (value === null || value === undefined) return undefined;
   const parsed = ManagedCloudMessageMetadataSchema.safeParse(value);
   if (!parsed.success) {
     console.warn('[useConversations] dropped malformed message metadata', parsed.error.issues);
     return undefined;
   }
-  return parsed.data as Message['metadata'];
+  const interactiveCards = readPersistedInteractiveCards(parsed.data);
+  return {
+    ...parsed.data,
+    ...(Object.hasOwn(parsed.data, 'interactiveCards') ? { interactiveCards } : {}),
+  } as Message['metadata'];
 }
 
 /**
@@ -162,6 +167,7 @@ export function useConversations(): UseConversationsReturn {
 
   const setConversations = useChatStore((state) => state.setConversations);
   const addConversation = useChatStore((state) => state.addConversation);
+  const upsertConversation = useChatStore((state) => state.upsertConversation);
   const updateConversationInStore = useChatStore((state) => state.updateConversation);
   const deleteConversationFromStore = useChatStore((state) => state.deleteConversation);
   const setActiveConversation = useChatStore((state) => state.setActiveConversation);
@@ -353,24 +359,27 @@ export function useConversations(): UseConversationsReturn {
         const data = ManagedCloudConversationResponseSchema.parse(await response.json());
         if (cancelled()) return true;
         const loadedConversation = toWebConversation(data.conversation);
-        updateConversationInStore(id, {
-          title: loadedConversation.title,
-          model: loadedConversation.model,
-          projectId: loadedConversation.projectId,
-          isPinned: loadedConversation.isPinned,
-          updatedAt: loadedConversation.updatedAt,
-        });
+        // Detail routes are the source of truth for deep-linked conversations,
+        // including rows older than the first sidebar page. A map-only update
+        // silently dropped those rows and therefore their saved model.
+        upsertConversation(loadedConversation);
 
         // Convert API messages to store format
         const messages: Message[] = data.messages.map((m) => {
           // PER-33: validated, not asserted.
           const metadata = readLoadedMessageMetadata(m.metadata);
+          const resumesVideo =
+            metadata?.toolType === 'video-generation' &&
+            (metadata.videoStatus === 'queued' || metadata.videoStatus === 'processing') &&
+            typeof metadata.videoTaskId === 'string';
           return {
             id: m.id,
             role: m.role,
             content: m.content,
             createdAt: m.created_at,
             model: m.model ?? undefined,
+            provider: m.provider ?? undefined,
+            isStreaming: resumesVideo,
             attachments: readPersistedAttachments(metadata?.attachments),
             metadata,
           };
@@ -407,7 +416,7 @@ export function useConversations(): UseConversationsReturn {
     },
     [
       getAuthHeaders,
-      updateConversationInStore,
+      upsertConversation,
       setActiveConversation,
       setActiveConversationWithMessages,
       setError,

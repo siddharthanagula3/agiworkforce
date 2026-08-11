@@ -2,9 +2,31 @@ import { describe, expect, it } from 'vitest';
 import {
   buildEffectiveCapabilityDocument,
   getAllowedModelsForTier,
+  getModelMetadataById,
+  getRoutingSlotModel,
+  getTaskModelForProvider,
+  requireProviderDefaultModel,
+  resolveEffectiveModelPricingForInputTokens,
   type PlatformCapability,
 } from '@agiworkforce/types';
 import { resolveAutoRoute } from '../auto';
+
+const FAST_MODEL_ID = getRoutingSlotModel('workhorse_general');
+const CODING_PREMIUM_MODEL_ID = getRoutingSlotModel('flagship_coding');
+const CODING_BALANCED_MODEL_ID = getRoutingSlotModel('coding_balanced');
+const CODING_ESCALATION_MODEL_ID = getRoutingSlotModel('escalation_coding');
+const SEARCH_PREMIUM_MODEL_ID = getRoutingSlotModel('search_premium');
+const REASONING_ECONOMY_MODEL_ID = getRoutingSlotModel('reasoning_economy');
+const REASONING_BALANCED_MODEL_ID = getRoutingSlotModel('reasoning_balanced');
+const IMAGE_MODEL_ID = getRoutingSlotModel('image_generation');
+const OPENAI_DEFAULT_MODEL_ID = requireProviderDefaultModel('openai');
+const OPENAI_FAST_MODEL_ID = getTaskModelForProvider('openai', 'fast_completion');
+const OPENAI_CHAT_MODEL_ID = getTaskModelForProvider('openai', 'chat');
+const MINIMAX_MODEL_ID = requireProviderDefaultModel('minimax');
+
+if (!OPENAI_FAST_MODEL_ID || !OPENAI_CHAT_MODEL_ID) {
+  throw new Error('Canonical OpenAI fast and chat routes must exist');
+}
 
 describe('resolveAutoRoute', () => {
   it('honors the requested economy profile even when the tier allows premium', () => {
@@ -17,7 +39,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.5-flash-lite',
+      modelKey: FAST_MODEL_ID,
       requestedProfile: 'economy',
       effectiveProfile: 'economy',
       reason: 'preferred_slot',
@@ -34,7 +56,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.5-flash-lite',
+      modelKey: FAST_MODEL_ID,
       requestedProfile: 'economy',
       effectiveProfile: 'economy',
     });
@@ -50,7 +72,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-5',
+      modelKey: CODING_PREMIUM_MODEL_ID,
       requestedProfile: 'premium',
       effectiveProfile: 'premium',
     });
@@ -66,7 +88,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gpt-5.4-mini',
+      modelKey: getRoutingSlotModel('coding_fast'),
       requestedProfile: 'premium',
       effectiveProfile: 'economy',
     });
@@ -93,14 +115,14 @@ describe('resolveAutoRoute', () => {
       taskType: 'coding',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
-      budgetRemainingCents: 2.0, // opus ~3.0c unaffordable; sonnet ~1.8c fits
+      budgetRemainingCents: 2.0, // premium route unaffordable; balanced route fits
       estimatedInputTokens: 1000,
       estimatedOutputTokens: 1000,
     });
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-sonnet-5',
+      modelKey: CODING_BALANCED_MODEL_ID,
       effectiveProfile: 'premium',
     });
   });
@@ -111,12 +133,12 @@ describe('resolveAutoRoute', () => {
       taskType: 'coding',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
-      budgetRemainingCents: 1.0, // opus ~3.0c and sonnet ~1.8c unaffordable; glm ~0.58c fits
+      budgetRemainingCents: 1.0, // premium and balanced routes are unaffordable; escalation fits
       estimatedInputTokens: 1000,
       estimatedOutputTokens: 1000,
     });
 
-    expect(result).toMatchObject({ status: 'selected', modelKey: 'glm-5.2' });
+    expect(result).toMatchObject({ status: 'selected', modelKey: CODING_ESCALATION_MODEL_ID });
   });
 
   it('affordability: a nearly-exhausted budget still reaches the workhorse fallback (reservation is the hard gate)', () => {
@@ -130,7 +152,7 @@ describe('resolveAutoRoute', () => {
       estimatedOutputTokens: 1000,
     });
 
-    expect(result).toMatchObject({ status: 'selected', modelKey: 'gemini-3.5-flash-lite' });
+    expect(result).toMatchObject({ status: 'selected', modelKey: FAST_MODEL_ID });
   });
 
   it('affordability: no budget signal leaves routing unchanged (bias is a no-op off web)', () => {
@@ -143,7 +165,49 @@ describe('resolveAutoRoute', () => {
       estimatedOutputTokens: 1000,
     });
 
-    expect(result).toMatchObject({ status: 'selected', modelKey: 'claude-opus-5' });
+    expect(result).toMatchObject({ status: 'selected', modelKey: CODING_PREMIUM_MODEL_ID });
+  });
+
+  it('affordability: rejects a long request when only its short-context estimate fits', () => {
+    const request = {
+      selection: 'auto-premium',
+      taskType: 'reasoning',
+      subscriptionTier: 'max',
+      trustMode: 'managed_cloud',
+      usOnly: true,
+    } as const;
+    const withoutBudget = resolveAutoRoute(request);
+    expect(withoutBudget.status).toBe('selected');
+    if (withoutBudget.status !== 'selected') return;
+    const metadata = getModelMetadataById(withoutBudget.modelKey);
+    const [firstTier] = metadata?.inputTokenPricingTiers ?? [];
+    expect(firstTier).toBeDefined();
+    if (!metadata || !firstTier) return;
+
+    const inputTokens = firstTier.thresholdTokens + 1;
+    const outputTokens = 1_000;
+    const shortEstimateCents =
+      ((inputTokens * metadata.inputCost + outputTokens * metadata.outputCost) / 1_000_000) * 100;
+    const tiered = resolveEffectiveModelPricingForInputTokens(
+      metadata,
+      new Date('2030-01-01T00:00:00Z'),
+      inputTokens,
+    );
+    const longEstimateCents =
+      ((inputTokens * tiered.inputCost + outputTokens * tiered.outputCost) / 1_000_000) * 100;
+    expect(longEstimateCents).toBeGreaterThan(shortEstimateCents);
+
+    const withMidpointBudget = resolveAutoRoute({
+      ...request,
+      estimatedInputTokens: inputTokens,
+      estimatedOutputTokens: outputTokens,
+      budgetRemainingCents: (shortEstimateCents + longEstimateCents) / 2,
+    });
+    if (withMidpointBudget.status === 'selected') {
+      expect(withMidpointBudget.modelKey).not.toBe(withoutBudget.modelKey);
+    } else {
+      expect(withMidpointBudget.code).toBe('no_admitted_route');
+    }
   });
 
   it('clamps premium Auto to the tier maximum profile', () => {
@@ -156,7 +220,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gpt-5.4-mini',
+      modelKey: getRoutingSlotModel('coding_fast'),
       requestedProfile: 'premium',
       effectiveProfile: 'economy',
       reason: 'preferred_slot',
@@ -173,16 +237,16 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-5',
+      modelKey: CODING_PREMIUM_MODEL_ID,
       effectiveProfile: 'premium',
       fallbacks: [
         {
-          modelKey: 'glm-5.2',
+          modelKey: CODING_ESCALATION_MODEL_ID,
           provider: 'zhipu',
           harnessId: 'zhipu/chat-completions',
         },
         {
-          modelKey: 'gemini-3.5-flash-lite',
+          modelKey: FAST_MODEL_ID,
           provider: 'google',
           harnessId: 'google/generate-content',
         },
@@ -200,7 +264,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.6-flash',
+      modelKey: SEARCH_PREMIUM_MODEL_ID,
       fallbacks: [],
     });
   });
@@ -216,7 +280,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gpt-5.6-sol',
+      modelKey: OPENAI_DEFAULT_MODEL_ID,
       provider: 'openai',
     });
   });
@@ -255,7 +319,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'qwen-3.5-flash',
+      modelKey: REASONING_ECONOMY_MODEL_ID,
       effectiveProfile: 'economy',
     });
   });
@@ -309,7 +373,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'qwen-3.7-plus',
+      modelKey: REASONING_BALANCED_MODEL_ID,
       provider: 'qwen',
     });
   });
@@ -324,14 +388,14 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.1-flash-image',
+      modelKey: IMAGE_MODEL_ID,
       harnessId: 'google/media',
     });
   });
 
   it('falls back from an explicit text model to Auto for a specialist capability when authorized', () => {
     const result = resolveAutoRoute({
-      selection: 'gpt-5.6-luna',
+      selection: OPENAI_FAST_MODEL_ID,
       taskType: 'image_generation',
       subscriptionTier: 'pro',
       trustMode: 'managed_cloud',
@@ -341,8 +405,8 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      requestedSelection: 'gpt-5.6-luna',
-      modelKey: 'gemini-3.1-flash-image',
+      requestedSelection: OPENAI_FAST_MODEL_ID,
+      modelKey: IMAGE_MODEL_ID,
       harnessId: 'google/media',
       reason: 'capability_fallback',
     });
@@ -350,7 +414,7 @@ describe('resolveAutoRoute', () => {
 
   it('does not silently replace an explicit model unless capability fallback is authorized', () => {
     const result = resolveAutoRoute({
-      selection: 'gpt-5.6-luna',
+      selection: OPENAI_FAST_MODEL_ID,
       taskType: 'image_generation',
       subscriptionTier: 'pro',
       trustMode: 'managed_cloud',
@@ -365,7 +429,7 @@ describe('resolveAutoRoute', () => {
 
   it('preserves an explicit eligible model instead of silently switching providers', () => {
     const result = resolveAutoRoute({
-      selection: 'gpt-5.6-luna',
+      selection: OPENAI_FAST_MODEL_ID,
       taskType: 'coding',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
@@ -373,7 +437,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gpt-5.6-luna',
+      modelKey: OPENAI_FAST_MODEL_ID,
       harnessId: 'openai/responses',
       reason: 'explicit',
       fallbacks: [],
@@ -404,7 +468,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.6-flash',
+      modelKey: SEARCH_PREMIUM_MODEL_ID,
       harnessId: 'google/generate-content',
       reason: 'preferred_slot',
     });
@@ -412,7 +476,7 @@ describe('resolveAutoRoute', () => {
 
   it('accepts GA models when the calling runtime supports their harness', () => {
     const result = resolveAutoRoute({
-      selection: 'gpt-5.6-sol',
+      selection: OPENAI_DEFAULT_MODEL_ID,
       taskType: 'reasoning',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
@@ -420,7 +484,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gpt-5.6-sol',
+      modelKey: OPENAI_DEFAULT_MODEL_ID,
       provider: 'openai',
       reason: 'explicit',
     });
@@ -454,7 +518,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-5',
+      modelKey: CODING_PREMIUM_MODEL_ID,
       effectiveProfile: 'premium',
     });
   });
@@ -470,7 +534,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-5',
+      modelKey: CODING_PREMIUM_MODEL_ID,
       harnessId: 'anthropic/messages',
     });
   });
@@ -486,7 +550,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gpt-5.6-terra',
+      modelKey: OPENAI_CHAT_MODEL_ID,
       harnessId: 'openai/responses',
     });
   });
@@ -517,14 +581,14 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.6-flash',
+      modelKey: SEARCH_PREMIUM_MODEL_ID,
       harnessId: 'google/generate-content',
     });
   });
 
   it('admits AGI Work when the Web runtime executes platform tool discovery', () => {
     const result = resolveAutoRoute({
-      selection: 'minimax-m3',
+      selection: MINIMAX_MODEL_ID,
       taskType: 'agentic',
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
@@ -533,7 +597,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'minimax-m3',
+      modelKey: MINIMAX_MODEL_ID,
       harnessId: 'minimax/chat-completions',
     });
   });
@@ -549,7 +613,7 @@ describe('resolveAutoRoute', () => {
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.6-flash',
+      modelKey: SEARCH_PREMIUM_MODEL_ID,
       harnessId: 'google/generate-content',
     });
   });
@@ -559,14 +623,14 @@ describe('resolveAutoRoute', () => {
       selection: 'auto-economy',
       taskType: 'coding',
       previousTaskType: 'simple_chat',
-      currentModelKey: 'gemini-3.5-flash-lite',
+      currentModelKey: FAST_MODEL_ID,
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
     });
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.5-flash-lite',
+      modelKey: FAST_MODEL_ID,
       reason: 'continuity',
     });
   });
@@ -576,14 +640,14 @@ describe('resolveAutoRoute', () => {
       selection: 'auto-premium',
       taskType: 'research',
       previousTaskType: 'general',
-      currentModelKey: 'gpt-5.6-terra',
+      currentModelKey: OPENAI_CHAT_MODEL_ID,
       subscriptionTier: 'max',
       trustMode: 'managed_cloud',
     });
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'gemini-3.6-flash',
+      modelKey: SEARCH_PREMIUM_MODEL_ID,
       reason: 'preferred_slot',
     });
   });
@@ -637,7 +701,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
 
     expect(result).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-5',
+      modelKey: CODING_PREMIUM_MODEL_ID,
       effectiveProfile: 'premium',
     });
   });
@@ -698,7 +762,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
       capabilityDocument: sessionDocument(),
       capabilityRequirements: [{ capabilityId: 'canUseDeepResearch', strength: 'optional' }],
     });
-    expect(deniedOptional).toMatchObject({ status: 'selected', modelKey: 'claude-opus-5' });
+    expect(deniedOptional).toMatchObject({ status: 'selected', modelKey: CODING_PREMIUM_MODEL_ID });
 
     const optionalWithoutDocument = resolveAutoRoute({
       selection: 'auto-premium',
@@ -709,7 +773,7 @@ describe('resolveAutoRoute session capability admission (capability-handshake in
     });
     expect(optionalWithoutDocument).toMatchObject({
       status: 'selected',
-      modelKey: 'claude-opus-5',
+      modelKey: CODING_PREMIUM_MODEL_ID,
     });
   });
 });

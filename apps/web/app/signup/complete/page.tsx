@@ -32,7 +32,10 @@ export default async function SignupCompletePage({
   return (
     <main className="mx-auto flex min-h-[60vh] w-full max-w-md items-center justify-center p-6">
       <div className="w-full">
-        <TermsGate blockedMessage="Accept the terms above to finish setting up your account.">
+        <TermsGate
+          blockedMessage="Accept the terms above to finish setting up your account."
+          restorePreAuthMarker={false}
+        >
           <RecordTermsAcceptance redirectTo={redirectTo} />
         </TermsGate>
       </div>

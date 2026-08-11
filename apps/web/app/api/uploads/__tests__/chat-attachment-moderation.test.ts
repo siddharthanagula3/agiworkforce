@@ -19,6 +19,7 @@ const {
   mockDeleteObject,
   mockInsertMediaAsset,
   mockGetMediaAssetByStoragePathname,
+  mockResolveActiveOrganizationId,
   loggerMock,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
@@ -26,6 +27,7 @@ const {
   mockDeleteObject: vi.fn(),
   mockInsertMediaAsset: vi.fn(),
   mockGetMediaAssetByStoragePathname: vi.fn(),
+  mockResolveActiveOrganizationId: vi.fn(),
   loggerMock: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
@@ -47,6 +49,10 @@ vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: mockInsertMediaAsset,
   getMediaAssetByStoragePathname: mockGetMediaAssetByStoragePathname,
 }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+}));
 
 import { POST } from '@/app/api/uploads/chat-attachment/complete/route';
 
@@ -56,6 +62,7 @@ const PNG_BYTES = new Uint8Array([
 ]);
 const PNG_DIGEST = createHash('sha256').update(PNG_BYTES).digest('hex');
 const STORAGE_KEY = 'chat-attachments/user-abc/1700000000000_abcdefghijklm.png';
+const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
 const savedList = process.env['MODERATION_HASH_DENYLIST'];
 
@@ -74,6 +81,7 @@ function completeRequest(): NextRequest {
 
 beforeEach(() => {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
+  mockResolveActiveOrganizationId.mockResolvedValue(ORGANIZATION_ID);
   mockGetMediaAssetByStoragePathname.mockResolvedValue(null);
   mockGetObject.mockResolvedValue({ data: PNG_BYTES, contentType: 'image/png' });
   mockInsertMediaAsset.mockResolvedValue('asset-1');
@@ -94,6 +102,14 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
 
     expect(response.status).toBe(200);
     expect(mockInsertMediaAsset).toHaveBeenCalledTimes(1);
+    expect(mockGetMediaAssetByStoragePathname).toHaveBeenCalledWith(
+      'user-abc',
+      STORAGE_KEY,
+      ORGANIZATION_ID,
+    );
+    expect(mockInsertMediaAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ organizationId: ORGANIZATION_ID }),
+    );
     expect(mockDeleteObject).not.toHaveBeenCalled();
   });
 

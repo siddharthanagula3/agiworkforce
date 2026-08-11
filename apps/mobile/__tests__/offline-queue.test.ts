@@ -27,7 +27,7 @@ function makeMsg(
   return {
     conversationId: 'conv-1',
     content: `message-${Math.random().toString(36).slice(2)}`,
-    model: 'claude-opus-5',
+    model: 'fixture-queued-model',
     provenance: { scope: 'local' },
     ...overrides,
   };
@@ -102,13 +102,13 @@ describe('enqueue', () => {
     offlineQueue.enqueue({
       conversationId: 'conv-a',
       content: 'hello',
-      model: 'gpt-5.6-sol',
+      model: 'fixture-shared-model',
       provenance: { scope: 'local' },
     });
     offlineQueue.enqueue({
       conversationId: 'conv-b',
       content: 'hello',
-      model: 'gpt-5.6-sol',
+      model: 'fixture-shared-model',
       provenance: { scope: 'local' },
     });
 
@@ -136,7 +136,7 @@ describe('processQueue — success path', () => {
   });
 
   it('passes the full QueuedMessage to sendFn', async () => {
-    const msg = makeMsg({ content: 'check-payload', model: 'deepseek-v3' });
+    const msg = makeMsg({ content: 'check-payload', model: 'fixture-payload-model' });
     const entry = offlineQueue.enqueue(msg);
 
     const sendFn = jest.fn().mockResolvedValue(undefined);
@@ -147,7 +147,7 @@ describe('processQueue — success path', () => {
     const calledWith = sendFn.mock.calls[0]?.[0] as QueuedMessage;
     expect(calledWith.id).toBe(entry.id);
     expect(calledWith.content).toBe('check-payload');
-    expect(calledWith.model).toBe('deepseek-v3');
+    expect(calledWith.model).toBe('fixture-payload-model');
   });
 
   it('is a no-op when the queue is empty', async () => {

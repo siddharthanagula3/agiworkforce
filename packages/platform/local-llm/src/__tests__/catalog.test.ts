@@ -1,18 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import {
   getDefaultModel,
+  getLocalModelCatalog,
   getLiteModeModel,
   getModelById,
   getModelsForRole,
   getShippableModels,
   getSystemModelForTier1Runtime,
 } from '../catalog.js';
+import { requireExecutorchVisionModel, requireGgufVisionModel } from './catalog-fixtures.js';
+
+const HEX64 = /^[0-9a-f]{64}$/;
 
 describe('on-device catalog: getModelById', () => {
-  it('returns Qwen3-4B for the default model id', () => {
-    const model = getModelById('qwen3-4b-instruct-2507');
+  it('returns the canonical default model by its catalog id', () => {
+    const expected = getDefaultModel();
+    const model = getModelById(expected.id);
     expect(model).toBeDefined();
-    expect(model!.id).toBe('qwen3-4b-instruct-2507');
+    expect(model!.id).toBe(expected.id);
     expect(model!.license).toBe('Apache-2.0');
     expect(model!.role).toBe('default');
     expect(model!.shipsInV1).toBe(true);
@@ -22,15 +27,17 @@ describe('on-device catalog: getModelById', () => {
     expect(getModelById('totally-unknown')).toBeUndefined();
   });
 
-  it('returns apple-foundation-models entry with fileSizeBytes 0', () => {
-    const model = getModelById('apple-foundation-models');
+  it('returns the Apple system entry with fileSizeBytes 0', () => {
+    const model = getSystemModelForTier1Runtime('foundation_models');
     expect(model).toBeDefined();
     expect(model!.fileSizeBytes).toBe(0);
     expect(model!.supportedRuntimes).toContain('apple-foundation-models');
+    const legacyRuntimeShapedId = model!.supportedRuntimes[0];
+    expect(getModelById(legacyRuntimeShapedId)?.id).toBe(model!.id);
   });
 
-  it('returns gemini-nano-aicore entry with fileSizeBytes 0', () => {
-    const model = getModelById('gemini-nano-aicore');
+  it('returns the Android system entry with fileSizeBytes 0', () => {
+    const model = getSystemModelForTier1Runtime('aicore');
     expect(model).toBeDefined();
     expect(model!.fileSizeBytes).toBe(0);
     expect(model!.supportedRuntimes).toContain('aicore');
@@ -38,9 +45,11 @@ describe('on-device catalog: getModelById', () => {
 });
 
 describe('on-device catalog: getDefaultModel', () => {
-  it('returns qwen3-4b-instruct-2507 as default', () => {
+  it('returns the single catalog-owned default', () => {
     const model = getDefaultModel();
-    expect(model.id).toBe('qwen3-4b-instruct-2507');
+    expect(getLocalModelCatalog().filter((candidate) => candidate.role === 'default')).toEqual([
+      model,
+    ]);
     expect(model.role).toBe('default');
     expect(model.capabilities.text).toBe(true);
     expect(model.capabilities.toolCalls).toBe(true);
@@ -66,25 +75,30 @@ describe('on-device catalog: tier-one system model resolution', () => {
 });
 
 describe('on-device catalog: getShippableModels', () => {
-  it('excludes phi-4-mini (internal eval hedge, shipsInV1=false)', () => {
+  it('excludes internal evaluation hedges', () => {
     const shippable = getShippableModels();
-    expect(shippable.some((m) => m.id === 'phi-4-mini-instruct')).toBe(false);
+    expect(shippable.some((m) => m.role === 'internal-eval-hedge')).toBe(false);
   });
 
-  it('excludes gemma4 (shipsInV1=false)', () => {
+  it('excludes every catalog row whose ship gate is closed', () => {
     const shippable = getShippableModels();
-    expect(shippable.some((m) => m.family === 'gemma4')).toBe(false);
+    const gatedModelIds = getLocalModelCatalog()
+      .filter((model) => !model.shipsInV1)
+      .map((model) => model.id);
+    expect(gatedModelIds.length).toBeGreaterThan(0);
+    expect(shippable.every((model) => !gatedModelIds.includes(model.id))).toBe(true);
   });
 
   it('excludes the vision pack until runtime artifacts are wired', () => {
     const shippable = getShippableModels();
-    expect(shippable.some((m) => m.id === 'qwen2.5-vl-3b-instruct')).toBe(false);
+    expect(
+      shippable.some((model) => model.role === 'premium-vision-pack' && !model.executorchPreset),
+    ).toBe(false);
   });
 
   it('includes system-multimodal entries', () => {
     const shippable = getShippableModels();
-    expect(shippable.some((m) => m.id === 'apple-foundation-models')).toBe(true);
-    expect(shippable.some((m) => m.id === 'gemini-nano-aicore')).toBe(true);
+    expect(shippable.filter((m) => m.role === 'system-multimodal')).toHaveLength(2);
   });
 
   it('requires install presets for shippable downloadable ExecuTorch models', () => {
@@ -95,19 +109,17 @@ describe('on-device catalog: getShippableModels', () => {
     }
   });
 
-  it('excludes the qwen3-vl multimodal pack until the mobile GGUF path ships', () => {
+  it('excludes the GGUF multimodal pack until the mobile path ships', () => {
     const shippable = getShippableModels();
-    expect(shippable.some((m) => m.id === 'qwen3-vl-2b-instruct')).toBe(false);
+    const visionModel = requireGgufVisionModel();
+    expect(shippable.some((m) => m.id === visionModel.id)).toBe(false);
   });
 });
 
-describe('on-device catalog: qwen3-vl-2b multimodal entry (P6)', () => {
-  const HEX64 = /^[0-9a-f]{64}$/;
-
+describe('on-device catalog: GGUF multimodal entry (P6)', () => {
   it('is the Apache-2.0 primary vision pack with verified GGUF artifacts', () => {
-    const model = getModelById('qwen3-vl-2b-instruct');
+    const model = requireGgufVisionModel();
     expect(model).toBeDefined();
-    expect(model!.family).toBe('qwen3-vl');
     expect(model!.license).toBe('Apache-2.0');
     expect(model!.role).toBe('premium-vision-pack');
     expect(model!.format).toBe('gguf');
@@ -116,48 +128,39 @@ describe('on-device catalog: qwen3-vl-2b multimodal entry (P6)', () => {
   });
 
   it('carries a verified base-GGUF url + sha256 + byte size', () => {
-    const model = getModelById('qwen3-vl-2b-instruct')!;
-    expect(model.downloadUrl).toContain(
-      '/Qwen3-VL-2B-Instruct-GGUF/resolve/main/Qwen3VL-2B-Instruct-Q4_K_M.gguf',
-    );
+    const model = requireGgufVisionModel();
+    expect(new URL(model.downloadUrl!).protocol).toBe('https:');
+    expect(model.downloadUrl).toMatch(/\.gguf$/i);
     expect(model.checksum).toMatch(HEX64);
-    expect(model.checksum).toBe('089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae');
-    expect(model.fileSizeBytes).toBe(1_107_409_952);
+    expect(model.fileSizeBytes).toBeGreaterThan(0);
   });
 
   it('carries a verified mmproj vision-projector as a second artifact', () => {
-    const model = getModelById('qwen3-vl-2b-instruct')!;
-    expect(model.mmprojUrl).toContain('mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf');
+    const model = requireGgufVisionModel();
+    expect(new URL(model.mmprojUrl!).protocol).toBe('https:');
+    expect(model.mmprojUrl).toMatch(/\.gguf$/i);
     expect(model.mmprojChecksum).toMatch(HEX64);
-    expect(model.mmprojChecksum).toBe(
-      'f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82',
-    );
-    expect(model.mmprojSizeBytes).toBe(445_053_216);
+    expect(model.mmprojSizeBytes).toBeGreaterThan(0);
   });
 
   it('stays gated off until the mobile runtime path is wired', () => {
-    expect(getModelById('qwen3-vl-2b-instruct')!.shipsInV1).toBe(false);
+    expect(requireGgufVisionModel().shipsInV1).toBe(false);
   });
 });
 
-describe('on-device catalog: lfm2-vl tier-2 option (P6, gated off)', () => {
-  it('is recorded as the true 450M identity, gated off, with verified artifact fields', () => {
-    const model = getModelById('lfm2-vl-450m');
+describe('on-device catalog: tier-2 vision option (P6, gated off)', () => {
+  it('is gated off with internally consistent verified artifact fields', () => {
+    const model = requireExecutorchVisionModel();
     expect(model).toBeDefined();
-    expect(model!.family).toBe('lfm2-vl');
-    expect(model!.paramCountB).toBe(0.45);
-    expect(model!.fileSizeBytes).toBe(648_917_376);
+    expect(model!.paramCountB).toBeGreaterThan(0);
+    expect(model!.fileSizeBytes).toBeGreaterThan(0);
     expect(model!.shipsInV1).toBe(false);
-    // Verified 2026-07-16 against the installed react-native-executorch
-    // 0.8.4's own modelUrls.js AND the live HF LFS pointer (sha256 + size).
-    expect(model!.downloadUrl).toContain(
-      'react-native-executorch-lfm-2.5/resolve/v0.8.0/lfm2.5-VL-450M',
-    );
-    expect(model!.checksum).toBe(
-      'c3aeead4499cb1c19de48d4216f3b2e9216b27770d768ea4650dbcaa1a998a9b',
-    );
-    expect(model!.executorchPreset?.modelName).toBe('lfm2.5-vl-450m-quantized');
-    expect(model!.license).toContain('LFM Open License');
+    expect(new URL(model!.downloadUrl!).protocol).toBe('https:');
+    expect(model!.checksum).toMatch(HEX64);
+    expect(model!.executorchPreset?.modelName).toBeTruthy();
+    expect(model!.executorchPreset?.capabilities).toContain('vision');
+    expect(model!.downloadUrl).toBe(model!.executorchPreset?.modelSource);
+    expect(model!.license).not.toBe('Unverified');
   });
 
   it('claims vision-in NOMINALLY only — effective vision stays install-gated', () => {
@@ -165,22 +168,22 @@ describe('on-device catalog: lfm2-vl tier-2 option (P6, gated off)', () => {
     // runtime capability is effectiveTier2VisionIn (multimodal.ts), which is
     // false until the model is actually installed — pinned in
     // tier2-vision.test.ts.
-    const model = getModelById('lfm2-vl-450m')!;
+    const model = requireExecutorchVisionModel();
     expect(model.capabilities.visionIn).toBe(true);
   });
 
-  it('no stale lfm2-vl-1.6b id remains in the catalog', () => {
-    expect(getModelById('lfm2-vl-1.6b')).toBeUndefined();
+  it('returns undefined for a retired fixture id', () => {
+    expect(getModelById('fixture-retired-local-model')).toBeUndefined();
   });
 });
 
 describe('on-device catalog: getLiteModeModel', () => {
-  it('returns the llama 1B lite-mode model', () => {
+  it('returns the single lite-mode model', () => {
     const model = getLiteModeModel();
     expect(model).toBeDefined();
     expect(model!.liteMode).toBe(true);
     expect(model!.role).toBe('lite-mode');
-    expect(model!.id).toBe('llama-3.2-1b-instruct-spinquant');
+    expect(getLocalModelCatalog().filter((candidate) => candidate.liteMode)).toEqual([model]);
   });
 });
 

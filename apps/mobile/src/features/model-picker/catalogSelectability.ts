@@ -36,7 +36,7 @@ export function isSystemRuntimeOnlyModel(model: OnDeviceModel): boolean {
  *
  * Note this predicate is applied to SHIPPABLE catalog rows only
  * (`getShippableModels()` already filters `shipsInV1`) — a `shipsInV1:false`
- * row like the qwen3-vl vision pack never reaches it in production listing,
+ * hidden vision-pack rows never reach it in production listing,
  * regardless of what it returns.
  */
 export function isSelectableLocalCatalogModel(model: OnDeviceModel): boolean {

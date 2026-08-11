@@ -54,17 +54,40 @@ function renderAndNormalize(
   return html.replace(/STABLE-NONCE-FOR-SNAPSHOTS/g, 'NONCE');
 }
 
+function renderSnapshotAndNormalize(
+  initialMode: 'auto' | 'plan' | 'execute' = 'auto',
+  initialEffort: 'low' | 'medium' | 'high' = 'medium',
+  supportsEffort = true,
+  meterCollapsed = false,
+): string {
+  let html = renderAndNormalize(initialMode, initialEffort, supportsEffort, meterCollapsed);
+
+  // The picker is catalog-derived production behavior. Snapshot its structure,
+  // not release-specific model IDs/names, so a catalog update does not copy
+  // concrete provider identifiers into test output. Longest values go first to
+  // avoid partial replacement when one catalog string contains another.
+  const catalogOptions = MODEL_PICKER_OPTIONS.filter((option) => option.id !== 'auto').sort(
+    (left, right) => right.id.length - left.id.length,
+  );
+  for (const [index, option] of catalogOptions.entries()) {
+    html = html.split(option.id).join(`fixture-catalog-model-${index + 1}`);
+    html = html.split(option.label).join(`Catalog model ${index + 1}`);
+  }
+
+  return html;
+}
+
 describe('VS Code webview structural snapshots', () => {
   it('locks the default rendered webview shape (auto / medium / supportsEffort=true)', () => {
-    expect(renderAndNormalize()).toMatchSnapshot();
+    expect(renderSnapshotAndNormalize()).toMatchSnapshot();
   });
 
   it('locks the rendered shape when effort is hidden (supportsEffort=false)', () => {
-    expect(renderAndNormalize('auto', 'medium', false, false)).toMatchSnapshot();
+    expect(renderSnapshotAndNormalize('auto', 'medium', false, false)).toMatchSnapshot();
   });
 
   it('locks the rendered shape when meter is collapsed', () => {
-    expect(renderAndNormalize('auto', 'medium', true, true)).toMatchSnapshot();
+    expect(renderSnapshotAndNormalize('auto', 'medium', true, true)).toMatchSnapshot();
   });
 });
 

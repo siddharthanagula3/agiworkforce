@@ -2,6 +2,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import {
+  calculateObservedProviderUsageCostDollars,
   finalizeObservedManagedUsage,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
@@ -14,6 +15,7 @@ import {
 } from '@/lib/services/cloud-agent-run-service';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { INTERACTIVE_CARDS_MAX_PER_MESSAGE, type InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import type { ProcessedRequest } from './request-processor';
 import {
@@ -21,6 +23,7 @@ import {
   extractAssistantTextDelta,
   persistAssistantTurn,
 } from './assistant-turn-persistence';
+import { extractAssistantInteractiveCardDeltas } from './interactive-card-stream';
 
 const TERMINAL_EVENT = 'data: [DONE]\n\n';
 
@@ -125,6 +128,7 @@ export function buildManagedAgentStream(
   // assistant_message_id, or a Temporary Chat) so no work is done for nothing.
   const persistable = Boolean(input.userId) && canPersistAssistantTurn(input.processed);
   let assistantText = '';
+  const interactiveCards = new Map<string, InteractiveCard>();
   let turnPersisted = false;
 
   const persistTurn = async (truncated: boolean): Promise<void> => {
@@ -141,6 +145,7 @@ export function buildManagedAgentStream(
         inputTokens: input.usage.inputTokens,
         outputTokens: input.usage.outputTokens,
         truncated,
+        interactiveCards: [...interactiveCards.values()],
       },
     });
   };
@@ -197,6 +202,10 @@ export function buildManagedAgentStream(
         outcome,
         provider: serving.provider,
         model: serving.chatRequest.model,
+        measuredCostDollars: calculateObservedProviderUsageCostDollars(input.usage, {
+          provider: serving.provider,
+          model: serving.chatRequest.model,
+        }),
         usage: {
           promptTokens: inputTokens,
           completionTokens: outputTokens,
@@ -252,7 +261,17 @@ export function buildManagedAgentStream(
           }
           if (isManagedAgentTerminalEvent(next.value)) continue;
           if (containsManagedAgentReportedFailure(next.value)) reportedFailure = true;
-          if (persistable) assistantText += extractAssistantTextDelta(next.value);
+          if (persistable) {
+            assistantText += extractAssistantTextDelta(next.value);
+            for (const card of extractAssistantInteractiveCardDeltas(next.value)) {
+              if (
+                interactiveCards.has(card.cardId) ||
+                interactiveCards.size < INTERACTIVE_CARDS_MAX_PER_MESSAGE
+              ) {
+                interactiveCards.set(card.cardId, card);
+              }
+            }
+          }
           if (input.runJournal) {
             for (const envelope of extractManagedAgentEventEnvelopes(next.value)) {
               const run = await appendCloudAgentEvent(input.runJournal.db, {

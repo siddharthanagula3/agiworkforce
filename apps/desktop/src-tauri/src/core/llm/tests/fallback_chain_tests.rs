@@ -22,8 +22,8 @@ mod tests {
 
         // No providers should be rate limited initially
         assert!(!tracker.is_rate_limited(Provider::OpenAI, None));
-        assert!(!tracker.is_rate_limited(Provider::Anthropic, Some("claude-sonnet")));
-        assert!(!tracker.is_rate_limited(Provider::Google, Some("gemini-pro")));
+        assert!(!tracker.is_rate_limited(Provider::Anthropic, Some("fixture-balanced-model")));
+        assert!(!tracker.is_rate_limited(Provider::Google, Some("fixture-fast-model")));
     }
 
     #[test]
@@ -39,8 +39,8 @@ mod tests {
 
         // All models for this provider should be rate limited
         assert!(tracker.is_rate_limited(Provider::OpenAI, None));
-        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5")));
-        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5.6-luna")));
+        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("fixture-primary-model")));
+        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("fixture-secondary-model")));
 
         // Other providers not affected
         assert!(!tracker.is_rate_limited(Provider::Anthropic, None));
@@ -57,13 +57,13 @@ mod tests {
         // Rate limit a specific model
         tracker.record_rate_limit(
             Provider::OpenAI,
-            Some("gpt-5"),
+            Some("fixture-primary-model"),
             Some(Duration::from_secs(60)),
         );
 
         // Only that model should be rate limited
-        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5")));
-        assert!(!tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5.6-luna")));
+        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("fixture-primary-model")));
+        assert!(!tracker.is_rate_limited(Provider::OpenAI, Some("fixture-secondary-model")));
         assert!(!tracker.is_rate_limited(Provider::OpenAI, None));
     }
 
@@ -75,9 +75,9 @@ mod tests {
         };
         let tracker = RateLimitTracker::new(config);
 
-        tracker.record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
+        tracker.record_rate_limit(Provider::OpenAI, Some("fixture-primary-model"), None);
 
-        let remaining = tracker.cooldown_remaining(Provider::OpenAI, Some("gpt-5"));
+        let remaining = tracker.cooldown_remaining(Provider::OpenAI, Some("fixture-primary-model"));
         assert!(remaining > Duration::ZERO);
         assert!(remaining <= Duration::from_secs(60));
 
@@ -91,32 +91,32 @@ mod tests {
         let tracker = RateLimitTracker::default();
 
         // Record multiple rate limits
-        tracker.record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
-        tracker.record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
-        tracker.record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
+        tracker.record_rate_limit(Provider::OpenAI, Some("fixture-primary-model"), None);
+        tracker.record_rate_limit(Provider::OpenAI, Some("fixture-primary-model"), None);
+        tracker.record_rate_limit(Provider::OpenAI, Some("fixture-primary-model"), None);
 
         // Record success
-        tracker.record_success(Provider::OpenAI, Some("gpt-5"));
+        tracker.record_success(Provider::OpenAI, Some("fixture-primary-model"));
 
         // Should no longer be rate limited
-        assert!(!tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5")));
+        assert!(!tracker.is_rate_limited(Provider::OpenAI, Some("fixture-primary-model")));
     }
 
     #[test]
     fn test_tracker_clear_all() {
         let tracker = RateLimitTracker::default();
 
-        tracker.record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
+        tracker.record_rate_limit(Provider::OpenAI, Some("fixture-primary-model"), None);
         tracker.record_rate_limit(Provider::Anthropic, Some("claude"), None);
         tracker.record_rate_limit(Provider::Google, Some("gemini"), None);
 
-        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5")));
+        assert!(tracker.is_rate_limited(Provider::OpenAI, Some("fixture-primary-model")));
         assert!(tracker.is_rate_limited(Provider::Anthropic, Some("claude")));
         assert!(tracker.is_rate_limited(Provider::Google, Some("gemini")));
 
         tracker.clear_all();
 
-        assert!(!tracker.is_rate_limited(Provider::OpenAI, Some("gpt-5")));
+        assert!(!tracker.is_rate_limited(Provider::OpenAI, Some("fixture-primary-model")));
         assert!(!tracker.is_rate_limited(Provider::Anthropic, Some("claude")));
         assert!(!tracker.is_rate_limited(Provider::Google, Some("gemini")));
     }
@@ -125,12 +125,12 @@ mod tests {
     fn test_tracker_get_status() {
         let tracker = RateLimitTracker::default();
 
-        tracker.record_rate_limit(Provider::OpenAI, Some("gpt-5"), None);
+        tracker.record_rate_limit(Provider::OpenAI, Some("fixture-primary-model"), None);
         tracker.record_rate_limit(Provider::Anthropic, Some("claude"), None);
 
         let status = tracker.get_status();
         assert_eq!(status.len(), 2);
-        assert!(status.contains_key("openai:gpt-5"));
+        assert!(status.contains_key("openai:fixture-primary-model"));
         assert!(status.contains_key("anthropic:claude"));
     }
 
@@ -219,11 +219,11 @@ mod tests {
     #[test]
     fn test_candidate_builder() {
         let candidates = CandidateBuilder::new()
-            .add(Provider::Anthropic, "claude-sonnet-5")
-            .add_with_priority(Provider::OpenAI, "gpt-5.6-sol", 1)
+            .add(Provider::Anthropic, "fixture-primary-model")
+            .add_with_priority(Provider::OpenAI, "fixture-secondary-model", 1)
             .add_with_reason(
                 Provider::Google,
-                "gemini-3-pro-preview",
+                "fixture-tertiary-model",
                 "multimodal fallback",
             )
             .build();
@@ -231,15 +231,15 @@ mod tests {
         assert_eq!(candidates.len(), 3);
 
         assert_eq!(candidates[0].provider, Provider::Anthropic);
-        assert_eq!(candidates[0].model, "claude-sonnet-5");
+        assert_eq!(candidates[0].model, "fixture-primary-model");
         assert_eq!(candidates[0].priority, 0);
 
         assert_eq!(candidates[1].provider, Provider::OpenAI);
-        assert_eq!(candidates[1].model, "gpt-5.6-sol");
+        assert_eq!(candidates[1].model, "fixture-secondary-model");
         assert_eq!(candidates[1].priority, 1);
 
         assert_eq!(candidates[2].provider, Provider::Google);
-        assert_eq!(candidates[2].model, "gemini-3-pro-preview");
+        assert_eq!(candidates[2].model, "fixture-tertiary-model");
         assert_eq!(
             candidates[2].reason,
             Some("multimodal fallback".to_string())
@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
     fn test_candidate_non_skippable() {
-        let candidate = ModelCandidate::new(Provider::OpenAI, "gpt-5")
+        let candidate = ModelCandidate::new(Provider::OpenAI, "fixture-primary-model")
             .non_skippable()
             .with_reason("must try this");
 
@@ -265,7 +265,7 @@ mod tests {
         let errors = vec![
             ProviderError {
                 provider: Provider::OpenAI,
-                model: "gpt-5".to_string(),
+                model: "fixture-primary-model".to_string(),
                 message: "rate limit exceeded".to_string(),
                 is_retryable: true,
                 is_rate_limit: true,
@@ -294,7 +294,7 @@ mod tests {
         let errors = vec![
             ProviderError {
                 provider: Provider::OpenAI,
-                model: "gpt-5".to_string(),
+                model: "fixture-primary-model".to_string(),
                 message: "rate limit exceeded".to_string(),
                 is_retryable: true,
                 is_rate_limit: true,
@@ -336,8 +336,8 @@ mod tests {
     async fn test_chain_success_first_candidate() {
         let chain = FallbackChain::new(FallbackConfig::default());
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-balanced-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
         ];
 
         let result = chain
@@ -364,8 +364,8 @@ mod tests {
             ..Default::default()
         });
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-balanced-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
         ];
 
         let result = chain
@@ -397,13 +397,13 @@ mod tests {
         // Pre-rate-limit the first provider
         chain.rate_limit_tracker().record_rate_limit(
             Provider::Anthropic,
-            Some("claude-sonnet"),
+            Some("fixture-balanced-model"),
             None,
         );
 
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-balanced-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
         ];
 
         let result = chain
@@ -418,7 +418,7 @@ mod tests {
             .unwrap();
 
         // Should skip Anthropic and go directly to OpenAI
-        assert_eq!(result.value, "openai:gpt-5");
+        assert_eq!(result.value, "openai:fixture-primary-model");
         assert_eq!(result.successful_candidate.provider, Provider::OpenAI);
         assert_eq!(result.attempts, 1); // Only attempted OpenAI
 
@@ -426,7 +426,7 @@ mod tests {
         assert_eq!(result.skipped_due_to_rate_limit.len(), 1);
         assert_eq!(
             result.skipped_due_to_rate_limit[0],
-            "anthropic:claude-sonnet"
+            "anthropic:fixture-balanced-model"
         );
     }
 
@@ -440,13 +440,13 @@ mod tests {
         // Pre-rate-limit the provider
         chain.rate_limit_tracker().record_rate_limit(
             Provider::Anthropic,
-            Some("claude-sonnet"),
+            Some("fixture-balanced-model"),
             None,
         );
 
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet").non_skippable(),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-balanced-model").non_skippable(),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
         ];
 
         let result = chain
@@ -461,7 +461,7 @@ mod tests {
             .unwrap();
 
         // Should attempt Anthropic despite rate limit because it's non-skippable
-        assert_eq!(result.value, "anthropic:claude-sonnet");
+        assert_eq!(result.value, "anthropic:fixture-balanced-model");
     }
 
     #[tokio::test]
@@ -471,8 +471,8 @@ mod tests {
             ..Default::default()
         });
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-balanced-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
         ];
 
         let result = chain
@@ -491,12 +491,12 @@ mod tests {
         // Anthropic should now be rate limited
         assert!(chain
             .rate_limit_tracker()
-            .is_rate_limited(Provider::Anthropic, Some("claude-sonnet")));
+            .is_rate_limited(Provider::Anthropic, Some("fixture-balanced-model")));
 
         // OpenAI should not be rate limited
         assert!(!chain
             .rate_limit_tracker()
-            .is_rate_limited(Provider::OpenAI, Some("gpt-5")));
+            .is_rate_limited(Provider::OpenAI, Some("fixture-primary-model")));
     }
 
     #[tokio::test]
@@ -506,8 +506,8 @@ mod tests {
             ..Default::default()
         });
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-balanced-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
         ];
 
         let result = chain
@@ -531,9 +531,9 @@ mod tests {
             ..Default::default()
         });
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
-            ModelCandidate::new(Provider::Google, "gemini-pro"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-balanced-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
+            ModelCandidate::new(Provider::Google, "fixture-fast-model"),
         ];
 
         let result = chain
@@ -558,7 +558,7 @@ mod tests {
         // Add candidates with explicit priorities (lower = higher priority)
         let candidates = vec![
             ModelCandidate::new(Provider::Google, "gemini").with_priority(2),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5").with_priority(0), // Highest priority
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model").with_priority(0), // Highest priority
             ModelCandidate::new(Provider::Anthropic, "claude").with_priority(1),
         ];
 
@@ -601,7 +601,7 @@ mod tests {
         let chain = FallbackChain::with_tracker(FallbackConfig::default(), tracker.clone());
         let candidates = vec![
             ModelCandidate::new(Provider::Anthropic, "claude"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
         ];
 
         let result = chain

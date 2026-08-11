@@ -56,3 +56,52 @@ export function isStaleActiveConversation(input: StaleActiveConversationInput): 
   if (displayedConversationId) return false;
   return Boolean(activeConversationId);
 }
+
+export interface ConversationRoutePendingInput {
+  /** The conversation named by the current URL/view. */
+  displayedConversationId: string | null | undefined;
+  /** The transcript currently active in the chat store. */
+  activeConversationId: string | null | undefined;
+  /** Number of messages already available for the displayed conversation. */
+  displayedMessageCount: number;
+  /** Clerk has resolved whether the viewer is signed in. */
+  authLoaded: boolean;
+  /** Conversation list/create/open work reported by useConversations. */
+  isConversationLoading: boolean;
+}
+
+/**
+ * Whether a URL-owned conversation is waiting for its transcript.
+ *
+ * A direct reload initially has a route id but no active store transcript. The
+ * async auth/load effects start only after that first paint, so relying on the
+ * hook's loading flag alone briefly renders the brand-new-chat greeting. Route
+ * ownership is synchronous: while the route has no matching transcript, show
+ * the existing conversation skeleton. Once any messages are available they win
+ * immediately, even if the independent sidebar list fetch is still running.
+ */
+export function isConversationRoutePending(input: ConversationRoutePendingInput): boolean {
+  const {
+    displayedConversationId,
+    activeConversationId,
+    displayedMessageCount,
+    authLoaded,
+    isConversationLoading,
+  } = input;
+
+  if (!displayedConversationId || displayedMessageCount > 0) return false;
+  return !authLoaded || isConversationLoading || activeConversationId !== displayedConversationId;
+}
+
+/**
+ * Keep the sidebar honest before auth can start its first conversation-list
+ * fetch. Once real conversations are present, an unrelated create/open request
+ * must not replace them with a loading placeholder.
+ */
+export function isConversationListPending(input: {
+  authLoaded: boolean;
+  isConversationLoading: boolean;
+  conversationCount: number;
+}): boolean {
+  return !input.authLoaded || (input.conversationCount === 0 && input.isConversationLoading);
+}

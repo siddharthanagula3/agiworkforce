@@ -35,8 +35,8 @@ export default function VscodeExtensionPage() {
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">AGI in VS Code · coming soon</p>
               <h1 id="agi-vscode-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Your editor,</span>
-                <span className="agi-fl-h1-line">with an agent</span>
+                <span className="agi-fl-h1-line">Your editor,</span>{' '}
+                <span className="agi-fl-h1-line">with an agent</span>{' '}
                 <span className="agi-fl-h1-line">
                   <em className="agi-fl-h1-em">on call.</em>
                 </span>

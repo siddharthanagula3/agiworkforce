@@ -48,7 +48,10 @@ function toModelTier(provider: Provider | string, modelId: string): ModelInfo['t
 
 function buildFallbackModel(provider: Provider, modelId: string | null): ModelInfo | null {
   const metadata = getModelMetadataById(modelId);
-  if (!metadata) {
+  // Unified Chat uses token context for chat compaction and presentation.
+  // Specialized media models may honestly omit this inapplicable field, so a
+  // row without a published token limit cannot become a chat fallback.
+  if (!metadata || metadata.contextWindow === undefined) {
     return null;
   }
 
@@ -78,7 +81,7 @@ const AUTO_MODE_FALLBACKS: ModelInfo[] = AUTO_ROUTING_PROFILES.flatMap((profile)
   const tier = AUTO_PROFILE_TIER[profile.profile];
   const representativeId = resolveAutoModeModel(profile.id, tier.subscription, 'general');
   const metadata = getModelMetadataById(representativeId);
-  if (!metadata) return [];
+  if (!metadata || metadata.contextWindow === undefined) return [];
 
   return [
     {

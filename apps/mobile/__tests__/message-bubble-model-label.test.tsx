@@ -142,6 +142,10 @@ jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
 }));
 
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
+import { DEFAULT_LOCAL_MODEL_ID, getShortDisplayName } from '@/src/features/model-picker/service';
+
+const LOCAL_MODEL_LABEL = getShortDisplayName(DEFAULT_LOCAL_MODEL_ID);
+const SYNTHETIC_CLOUD_MODEL_ID = 'fixture-cloud-model';
 
 describe('MessageBubble model label', () => {
   it('shows the friendly local model name instead of the internal model ID', () => {
@@ -150,14 +154,16 @@ describe('MessageBubble model label', () => {
       role: 'assistant',
       content: 'Local AI runs on this device.',
       createdAt: new Date().toISOString(),
-      model: 'qwen3-4b-instruct-2507',
+      model: DEFAULT_LOCAL_MODEL_ID,
     };
 
     const { getByText, queryByText, getByLabelText } = render(<MessageBubble message={message} />);
 
-    expect(getByText(/AGI Standard/)).toBeTruthy();
-    expect(queryByText('qwen3-4b-instruct-2507')).toBeNull();
-    expect(getByLabelText('AGI Standard message: Local AI runs on this device.')).toBeTruthy();
+    expect(getByText(new RegExp(LOCAL_MODEL_LABEL))).toBeTruthy();
+    expect(queryByText(DEFAULT_LOCAL_MODEL_ID)).toBeNull();
+    expect(
+      getByLabelText(`${LOCAL_MODEL_LABEL} message: Local AI runs on this device.`),
+    ).toBeTruthy();
   });
 
   it('renders canonical Cloud activity once and suppresses duplicate legacy step/tool rows', () => {
@@ -166,7 +172,7 @@ describe('MessageBubble model label', () => {
       role: 'assistant',
       content: 'Verified answer.',
       createdAt: new Date().toISOString(),
-      model: 'gpt-5.6-luna',
+      model: SYNTHETIC_CLOUD_MODEL_ID,
       reasoning: 'private provider scratchpad',
       steps: [
         {
@@ -226,7 +232,7 @@ describe('MessageBubble model label', () => {
       role: 'assistant',
       content: 'Direct answer.',
       createdAt: new Date().toISOString(),
-      model: 'gpt-5.6-luna',
+      model: SYNTHETIC_CLOUD_MODEL_ID,
     };
 
     const view = render(<MessageBubble message={message} />);

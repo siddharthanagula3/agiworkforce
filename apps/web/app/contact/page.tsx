@@ -62,7 +62,7 @@ export default function ContactPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Contact</p>
           <h1 id="agi-contact-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">One inbox,</span>
+            <span className="agi-fl-h1-line">One inbox,</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">one human.</em>
             </span>

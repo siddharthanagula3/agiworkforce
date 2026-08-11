@@ -15,6 +15,7 @@ import {
   contactEnterpriseSales,
   previewUpgrade,
   startPlanCheckout,
+  startTopUpCheckout,
   upgradePlanMidCycle,
   upgradeToBasicPlan,
   upgradeToMax15xPlan,
@@ -132,6 +133,22 @@ describe('stripe payments', () => {
       billingInterval: 'monthly',
     });
     expect(window.location.href).toBe('https://checkout.example/max-15x');
+  });
+
+  it('starts a top-up checkout with only the selected whole-dollar amount', async () => {
+    const fetchMock = vi.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: 'https://checkout.example/top-up' }),
+    } as Response);
+
+    await startTopUpCheckout(10);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/billing/top-up',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({ amountUsd: 10 });
+    expect(window.location.href).toBe('https://checkout.example/top-up');
   });
 
   it('completes required card authentication before reporting an upgrade as pending activation', async () => {

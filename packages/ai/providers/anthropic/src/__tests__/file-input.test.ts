@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
+import { ANTHROPIC_DEFAULT_MODEL_ID } from './model-fixtures';
 
 function requestWithFile(mediaType: string, data: string): ChatRequest {
   return {
-    model: 'claude-sonnet-5',
+    model: ANTHROPIC_DEFAULT_MODEL_ID,
     messages: [
       {
         role: 'user',

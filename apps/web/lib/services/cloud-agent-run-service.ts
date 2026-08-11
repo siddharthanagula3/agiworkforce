@@ -8,10 +8,12 @@ import {
   CloudAgentRunSchema,
   ManagedCloudAgentRunRequestIdSchema,
   MAX_CLOUD_AGENT_PENDING_APPROVAL_ARGS_PREVIEW_LENGTH,
+  readPersistedInteractiveCards,
   type CloudAgentOriginSurface,
   type CloudAgentRun,
   type CloudAgentWorkMode,
 } from '@agiworkforce/cloud-contracts';
+import { INTERACTIVE_CARDS_METADATA_KEY, type InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentTaskState } from '@agiworkforce/types/protocol';
 import { z } from 'zod';
 import { toIsoTimestamp } from '@/lib/server/iso-timestamps';
@@ -580,6 +582,8 @@ export interface CloudAgentRunAssistantText {
   text: string;
   /** Highest journal sequence covered by `text`; -1 when the run has no events. */
   lastSequence: number;
+  /** Validated cards recovered from durable completed tool-operation receipts. */
+  interactiveCards: InteractiveCard[];
 }
 
 /**
@@ -597,14 +601,29 @@ export async function readCloudAgentRunAssistantText(
   db: DatabaseAdapter,
   input: { userId: string; runId: string },
 ): Promise<CloudAgentRunAssistantText> {
-  const rows = await db.query<{ text: string | null; last_sequence: number | string | null }>(
+  const rows = await db.query<{
+    text: string | null;
+    last_sequence: number | string | null;
+    interactive_cards: unknown;
+  }>(
     `select coalesce(
               string_agg(envelope->'event'->>'delta', '' order by sequence)
                 filter (where envelope->'event'->>'type' = 'text-delta'
                           and jsonb_typeof(envelope->'event'->'delta') = 'string'),
               ''
             ) as text,
-            coalesce(max(sequence), -1) as last_sequence
+            coalesce(max(sequence), -1) as last_sequence,
+            coalesce(
+              (select jsonb_agg(operation.result->'interactiveCard'
+                                order by operation.created_at, operation.id)
+                 from public.cloud_agent_execution_operations operation
+                where operation.run_id = $1
+                  and operation.user_id = $2
+                  and operation.operation_kind = 'tool'
+                  and operation.status = 'completed'
+                  and jsonb_typeof(operation.result->'interactiveCard') = 'object'),
+              '[]'::jsonb
+            ) as interactive_cards
        from public.cloud_agent_events
       where run_id = $1 and user_id = $2`,
     [input.runId, input.userId],
@@ -618,6 +637,9 @@ export async function readCloudAgentRunAssistantText(
       .min(-1)
       .catch(-1)
       .parse(row?.last_sequence ?? -1),
+    interactiveCards: readPersistedInteractiveCards({
+      [INTERACTIVE_CARDS_METADATA_KEY]: row?.interactive_cards,
+    }),
   };
 }
 

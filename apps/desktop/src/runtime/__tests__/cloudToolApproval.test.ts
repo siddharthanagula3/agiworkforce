@@ -9,6 +9,7 @@ vi.mock('../../api/cloudApi', () => ({
 import { CloudToolApprovalRegistry } from '../cloudToolApproval';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000099';
+const FIXTURE_MODEL_ID = 'fixture-model';
 
 function suspendedSink(
   calls: { toolCallId: string; name: string; args: Record<string, unknown> }[],
@@ -40,12 +41,12 @@ describe('CloudToolApprovalRegistry', () => {
     registry.recordTurnOutcome(
       'conv-1',
       RUN_ID,
-      'gpt-5',
+      FIXTURE_MODEL_ID,
       suspendedSink([{ toolCallId: 'call_1', name: 'read_file', args: {} }]),
     );
     expect(registry.hasLiveTurn('conv-1')).toBe(true);
 
-    registry.recordTurnOutcome('conv-1', RUN_ID, 'gpt-5', completedSink());
+    registry.recordTurnOutcome('conv-1', RUN_ID, FIXTURE_MODEL_ID, completedSink());
     expect(registry.hasLiveTurn('conv-1')).toBe(false);
   });
 
@@ -56,7 +57,7 @@ describe('CloudToolApprovalRegistry', () => {
       registry.hasLiveTurn('conv-1', {
         assistantMessageId: 'assistant-1',
         runId: RUN_ID,
-        model: 'gpt-5',
+        model: FIXTURE_MODEL_ID,
         assistantContent: 'Before approval.',
         calls: [
           {
@@ -76,7 +77,7 @@ describe('CloudToolApprovalRegistry', () => {
     registry.recordTurnOutcome(
       'conv-1',
       RUN_ID,
-      'gpt-5',
+      FIXTURE_MODEL_ID,
       suspendedSink([
         { toolCallId: 'call_1', name: 'read_file', args: {} },
         { toolCallId: 'call_2', name: 'write_file', args: {} },
@@ -131,7 +132,7 @@ describe('CloudToolApprovalRegistry', () => {
     registry.recordTurnOutcome(
       'conv-1',
       RUN_ID,
-      'gpt-5',
+      FIXTURE_MODEL_ID,
       suspendedSink([
         { toolCallId: 'call_1', name: 'read_file', args: {} },
         { toolCallId: 'call_2', name: 'write_file', args: {} },
@@ -160,7 +161,7 @@ describe('CloudToolApprovalRegistry', () => {
     registry.recordTurnOutcome(
       'conv-1',
       RUN_ID,
-      'gpt-5',
+      FIXTURE_MODEL_ID,
       suspendedSink([{ toolCallId: 'call_1', name: 'read_file', args: {} }]),
     );
     sendCloudApprovalResume.mockImplementationOnce(
@@ -223,7 +224,7 @@ describe('CloudToolApprovalRegistry', () => {
     registry.recordTurnOutcome(
       'conv-1',
       RUN_ID,
-      'gpt-5',
+      FIXTURE_MODEL_ID,
       suspendedSink([{ toolCallId: 'call_1', name: 'read_file', args: {} }]),
     );
     sendCloudApprovalResume.mockImplementationOnce(
@@ -254,7 +255,7 @@ describe('CloudToolApprovalRegistry', () => {
     registry.recordTurnOutcome(
       'conv-1',
       RUN_ID,
-      'gpt-5',
+      FIXTURE_MODEL_ID,
       suspendedSink([{ toolCallId: 'call_1', name: 'write_file', args: {} }]),
     );
     sendCloudApprovalResume

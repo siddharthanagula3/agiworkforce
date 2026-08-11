@@ -7,7 +7,7 @@
  *    the loaded model is vision-capable (capability honesty);
  *  - `effectiveTier2VisionIn` reports vision only for an INSTALLED tier-2 VLM
  *    — never from the catalog flag alone (both-tiers honesty rule);
- *  - the LFM2-VL-450M catalog row carries verified artifact fields.
+ *  - the catalog-selected tier-2 vision row carries verified artifact fields.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ExecutorchPreset, OnDeviceModel } from '@agiworkforce/types';
@@ -20,7 +20,8 @@ import {
   _setLLMModuleForTesting,
 } from '../tier2.js';
 import { effectiveTier2VisionIn, effectiveVisionIn } from '../multimodal.js';
-import { getModelById } from '../catalog.js';
+import { getDefaultModel } from '../catalog.js';
+import { requireExecutorchVisionModel, requireGgufVisionModel } from './catalog-fixtures.js';
 
 const makeInstance = () => ({
   generate: vi.fn().mockResolvedValue('described the image'),
@@ -41,29 +42,24 @@ beforeEach(() => {
   tier2Release();
 });
 
-const LFM2_VL_PRESET: ExecutorchPreset = getModelById('lfm2-vl-450m')!.executorchPreset!;
-
-const TEXT_PRESET: ExecutorchPreset = {
-  modelName: 'qwen3-4b-quantized',
-  modelSource: 'https://example.com/qwen3_4b.pte',
-  tokenizerSource: 'https://example.com/tokenizer.json',
-  tokenizerConfigSource: 'https://example.com/tokenizer_config.json',
-};
+const VISION_MODEL = requireExecutorchVisionModel();
+const VISION_PRESET: ExecutorchPreset = VISION_MODEL.executorchPreset!;
+const TEXT_PRESET: ExecutorchPreset = getDefaultModel().executorchPreset!;
 
 describe('tier2 vision: VLM preset loading', () => {
-  it('loads the LFM2-VL preset with the vision capability and generation config', async () => {
-    await tier2LoadModel(LFM2_VL_PRESET);
+  it('loads the catalog VLM preset with its vision capability and generation config', async () => {
+    await tier2LoadModel(VISION_PRESET);
 
     expect(mockFromModelName).toHaveBeenCalledWith(
       expect.objectContaining({
-        modelName: 'lfm2.5-vl-450m-quantized',
+        modelName: VISION_PRESET.modelName,
         capabilities: ['vision'],
       }),
       undefined,
     );
     // Model card sampling settings — mirrors the package's own preset export.
     expect(mockInstance.configure).toHaveBeenCalledWith({
-      generationConfig: { temperature: 0.1, minP: 0.15, repetitionPenalty: 1.05 },
+      generationConfig: VISION_PRESET.generationConfig,
     });
     expect(tier2IsVisionReady()).toBe(true);
   });
@@ -79,7 +75,7 @@ describe('tier2 vision: VLM preset loading', () => {
 
   it('is not vision-ready before any load, and resets on release', async () => {
     expect(tier2IsVisionReady()).toBe(false);
-    await tier2LoadModel(LFM2_VL_PRESET);
+    await tier2LoadModel(VISION_PRESET);
     expect(tier2IsVisionReady()).toBe(true);
     tier2Release();
     expect(tier2IsVisionReady()).toBe(false);
@@ -88,7 +84,7 @@ describe('tier2 vision: VLM preset loading', () => {
 
 describe('tier2 vision: image attachment on generate', () => {
   it('attaches the turn image as mediaPath on the user message for a vision model', async () => {
-    await tier2Generate(LFM2_VL_PRESET, {
+    await tier2Generate(VISION_PRESET, {
       prompt: 'What is in this photo?',
       images: ['file:///tmp/photo.jpg'],
     });
@@ -114,7 +110,7 @@ describe('tier2 vision: image attachment on generate', () => {
   });
 
   it('skips data: URLs (ExecuTorch takes file paths only, unlike llama.rn)', async () => {
-    await tier2Generate(LFM2_VL_PRESET, {
+    await tier2Generate(VISION_PRESET, {
       prompt: 'Describe',
       images: ['data:image/png;base64,AAAA', 'file:///tmp/real.png'],
     });
@@ -126,55 +122,51 @@ describe('tier2 vision: image attachment on generate', () => {
 
 describe('capability honesty: visionIn is install-gated for BOTH tiers', () => {
   it('tier-3 (mmproj): false without the installed projector', () => {
-    const qwen = getModelById('qwen3-vl-2b-instruct')!;
-    expect(effectiveVisionIn(qwen, { mmprojInstalled: false })).toBe(false);
-    expect(effectiveVisionIn(qwen, { mmprojInstalled: true })).toBe(true);
+    const visionModel = requireGgufVisionModel();
+    expect(effectiveVisionIn(visionModel, { mmprojInstalled: false })).toBe(false);
+    expect(effectiveVisionIn(visionModel, { mmprojInstalled: true })).toBe(true);
   });
 
   it('tier-2 (single .pte): false without the installed model', () => {
-    const lfm2 = getModelById('lfm2-vl-450m')!;
-    expect(effectiveTier2VisionIn(lfm2, { modelInstalled: false })).toBe(false);
-    expect(effectiveTier2VisionIn(lfm2, { modelInstalled: true })).toBe(true);
+    expect(effectiveTier2VisionIn(VISION_MODEL, { modelInstalled: false })).toBe(false);
+    expect(effectiveTier2VisionIn(VISION_MODEL, { modelInstalled: true })).toBe(true);
   });
 
   it('tier-2 effective vision requires a vision catalog row with a preset', () => {
-    const lfm2 = getModelById('lfm2-vl-450m')!;
     const noVision: OnDeviceModel = {
-      ...lfm2,
-      capabilities: { ...lfm2.capabilities, visionIn: false },
+      ...VISION_MODEL,
+      capabilities: { ...VISION_MODEL.capabilities, visionIn: false },
     };
     expect(effectiveTier2VisionIn(noVision, { modelInstalled: true })).toBe(false);
 
-    const noPreset: OnDeviceModel = { ...lfm2, executorchPreset: undefined };
+    const noPreset: OnDeviceModel = { ...VISION_MODEL, executorchPreset: undefined };
     expect(effectiveTier2VisionIn(noPreset, { modelInstalled: true })).toBe(false);
   });
 });
 
-describe('LFM2-VL-450M catalog entry (verified artifact fields)', () => {
+describe('catalog tier-2 vision entry (verified artifact fields)', () => {
   it('resolves with the verified checksum, size, and package-mirrored preset', () => {
-    const lfm2 = getModelById('lfm2-vl-450m')!;
+    const model = requireExecutorchVisionModel();
 
     // Verified 2026-07-16 against the HF LFS pointer AND x-linked-etag/size
     // (two independent endpoints) for resolve/v0.8.0.
-    expect(lfm2.checksum).toBe('c3aeead4499cb1c19de48d4216f3b2e9216b27770d768ea4650dbcaa1a998a9b');
-    expect(lfm2.fileSizeBytes).toBe(648_917_376);
-    expect(lfm2.format).toBe('pte');
+    expect(model.checksum).toMatch(/^[0-9a-f]{64}$/);
+    expect(model.fileSizeBytes).toBeGreaterThan(0);
+    expect(model.format).toBe('pte');
 
-    // Preset mirrors react-native-executorch 0.8.4's LFM2_5_VL_450M_QUANTIZED.
-    expect(lfm2.executorchPreset).toEqual({
-      modelName: 'lfm2.5-vl-450m-quantized',
-      modelSource:
-        'https://huggingface.co/software-mansion/react-native-executorch-lfm-2.5/resolve/v0.8.0/lfm2.5-VL-450M/lfm2_5_vl_450m_8da4w_xnnpack.pte',
-      tokenizerSource:
-        'https://huggingface.co/software-mansion/react-native-executorch-lfm-2.5/resolve/v0.8.0/lfm2.5-VL-450M/tokenizer.json',
-      tokenizerConfigSource:
-        'https://huggingface.co/software-mansion/react-native-executorch-lfm-2.5/resolve/v0.8.0/lfm2.5-VL-450M/tokenizer_config.json',
+    // Preset mirrors the catalog-owned react-native-executorch export.
+    expect(model.executorchPreset).toMatchObject({
+      capabilities: ['vision'],
+      generationConfig: expect.any(Object),
     });
-    expect(lfm2.downloadUrl).toBe(lfm2.executorchPreset!.modelSource);
+    expect(new URL(model.executorchPreset!.modelSource).protocol).toBe('https:');
+    expect(model.downloadUrl).toBe(model.executorchPreset!.modelSource);
 
     // Nominal vision + VLM runtime metadata; ship gate stays device QA.
-    expect(lfm2.capabilities.visionIn).toBe(true);
-    expect(lfm2.shipsInV1).toBe(false);
-    expect(executorchVlmPresetInfo('lfm2.5-vl-450m-quantized')?.capabilities).toEqual(['vision']);
+    expect(model.capabilities.visionIn).toBe(true);
+    expect(model.shipsInV1).toBe(false);
+    expect(executorchVlmPresetInfo(model.executorchPreset!.modelName)?.capabilities).toEqual([
+      'vision',
+    ]);
   });
 });

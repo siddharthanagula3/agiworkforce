@@ -123,6 +123,7 @@ function makeProcessed(root: string, offerSkill = true): ProcessedRequest {
       max_tokens: 256,
       stream: true,
       tools: offerSkill ? [createSkillToolDefinition()] : undefined,
+      tool_choice: offerSkill ? { type: 'function', function: { name: 'skill' } } : undefined,
     },
   } as ProcessedRequest;
 }
@@ -199,8 +200,13 @@ describe('managed Cloud Skill tool loop', () => {
     const firstRequest = providerRequests[0];
     expect(JSON.stringify(firstRequest)).not.toContain('Inspect the rendered interface');
     expect(JSON.stringify(firstRequest)).not.toContain(root);
+    expect(firstRequest?.tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'skill' },
+    });
 
     const secondRequest = providerRequests[1]!;
+    expect(secondRequest.tool_choice).toBe('auto');
     const toolResult = secondRequest.messages.find((message) => message.role === 'tool');
     expect(toolResult).toMatchObject({ role: 'tool', tool_call_id: 'call_skill_1' });
     expect(toolResult?.content).toContain('<skill_result untrusted="true"');

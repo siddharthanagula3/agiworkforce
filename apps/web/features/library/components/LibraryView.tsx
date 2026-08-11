@@ -6,7 +6,7 @@
  * The view itself lives in `@agiworkforce/unified-chat` so Desktop renders the
  * same Library rather than a second implementation of it. This file supplies
  * only what differs on web: Clerk's session state, same-origin cookie fetches,
- * the CSRF header the restore endpoint requires, and "open in a new tab".
+ * the CSRF header state-changing endpoints require, and "open in a new tab".
  *
  * Downloads and previews still go through the authed same-origin
  * `/api/files/{id}` route — no public URLs.
@@ -23,10 +23,11 @@ import { getCsrfToken } from '@/lib/client/csrf';
 export { iconKindFor, generatedFileFromLibraryItem } from '@agiworkforce/unified-chat';
 
 export function LibraryView() {
-  const { isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
 
   const transport = useMemo<LibraryTransport>(
     () => ({
+      isAuthReady: isLoaded,
       isSignedIn: Boolean(isSignedIn),
       listPage: (params) =>
         fetch(`/api/library?${params.toString()}`, { credentials: 'same-origin' }),
@@ -35,6 +36,22 @@ export function LibraryView() {
       // deliberately omits this capability because its bearer cannot be
       // attached to an <img> request.
       inlinePreviewUri: (uri) => uri,
+      deleteItem: async (id) => {
+        const csrf = await getCsrfToken();
+        return fetch(`/api/media?id=${encodeURIComponent(id)}`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'x-csrf-token': csrf },
+        });
+      },
+      permanentlyDeleteItem: async (id) => {
+        const csrf = await getCsrfToken();
+        return fetch(`/api/media?id=${encodeURIComponent(id)}&permanent=true`, {
+          method: 'DELETE',
+          credentials: 'same-origin',
+          headers: { 'x-csrf-token': csrf },
+        });
+      },
       restoreItem: async (id) => {
         // The restore endpoint is state-changing, so it carries the CSRF token.
         const csrf = await getCsrfToken();
@@ -50,7 +67,7 @@ export function LibraryView() {
         window.open(uri, '_blank', 'noopener,noreferrer');
       },
     }),
-    [isSignedIn],
+    [isLoaded, isSignedIn],
   );
 
   return <SharedLibraryView transport={transport} />;

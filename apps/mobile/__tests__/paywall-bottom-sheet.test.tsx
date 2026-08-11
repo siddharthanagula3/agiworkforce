@@ -49,7 +49,12 @@ jest.mock('../src/ui/theme', () => {
   };
 });
 
-// Button component — render a Pressable so sales-handoff tests can use it.
+const mockPush = jest.fn();
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockPush }),
+}));
+
+// Button component — render a Pressable so action tests can use it.
 jest.mock('../components/ui/button', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
@@ -158,16 +163,21 @@ describe('PaywallBottomSheet rendering', () => {
     expect(getAllByText('Upgrade to Basic').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders correct label for max tier', () => {
+  it('renders the canonical Max 5x label for max-tier model access', () => {
     const { getAllByText } = render(
-      <PaywallBottomSheet {...defaultProps} requiredTier="max" feature="video_generation" />,
+      <PaywallBottomSheet {...defaultProps} requiredTier="max" feature="model_access" />,
     );
-    expect(getAllByText('Upgrade to Max').length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText('Upgrade to Max 5x').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('shows "not available yet" copy instead of a purchase CTA', () => {
-    const { getByText, queryByTestId } = render(<PaywallBottomSheet {...defaultProps} />);
-    expect(getByText(/Upgrades aren't available in the app yet/i)).toBeTruthy();
+  it('shows honest unavailable copy instead of a self-routing purchase CTA', () => {
+    const { getByText, queryByTestId } = render(
+      <PaywallBottomSheet
+        {...defaultProps}
+        primaryActionUnavailableMessage="Plan changes aren't available in the app yet. Check back soon."
+      />,
+    );
+    expect(getByText(/Plan changes aren't available in the app yet/i)).toBeTruthy();
     expect(queryByTestId('paywall-action-button')).toBeNull();
   });
 
@@ -175,7 +185,11 @@ describe('PaywallBottomSheet rendering', () => {
     'offers canonical %s prospects a strict Contact Sales handoff',
     (requiredTier) => {
       const { getByText, queryByText } = render(
-        <PaywallBottomSheet {...defaultProps} requiredTier={requiredTier} />,
+        <PaywallBottomSheet
+          {...defaultProps}
+          requiredTier={requiredTier}
+          primaryActionUnavailableMessage="Plan changes aren't available in the app yet."
+        />,
       );
 
       fireEvent.press(getByText('Contact Sales'));
@@ -183,7 +197,7 @@ describe('PaywallBottomSheet rendering', () => {
       expect(openExternalUrl).toHaveBeenCalledWith(
         `https://agiworkforce.com/contact-sales?plan=${requiredTier}`,
       );
-      expect(queryByText(/Upgrades aren't available in the app yet/i)).toBeNull();
+      expect(queryByText(/Plan changes aren't available in the app yet/i)).toBeNull();
     },
   );
 

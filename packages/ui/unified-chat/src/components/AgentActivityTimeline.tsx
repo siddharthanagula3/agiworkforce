@@ -49,6 +49,22 @@ export interface AgentActivityTimelineProps {
   onRetryTurn?: () => void;
 }
 
+/**
+ * Whether the canonical activity projection already owns tool-call rendering.
+ *
+ * A durable run can legitimately carry a terminal activity envelope with no
+ * tool entries while the portable/legacy projection still contains real tool
+ * activity (for example, provider-native web grounding). Treating the mere
+ * presence of the envelope as authoritative hides that work completely. Both
+ * the shared bubble and the Web bubble use this predicate so the fallback is
+ * suppressed only when the canonical spine can actually render a tool.
+ */
+export function hasCanonicalToolActivity(
+  activity: Pick<AgentActivityState, 'entries'> | undefined,
+): boolean {
+  return activity?.entries.some((entry) => entry.kind === 'tool') ?? false;
+}
+
 function latestActiveSummary(activity: AgentActivityState): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
@@ -158,6 +174,7 @@ function categoryToKind(category: AgentEventToolCategory): InlineToolKind {
     case 'artifact':
       return 'write';
     case 'skill':
+      return 'skill';
     case 'memory':
     case 'other':
       return 'unknown';

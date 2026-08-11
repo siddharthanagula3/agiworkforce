@@ -27,9 +27,9 @@ interface Props {
   open: boolean;
   onClose: () => void;
   /** Called with a File object; the parent handles the actual upload + state. */
-  onUploadFile: (file: File) => void;
+  onUploadFile: (file: File) => Promise<void>;
   /** Called with text content and a title; parent converts to blob and uploads. */
-  onUploadText: (text: string, title: string) => void;
+  onUploadText: (text: string, title: string) => Promise<void>;
   /** Whether an upload is currently in progress (disable submit during upload). */
   isUploading?: boolean;
   /** Accepted MIME types for the file picker (comma-separated). */
@@ -53,6 +53,8 @@ export function AddSourcesModal({
   const [textTitle, setTextTitle] = useState('');
   const [textContent, setTextContent] = useState('');
   const [isDragging, setIsDragging] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Reset inner state when modal opens/closes
   useEffect(() => {
@@ -61,6 +63,8 @@ export function AddSourcesModal({
       setTextTitle('');
       setTextContent('');
       setIsDragging(false);
+      setIsSubmitting(false);
+      setSubmitError(null);
     }
   }, [open]);
 
@@ -99,31 +103,50 @@ export function AddSourcesModal({
 
   if (!open) return null;
 
+  async function submitFile(file: File) {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await onUploadFile(file);
+      onClose();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Could not add this source.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   function handleDrop(e: React.DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files?.[0];
     if (file) {
-      onUploadFile(file);
-      onClose();
+      void submitFile(file);
     }
   }
 
   function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
-      onUploadFile(file);
-      onClose();
+      void submitFile(file);
     }
     e.target.value = '';
   }
 
-  function handleTextSubmit() {
+  async function handleTextSubmit() {
     const text = textContent.trim();
     if (!text) return;
     const title = textTitle.trim() || 'Text note';
-    onUploadText(text, title);
-    onClose();
+    setIsSubmitting(true);
+    setSubmitError(null);
+    try {
+      await onUploadText(text, title);
+      onClose();
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Could not add this source.');
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   function handleConnectorRoute(path: string) {
@@ -270,7 +293,7 @@ export function AddSourcesModal({
                   label="Upload"
                   description="Files from your device"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading}
+                  disabled={isUploading || isSubmitting}
                 />
 
                 {/* Text input */}
@@ -340,6 +363,11 @@ export function AddSourcesModal({
                   <ExternalLink style={{ width: 10, height: 10 }} aria-hidden="true" />
                 </button>
               </p>
+              {submitError ? (
+                <p role="alert" style={{ margin: '10px 0 0', color: '#f87171', fontSize: 12 }}>
+                  {submitError}
+                </p>
+              ) : null}
             </>
           ) : (
             /* Text input view */
@@ -433,26 +461,38 @@ export function AddSourcesModal({
                 </button>
                 <button
                   type="button"
-                  disabled={!textContent.trim() || isUploading}
-                  onClick={handleTextSubmit}
+                  disabled={!textContent.trim() || isUploading || isSubmitting}
+                  onClick={() => void handleTextSubmit()}
                   style={{
                     padding: '8px 18px',
                     borderRadius: 9999,
                     border: 'none',
                     background:
-                      textContent.trim() && !isUploading ? 'var(--agi-amber)' : 'var(--agi-bg-3)',
+                      textContent.trim() && !isUploading && !isSubmitting
+                        ? 'var(--agi-amber)'
+                        : 'var(--agi-bg-3)',
                     color:
-                      textContent.trim() && !isUploading ? 'var(--agi-bg)' : 'var(--agi-ink-2)',
+                      textContent.trim() && !isUploading && !isSubmitting
+                        ? 'var(--agi-bg)'
+                        : 'var(--agi-ink-2)',
                     fontSize: 13,
                     fontWeight: 500,
-                    cursor: textContent.trim() && !isUploading ? 'pointer' : 'not-allowed',
+                    cursor:
+                      textContent.trim() && !isUploading && !isSubmitting
+                        ? 'pointer'
+                        : 'not-allowed',
                     transition: 'background 0.15s, color 0.15s',
                   }}
                   data-testid="add-sources-text-submit"
                 >
-                  {isUploading ? 'Saving...' : 'Add text'}
+                  {isUploading || isSubmitting ? 'Saving...' : 'Add text'}
                 </button>
               </div>
+              {submitError ? (
+                <p role="alert" style={{ margin: '10px 0 0', color: '#f87171', fontSize: 12 }}>
+                  {submitError}
+                </p>
+              ) : null}
             </>
           )}
         </div>

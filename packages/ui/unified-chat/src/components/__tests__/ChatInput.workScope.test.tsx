@@ -72,6 +72,38 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     expect(screen.getByRole('button', { name: 'Send message (Cmd/Ctrl+Enter)' })).not.toBeNull();
   });
 
+  it('selects a host-admitted skill and forwards its exact catalog name with the turn', () => {
+    const { onSend, textarea } = renderComposer({
+      skills: [
+        {
+          id: 'fixture-reviewed-skill',
+          name: 'fixture-reviewed-skill',
+          category: 'bundled',
+        },
+      ],
+    });
+
+    fireEvent.change(textarea, { target: { value: 'Review this @fixture' } });
+    fireEvent.click(screen.getByRole('option', { name: /fixture-reviewed-skill/i }));
+
+    expect(textarea.value).toBe('Review this');
+    expect(screen.getByText('Skill: fixture-reviewed-skill')).not.toBeNull();
+
+    fireEvent.keyDown(textarea, { key: 'Enter' });
+
+    expect(onSend).toHaveBeenCalledWith(
+      'Review this',
+      'ask',
+      undefined,
+      undefined,
+      false,
+      undefined,
+      undefined,
+      'fixture-reviewed-skill',
+    );
+    expect(screen.queryByText('Skill: fixture-reviewed-skill')).toBeNull();
+  });
+
   it('renders no toggle and keeps the unchanged send signature when the host feeds no picker', () => {
     const { onSend, textarea } = renderComposer();
 

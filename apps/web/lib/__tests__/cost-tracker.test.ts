@@ -16,7 +16,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
     // #22 (reaffirmed 2026-08-05) — Sonnet 5 bills the standard $3/$15 per MTok
     // regardless of date; a provider's introductory window is a provider-cost
     // fact, not a product price.
-    'claude-sonnet-5': {
+    'fixture-anthropic-standard': {
       provider: 'anthropic',
       inputCost: 3.0,
       outputCost: 15.0,
@@ -46,7 +46,7 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
         { effectiveFrom: '2030-04-01' },
       ],
     },
-    'claude-opus-5': {
+    'fixture-anthropic-premium': {
       provider: 'anthropic',
       inputCost: 5.0,
       outputCost: 25.0,
@@ -54,41 +54,72 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
       cached_write: 6.25,
       cached_write_1h: 10.0,
     },
-    'gpt-5.6-sol': {
+    'fixture-inclusive-tiered-primary': {
       provider: 'openai',
       inputCost: 5.0,
       outputCost: 30.0,
       cached_input: 0.5,
+      cached_write: 6.25,
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 272_000,
+          inputCost: 10,
+          outputCost: 45,
+          cached_input: 1,
+          cached_write: 12.5,
+        },
+      ],
     },
-    // GPT-5.6 declares a cache-WRITE price (1.25x the uncached input rate).
-    'gpt-5.6-terra': {
+    // This inclusive-accounting fixture declares a cache-WRITE price at 1.25x input.
+    'fixture-inclusive-tiered-secondary': {
       provider: 'openai',
       inputCost: 2.0,
       outputCost: 12.0,
       cached_input: 0.2,
       cached_write: 2.5,
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 272_000,
+          inputCost: 4,
+          outputCost: 18,
+          cached_input: 0.4,
+          cached_write: 5,
+        },
+      ],
     },
-    // Pre-5.6 OpenAI: no write price declared, so cache writes stay free.
-    'gpt-5.4-mini': {
+    // Synthetic OpenAI fixture with no write price declared.
+    'fixture-no-cache-write': {
       provider: 'openai',
       inputCost: 0.75,
       outputCost: 4.5,
       cached_input: 0.075,
     },
-    'deepseek-v4-flash': {
+    'fixture-disjoint-tiered-pricing': {
+      provider: 'anthropic',
+      inputCost: 1,
+      outputCost: 4,
+      cached_input: 0.1,
+      cached_write: 1.25,
+      inputTokenPricingTiers: [
+        {
+          thresholdTokens: 100_000,
+          inputCost: 2,
+          outputCost: 6,
+          cached_input: 0.2,
+          cached_write: 2.5,
+        },
+      ],
+    },
+    'fixture-inclusive-discounted-cache': {
       provider: 'deepseek',
       inputCost: 0.14,
       outputCost: 0.28,
       cached_input: 0.0028,
     },
-    // Mirrors the shipped catalog: prices no cache read, so its reads take the
-    // shared fallback. grok-4.5 is the live case — it is in
-    // tierAllowedModels.flagship_additions and its OpenAI-shaped stream fills
-    // cache-read counts — and it does NOT declare caching, which is the proof
-    // that the fallback keys on the missing price and not on the capability.
-    // minimax-m3 is the same shape with caching declared, but no tier list
-    // includes it.
-    'grok-4.5': {
+    // A model that publishes no cache-read price takes the shared fallback.
+    // The fixture deliberately reports cache tokens without declaring caching,
+    // proving that the fallback keys on missing pricing rather than capability.
+    'fixture-inclusive-unpriced-cache': {
       provider: 'xai',
       inputCost: 2.0,
       outputCost: 10.0,
@@ -132,28 +163,34 @@ beforeEach(() => {
 
 describe('recordModelUsage', () => {
   it('creates a new session entry on first record', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
       inputTokens: 1000,
       outputTokens: 500,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    expect(report.has('claude-sonnet-5')).toBe(true);
+    expect(report.has('fixture-anthropic-standard')).toBe(true);
   });
 
   it('accumulates tokens across multiple calls for the same model', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 1000, outputTokens: 500 });
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
+      inputTokens: 1000,
+      outputTokens: 500,
+    });
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
+      inputTokens: 200,
+      outputTokens: 100,
+    });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('claude-sonnet-5')!;
+    const usage = report.get('fixture-anthropic-standard')!;
     expect(usage.inputTokens).toBe(1200);
     expect(usage.outputTokens).toBe(600);
     expect(usage.requestCount).toBe(2);
   });
 
   it('accumulates cache tokens', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', {
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
       inputTokens: 1000,
       outputTokens: 500,
       cacheReadInputTokens: 200,
@@ -161,24 +198,36 @@ describe('recordModelUsage', () => {
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('claude-sonnet-5')!;
+    const usage = report.get('fixture-anthropic-standard')!;
     expect(usage.cacheReadInputTokens).toBe(200);
     expect(usage.cacheCreationInputTokens).toBe(800);
   });
 
   it('keeps sessions isolated', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
-    recordModelUsage(SESSION_B, 'gpt-5.6-sol', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+    recordModelUsage(SESSION_B, 'fixture-inclusive-tiered-primary', {
+      inputTokens: 200,
+      outputTokens: 100,
+    });
 
-    expect(getModelUsageReport(SESSION_A).has('claude-sonnet-5')).toBe(true);
-    expect(getModelUsageReport(SESSION_A).has('gpt-5.6-sol')).toBe(false);
-    expect(getModelUsageReport(SESSION_B).has('gpt-5.6-sol')).toBe(true);
-    expect(getModelUsageReport(SESSION_B).has('claude-sonnet-5')).toBe(false);
+    expect(getModelUsageReport(SESSION_A).has('fixture-anthropic-standard')).toBe(true);
+    expect(getModelUsageReport(SESSION_A).has('fixture-inclusive-tiered-primary')).toBe(false);
+    expect(getModelUsageReport(SESSION_B).has('fixture-inclusive-tiered-primary')).toBe(true);
+    expect(getModelUsageReport(SESSION_B).has('fixture-anthropic-standard')).toBe(false);
   });
 
   it('tracks multiple models within the same session', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
+      inputTokens: 200,
+      outputTokens: 100,
+    });
 
     const report = getModelUsageReport(SESSION_A);
     expect(report.size).toBe(2);
@@ -186,12 +235,31 @@ describe('recordModelUsage', () => {
 });
 
 describe('cost calculation', () => {
+  it('selects a tier from total disjoint input, including cache reads and writes', () => {
+    const model = 'fixture-disjoint-tiered-pricing';
+    recordModelUsage(SESSION_A, model, {
+      inputTokens: 60_000,
+      outputTokens: 0,
+      cacheReadInputTokens: 25_000,
+      cacheCreationInputTokens: 15_000,
+    });
+    recordModelUsage(SESSION_B, model, {
+      inputTokens: 60_000,
+      outputTokens: 0,
+      cacheReadInputTokens: 25_000,
+      cacheCreationInputTokens: 15_001,
+    });
+
+    expect(getModelUsageReport(SESSION_A).get(model)!.costUsd).toBeCloseTo(0.08125, 8);
+    expect(getModelUsageReport(SESSION_B).get(model)!.costUsd).toBeCloseTo(0.1625025, 8);
+  });
+
   it('calculates input/output cost from models.json pricing', () => {
-    // claude-sonnet-5: $3/M input, $15/M output on every date.
+    // fixture-anthropic-standard: $3/M input, $15/M output on every date.
     // 1M input + 1M output = $3 + $15 = $18
     recordModelUsage(
       SESSION_A,
-      'claude-sonnet-5',
+      'fixture-anthropic-standard',
       {
         inputTokens: 1_000_000,
         outputTokens: 1_000_000,
@@ -200,77 +268,76 @@ describe('cost calculation', () => {
     );
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('claude-sonnet-5')!.costUsd;
+    const cost = report.get('fixture-anthropic-standard')!.costUsd;
     expect(cost).toBeCloseTo(18.0, 4);
   });
 
   it('uses catalog cached_input price when present', () => {
-    // claude-opus-5: inputCost=$5, cached_input=$0.5
+    // fixture-anthropic-premium: inputCost=$5, cached_input=$0.5
     // 1M input + 1M cache_read = $5 + $0.5 = $5.5
-    recordModelUsage(SESSION_A, 'claude-opus-5', {
+    recordModelUsage(SESSION_A, 'fixture-anthropic-premium', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('claude-opus-5')!.costUsd;
+    const cost = report.get('fixture-anthropic-premium')!.costUsd;
     expect(cost).toBeCloseTo(5.5, 4);
   });
 
   it('does not double-count cache reads for inclusive-prompt providers (deepseek)', () => {
-    // deepseek-v4-flash: input=$0.14/M, cached_input=$0.0028/M. DeepSeek reports
+    // fixture-inclusive-discounted-cache: input=$0.14/M, cached_input=$0.0028/M. DeepSeek reports
     // prompt_tokens INCLUSIVE of cache hits, so a 1M prompt with 1M cache hits is
     // entirely cached. Correct cost = 1M * $0.0028 = $0.0028, NOT
     // 1M*$0.14 + 1M*$0.0028 (the old double-count bug = $0.1428).
-    recordModelUsage(SESSION_A, 'deepseek-v4-flash', {
+    recordModelUsage(SESSION_A, 'fixture-inclusive-discounted-cache', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('deepseek-v4-flash')!.costUsd;
+    const cost = report.get('fixture-inclusive-discounted-cache')!.costUsd;
     expect(cost).toBeCloseTo(0.0028, 6);
   });
 
   it('bills only the uncached remainder at input rate for inclusive providers (openai)', () => {
-    // gpt-5.6-terra: input=$2/M, cached_input=$0.2/M. 1M prompt with 400k cache
-    // hits: 600k billed at $2/M + 400k at $0.2/M = $1.2 + $0.08 = $1.28
-    // (NOT $2 + $0.08 = $2.08).
-    recordModelUsage(SESSION_A, 'gpt-5.6-terra', {
+    // Above the catalog threshold the long rates are input=$4/M and cache
+    // read=$0.4/M. 600k plain + 400k cached = $2.40 + $0.16 = $2.56.
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-secondary', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 400_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.6-terra')!.costUsd;
-    expect(cost).toBeCloseTo(1.28, 4);
+    const cost = report.get('fixture-inclusive-tiered-secondary')!.costUsd;
+    expect(cost).toBeCloseTo(2.56, 4);
   });
 
   it('bills cache_read at the full input rate when the catalog prices none', () => {
-    // grok-4.5 prices no cache read, so its reads bill at the full $2/M — the
+    // fixture-inclusive-unpriced-cache prices no cache read, so its reads bill at the full $2/M — the
     // rate the desktop calculator and the gateway charge for the same request.
     // A 90%-off fallback here would bill $0.20/M for a discount the catalog
     // does not publish.
-    recordModelUsage(SESSION_A, 'grok-4.5', {
+    recordModelUsage(SESSION_A, 'fixture-inclusive-unpriced-cache', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('grok-4.5')!.costUsd;
+    const cost = report.get('fixture-inclusive-unpriced-cache')!.costUsd;
     expect(cost).toBeCloseTo(2.0, 6);
   });
 
   it('charges cache_creation at 125% of input rate', () => {
-    // claude-sonnet-5: catalog cacheCreation = $3.75/M
+    // fixture-anthropic-standard: catalog cacheCreation = $3.75/M
     // 1M cache_creation = $3.75
     recordModelUsage(
       SESSION_A,
-      'claude-sonnet-5',
+      'fixture-anthropic-standard',
       {
         inputTokens: 0,
         outputTokens: 0,
@@ -280,7 +347,7 @@ describe('cost calculation', () => {
     );
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('claude-sonnet-5')!.costUsd;
+    const cost = report.get('fixture-anthropic-standard')!.costUsd;
     expect(cost).toBeCloseTo(3.75, 4);
   });
 
@@ -306,7 +373,7 @@ describe('cost calculation', () => {
 // portion at 2x while billing the remainder at the 5-minute 1.25x rate.
 describe('worked cost examples — all token classes, per provider', () => {
   it('anthropic (disjoint input): applies Sonnet 5 catalog cache prices', () => {
-    // claude-sonnet-5: input=$3/M, output=$15/M, cache-read=$0.3/M,
+    // fixture-anthropic-standard: input=$3/M, output=$15/M, cache-read=$0.3/M,
     // cache-write=$3.75/M.
     //   input      100k * 3    /1e6 = $0.30   (Anthropic input_tokens are disjoint → full, no subtraction)
     //   output      50k * 15   /1e6 = $0.75
@@ -315,7 +382,7 @@ describe('worked cost examples — all token classes, per provider', () => {
     //   total = $4.11
     recordModelUsage(
       SESSION_A,
-      'claude-sonnet-5',
+      'fixture-anthropic-standard',
       {
         inputTokens: 100_000,
         outputTokens: 50_000,
@@ -324,28 +391,34 @@ describe('worked cost examples — all token classes, per provider', () => {
       },
       PRICED_ON,
     );
-    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(4.11, 6);
+    expect(getModelUsageReport(SESSION_A).get('fixture-anthropic-standard')!.costUsd).toBeCloseTo(
+      4.11,
+      6,
+    );
   });
 
   it('anthropic (catalog cached_input): read billed at explicit rate, write at 1.25x', () => {
-    // claude-opus-5: input=$5/M, output=$25/M, cache-read=$0.5/M,
+    // fixture-anthropic-premium: input=$5/M, output=$25/M, cache-read=$0.5/M,
     // cache-write=$6.25/M.
     //   input       1M * 5    /1e6 = $5.00
     //   output      1M * 25   /1e6 = $25.00
     //   cache-read  1M * 0.50 /1e6 = $0.50
     //   cache-write 1M * 6.25 /1e6 = $6.25
     //   total = $36.75
-    recordModelUsage(SESSION_A, 'claude-opus-5', {
+    recordModelUsage(SESSION_A, 'fixture-anthropic-premium', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
       cacheReadInputTokens: 1_000_000,
       cacheCreationInputTokens: 1_000_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('claude-opus-5')!.costUsd).toBeCloseTo(36.75, 6);
+    expect(getModelUsageReport(SESSION_A).get('fixture-anthropic-premium')!.costUsd).toBeCloseTo(
+      36.75,
+      6,
+    );
   });
 
   it('anthropic 1h cache write bills at 2x input; the 5m remainder at 1.25x', () => {
-    // claude-sonnet-5: 5m cache-write=$3.75/M, 1h cache-write=$6/M.
+    // fixture-anthropic-standard: 5m cache-write=$3.75/M, 1h cache-write=$6/M.
     //   1h write 400k * (3 * 2.0  = $6.00/M) /1e6 = $2.40
     //   5m write 600k * (3 * 1.25 = $3.75/M) /1e6 = $2.25   (1M total − 400k @ 1h)
     //   total = $4.65
@@ -353,7 +426,7 @@ describe('worked cost examples — all token classes, per provider', () => {
     // cacheCreation1hInputTokens at 0, so only this case can fail on that rate.
     recordModelUsage(
       SESSION_A,
-      'claude-sonnet-5',
+      'fixture-anthropic-standard',
       {
         inputTokens: 0,
         outputTokens: 0,
@@ -362,37 +435,45 @@ describe('worked cost examples — all token classes, per provider', () => {
       },
       PRICED_ON,
     );
-    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(4.65, 6);
+    expect(getModelUsageReport(SESSION_A).get('fixture-anthropic-standard')!.costUsd).toBeCloseTo(
+      4.65,
+      6,
+    );
   });
 
   it('openai (inclusive prompt): cached subset subtracted from the input bucket', () => {
-    // gpt-5.6-sol: input=$5/M, output=$30/M, catalog cached_input=$0.5/M.
+    // This request is above the long-context threshold: input=$10/M,
+    // output=$45/M, and cache read=$1/M.
     // OpenAI prompt_tokens INCLUDE the cached hits, so the cached subset is
     // subtracted from the billable-input bucket (billed once, at the read rate).
-    //   billable input (1M - 400k) 600k * 5   /1e6 = $3.00
-    //   cache-read                 400k * 0.5 /1e6 = $0.20
-    //   output                      1M  * 30  /1e6 = $30.00
-    //   total = $33.20
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
+    //   billable input (1M - 400k) 600k * 10 /1e6 = $6.00
+    //   cache-read                 400k * 1  /1e6 = $0.40
+    //   output                      1M  * 45 /1e6 = $45.00
+    //   total = $51.40
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
       cacheReadInputTokens: 400_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('gpt-5.6-sol')!.costUsd).toBeCloseTo(33.2, 6);
+    expect(
+      getModelUsageReport(SESSION_A).get('fixture-inclusive-tiered-primary')!.costUsd,
+    ).toBeCloseTo(51.4, 6);
   });
 
   it('deepseek (inclusive prompt): fully-cached prompt bills only the discounted read rate', () => {
-    // deepseek-v4-flash: input=$0.14/M, output=$0.28/M, catalog cached_input=$0.0028/M.
+    // fixture-inclusive-discounted-cache: input=$0.14/M, output=$0.28/M, catalog cached_input=$0.0028/M.
     //   billable input (1M - 1M)   0 * 0.14   /1e6 = $0.00
     //   cache-read                1M * 0.0028 /1e6 = $0.0028
     //   output                   500k * 0.28  /1e6 = $0.14
     //   total = $0.1428
-    recordModelUsage(SESSION_A, 'deepseek-v4-flash', {
+    recordModelUsage(SESSION_A, 'fixture-inclusive-discounted-cache', {
       inputTokens: 1_000_000,
       outputTokens: 500_000,
       cacheReadInputTokens: 1_000_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('deepseek-v4-flash')!.costUsd).toBeCloseTo(0.1428, 6);
+    expect(
+      getModelUsageReport(SESSION_A).get('fixture-inclusive-discounted-cache')!.costUsd,
+    ).toBeCloseTo(0.1428, 6);
   });
 });
 
@@ -485,91 +566,98 @@ describe('effective-dated pricing', () => {
     // $3/M input on both sides of the retired 2026-09-01 boundary.
     recordModelUsage(
       SESSION_A,
-      'claude-sonnet-5',
+      'fixture-anthropic-standard',
       { inputTokens: 1_000_000, outputTokens: 0 },
       new Date('2026-08-15T00:00:00.000Z'),
     );
     recordModelUsage(
       SESSION_B,
-      'claude-sonnet-5',
+      'fixture-anthropic-standard',
       { inputTokens: 1_000_000, outputTokens: 0 },
       new Date('2026-09-15T00:00:00.000Z'),
     );
-    expect(getModelUsageReport(SESSION_A).get('claude-sonnet-5')!.costUsd).toBeCloseTo(3.0, 6);
-    expect(getModelUsageReport(SESSION_B).get('claude-sonnet-5')!.costUsd).toBeCloseTo(3.0, 6);
+    expect(getModelUsageReport(SESSION_A).get('fixture-anthropic-standard')!.costUsd).toBeCloseTo(
+      3.0,
+      6,
+    );
+    expect(getModelUsageReport(SESSION_B).get('fixture-anthropic-standard')!.costUsd).toBeCloseTo(
+      3.0,
+      6,
+    );
   });
 
   it('prices a model without a schedule identically on any date', () => {
     recordModelUsage(
       SESSION_A,
-      'claude-opus-5',
+      'fixture-anthropic-premium',
       { inputTokens: 1_000_000, outputTokens: 0 },
       new Date('2020-01-01T00:00:00.000Z'),
     );
     recordModelUsage(
       SESSION_B,
-      'claude-opus-5',
+      'fixture-anthropic-premium',
       { inputTokens: 1_000_000, outputTokens: 0 },
       new Date('2099-12-31T00:00:00.000Z'),
     );
-    expect(getModelUsageReport(SESSION_A).get('claude-opus-5')!.costUsd).toBeCloseTo(
-      getModelUsageReport(SESSION_B).get('claude-opus-5')!.costUsd,
+    expect(getModelUsageReport(SESSION_A).get('fixture-anthropic-premium')!.costUsd).toBeCloseTo(
+      getModelUsageReport(SESSION_B).get('fixture-anthropic-premium')!.costUsd,
       10,
     );
   });
 });
 
-// OpenAI began charging for prompt-cache WRITES with the GPT-5.6 family
-// (1.25x the uncached input rate, automatic and explicit breakpoints alike).
-// The catalog expresses that as a `cached_write` price, so billing keys off the
-// declared price rather than the model name.
+// Some OpenAI models charge for prompt-cache writes at 1.25x uncached input.
+// The catalog expresses that as `cached_write`, so billing keys off declared
+// pricing rather than a concrete model family or release name.
 describe('OpenAI cache-write billing', () => {
   it('bills writes at the declared price for models that publish one', () => {
-    // gpt-5.6-terra: input $2/M, cached_write $2.5/M. OpenAI prompt_tokens are
-    // INCLUSIVE, so a 1M prompt that is entirely cache writes bills
-    // 1M * $2.5/M = $2.50 — the input charge plus the 0.25x write surcharge.
-    recordModelUsage(SESSION_A, 'gpt-5.6-terra', {
+    // Above the threshold, a 1M prompt consisting entirely of cache writes uses
+    // the catalog's $5/M long-context write rate.
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-secondary', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheCreationInputTokens: 1_000_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('gpt-5.6-terra')!.costUsd).toBeCloseTo(2.5, 6);
+    expect(
+      getModelUsageReport(SESSION_A).get('fixture-inclusive-tiered-secondary')!.costUsd,
+    ).toBeCloseTo(5, 6);
   });
 
-  it('keeps writes free for pre-5.6 OpenAI models that declare no write price', () => {
-    // gpt-5.4-mini: input $0.75/M, no cached_write. A written token bills once,
-    // at the input rate — identical to the same prompt with no cache activity.
-    recordModelUsage(SESSION_A, 'gpt-5.4-mini', {
+  it('keeps writes free when a model declares no write price', () => {
+    const model = 'fixture-no-cache-write';
+    recordModelUsage(SESSION_A, model, {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheCreationInputTokens: 1_000_000,
     });
-    recordModelUsage(SESSION_B, 'gpt-5.4-mini', {
+    recordModelUsage(SESSION_B, model, {
       inputTokens: 1_000_000,
       outputTokens: 0,
     });
-    const withWrites = getModelUsageReport(SESSION_A).get('gpt-5.4-mini')!.costUsd;
+    const withWrites = getModelUsageReport(SESSION_A).get(model)!.costUsd;
     expect(withWrites).toBeCloseTo(0.75, 6);
-    expect(withWrites).toBeCloseTo(getModelUsageReport(SESSION_B).get('gpt-5.4-mini')!.costUsd, 10);
+    expect(withWrites).toBeCloseTo(getModelUsageReport(SESSION_B).get(model)!.costUsd, 10);
   });
 
   it('bills each prompt token exactly once across input, read, and write', () => {
-    // gpt-5.6-terra: input $2/M, cached_input $0.2/M, cached_write $2.5/M.
-    //   plain input (1M - 400k - 200k) 400k * 2   /1e6 = $0.80
-    //   cache read                     400k * 0.2 /1e6 = $0.08
-    //   cache write                    200k * 2.5 /1e6 = $0.50
-    //   total = $1.38
-    recordModelUsage(SESSION_A, 'gpt-5.6-terra', {
+    // Long-context rates are input $4/M, cache read $0.4/M, cache write $5/M.
+    //   plain input (1M - 400k - 200k) 400k * 4   /1e6 = $1.60
+    //   cache read                     400k * 0.4 /1e6 = $0.16
+    //   cache write                    200k * 5   /1e6 = $1.00
+    //   total = $2.76
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-secondary', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 400_000,
       cacheCreationInputTokens: 200_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('gpt-5.6-terra')!.costUsd).toBeCloseTo(1.38, 6);
+    expect(
+      getModelUsageReport(SESSION_A).get('fixture-inclusive-tiered-secondary')!.costUsd,
+    ).toBeCloseTo(2.76, 6);
   });
 
   it('keeps Anthropic disjoint accounting: cache tokens add to input, never subtract', () => {
-    // claude-opus-5: input $5/M, cached_input $0.5/M, cached_write $6.25/M.
+    // fixture-anthropic-premium: input $5/M, cached_input $0.5/M, cached_write $6.25/M.
     // Anthropic reports input_tokens SEPARATELY from the cache buckets, so all
     // three are summed — this is the accounting distinction that must survive
     // the OpenAI write-billing change.
@@ -577,13 +665,16 @@ describe('OpenAI cache-write billing', () => {
     //   cache read  1M * 0.50 /1e6 = $0.50
     //   cache write 1M * 6.25 /1e6 = $6.25
     //   total = $11.75
-    recordModelUsage(SESSION_A, 'claude-opus-5', {
+    recordModelUsage(SESSION_A, 'fixture-anthropic-premium', {
       inputTokens: 1_000_000,
       outputTokens: 0,
       cacheReadInputTokens: 1_000_000,
       cacheCreationInputTokens: 1_000_000,
     });
-    expect(getModelUsageReport(SESSION_A).get('claude-opus-5')!.costUsd).toBeCloseTo(11.75, 6);
+    expect(getModelUsageReport(SESSION_A).get('fixture-anthropic-premium')!.costUsd).toBeCloseTo(
+      11.75,
+      6,
+    );
   });
 });
 
@@ -593,18 +684,21 @@ describe('getSessionTotalCostUsd', () => {
   });
 
   it('sums cost across all models in a session', () => {
-    // claude-sonnet-5: $3/M input → 1M = $3
+    // fixture-anthropic-standard: $3/M input → 1M = $3
     recordModelUsage(
       SESSION_A,
-      'claude-sonnet-5',
+      'fixture-anthropic-standard',
       { inputTokens: 1_000_000, outputTokens: 0 },
       PRICED_ON,
     );
-    // gpt-5.6-sol: $5/M input → 1M = $5
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', { inputTokens: 1_000_000, outputTokens: 0 });
+    // The 1M input crosses the long-context tier: $10/M → $10.
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
+      inputTokens: 1_000_000,
+      outputTokens: 0,
+    });
 
     const total = getSessionTotalCostUsd(SESSION_A);
-    expect(total).toBeCloseTo(8.0, 4);
+    expect(total).toBeCloseTo(13.0, 4);
   });
 });
 
@@ -615,22 +709,31 @@ describe('getModelUsageReport', () => {
   });
 
   it('returns a snapshot (mutations do not affect store)', () => {
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', { inputTokens: 100, outputTokens: 50 });
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
+      inputTokens: 100,
+      outputTokens: 50,
+    });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('gpt-5.6-sol')!;
+    const usage = report.get('fixture-inclusive-tiered-primary')!;
     usage.inputTokens = 9999; // mutate snapshot
 
     // Store should be unaffected
     const report2 = getModelUsageReport(SESSION_A);
-    expect(report2.get('gpt-5.6-sol')!.inputTokens).toBe(100);
+    expect(report2.get('fixture-inclusive-tiered-primary')!.inputTokens).toBe(100);
   });
 });
 
 describe('resetModelUsage', () => {
   it('removes only the specified session', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
-    recordModelUsage(SESSION_B, 'gpt-5.6-sol', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+    recordModelUsage(SESSION_B, 'fixture-inclusive-tiered-primary', {
+      inputTokens: 200,
+      outputTokens: 100,
+    });
 
     resetModelUsage(SESSION_A);
 
@@ -645,8 +748,14 @@ describe('resetModelUsage', () => {
 
 describe('resetAllSessions', () => {
   it('clears all sessions', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
-    recordModelUsage(SESSION_B, 'gpt-5.6-sol', { inputTokens: 200, outputTokens: 100 });
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
+      inputTokens: 100,
+      outputTokens: 50,
+    });
+    recordModelUsage(SESSION_B, 'fixture-inclusive-tiered-primary', {
+      inputTokens: 200,
+      outputTokens: 100,
+    });
 
     resetAllSessions();
 
@@ -657,56 +766,59 @@ describe('resetAllSessions', () => {
 
 describe('reasoningOutputTokens', () => {
   it('accumulates reasoningOutputTokens across calls', () => {
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 1000,
       outputTokens: 500,
       reasoningOutputTokens: 200,
     });
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 100,
       outputTokens: 50,
       reasoningOutputTokens: 80,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('gpt-5.6-sol')!;
+    const usage = report.get('fixture-inclusive-tiered-primary')!;
     expect(usage.reasoningOutputTokens).toBe(280);
   });
 
   it('initializes reasoningOutputTokens to 0 when absent', () => {
-    recordModelUsage(SESSION_A, 'claude-sonnet-5', { inputTokens: 100, outputTokens: 50 });
+    recordModelUsage(SESSION_A, 'fixture-anthropic-standard', {
+      inputTokens: 100,
+      outputTokens: 50,
+    });
 
     const report = getModelUsageReport(SESSION_A);
-    const usage = report.get('claude-sonnet-5')!;
+    const usage = report.get('fixture-anthropic-standard')!;
     expect(usage.reasoningOutputTokens).toBe(0);
   });
 
   it('charges reasoning tokens at the output token rate', () => {
-    // gpt-5.6-sol: outputCost=$30/M
+    // fixture-inclusive-tiered-primary: outputCost=$30/M
     // 1M reasoning tokens = $30
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 0,
       outputTokens: 0,
       reasoningOutputTokens: 1_000_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.6-sol')!.costUsd;
+    const cost = report.get('fixture-inclusive-tiered-primary')!.costUsd;
     expect(cost).toBeCloseTo(30.0, 4);
   });
 
   it('adds reasoning cost on top of input + output cost', () => {
-    // gpt-5.6-sol: input=$5/M, output=$30/M
-    // 1M input + 1M output + 500k reasoning = $5 + $30 + $15 = $50
-    recordModelUsage(SESSION_A, 'gpt-5.6-sol', {
+    // Above the threshold: input=$10/M, output/reasoning=$45/M.
+    // 1M input + 1M output + 500k reasoning = $10 + $45 + $22.50 = $77.50.
+    recordModelUsage(SESSION_A, 'fixture-inclusive-tiered-primary', {
       inputTokens: 1_000_000,
       outputTokens: 1_000_000,
       reasoningOutputTokens: 500_000,
     });
 
     const report = getModelUsageReport(SESSION_A);
-    const cost = report.get('gpt-5.6-sol')!.costUsd;
-    expect(cost).toBeCloseTo(50.0, 4);
+    const cost = report.get('fixture-inclusive-tiered-primary')!.costUsd;
+    expect(cost).toBeCloseTo(77.5, 4);
   });
 });
 
@@ -732,19 +844,19 @@ describe('inferGenAiSystem', () => {
 
 describe('toOtelAttributes', () => {
   it('includes standard GenAI semantic convention fields', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
+    const attrs = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', {
       inputTokens: 1000,
       outputTokens: 500,
     });
 
     expect(attrs['gen_ai.system']).toBe('openai');
-    expect(attrs['gen_ai.request.model']).toBe('gpt-5.6-sol');
+    expect(attrs['gen_ai.request.model']).toBe('fixture-inclusive-tiered-primary');
     expect(attrs['gen_ai.usage.input_tokens']).toBe(1000);
     expect(attrs['gen_ai.usage.output_tokens']).toBe(500);
   });
 
   it('includes cache_read attribute when cacheReadInputTokens is provided', () => {
-    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-5', {
+    const attrs = toOtelAttributes('anthropic', 'fixture-anthropic-standard', {
       inputTokens: 2000,
       outputTokens: 300,
       cacheReadInputTokens: 800,
@@ -754,7 +866,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('omits cache_read attribute when cacheReadInputTokens is absent', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
+    const attrs = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', {
       inputTokens: 100,
       outputTokens: 50,
     });
@@ -763,7 +875,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('includes codex.usage.cache_creation_input_tokens when provided', () => {
-    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-5', {
+    const attrs = toOtelAttributes('anthropic', 'fixture-anthropic-standard', {
       inputTokens: 2000,
       outputTokens: 300,
       cacheCreationInputTokens: 1200,
@@ -773,7 +885,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('includes codex.usage.reasoning_output_tokens when provided', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
+    const attrs = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', {
       inputTokens: 1000,
       outputTokens: 500,
       reasoningOutputTokens: 256,
@@ -783,7 +895,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('omits codex.usage.reasoning_output_tokens when absent', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
+    const attrs = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', {
       inputTokens: 1000,
       outputTokens: 500,
     });
@@ -792,7 +904,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('computes total_tokens as input + output + reasoning + cache_creation', () => {
-    const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
+    const attrs = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', {
       inputTokens: 1000,
       outputTokens: 500,
       reasoningOutputTokens: 200,
@@ -804,7 +916,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('total_tokens excludes cache_read (reads are not net-new tokens)', () => {
-    const attrs = toOtelAttributes('anthropic', 'claude-sonnet-5', {
+    const attrs = toOtelAttributes('anthropic', 'fixture-anthropic-standard', {
       inputTokens: 1000,
       outputTokens: 500,
       cacheReadInputTokens: 800, // not counted in total
@@ -815,7 +927,7 @@ describe('toOtelAttributes', () => {
   });
 
   it('uses inferGenAiSystem to map provider to gen_ai.system', () => {
-    const attrs = toOtelAttributes('google', 'gemini-2.0-flash', {
+    const attrs = toOtelAttributes('google', 'fixture-model', {
       inputTokens: 100,
       outputTokens: 50,
     });
@@ -829,7 +941,7 @@ describe('toOtelAttributes', () => {
   // only label the span with what the durable row already carries.
   describe('CPST vendor attributes', () => {
     it('emits no codex.usage CPST attribute when no CPST fields are supplied', () => {
-      const attrs = toOtelAttributes('openai', 'gpt-5.6-sol', {
+      const attrs = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', {
         inputTokens: 100,
         outputTokens: 50,
       });
@@ -846,7 +958,7 @@ describe('toOtelAttributes', () => {
     it('mirrors every populated CPST field into the codex.usage namespace', () => {
       const attrs = toOtelAttributes(
         'anthropic',
-        'claude-sonnet-5',
+        'fixture-anthropic-standard',
         { inputTokens: 10, outputTokens: 5 },
         {
           taskOutcome: 'unknown',
@@ -875,7 +987,7 @@ describe('toOtelAttributes', () => {
     it('keeps an absent CPST field absent instead of defaulting it', () => {
       const attrs = toOtelAttributes(
         'openai',
-        'gpt-5.6-sol',
+        'fixture-inclusive-tiered-primary',
         { inputTokens: 10, outputTokens: 5 },
         { taskOutcome: 'failure', verifierResult: 'skipped' },
       );
@@ -890,7 +1002,7 @@ describe('toOtelAttributes', () => {
     it('emits fallback_used:false as a real false, not as an omission', () => {
       const attrs = toOtelAttributes(
         'openai',
-        'gpt-5.6-sol',
+        'fixture-inclusive-tiered-primary',
         { inputTokens: 10, outputTokens: 5 },
         { fallbackUsed: false, retries: 0 },
       );
@@ -901,8 +1013,8 @@ describe('toOtelAttributes', () => {
 
     it('leaves the token attributes byte-identical whether or not CPST is passed', () => {
       const usage = { inputTokens: 1000, outputTokens: 500, cacheCreationInputTokens: 300 };
-      const withoutCpst = toOtelAttributes('openai', 'gpt-5.6-sol', usage);
-      const withCpst = toOtelAttributes('openai', 'gpt-5.6-sol', usage, {
+      const withoutCpst = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', usage);
+      const withCpst = toOtelAttributes('openai', 'fixture-inclusive-tiered-primary', usage, {
         taskOutcome: 'unknown',
       });
 

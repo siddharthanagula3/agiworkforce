@@ -20,6 +20,7 @@ import {
   type ChatMessageRow,
 } from '@/lib/server/neon-chat';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -51,14 +52,18 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const { id: clientMessageId, content, metadata, model, role, skipLlm } = validationResult.data;
 
   const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
   const [conversation] = await db.query<{ id: string; model: string | null }>(
     `
       select id, model
       from web_conversations
-      where id = $1 and user_id = $2 and deleted_at is null
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and deleted_at is null
       limit 1
     `,
-    [conversationId, userId],
+    [conversationId, userId, organizationId],
   );
 
   if (!conversation) {
@@ -118,8 +123,12 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
       // First message - generate title
       const title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
       await db.execute(
-        'update web_conversations set title = $1, updated_at = now() where id = $2 and user_id = $3',
-        [title, conversationId, userId],
+        `update web_conversations
+            set title = $1, updated_at = now()
+          where id = $2
+            and user_id = $3
+            and organization_id is not distinct from $4`,
+        [title, conversationId, userId, organizationId],
       );
     }
   }

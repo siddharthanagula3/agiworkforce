@@ -1,4 +1,8 @@
-import { getAutoRoutingProfiles, getCoreManualModelOptions } from '@agiworkforce/types';
+import {
+  getAutoRoutingProfiles,
+  getCoreManualModelOptions,
+  getModelMetadataById,
+} from '@agiworkforce/types';
 import type {
   ManagedCloudScheduleRecurrence,
   ManagedCloudScheduleRun,
@@ -66,6 +70,18 @@ export const AVAILABLE_MODELS = [
   })),
   ...getCoreManualModelOptions().map((model) => ({ value: model.id, label: model.label })),
 ];
+
+/** User-facing label for a Managed Cloud schedule selection or run receipt. */
+export function scheduleModelLabel(modelId: string | null | undefined): string {
+  const normalizedModelId = modelId?.trim() ?? '';
+  if (!normalizedModelId) return 'Auto';
+
+  return (
+    AVAILABLE_MODELS.find((option) => option.value === normalizedModelId)?.label ??
+    getModelMetadataById(normalizedModelId)?.name ??
+    'Unavailable model'
+  );
+}
 
 export const DAYS_OF_WEEK = [
   { value: 0, label: 'Sun', longLabel: 'Sunday' },

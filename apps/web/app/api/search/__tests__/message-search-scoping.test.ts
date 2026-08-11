@@ -16,9 +16,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-const { mockGetClerkAuthUser, mockNeonQuery } = vi.hoisted(() => ({
+const { mockGetClerkAuthUser, mockNeonQuery, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
+  mockResolveActiveOrganizationId: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -40,6 +41,9 @@ vi.mock('@/lib/server/neon-db', () => ({
     dispose: vi.fn(),
   })),
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+}));
 
 import { GET } from '@/app/api/search/route';
 
@@ -60,6 +64,7 @@ function messageQuery(): QueryCall {
 beforeEach(() => {
   // vitest.config.ts sets mockReset: true — re-register per test.
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
+  mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
   mockNeonQuery.mockResolvedValue([]);
 });
 
@@ -71,8 +76,10 @@ describe('GET /api/search message scoping', () => {
     const [sql, params] = messageQuery();
     expect(sql).toContain('join web_conversations c on c.id = m.conversation_id');
     expect(sql).toContain('c.user_id = $1');
+    expect(sql).toContain('c.organization_id is not distinct from $3::uuid');
     expect(sql).not.toContain('any($1::uuid[])');
     expect(params[0]).toBe('user-abc');
+    expect(params[2]).toBe('11111111-1111-4111-8111-111111111111');
 
     // The id-list prefetch was the only reader of a bare conversation-id select.
     const prefetch = (mockNeonQuery.mock.calls as QueryCall[]).filter(([statement]) =>
@@ -100,11 +107,33 @@ describe('GET /api/search message scoping', () => {
     await GET(searchRequest('&startDate=2026-01-01&endDate=2026-02-01&role=user'));
 
     const [sql, params] = messageQuery();
-    expect(sql).toContain('m.role = $3');
-    expect(sql).toContain('m.created_at >= $4');
-    expect(sql).toContain('m.created_at <= $5');
+    expect(sql).toContain('m.role = $4');
+    expect(sql).toContain('m.created_at >= $5');
+    expect(sql).toContain('m.created_at <= $6');
     expect(sql).not.toMatch(/\band created_at\b/);
-    expect(params).toEqual(['user-abc', '%hello%', 'user', '2026-01-01', '2026-02-01']);
+    expect(params).toEqual([
+      'user-abc',
+      '%hello%',
+      '11111111-1111-4111-8111-111111111111',
+      'user',
+      '2026-01-01',
+      '2026-02-01',
+    ]);
+  });
+
+  it('scopes every searchable content root to Personal when no workspace is active', async () => {
+    mockResolveActiveOrganizationId.mockResolvedValueOnce(null);
+
+    await GET(searchRequest());
+
+    const contentCalls = (mockNeonQuery.mock.calls as QueryCall[]).filter(([sql]) =>
+      /from (web_conversations|user_projects|media_assets|web_messages)/.test(sql),
+    );
+    expect(contentCalls).toHaveLength(4);
+    for (const [sql, params] of contentCalls) {
+      expect(sql).toContain('organization_id is not distinct from $3::uuid');
+      expect(params[2]).toBeNull();
+    }
   });
 
   it('returns message hits without depending on a prior conversation listing', async () => {
@@ -131,5 +160,16 @@ describe('GET /api/search message scoping', () => {
     const res = await GET(searchRequest());
     const body = (await res.json()) as { stats: { messageMatches: number } };
     expect(body.stats.messageMatches).toBe(1);
+  });
+
+  it('attributes full-search telemetry to the workspace captured for the request', async () => {
+    await GET(searchRequest());
+
+    expect(mockNeonQuery).toHaveBeenCalledWith('select track_search($1, $2, $3, $4)', [
+      'user-abc',
+      '11111111-1111-4111-8111-111111111111',
+      'hello',
+      0,
+    ]);
   });
 });

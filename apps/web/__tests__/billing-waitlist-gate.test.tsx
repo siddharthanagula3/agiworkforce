@@ -14,12 +14,9 @@
  *
  * Lane files: BillingDashboard.tsx
  *
- * Credit top-ups (Topup.tsx, api/credit-topup, token-pack-purchase's
- * buyTokenPack) were removed entirely — the locked product rule is "no
- * top-ups, ever". The exhausted-Max contact-sales route is covered by
- * UpgradePlanDialog.test.tsx and marketing-copy-regression.test.ts; the
- * unreachable CreditAlertModal that also asserted it was cut 2026-08-06. It read:
- * Enterprise contact-sales instead of a purchase flow.
+ * The retired token-pack implementation stays removed. The current top-up
+ * flow is the separate authenticated `/api/billing/top-up` Checkout route and
+ * is covered by its route, webhook, service and BillingSection tests.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';

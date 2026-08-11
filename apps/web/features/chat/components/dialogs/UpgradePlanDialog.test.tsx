@@ -88,4 +88,20 @@ describe('UpgradePlanDialog', () => {
       '/pricing#pricing-team-title',
     );
   });
+
+  it('focuses the exact required tier carried by a transcript refusal', () => {
+    render(
+      <UpgradePlanDialog
+        open
+        onOpenChange={vi.fn()}
+        currentTier="pro"
+        targetTier="max_15x"
+        onUpgrade={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText('Upgrade to Max 15x').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('button', { name: 'Upgrade to Max 15x' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Upgrade to Max 5x' })).toBeNull();
+  });
 });

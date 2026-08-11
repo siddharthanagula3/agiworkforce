@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 async function handleBatchGetTags(request: NextRequest) {
   // AUDIT-008-006: Enforce CSRF protection for cookie-auth POST endpoint
@@ -26,6 +27,7 @@ async function handleBatchGetTags(request: NextRequest) {
 
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   let body: { conversationIds?: string[] };
   try {
@@ -53,10 +55,16 @@ async function handleBatchGetTags(request: NextRequest) {
   let rows: { conversation_id: string; tag: string }[];
   try {
     rows = await db.query<{ conversation_id: string; tag: string }>(
-      `select conversation_id, tag
-       from conversation_tags
-       where user_id = $1 and conversation_id = any($2::text[])`,
-      [userId, conversationIds],
+      `select ct.conversation_id, ct.tag
+         from conversation_tags ct
+         join public.web_conversations c
+           on c.id::text = ct.conversation_id
+          and c.user_id = $1
+          and c.organization_id is not distinct from $3::uuid
+          and c.deleted_at is null
+        where ct.user_id = $1
+          and ct.conversation_id = any($2::text[])`,
+      [userId, conversationIds, organizationId],
     );
   } catch (err) {
     logger.error({ err, userId }, 'Failed to fetch batch tags');

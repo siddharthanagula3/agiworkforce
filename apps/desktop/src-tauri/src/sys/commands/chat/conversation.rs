@@ -332,7 +332,7 @@ pub fn chat_get_conversation_stats(
         .filter(|message| matches!(message.role, MessageRole::Assistant))
         .filter_map(|message| message.tokens)
         .sum();
-    let total_cost = messages.iter().filter_map(|message| message.cost).sum();
+    let total_cost = super::persistence::total_request_cost(&messages);
 
     Ok(ConversationStats {
         message_count,

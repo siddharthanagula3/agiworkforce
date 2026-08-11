@@ -137,8 +137,9 @@ export function DesktopDownloadAvailability() {
       </h2>
       <p className="agi-fl-section-lede">
         macOS gets the AGI Cloud desktop app (cloud accounts only) when a signed build is published.
-        The stable Tauri channel currently publishes a signed Linux x64 AppImage. Windows installers
-        have not been published, and no release dates are available for them.
+        Linux x64 package assets exist, but a download is offered only after the release API
+        verifies the matching updater signature. Windows installers have not been published, and no
+        release dates are available for them.
       </p>
 
       <ul className="mt-8 grid list-none gap-4 p-0 md:grid-cols-3" aria-label="Desktop platforms">

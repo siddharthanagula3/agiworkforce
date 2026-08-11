@@ -90,6 +90,7 @@ jest.mock('../src/features/model-picker/installStore', () => ({
 }));
 
 import ModelsScreen from '../app/(app)/models';
+import { getDefaultModel } from '@agiworkforce/local-llm';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { LOCAL_MODEL_LIST } from '../src/features/model-picker/service';
@@ -98,7 +99,7 @@ describe('Models screen', () => {
   beforeEach(() => {
     lastModelPickerProps = null;
     useModelStore.setState({
-      selectedModel: 'qwen3-4b-instruct-2507',
+      selectedModel: getDefaultModel().id,
       selectedProvider: 'local',
       favorites: [],
       recentModels: [],

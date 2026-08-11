@@ -12,11 +12,14 @@ import { render, fireEvent } from '@testing-library/react';
 import { ProvenanceFooter } from '../ProvenanceFooter';
 import type { ChatMessage } from '../../lib/types';
 
+const FIXTURE_MODEL_ID = 'fixture-provenance-model';
+const FIXTURE_PIN_MODEL_ID = 'fixture-pin-model';
+
 const baseMessage: Pick<
   ChatMessage,
   'model' | 'provider' | 'toolCalls' | 'citations' | 'createdAt' | 'routing'
 > = {
-  model: 'test-model-id',
+  model: FIXTURE_MODEL_ID,
   provider: 'test-provider',
   createdAt: new Date().toISOString(),
 };
@@ -34,7 +37,7 @@ describe('ProvenanceFooter — source modes', () => {
     expect(container.querySelector('[data-component="provenance-footer"]')).toBeTruthy();
     expect(container.querySelector('[data-component="provenance-routing"]')).toBeNull();
     expect(queryByTestId('provenance-pin-button')).toBeNull();
-    expect(container.textContent).toContain('test-model-id');
+    expect(container.textContent).toContain(FIXTURE_MODEL_ID);
   });
 
   it('auto source: renders routing trace with task, model, and reason', () => {
@@ -46,7 +49,7 @@ describe('ProvenanceFooter — source modes', () => {
             source: 'auto',
             task: 'code',
             reason: 'detected code-related prompt',
-            pinModel: 'test-model-id',
+            pinModel: FIXTURE_MODEL_ID,
           },
         }}
       />,
@@ -55,7 +58,7 @@ describe('ProvenanceFooter — source modes', () => {
     expect(trace).toBeTruthy();
     expect(trace?.textContent).toContain('Auto routed');
     expect(trace?.textContent).toContain('code');
-    expect(trace?.textContent).toContain('test-model-id');
+    expect(trace?.textContent).toContain(FIXTURE_MODEL_ID);
     expect(trace?.textContent).toContain('detected code-related prompt');
   });
 
@@ -65,7 +68,7 @@ describe('ProvenanceFooter — source modes', () => {
       source: 'auto' as const,
       task: 'image',
       reason: 'image prompt detected',
-      pinModel: 'pin-model-id',
+      pinModel: FIXTURE_PIN_MODEL_ID,
     };
     const { container } = render(
       <ProvenanceFooter message={{ ...baseMessage, routing }} onPinModel={onPinModel} />,
@@ -74,7 +77,7 @@ describe('ProvenanceFooter — source modes', () => {
       '[data-component="provenance-pin-button"]',
     ) as HTMLButtonElement | null;
     expect(button).toBeTruthy();
-    expect(button?.textContent).toContain('Pin to pin-model-id');
+    expect(button?.textContent).toContain(`Pin to ${FIXTURE_PIN_MODEL_ID}`);
     fireEvent.click(button!);
     expect(onPinModel).toHaveBeenCalledTimes(1);
     expect(onPinModel).toHaveBeenCalledWith(routing);
@@ -88,7 +91,7 @@ describe('ProvenanceFooter — source modes', () => {
           routing: {
             source: 'auto',
             task: 'video',
-            pinModel: 'pin-model-id',
+            pinModel: FIXTURE_PIN_MODEL_ID,
           },
         }}
       />,

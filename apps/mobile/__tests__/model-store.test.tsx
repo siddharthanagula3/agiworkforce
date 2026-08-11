@@ -37,16 +37,35 @@ import {
 } from '../src/features/model-picker/service';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useTierStore } from '../src/features/billing/store';
+import { getModelReasoning } from '@agiworkforce/types';
+import { requireLocalModel, requireMobileCloudModel } from '../test-utils/modelFixtures';
+import {
+  canAccessCloudModelForTier,
+  getDefaultCloudModelIdForTier,
+} from '../src/features/model-picker/service';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const LITE_MODEL_ID = 'llama-3.2-1b-instruct-spinquant';
-const CLOUD_MODEL_ID = LOCKED_CLOUD_MODELS[0]?.id ?? 'gpt-5.6-sol';
+const LITE_MODEL_ID = requireLocalModel(
+  (model) => model.role === 'lite-mode',
+  'lite-mode model',
+).id;
+const CLOUD_MODEL_ID = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
+const MANDATORY_REASONING_MODEL_ID = requireMobileCloudModel((model) => {
+  const reasoning = getModelReasoning(model.id);
+  return reasoning.capable && reasoning.canDisableThinking === false;
+}, 'Mobile Cloud model with mandatory reasoning').id;
 const SELECTABLE_MODEL_IDS = LOCAL_MODEL_LIST.map((model) => model.id);
 const SECOND_SELECTABLE_MODEL_ID = SELECTABLE_MODEL_IDS.find((id) => id !== LITE_MODEL_ID);
 const SELECTABLE_AUTO_MODE_ID = AUTO_MODES[0]?.id;
+const MAX_ONLY_MODEL_ID = requireMobileCloudModel(
+  (model) =>
+    canAccessCloudModelForTier(model.id, 'max') && !canAccessCloudModelForTier(model.id, 'pro'),
+  'Max-only Mobile Cloud model',
+).id;
 
 function getState() {
   return useModelStore.getState();
@@ -72,6 +91,7 @@ function resetStore() {
     thinkingModeEnabled: false,
     thinkingEnabledPerModel: {},
   });
+  useTierStore.setState({ tier: 'free', billingTier: 'free' });
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +128,7 @@ describe('modelStore', () => {
 
     it('selects cloud provider model ids after invite access', () => {
       useWaitlistStore.setState({ cloudUnlocked: true });
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
 
       getState().setModel(CLOUD_MODEL_ID);
 
@@ -118,6 +139,7 @@ describe('modelStore', () => {
 
     it('selects the registry-owned shared default after cloud access is unlocked', () => {
       useWaitlistStore.setState({ cloudUnlocked: true });
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
       if (!DEFAULT_CLOUD_MODEL_ID) {
         throw new Error('Expected a default cloud model for the mobile cloud picker.');
       }
@@ -126,6 +148,15 @@ describe('modelStore', () => {
 
       expect(getState().selectedModel).toBe(DEFAULT_CLOUD_MODEL_ID);
       expect(getState().selectedProvider).toBe('cloud_managed');
+    });
+
+    it('rejects a Cloud model that is locked for the current plan', () => {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      useTierStore.setState({ tier: 'pro', billingTier: 'pro' });
+
+      getState().setModel(MAX_ONLY_MODEL_ID);
+
+      expect(getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
     });
 
     it('pushes local models to recents newest first', () => {
@@ -181,6 +212,20 @@ describe('modelStore', () => {
     });
   });
 
+  describe('hydration admission', () => {
+    it('replaces a persisted plan-locked Cloud model before rendering it', () => {
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      useTierStore.setState({ tier: 'pro', billingTier: 'pro' });
+      const merge = useModelStore.persist.getOptions().merge;
+      expect(merge).toBeDefined();
+
+      const hydrated = merge?.({ selectedModel: MAX_ONLY_MODEL_ID }, useModelStore.getState());
+
+      expect(hydrated?.selectedModel).toBe(getDefaultCloudModelIdForTier('pro'));
+      expect(hydrated?.selectedModel).not.toBe(MAX_ONLY_MODEL_ID);
+    });
+  });
+
   describe('toggleFavorite', () => {
     it('adds and removes a local model from favorites', () => {
       getState().toggleFavorite(LITE_MODEL_ID);
@@ -197,7 +242,8 @@ describe('modelStore', () => {
     });
 
     it('ignores auto modes', () => {
-      getState().toggleFavorite('auto-balanced');
+      expect(SELECTABLE_AUTO_MODE_ID).toBeDefined();
+      getState().toggleFavorite(SELECTABLE_AUTO_MODE_ID!);
 
       expect(getState().favorites).toEqual([]);
     });
@@ -237,9 +283,10 @@ describe('modelStore', () => {
     });
 
     it('does not enable thinking for auto modes', () => {
-      getState().toggleThinkingForModel('auto-balanced');
+      expect(SELECTABLE_AUTO_MODE_ID).toBeDefined();
+      getState().toggleThinkingForModel(SELECTABLE_AUTO_MODE_ID!);
 
-      expect(getState().thinkingEnabledPerModel['auto-balanced']).toBeUndefined();
+      expect(getState().thinkingEnabledPerModel[SELECTABLE_AUTO_MODE_ID!]).toBeUndefined();
     });
 
     it('returns false when the selected local model has no thinking state', () => {
@@ -263,20 +310,21 @@ describe('modelStore', () => {
       expect(getState().thinkingModeEnabled).toBe(false);
     });
 
-    it('initializes mandatory Fable 5 reasoning and refuses to turn it off', () => {
+    it('initializes mandatory reasoning and refuses to turn it off', () => {
       useWaitlistStore.setState({ cloudUnlocked: true });
+      useTierStore.setState({ tier: 'max', billingTier: 'max' });
 
-      getState().setModel('claude-fable-5');
+      getState().setModel(MANDATORY_REASONING_MODEL_ID);
 
       expect(getState().thinkingModeEnabled).toBe(true);
-      expect(getState().thinkingEnabledPerModel['claude-fable-5']).toBe(true);
+      expect(getState().thinkingEnabledPerModel[MANDATORY_REASONING_MODEL_ID]).toBe(true);
       expect(getState().isThinkingEnabledForSelected()).toBe(true);
 
-      getState().toggleThinkingForModel('claude-fable-5');
+      getState().toggleThinkingForModel(MANDATORY_REASONING_MODEL_ID);
       getState().setThinkingMode(false);
 
       expect(getState().thinkingModeEnabled).toBe(true);
-      expect(getState().thinkingEnabledPerModel['claude-fable-5']).toBe(true);
+      expect(getState().thinkingEnabledPerModel[MANDATORY_REASONING_MODEL_ID]).toBe(true);
     });
   });
 });

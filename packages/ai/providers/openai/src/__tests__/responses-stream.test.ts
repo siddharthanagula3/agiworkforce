@@ -193,7 +193,7 @@ describe('translateOpenAIResponsesStream', () => {
                   id: 'fc_1',
                   call_id: 'call_1',
                   name: 'write_file',
-                  arguments: '{"path":"gpt54-mini-live.html"}',
+                  arguments: '{"path":"generated-tool-output.html"}',
                   status: 'completed',
                 },
               ],
@@ -208,7 +208,7 @@ describe('translateOpenAIResponsesStream', () => {
       {
         type: 'tool-use-delta',
         toolUseId: 'call_1',
-        deltaJson: '{"path":"gpt54-mini-live.html"}',
+        deltaJson: '{"path":"generated-tool-output.html"}',
       },
       { type: 'tool-use-end', toolUseId: 'call_1' },
       { type: 'stop', reason: 'tool_use' },

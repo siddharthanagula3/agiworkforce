@@ -9,6 +9,8 @@ import {
   requireManagedComputeEligibility,
 } from '../../src/middleware/managedComputeGate';
 
+const MANAGED_MODEL_FIXTURE = 'fixture-model';
+
 function createResponse() {
   return {
     status: vi.fn().mockReturnThis(),
@@ -75,7 +77,7 @@ describe('managedComputeGate', () => {
 
     const eligibility = buildManagedComputeEligibility(req, {
       provider: 'openai',
-      model: 'gpt-5.5',
+      model: MANAGED_MODEL_FIXTURE,
     });
 
     expect(eligibility.allowed).toBe(true);
@@ -91,7 +93,7 @@ describe('managedComputeGate', () => {
 
     const eligibility = buildManagedComputeEligibility(req, {
       provider: 'anthropic',
-      model: 'claude-opus-5',
+      model: MANAGED_MODEL_FIXTURE,
     });
 
     expect(eligibility.allowed).toBe(true);
@@ -105,15 +107,15 @@ describe('managedComputeGate', () => {
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
     const withoutHeader = buildManagedComputeEligibility(
       { user: { userId: 'user-1' }, headers: {} } as Request,
-      { provider: 'openai', model: 'gpt-5.5' },
+      { provider: 'openai', model: MANAGED_MODEL_FIXTURE },
     );
     const withWrongHeader = buildManagedComputeEligibility(
       { user: { userId: 'user-1' }, headers: { [MANAGED_COMPUTE_BETA_HEADER]: '0' } } as Request,
-      { provider: 'openai', model: 'gpt-5.5' },
+      { provider: 'openai', model: MANAGED_MODEL_FIXTURE },
     );
     const withRightHeader = buildManagedComputeEligibility(
       { user: { userId: 'user-1' }, headers: { [MANAGED_COMPUTE_BETA_HEADER]: '1' } } as Request,
-      { provider: 'openai', model: 'gpt-5.5' },
+      { provider: 'openai', model: MANAGED_MODEL_FIXTURE },
     );
 
     expect(withoutHeader.allowed).toBe(true);
@@ -132,7 +134,7 @@ describe('managedComputeGate', () => {
 
       const eligibility = buildManagedComputeEligibility(req, {
         provider: 'openai',
-        model: 'gpt-5.5',
+        model: MANAGED_MODEL_FIXTURE,
       });
 
       expect(eligibility.allowed).toBe(false);
@@ -147,7 +149,7 @@ describe('managedComputeGate', () => {
 
     const eligibility = buildManagedComputeEligibility(req, {
       provider: 'openai',
-      model: 'gpt-5.5',
+      model: MANAGED_MODEL_FIXTURE,
     });
 
     expect(eligibility.denialMessage).toBeDefined();
@@ -166,7 +168,7 @@ describe('managedComputeGate', () => {
 
     const middleware = requireManagedComputeEligibility(() => ({
       provider: 'openai',
-      model: 'gpt-5.5',
+      model: MANAGED_MODEL_FIXTURE,
     }));
 
     middleware(req, res, next);
@@ -184,7 +186,7 @@ describe('managedComputeGate', () => {
 
     const middleware = requireManagedComputeEligibility(() => ({
       provider: 'openai',
-      model: 'gpt-5.5',
+      model: MANAGED_MODEL_FIXTURE,
     }));
 
     middleware(req, res, next);

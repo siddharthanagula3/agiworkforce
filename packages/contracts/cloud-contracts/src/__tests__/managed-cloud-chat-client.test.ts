@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createManagedCloudChatClient } from '../managed-cloud-chat-client';
+import { MANAGED_CLOUD_DEFAULT_MODEL_SELECTION } from '../conversations';
 
 const rawConversation = {
   id: '0190a000-0000-7000-8000-0000000000aa',
   title: 'Cloud chat',
-  model: 'auto',
+  model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
   project_id: null,
   pinned: false,
   starred: false,

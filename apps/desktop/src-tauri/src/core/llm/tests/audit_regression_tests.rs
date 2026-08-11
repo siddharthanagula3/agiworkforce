@@ -6,51 +6,45 @@
 // ---------------------------------------------------------------------------
 // R1 — Phantom model names removed from get_model_for_task
 //
-// Previously Google/ComplexReasoning returned "gemini-3-deep-think" (a model
-// that never existed) and Qwen/CodeGeneration returned bare "qwen-coder"
-// instead of a real catalog model.  These tests pin the correct values.
-// "qwen-coder-plus" was retired in the 2026-07 catalog restructure (latest-
-// family-only); code_generation now routes to "qwen-3.7-plus".
+// These routes previously returned invented or retired model names. The tests
+// now prove that the provider API resolves the catalog's current task route.
 // ---------------------------------------------------------------------------
 mod r1_phantom_models {
     use crate::core::llm::{Provider, TaskType};
 
     #[test]
-    fn google_complex_reasoning_returns_gemini_3_1_pro_not_phantom() {
+    fn google_complex_reasoning_returns_the_catalog_route() {
         let model = Provider::Google.get_model_for_task(TaskType::ComplexReasoning);
-        assert_ne!(
-            model, "gemini-3-deep-think",
-            "Phantom model 'gemini-3-deep-think' must not be returned; got: {}",
-            model
-        );
+        let expected =
+            crate::core::llm::models_config::get_task_model(&Provider::Google, "complex_reasoning");
         assert_eq!(
-            model, "gemini-3.1-pro-preview",
-            "Google/ComplexReasoning should return 'gemini-3.1-pro-preview', got: {}",
-            model
+            model, expected,
+            "Google complex reasoning must follow catalog task routing"
         );
+        assert!(crate::core::llm::models_config::config()
+            .models
+            .contains_key(model));
     }
 
     #[test]
-    fn qwen_code_generation_returns_qwen_3_7_plus_not_bare_qwen_coder() {
+    fn qwen_code_generation_returns_the_catalog_route() {
         let model = Provider::Qwen.get_model_for_task(TaskType::CodeGeneration);
-        assert_ne!(
-            model, "qwen-coder",
-            "Bare 'qwen-coder' must not be returned; got: {}",
-            model
-        );
+        let expected =
+            crate::core::llm::models_config::get_task_model(&Provider::Qwen, "code_generation");
         assert_eq!(
-            model, "qwen-3.7-plus",
-            "Qwen/CodeGeneration should return 'qwen-3.7-plus', got: {}",
-            model
+            model, expected,
+            "Qwen code generation must follow catalog task routing"
         );
+        assert!(crate::core::llm::models_config::config()
+            .models
+            .contains_key(model));
     }
 
-    /// Snapshot test: every (Provider, TaskType) pair must return a non-empty,
-    /// non-phantom model string.  Adding a new phantom model will fail here.
+    /// Snapshot test: hosted provider/task routes must return a non-empty,
+    /// catalog-backed model string. Local runtimes deliberately resolve their
+    /// models from runtime discovery instead of inventing a catalog default.
     #[test]
     fn no_phantom_models_in_any_task_routing() {
-        let phantom_names = ["gemini-3-deep-think", "qwen-coder"];
-
         let providers = [
             Provider::OpenAI,
             Provider::Anthropic,
@@ -86,18 +80,24 @@ mod r1_phantom_models {
         for p in providers {
             for t in tasks {
                 let model = p.get_model_for_task(t);
-                for phantom in &phantom_names {
-                    assert_ne!(
-                        model, *phantom,
-                        "Phantom model '{}' found for {:?}/{:?}",
-                        phantom, p, t
+                if p == Provider::Ollama {
+                    assert!(
+                        model.is_empty(),
+                        "local runtime task routing must defer to discovery"
                     );
+                    continue;
                 }
                 assert!(
                     !model.is_empty(),
                     "{:?}.get_model_for_task({:?}) returned empty string",
                     p,
                     t
+                );
+                assert!(
+                    crate::core::llm::models_config::config()
+                        .models
+                        .contains_key(model),
+                    "{p:?}/{t:?} returned an uncataloged model"
                 );
             }
         }

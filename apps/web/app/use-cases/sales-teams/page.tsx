@@ -1,6 +1,4 @@
 import { buildMetadata } from '@/lib/seo/metadata';
-import { JsonLd } from '@shared/components/seo/JsonLd';
-import { breadcrumbSchema } from '@/lib/seo/structured-data';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
@@ -18,13 +16,6 @@ export const metadata = buildMetadata({
 export default function SalesTeamsPage() {
   return (
     <div data-design="agi">
-      <JsonLd
-        data={breadcrumbSchema([
-          { name: 'Home', path: '/' },
-          { name: 'Use Cases', path: '/use-cases' },
-          { name: 'Sales Teams', path: '/use-cases/sales-teams' },
-        ])}
-      />
       <main className="agi-shell">
         <Header />
 
@@ -32,7 +23,7 @@ export default function SalesTeamsPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Use case · sales teams</p>
           <h1 id="agi-sales-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Know the account.</span>
+            <span className="agi-fl-h1-line">Know the account.</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">Own the context.</em>
             </span>

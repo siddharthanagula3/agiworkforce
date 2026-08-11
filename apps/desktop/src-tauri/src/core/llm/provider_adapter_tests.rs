@@ -11,6 +11,36 @@ mod tests {
     };
     use serde_json::json;
 
+    const CHAT_COMPLETIONS_FIXTURE_MODEL: &str = "fixture-chat-completions-model";
+    const ANTHROPIC_RESPONSE_FIXTURE_MODEL: &str = "fixture-anthropic-response-model";
+
+    fn openai_reasoning_model() -> &'static str {
+        crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.provider == "openai" && entry.model_type == "reasoning")
+            .map(|entry| entry.id.as_str())
+            .expect("catalog must contain an OpenAI reasoning model")
+    }
+
+    fn anthropic_chat_model() -> &'static str {
+        crate::core::llm::models_config::get_task_model(&Provider::Anthropic, "chat")
+    }
+
+    fn adaptive_anthropic_model() -> &'static str {
+        crate::core::llm::models_config::get_all_model_entries()
+            .values()
+            .find(|entry| {
+                entry.provider == "anthropic"
+                    && crate::core::llm::models_config::model_uses_adaptive_thinking(&entry.id)
+            })
+            .map(|entry| entry.id.as_str())
+            .expect("catalog must include an adaptive Anthropic model")
+    }
+
+    fn xai_chat_model() -> &'static str {
+        crate::core::llm::models_config::get_task_model(&Provider::XAI, "chat")
+    }
+
     #[test]
     fn test_openai_adapter_chat_completions_basic() {
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
@@ -23,7 +53,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-4.1".to_string(),
+            model: CHAT_COMPLETIONS_FIXTURE_MODEL.to_string(),
             temperature: Some(0.7),
             max_tokens: Some(100),
             stream: false,
@@ -50,19 +80,19 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-4.1");
+        assert_eq!(adapted["model"], CHAT_COMPLETIONS_FIXTURE_MODEL);
         // f32 temperature (0.7f32) serialized to JSON may lose precision vs f64 literal
         let temp = adapted["temperature"].as_f64().unwrap();
         assert!(
             (temp - 0.7_f64).abs() < 1e-5,
             "temperature should be ~0.7, got {temp}"
         );
-        assert_eq!(adapted["max_output_tokens"], 100);
+        assert_eq!(adapted["max_tokens"], 100);
     }
 
     #[test]
-    fn test_openai_adapter_responses_api_gpt5() {
-        // Uses gpt-5.6-sol (catalog reasoning model with thinking support).
+    fn test_openai_adapter_responses_api_catalog_reasoning_model() {
+        // Use a catalog-selected OpenAI reasoning model with thinking support.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
         let request = LLMRequest {
@@ -73,7 +103,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.6-sol".to_string(),
+            model: openai_reasoning_model().to_string(),
             temperature: Some(0.3),
             max_tokens: Some(2000),
             stream: false,
@@ -100,7 +130,7 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.6-sol");
+        assert_eq!(adapted["model"], openai_reasoning_model());
         // c3: the crate serializer sends a typed input item instead of the
         // legacy compact string — wire-equivalent per the Responses API
         // (pinned as CompactSingleTurnInput in the c2c oracle).
@@ -114,7 +144,7 @@ mod tests {
 
     #[test]
     fn test_openai_adapter_reasoning_model_with_budget() {
-        // Uses gpt-5.6-sol (catalog reasoning model with thinking support).
+        // Use a catalog-selected OpenAI reasoning model with thinking support.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
 
         let request = LLMRequest {
@@ -125,7 +155,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.6-sol".to_string(),
+            model: openai_reasoning_model().to_string(),
             temperature: Some(1.0),
             max_tokens: Some(4000),
             stream: false,
@@ -155,7 +185,7 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.6-sol");
+        assert_eq!(adapted["model"], openai_reasoning_model());
         assert_eq!(adapted["reasoning"]["effort"], "high"); // 8000 tokens = high effort
     }
 
@@ -180,7 +210,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5".to_string(),
+            model: openai_reasoning_model().to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -241,7 +271,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-4.1".to_string(),
+            model: openai_reasoning_model().to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -291,7 +321,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.6-luna".to_string(),
+            model: openai_reasoning_model().to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -444,7 +474,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gemini-3-flash-preview".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -518,7 +548,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gemini-3-flash-preview".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -582,7 +612,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.6-sol".to_string(),
+            model: openai_reasoning_model().to_string(),
             temperature: None,
             max_tokens: None,
             stream: false,
@@ -633,7 +663,7 @@ mod tests {
             "id": "chatcmpl-123",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4.1",
+            "model": CHAT_COMPLETIONS_FIXTURE_MODEL,
             "choices": [{
                 "index": 0,
                 "message": {
@@ -664,7 +694,7 @@ mod tests {
         assert_eq!(response.completion_tokens, Some(9));
         assert_eq!(response.tokens, Some(19));
         assert_eq!(response.cache_read_input_tokens, Some(5));
-        assert_eq!(response.model, "gpt-4.1");
+        assert_eq!(response.model, CHAT_COMPLETIONS_FIXTURE_MODEL);
         assert_eq!(response.finish_reason, Some("stop".to_string()));
     }
 
@@ -676,7 +706,7 @@ mod tests {
             "id": "chatcmpl-456",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "o4-mini",
+            "model": CHAT_COMPLETIONS_FIXTURE_MODEL,
             "choices": [{
                 "index": 0,
                 "message": {
@@ -701,7 +731,7 @@ mod tests {
         let response = result.unwrap();
         assert_eq!(response.reasoning_tokens, Some(150));
         assert_eq!(response.completion_tokens, Some(200));
-        assert_eq!(response.model, "o4-mini");
+        assert_eq!(response.model, CHAT_COMPLETIONS_FIXTURE_MODEL);
     }
 
     #[test]
@@ -712,7 +742,7 @@ mod tests {
             "id": "chatcmpl-789",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4.1",
+            "model": CHAT_COMPLETIONS_FIXTURE_MODEL,
             "choices": [{
                 "index": 0,
                 "message": {
@@ -755,7 +785,7 @@ mod tests {
         let api_response = json!({
             "id": "resp_123",
             "status": "completed",
-            "model": "gpt-5.6-sol",
+            "model": openai_reasoning_model(),
             "output": [
                 {
                     "type": "function_call",
@@ -805,7 +835,7 @@ mod tests {
             "incomplete_details": {
                 "reason": "max_output_tokens"
             },
-            "model": "gpt-5.6-sol",
+            "model": openai_reasoning_model(),
             "output": [
                 {
                     "type": "reasoning",
@@ -859,7 +889,7 @@ mod tests {
             "id": "resp_failed_1",
             "object": "response",
             "status": "failed",
-            "model": "gpt-5.6-sol",
+            "model": openai_reasoning_model(),
             "error": {
                 "code": "server_error",
                 "message": "The response could not be generated."
@@ -882,7 +912,7 @@ mod tests {
         let api_response = json!({
             "id": "resp_456",
             "status": "in_progress",
-            "model": "gpt-5.6-sol",
+            "model": openai_reasoning_model(),
             "output": [
                 {
                     "type": "local_shell_call",
@@ -925,7 +955,7 @@ mod tests {
             "id": "chatcmpl-server-1",
             "object": "chat.completion",
             "created": 1677652288,
-            "model": "gpt-4.1",
+            "model": CHAT_COMPLETIONS_FIXTURE_MODEL,
             "choices": [{
                 "index": 0,
                 "message": {
@@ -967,7 +997,7 @@ mod tests {
 
         assert_eq!(adapter.provider_name(), "OpenAI");
         assert!(adapter.supports_prompt_caching()); // OpenAI now supports prompt caching
-        assert!(adapter.supports_extended_thinking()); // GPT-5 and reasoning models
+        assert!(adapter.supports_extended_thinking()); // OpenAI reasoning models
         assert!(adapter.supports_batch_processing());
         assert!(adapter.supports_structured_outputs());
     }
@@ -1015,23 +1045,23 @@ mod tests {
             conversation_id: None,
         };
 
-        let opus = adapter
-            .adapt_request(&request_for("claude-opus-5", None))
-            .expect("Opus effort request should adapt");
-        assert!(opus.get("effort").is_none());
-        assert_eq!(opus["output_config"]["effort"], "high");
+        let adaptive = adapter
+            .adapt_request(&request_for(adaptive_anthropic_model(), None))
+            .expect("adaptive-model effort request should adapt");
+        assert!(adaptive.get("effort").is_none());
+        assert_eq!(adaptive["output_config"]["effort"], "high");
 
-        let sonnet = adapter
-            .adapt_request(&request_for("claude-sonnet-5", None))
-            .expect("Sonnet effort request should adapt");
-        assert!(sonnet.get("effort").is_none());
-        assert_eq!(sonnet["output_config"]["effort"], "high");
+        let balanced = adapter
+            .adapt_request(&request_for(anthropic_chat_model(), None))
+            .expect("balanced-model effort request should adapt");
+        assert!(balanced.get("effort").is_none());
+        assert_eq!(balanced["output_config"]["effort"], "high");
 
         // An effort value the catalog does not declare must still be dropped.
         let dropped = adapter
             .adapt_request(&LLMRequest {
                 effort: Some("minimal".to_string()),
-                ..request_for("claude-opus-5", None)
+                ..request_for(adaptive_anthropic_model(), None)
             })
             .expect("Unsupported effort value should adapt without output_config");
         assert!(dropped.get("effort").is_none());
@@ -1039,7 +1069,7 @@ mod tests {
 
         let structured = adapter
             .adapt_request(&request_for(
-                "claude-opus-5",
+                adaptive_anthropic_model(),
                 Some(OutputConfig {
                     format: OutputFormat::JsonSchema {
                         name: "answer".to_string(),
@@ -1108,8 +1138,8 @@ mod tests {
                     },
                 ]),
             }],
-            // Use gpt-4o which routes to Chat Completions API (not Responses API)
-            model: "gpt-4o".to_string(),
+            // An uncataloged synthetic fixture fails closed to Chat Completions.
+            model: CHAT_COMPLETIONS_FIXTURE_MODEL.to_string(),
             temperature: None,
             max_tokens: Some(100),
             stream: false,
@@ -1139,7 +1169,7 @@ mod tests {
         );
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-4o");
+        assert_eq!(adapted["model"], CHAT_COMPLETIONS_FIXTURE_MODEL);
 
         // Verify the message structure includes both text and image
         let messages = adapted["messages"].as_array().unwrap();
@@ -1194,7 +1224,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gpt-5.6-sol".to_string(), // catalog OpenAI reasoning model -> Responses API
+            model: openai_reasoning_model().to_string(), // catalog reasoning model -> Responses API
             temperature: None,
             max_tokens: Some(200),
             stream: false,
@@ -1224,7 +1254,7 @@ mod tests {
         );
 
         let adapted = result.unwrap();
-        assert_eq!(adapted["model"], "gpt-5.6-sol");
+        assert_eq!(adapted["model"], openai_reasoning_model());
         assert_eq!(
             adapted["instructions"],
             "You are a helpful vision assistant"
@@ -1267,7 +1297,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "deepseek-r1".to_string(),
+            model: "fixture-reasoning-model".to_string(),
             temperature: Some(0.5),
             max_tokens: Some(1000),
             stream: false,
@@ -1297,10 +1327,11 @@ mod tests {
         );
 
         let adapted = result.unwrap();
-        let expected = crate::core::llm::models_config::get_canonicalized_id("deepseek-r1");
+        let expected =
+            crate::core::llm::models_config::get_canonicalized_id("fixture-reasoning-model");
         assert_eq!(
             adapted["model"], expected,
-            "deepseek-r1 must be canonicalized via models.json (got {} vs expected {})",
+            "fixture-reasoning-model must be canonicalized via models.json (got {} vs expected {})",
             adapted["model"], expected
         );
     }
@@ -1317,7 +1348,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "deepseek-r1-zero".to_string(),
+            model: "fixture-reasoning-model-no-thought".to_string(),
             temperature: None,
             max_tokens: Some(500),
             stream: false,
@@ -1344,10 +1375,12 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        let expected = crate::core::llm::models_config::get_canonicalized_id("deepseek-r1-zero");
+        let expected = crate::core::llm::models_config::get_canonicalized_id(
+            "fixture-reasoning-model-no-thought",
+        );
         assert_eq!(
             adapted["model"], expected,
-            "deepseek-r1-zero must be canonicalized via models.json (got {} vs expected {})",
+            "fixture-reasoning-model-no-thought must be canonicalized via models.json (got {} vs expected {})",
             adapted["model"], expected
         );
     }
@@ -1364,7 +1397,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "deepseek-chat".to_string(),
+            model: "fixture-chat-model".to_string(),
             temperature: None,
             max_tokens: Some(100),
             stream: false,
@@ -1391,10 +1424,10 @@ mod tests {
         assert!(result.is_ok());
 
         let adapted = result.unwrap();
-        let expected = crate::core::llm::models_config::get_canonicalized_id("deepseek-chat");
+        let expected = crate::core::llm::models_config::get_canonicalized_id("fixture-chat-model");
         assert_eq!(
             adapted["model"], expected,
-            "deepseek-chat must be resolved via models.json canonicalization (got {} vs expected {})",
+            "fixture-chat-model must be resolved via models.json canonicalization (got {} vs expected {})",
             adapted["model"], expected
         );
     }
@@ -1479,7 +1512,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(100),
             stream: false,
@@ -1543,7 +1576,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(100),
             stream: false,
@@ -1600,7 +1633,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1644,7 +1677,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1688,7 +1721,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1733,7 +1766,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1784,7 +1817,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-5".to_string(),
+            model: adaptive_anthropic_model().to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1824,7 +1857,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -1863,7 +1896,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-5".to_string(),
+            model: adaptive_anthropic_model().to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1906,7 +1939,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-5".to_string(),
+            model: adaptive_anthropic_model().to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -1948,7 +1981,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-5".to_string(),
+            model: adaptive_anthropic_model().to_string(),
             temperature: Some(0.2),
             max_tokens: Some(4096),
             stream: false,
@@ -1988,7 +2021,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-opus-5".to_string(),
+            model: adaptive_anthropic_model().to_string(),
             temperature: None,
             max_tokens: Some(4096),
             stream: false,
@@ -2029,7 +2062,7 @@ mod tests {
             "id": "msg_123",
             "type": "message",
             "role": "assistant",
-            "model": "claude-sonnet-5",
+            "model": ANTHROPIC_RESPONSE_FIXTURE_MODEL,
             "content": [
                 {"type": "text", "text": "Hello from Claude!"}
             ],
@@ -2050,7 +2083,7 @@ mod tests {
         assert_eq!(response.prompt_tokens, Some(15));
         assert_eq!(response.completion_tokens, Some(8));
         assert_eq!(response.tokens, Some(23));
-        assert_eq!(response.model, "claude-sonnet-5");
+        assert_eq!(response.model, ANTHROPIC_RESPONSE_FIXTURE_MODEL);
         assert_eq!(response.finish_reason, Some("end_turn".to_string()));
     }
 
@@ -2062,7 +2095,7 @@ mod tests {
             "id": "msg_456",
             "type": "message",
             "role": "assistant",
-            "model": "claude-sonnet-5",
+            "model": ANTHROPIC_RESPONSE_FIXTURE_MODEL,
             "content": [
                 {"type": "text", "text": "Let me check the weather."},
                 {
@@ -2100,7 +2133,7 @@ mod tests {
             "id": "msg_789",
             "type": "message",
             "role": "assistant",
-            "model": "claude-opus-5",
+            "model": ANTHROPIC_RESPONSE_FIXTURE_MODEL,
             "content": [
                 {
                     "type": "thinking",
@@ -2208,7 +2241,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -2287,7 +2320,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -2379,7 +2412,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -2475,7 +2508,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -2540,7 +2573,7 @@ mod tests {
                     },
                 }]),
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -2592,7 +2625,7 @@ mod tests {
                     },
                 }]),
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -2659,7 +2692,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -2721,7 +2754,7 @@ mod tests {
                     },
                 }]),
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -2788,7 +2821,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(128),
             stream: false,
@@ -2873,7 +2906,7 @@ mod tests {
                     },
                 ]),
             }],
-            model: "gemini-3-flash".to_string(),
+            model: "fixture-google-model".to_string(),
             temperature: None,
             max_tokens: Some(256),
             stream: false,
@@ -2963,7 +2996,7 @@ mod tests {
                     }]),
                 },
             ],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3029,7 +3062,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3100,7 +3133,7 @@ mod tests {
                     }]),
                 },
             ],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3176,7 +3209,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3263,7 +3296,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3348,7 +3381,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "claude-sonnet-5".to_string(),
+            model: anthropic_chat_model().to_string(),
             temperature: None,
             max_tokens: Some(1024),
             stream: false,
@@ -3412,8 +3445,8 @@ mod tests {
     }
 
     #[test]
-    fn openai_gpt56_luna_body_uses_responses_shape() {
-        // The catalog classifies gpt-5.6-luna as an OpenAI reasoning model.
+    fn openai_catalog_reasoning_body_uses_responses_shape() {
+        // The catalog classifies this selected model as OpenAI reasoning.
         // It supports both endpoints, but AGI selects Responses so effort and
         // hosted-tool semantics do not split across two request shapes.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::OpenAI);
@@ -3425,7 +3458,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-5.6-luna".to_string(),
+            model: openai_reasoning_model().to_string(),
             max_tokens: Some(32),
             stream: true,
             ..Default::default()
@@ -3451,8 +3484,8 @@ mod tests {
                 "content": "Reply with a short one-sentence greeting."
             }])
         );
-        // apiModelId for gpt-5.6-luna equals its internal id.
-        assert_eq!(adapted["model"], "gpt-5.6-luna");
+        // The selected model's wire ID equals its internal catalog ID.
+        assert_eq!(adapted["model"], openai_reasoning_model());
         assert_eq!(adapted["max_output_tokens"], 32);
         assert!(
             adapted.get("max_tokens").is_none(),
@@ -3478,7 +3511,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "grok-4.5".to_string(),
+            model: xai_chat_model().to_string(),
             max_tokens: Some(32),
             stream: true,
             ..Default::default()
@@ -3497,11 +3530,11 @@ mod tests {
     }
 
     #[test]
-    fn anthropic_body_carries_api_model_id_not_dotted_internal() {
-        // BUG 1 regression: the Anthropic Messages body must carry the wire
-        // apiModelId (`claude-sonnet-5`), never the dotted internal catalog id
-        // (`claude-sonnet-5`) which Anthropic 404s.
+    fn anthropic_body_carries_the_catalog_wire_model_id() {
+        // The Anthropic Messages body must carry `apiModelId` when the catalog
+        // distinguishes it from the internal key.
         let adapter = ProviderAdapterFactory::create_adapter(Provider::Anthropic);
+        let model = anthropic_chat_model();
         let request = LLMRequest {
             messages: vec![ChatMessage {
                 role: "user".to_string(),
@@ -3510,16 +3543,17 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "claude-sonnet-5".to_string(),
+            model: model.to_string(),
             max_tokens: Some(32),
             stream: true,
             ..Default::default()
         };
 
         let adapted = adapter.adapt_request(&request).expect("adapt ok");
+        let expected_wire_model = crate::core::llm::models_config::get_api_model_id(model);
         assert_eq!(
-            adapted["model"], "claude-sonnet-5",
-            "Anthropic wire model must be the apiModelId, not the dotted internal id"
+            adapted["model"], expected_wire_model,
+            "Anthropic request model must be the catalog apiModelId"
         );
     }
 }

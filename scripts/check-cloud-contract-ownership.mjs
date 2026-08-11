@@ -36,6 +36,7 @@ const cloudModules = [
   'connectors',
   'capability-handshake',
   'schedules',
+  'skills',
 ];
 
 const cloudMovedFiles = [
@@ -60,6 +61,7 @@ const cloudMovedFiles = [
   '__tests__/managed-cloud-agent-runs-client.test.ts',
   '__tests__/capability-handshake.test.ts',
   '__tests__/schedules.test.ts',
+  '__tests__/skills.test.ts',
   ...cloudModules.map((moduleName) => `${moduleName}.ts`),
 ];
 

@@ -16,6 +16,7 @@ import { CloudApiError, sendCloudMessage } from '../cloudApi';
  */
 const IDEMPOTENCY_KEY = 'agi.chat.desktop.send.0190a000-0000-7000-8000-0000000000aa';
 const ASSISTANT_MESSAGE_ID = '0199c1f2-0000-7000-8000-0000000000ab';
+const FIXTURE_MODEL_ID = 'fixture-cloud-contract-model';
 
 function emptyStreamResponse(): Response {
   const stream = new ReadableStream<Uint8Array>({
@@ -54,7 +55,7 @@ describe('sendCloudMessage — outbound body contract', () => {
     await sendCloudMessage(
       'conv_contract',
       'What day is it?',
-      'claude-sonnet-5',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       vi.fn(),
@@ -84,7 +85,7 @@ describe('sendCloudMessage — outbound body contract', () => {
     await sendCloudMessage(
       'conv_contract',
       'Hello',
-      'claude-sonnet-5',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       vi.fn(),
@@ -107,7 +108,7 @@ describe('sendCloudMessage — outbound body contract', () => {
     await sendCloudMessage(
       'conv_contract',
       'Hello',
-      'claude-sonnet-5',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       vi.fn(),
@@ -158,7 +159,7 @@ describe('sendCloudMessage — refusal classification (DES-C22)', () => {
     await sendCloudMessage(
       'conv_quota',
       'Hello',
-      'claude-sonnet-5',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       onError,
@@ -196,7 +197,7 @@ describe('sendCloudMessage — refusal classification (DES-C22)', () => {
     await sendCloudMessage(
       'conv_quota',
       'Hello',
-      'claude-sonnet-5',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       onError,
@@ -229,7 +230,7 @@ describe('sendCloudMessage — refusal classification (DES-C22)', () => {
     await sendCloudMessage(
       'conv_quota',
       'Hello',
-      'claude-sonnet-5',
+      FIXTURE_MODEL_ID,
       vi.fn(),
       vi.fn(),
       onError,

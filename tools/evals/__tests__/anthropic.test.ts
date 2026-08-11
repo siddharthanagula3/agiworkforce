@@ -18,8 +18,8 @@ const evalCase: EvalCase = {
 };
 
 const catalog = {
-  providers: { anthropic: { defaultModel: 'claude-x' } },
-  models: { 'claude-x': { provider: 'anthropic', apiModelId: 'claude-x-wire' } },
+  providers: { anthropic: { defaultModel: 'fixture-model' } },
+  models: { 'fixture-model': { provider: 'anthropic', apiModelId: 'fixture-wire-model' } },
 };
 
 function jsonResponse(payload: unknown, status = 200): Response {
@@ -31,7 +31,10 @@ function jsonResponse(payload: unknown, status = 200): Response {
 
 describe('resolveAnthropicModel', () => {
   it('resolves the catalog default', () => {
-    expect(resolveAnthropicModel(catalog)).toEqual({ id: 'claude-x', apiModelId: 'claude-x-wire' });
+    expect(resolveAnthropicModel(catalog)).toEqual({
+      id: 'fixture-model',
+      apiModelId: 'fixture-wire-model',
+    });
   });
 
   // The committed catalog is the only source of model ids in this repo, so a
@@ -44,15 +47,17 @@ describe('resolveAnthropicModel', () => {
   it('refuses a catalog it cannot read a model out of', () => {
     expect(() => resolveAnthropicModel(null)).toThrow(/not an object/);
     expect(() => resolveAnthropicModel({ models: {} })).toThrow(/defaultModel/);
-    expect(() => resolveAnthropicModel({ ...catalog, models: {} })).toThrow(/no models\.claude-x/);
+    expect(() => resolveAnthropicModel({ ...catalog, models: {} })).toThrow(
+      /no models\.fixture-model/,
+    );
     expect(() =>
       resolveAnthropicModel({
         ...catalog,
-        models: { 'claude-x': { provider: 'openai', apiModelId: 'x' } },
+        models: { 'fixture-model': { provider: 'openai', apiModelId: 'x' } },
       }),
     ).toThrow(/not an anthropic model/);
     expect(() =>
-      resolveAnthropicModel({ ...catalog, models: { 'claude-x': { provider: 'anthropic' } } }),
+      resolveAnthropicModel({ ...catalog, models: { 'fixture-model': { provider: 'anthropic' } } }),
     ).toThrow(/apiModelId/);
   });
 });
@@ -90,7 +95,7 @@ describe('anthropicResponder', () => {
     const calls: Array<{ url: string; init: RequestInit }> = [];
     const respond = anthropicResponder({
       apiKey: 'test-key',
-      apiModelId: 'claude-x-wire',
+      apiModelId: 'fixture-wire-model',
       maxOutputTokens: 64,
       fetchImpl: async (url, init) => {
         calls.push({ url: String(url), init: init ?? {} });
@@ -108,7 +113,7 @@ describe('anthropicResponder', () => {
     expect(calls[0]!.init.signal).toBeInstanceOf(AbortSignal);
 
     expect(JSON.parse(String(calls[0]!.init.body))).toEqual({
-      model: 'claude-x-wire',
+      model: 'fixture-wire-model',
       max_tokens: 64,
       messages: [{ role: 'user', content: evalCase.prompt }],
     });
@@ -117,14 +122,14 @@ describe('anthropicResponder', () => {
   it('fails the run on a provider error instead of scoring an empty answer', async () => {
     const respond = anthropicResponder({
       apiKey: 'test-key',
-      apiModelId: 'claude-x-wire',
+      apiModelId: 'fixture-wire-model',
       fetchImpl: async () => jsonResponse({ error: { message: 'overloaded' } }, 529),
     });
     await expect(respond(evalCase)).rejects.toThrow(/anthropic 529 for golden\/example/);
   });
 
   it('refuses to build without a key', () => {
-    expect(() => anthropicResponder({ apiKey: '', apiModelId: 'claude-x-wire' })).toThrow(
+    expect(() => anthropicResponder({ apiKey: '', apiModelId: 'fixture-wire-model' })).toThrow(
       /requires an API key/,
     );
   });

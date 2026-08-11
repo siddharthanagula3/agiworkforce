@@ -48,6 +48,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
 
 import { settleWorkflowInvocation } from './steps/settle-workflow-invocation';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
+import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 
 const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const CONVERSATION_ID = '0190a000-0000-7000-8000-000000000003';
@@ -113,7 +114,11 @@ describe('durable cloud agent workflow settlement', () => {
       cacheWrite1hTokens: 0,
       reasoningTokens: 0,
     });
-    mocks.assistantText.mockResolvedValue({ text: 'The audit is clean.', lastSequence: 41 });
+    mocks.assistantText.mockResolvedValue({
+      text: 'The audit is clean.',
+      lastSequence: 41,
+      interactiveCards: [],
+    });
     mocks.execute.mockResolvedValue(undefined);
   });
 
@@ -145,7 +150,11 @@ describe('durable cloud agent workflow settlement', () => {
   });
 
   it('marks a cancelled turn truncated but still saves what was generated', async () => {
-    mocks.assistantText.mockResolvedValue({ text: 'Half an answ', lastSequence: 9 });
+    mocks.assistantText.mockResolvedValue({
+      text: 'Half an answ',
+      lastSequence: 9,
+      interactiveCards: [],
+    });
 
     await settleWorkflowInvocation(makeInput(), 'cancelled');
 
@@ -155,7 +164,11 @@ describe('durable cloud agent workflow settlement', () => {
   });
 
   it('persists partial text un-truncated while a run waits on approval', async () => {
-    mocks.assistantText.mockResolvedValue({ text: 'I need to run a command', lastSequence: 17 });
+    mocks.assistantText.mockResolvedValue({
+      text: 'I need to run a command',
+      lastSequence: 17,
+      interactiveCards: [],
+    });
 
     await settleWorkflowInvocation(makeInput(), 'awaiting_input');
 
@@ -169,6 +182,40 @@ describe('durable cloud agent workflow settlement', () => {
     });
     // awaiting_input must NOT flip the run to a terminal state.
     expect(mocks.transition).not.toHaveBeenCalled();
+  });
+
+  it('persists validated interactive cards recovered from durable tool receipts', async () => {
+    const card = parseInteractiveCardDelta({
+      card: {
+        schemaVersion: 1,
+        cardId: 'tool-call-map-fixture',
+        kind: 'map-search.v1',
+        createdAt: '2026-08-11T00:00:00.000Z',
+        fallback: { headline: 'Map search', text: 'Map search: coffee near Austin' },
+        producedBy: { toolCallId: 'tool-call-map-fixture', toolName: 'search_maps' },
+        body: {
+          title: 'Coffee near Austin',
+          query: 'coffee near Austin',
+          actions: [
+            {
+              provider: 'openstreetmap',
+              label: 'Open in OpenStreetMap',
+              url: 'https://www.openstreetmap.org/search?query=coffee%20near%20Austin',
+            },
+          ],
+        },
+      },
+    });
+    if (!card) throw new Error('card fixture did not parse');
+    mocks.assistantText.mockResolvedValue({
+      text: 'Choose a map provider.',
+      lastSequence: 12,
+      interactiveCards: [card],
+    });
+
+    await settleWorkflowInvocation(makeInput(), 'completed');
+
+    expect(persistedTurn()?.metadata['interactiveCards']).toEqual([card]);
   });
 
   it('writes the same row under the same id when a retried step settles twice', async () => {

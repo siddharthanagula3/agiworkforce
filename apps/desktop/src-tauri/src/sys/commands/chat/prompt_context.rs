@@ -276,51 +276,16 @@ pub(super) fn escape_xml(s: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Check if a model is likely to support vision.
+/// Check whether an exact catalog model supports vision.
 ///
-/// Authoritative source: `packages/contracts/types/src/models.json` (`capabilities.vision`).
-/// Looked up first via the canonical catalog.  For models not in the catalog
-/// (custom Ollama tags, brand-new releases that haven't been added yet,
-/// prefix-only sniffing, etc.) we fall back to a list of FAMILY SUBSTRINGS —
-/// these are intentionally generic prefixes (`"gpt-4"`, `"claude-3"`, …),
-/// not specific model IDs, so they keep matching new versions like
-/// `gpt-4o-2024-11`, `claude-3-5-sonnet`, etc.
+/// The authoritative source is `models.json` (`capabilities.vision`). Unknown
+/// Local/BYOK IDs fail closed instead of guessing from product-name prefixes;
+/// callers must add verified capability metadata before sending images.
 pub(super) fn model_likely_supports_vision(model: &str) -> bool {
-    // 1. Authoritative catalog lookup (post-canonicalization, e.g. "claude-opus-5"
-    //    -> "claude-opus-5").  If the model is in the catalog we trust the flag.
     let canonical = models_config::get_canonicalized_id(model);
-    if let Some(entry) = models_config::get_all_model_entries().get(&canonical) {
-        return entry.capabilities.vision;
-    }
-
-    // 2. Heuristic family-substring fallback for unknown / unreleased models.
-    //    These are family prefixes (NOT specific catalog IDs) and rule
-    //    `rule-models-json.md` does not apply — they're substring patterns.
-    let model_lower = model.to_lowercase();
-    let vision_families = [
-        "gpt-4",
-        "gpt-5",
-        "o1",
-        "o3",
-        "claude-3",
-        "claude-sonnet",
-        "claude-opus",
-        // Family prefix, not a catalog id. Haiku 4.5 was retired 2026-07-27;
-        // this stays so a future Haiku 5 is recognised as vision-capable
-        // the day it is added rather than silently treated as text-only.
-        "claude-haiku",
-        "gemini",
-        "llava",
-        "bakllava",
-        "cogvlm",
-        "qwen-vl",
-        "qwen2-vl",
-        "vision",
-    ];
-
-    vision_families
-        .iter()
-        .any(|pattern| model_lower.contains(pattern))
+    models_config::get_all_model_entries()
+        .get(&canonical)
+        .is_some_and(|entry| entry.capabilities.vision)
 }
 
 #[cfg(test)]
@@ -346,10 +311,20 @@ mod tests {
     }
 
     #[test]
-    fn model_likely_supports_vision_matches_expected_families() {
-        assert!(model_likely_supports_vision("gpt-5.6-sol"));
-        assert!(model_likely_supports_vision("claude-3-7-sonnet"));
-        assert!(model_likely_supports_vision("gemini-2.5-pro"));
-        assert!(!model_likely_supports_vision("text-embedding-3-large"));
+    fn model_likely_supports_vision_uses_catalog_and_fails_closed() {
+        let vision_model = models_config::get_all_model_entries()
+            .values()
+            .find(|entry| entry.capabilities.vision)
+            .expect("catalog must contain a vision-capable model");
+        let non_vision_model = models_config::get_all_model_entries()
+            .values()
+            .find(|entry| !entry.capabilities.vision)
+            .expect("catalog must contain a model without vision");
+
+        assert!(model_likely_supports_vision(&vision_model.id));
+        assert!(!model_likely_supports_vision(&non_vision_model.id));
+        assert!(!model_likely_supports_vision(
+            "fixture-unknown-vision-model"
+        ));
     }
 }

@@ -27,6 +27,7 @@ import {
 import type { LocalRuntimeClient, LocalRuntimeEvent } from '../integrations/localRuntimeClient';
 import type { LocalRuntimePool } from '../integrations/localRuntimePool';
 import { fetchTierInfo } from '../utils/api';
+import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
 
 vi.mock('../utils/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../utils/api')>();
@@ -36,7 +37,7 @@ vi.mock('../utils/api', async (importOriginal) => {
 /** A real catalog model id — never a hand-written one. */
 const CATALOG_MODEL = MODEL_PICKER_OPTIONS.find((option) => option.id !== 'auto')!.id;
 const CATALOG_PROVIDER_ID = getModelProviderInfo(CATALOG_MODEL).providerId;
-const LOCAL_MODEL = 'gemma4:e4b';
+const LOCAL_MODEL = SYNTHETIC_LOCAL_MODEL_ID;
 
 function makeHarness(localModels: Array<{ id: string; provider: 'ollama' | 'lmstudio' }> = []) {
   const listeners = new Set<(event: LocalRuntimeEvent) => void>();
@@ -275,7 +276,7 @@ describe('usage meter trust boundary (SIX-02)', () => {
   });
 
   it('treats a prefix-recognised local model as Local even before CLI discovery runs', async () => {
-    configuredModel('ollama/llama3.2');
+    configuredModel(`ollama/${SYNTHETIC_LOCAL_MODEL_ID}`);
     const harness = makeHarness();
 
     await harness.manager.pushUsageMeter();
@@ -285,9 +286,9 @@ describe('usage meter trust boundary (SIX-02)', () => {
   });
 
   it('does not assume a bare model id is local when discovery has not admitted it', async () => {
-    // `gemma4:e4b` really is an Ollama model, but nothing has proven that to
-    // this window yet — claiming Local off an unverified id is the failure mode
-    // this whole item exists to prevent.
+    // The fixture is presented as a local-runtime model elsewhere, but nothing
+    // has proven that to this window yet. Claiming Local from an unverified bare
+    // ID is the failure mode this whole item exists to prevent.
     configuredModel(LOCAL_MODEL);
     const harness = makeHarness();
 

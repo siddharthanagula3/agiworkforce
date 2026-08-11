@@ -16,6 +16,7 @@ import {
   DEVICE_REFRESH_TOKEN_EXPIRES_SECONDS,
 } from '@/lib/server/device-refresh-token';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
+import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 
 // RFC 8628 device-code POLL. Mirrors services/api-gateway deviceAuth.ts `/token`.
 // The CLI polls this until the user approves at /auth/device. Status codes are
@@ -89,6 +90,13 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
   }
   if (record.status !== 'approved' || !record.user_id) {
     return NextResponse.json({ error: 'authorization_pending' }, { status: 403, ...noStore });
+  }
+
+  // Approval and polling are separate requests. Re-check at issuance so a
+  // policy revision published between them cannot mint a session under stale
+  // assent.
+  if (!(await hasAcceptedCurrentTerms(record.user_id))) {
+    return NextResponse.json({ error: 'terms_acceptance_required' }, { status: 400, ...noStore });
   }
 
   let accessToken: string;

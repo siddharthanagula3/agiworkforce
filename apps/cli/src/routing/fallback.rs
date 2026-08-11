@@ -36,7 +36,8 @@ pub struct FallbackChain {
 }
 
 impl FallbackChain {
-    /// Parse a comma-separated `--model` argument like `"claude-opus-5,gpt-5.6-sol,llama3.1:8b"`.
+    /// Parse a comma-separated `--model` argument such as
+    /// `"primary-model,fallback-model,local-model"`.
     /// Whitespace around each entry is trimmed; empty entries are dropped.
     pub fn parse(spec: &str) -> Self {
         let primaries = spec
@@ -87,8 +88,11 @@ mod tests {
 
     #[test]
     fn parse_strips_whitespace_and_empties() {
-        let c = FallbackChain::parse(" claude-opus-5 , , gpt-5.6-sol ,  ");
-        assert_eq!(c.primaries, vec!["claude-opus-5", "gpt-5.6-sol"]);
+        let c = FallbackChain::parse(" fixture-primary-model , , fixture-fallback-model ,  ");
+        assert_eq!(
+            c.primaries,
+            vec!["fixture-primary-model", "fixture-fallback-model"]
+        );
     }
 
     #[test]

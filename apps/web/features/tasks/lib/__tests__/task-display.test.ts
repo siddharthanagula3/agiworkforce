@@ -17,16 +17,10 @@ describe('task-display', () => {
   });
 
   it('treats only non-terminal states as cancellable', () => {
-    for (const s of [
-      'queued',
-      'running',
-      'awaiting_input',
-      'ready_for_review',
-      'paused',
-    ] as const) {
+    for (const s of ['queued', 'running', 'awaiting_input', 'paused'] as const) {
       expect(isCancellableState(s)).toBe(true);
     }
-    for (const s of ['completed', 'failed', 'cancelled', 'archived'] as const) {
+    for (const s of ['ready_for_review', 'completed', 'failed', 'cancelled', 'archived'] as const) {
       expect(isCancellableState(s)).toBe(false);
     }
   });

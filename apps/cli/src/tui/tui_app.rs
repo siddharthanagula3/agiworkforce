@@ -887,6 +887,7 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
         out_tokens: app.total_output_tokens,
         cache_read: app.session.total_cache_read_tokens,
         cache_creation: app.session.total_cache_creation_tokens,
+        total_usd: app.session.cost_ledger.total_usd,
         reasoning_tokens: app.session.total_reasoning_tokens,
         context_used: app.total_input_tokens as u64 + app.total_output_tokens as u64,
         context_window: crate::model_catalog::context_window(&app.model_name) as u64,
@@ -1069,10 +1070,10 @@ impl<'a> FrameCtx<'a> {
             mode: app.mode,
             effort_label: app.effort.label(),
             sandbox_type: app.sandbox_type,
-            cost_str: crate::output::format_cost(
-                &app.session.model,
+            cost_str: crate::output::format_accumulated_cost(
                 app.session.total_input_tokens,
                 app.session.total_output_tokens,
+                app.session.cost_ledger.total_usd,
             ),
         }
     }
@@ -2559,10 +2560,10 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         }
 
         "/cost" => {
-            let cost = crate::output::format_cost(
-                &app.session.model,
+            let cost = crate::output::format_accumulated_cost(
                 app.session.total_input_tokens,
                 app.session.total_output_tokens,
+                app.session.cost_ledger.total_usd,
             );
             SlashResult::SystemMessage(format!("Turns: {} │ {}", app.session.turn_count, cost))
         }
@@ -2698,18 +2699,23 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         if m.supports_reasoning { "R" } else { " " },
                     );
                     format!(
-                        "  {} [{}] {:>6}K ctx  ${:.2}/${:.2}",
+                        "  {} [{}] {:>6}K ctx  ${:.2}/${:.2} {}",
                         pad_to_cols(&m.id, 32),
                         flags,
                         m.context_window / 1000,
                         m.input_price_per_1m,
                         m.output_price_per_1m,
+                        if crate::model_catalog::input_token_pricing_tiers(&m.id).is_empty() {
+                            "base"
+                        } else {
+                            "base+tiered"
+                        },
                     )
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
             SlashResult::SystemMessage(format!(
-                "Available models:\n{models_output}\n\nLive local discovery: run `agi models scan` or `agi models status`."
+                "Available models:\n{models_output}\n\nPrices are per 1M input/output tokens; `base+tiered` has request-input bands shown by `agi --cost MODEL`.\nLive local discovery: run `agi models scan` or `agi models status`."
             ))
         }
 
@@ -3609,10 +3615,10 @@ pub async fn run(
     }
 
     crate::output::print_session_cost(
-        &app.session.model,
         app.session.total_input_tokens,
         app.session.total_output_tokens,
         app.session.turn_count,
+        app.session.cost_ledger.total_usd,
     );
 
     result
@@ -4098,10 +4104,10 @@ async fn send_message(
     // them while the rest of `FrameCtx` is built from disjoint `app` fields.
     let turn_access_mode = provider_access_mode(&app.session.provider);
     let turn_privacy_mode = app.session.privacy_mode;
-    let turn_cost_str = crate::output::format_cost(
-        &app.session.model,
+    let turn_cost_str = crate::output::format_accumulated_cost(
         app.session.total_input_tokens,
         app.session.total_output_tokens,
+        app.session.cost_ledger.total_usd,
     );
 
     let result = {
@@ -5357,7 +5363,7 @@ mod tests {
         let tool_cells: Vec<ToolCell> = Vec::new();
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
         let ctx = FrameCtx {
-            model_name: "gemma4:e4b",
+            model_name: "fixture-local-model:latest",
             statusline: &statusline_cfg,
             provider_name: "ollama",
             git_branch: None,
@@ -5408,7 +5414,7 @@ mod tests {
             "approval box must be drawn"
         );
         assert!(
-            rendered.contains("gemma4:e4b"),
+            rendered.contains("fixture-local-model:latest"),
             "header chrome must still be visible under the approval overlay, not blanked"
         );
         assert!(

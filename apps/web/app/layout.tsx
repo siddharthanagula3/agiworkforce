@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { ClerkProvider } from '@clerk/nextjs';
 import { Geist, Geist_Mono, JetBrains_Mono, Newsreader } from 'next/font/google';
 import { headers } from 'next/headers';
+import Script from 'next/script';
 import './globals.css';
 import Providers from './providers';
 import { AnalyticsConsentGate } from '@shared/components/AnalyticsConsentGate';
@@ -169,6 +170,13 @@ export default async function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${newsreader.variable} ${jetbrainsMono.variable} antialiased`}
       >
+        <Script
+          id="agi-theme-bootstrap"
+          src="/theme-init.js"
+          async
+          strategy="beforeInteractive"
+          nonce={nonce}
+        />
         <ClerkProvider localization={clerkLocalization}>
           <SkipLinks />
           {/*

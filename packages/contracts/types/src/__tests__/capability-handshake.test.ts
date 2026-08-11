@@ -22,6 +22,8 @@ import {
 } from '../capability-handshake';
 
 const COMPUTED_AT = '2026-07-15T00:00:00.000Z';
+const FIXTURE_MODEL_SOURCE = 'model:fixture-capability-model';
+const FIXTURE_ALTERNATE_MODEL_SOURCE = 'model:fixture-alternate-model';
 
 function grant(
   layer: CapabilityLayerGrant['layer'],
@@ -38,7 +40,7 @@ describe('buildEffectiveCapabilityDocument', () => {
       version: 'v1',
       computedAt: COMPUTED_AT,
       layers: {
-        model: grant('model', 'model:sonnet-5', ['canUseWebSearch', 'canRunLocalCode']),
+        model: grant('model', FIXTURE_MODEL_SOURCE, ['canUseWebSearch', 'canRunLocalCode']),
         tier: grant('tier', 'tier:pro', ['canUseWebSearch', 'canRunLocalCode']),
         surface: grant('surface', 'surface:desktop', ['canUseWebSearch', 'canRunLocalCode']),
         settings: grant('settings', 'settings:v3', ['canUseWebSearch', 'canRunLocalCode']),
@@ -51,7 +53,7 @@ describe('buildEffectiveCapabilityDocument', () => {
     expect(document.version).toBe('v1');
     expect(document.computedAt).toBe(COMPUTED_AT);
     expect(document.sources).toEqual({
-      model: 'model:sonnet-5',
+      model: FIXTURE_MODEL_SOURCE,
       tier: 'tier:pro',
       surface: 'surface:desktop',
       settings: 'settings:v3',
@@ -63,7 +65,7 @@ describe('buildEffectiveCapabilityDocument', () => {
       sessionId: 'sess_2',
       version: 'v1',
       layers: {
-        model: grant('model', 'model:haiku-4-5', ['canUseWebSearch']),
+        model: grant('model', FIXTURE_ALTERNATE_MODEL_SOURCE, ['canUseWebSearch']),
         tier: grant('tier', 'tier:free', []), // free tier withholds it
         surface: grant('surface', 'surface:web', ['canUseWebSearch']),
         settings: grant('settings', 'settings:default', ['canUseWebSearch']),
@@ -79,7 +81,7 @@ describe('buildEffectiveCapabilityDocument', () => {
       sessionId: 'sess_3',
       version: 'v1',
       layers: {
-        model: grant('model', 'model:sonnet-5', ['canRunLocalCode']),
+        model: grant('model', FIXTURE_MODEL_SOURCE, ['canRunLocalCode']),
         tier: grant('tier', 'tier:free', []),
         surface: grant('surface', 'surface:web', []), // web never exposes local-code execution
         settings: grant('settings', 'settings:default', []),
@@ -97,7 +99,7 @@ describe('buildEffectiveCapabilityDocument', () => {
       sessionId: 'sess_4',
       version: 'v1',
       layers: {
-        model: grant('model', 'model:sonnet-5', ['canUseWebSearch']),
+        model: grant('model', FIXTURE_MODEL_SOURCE, ['canUseWebSearch']),
         tier: grant('tier', 'tier:pro', ['canUseWebSearch']),
         surface: grant('surface', 'surface:desktop', ['canUseWebSearch']),
         settings: grant('settings', 'settings:default', ['canUseWebSearch']),
@@ -134,7 +136,7 @@ describe('evaluateCapabilityAdmission', () => {
       version: 'v1',
       computedAt: COMPUTED_AT,
       layers: {
-        model: grant('model', 'model:sonnet-5', ids),
+        model: grant('model', FIXTURE_MODEL_SOURCE, ids),
         tier: grant('tier', 'tier:pro', ids),
         surface: grant('surface', 'surface:desktop', ids),
         settings: grant('settings', 'settings:default', ids),
@@ -181,7 +183,7 @@ describe('evaluateCapabilityAdmission', () => {
       version: 'v1',
       computedAt: COMPUTED_AT,
       layers: {
-        model: grant('model', 'model:sonnet-5', ['canUseWebSearch']),
+        model: grant('model', FIXTURE_MODEL_SOURCE, ['canUseWebSearch']),
         tier: grant('tier', 'tier:free', []), // withholds
         surface: grant('surface', 'surface:web', ['canUseWebSearch']),
         settings: grant('settings', 'settings:default', ['canUseWebSearch']),

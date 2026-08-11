@@ -435,7 +435,7 @@ describe('paywall 429 JSON parsing — pattern test', () => {
 describe('SSE parsing pattern', () => {
   it('parses a valid SSE data line', () => {
     const line =
-      'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"gpt-4","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}';
+      'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1,"model":"fixture-stream-model","choices":[{"index":0,"delta":{"content":"Hello"},"finish_reason":null}]}';
     const trimmed = line.trim();
     expect(trimmed.startsWith('data:')).toBe(true);
 

@@ -24,7 +24,7 @@ export default function IntegrationsPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <p className="agi-fl-eyebrow">Integrations</p>
           <h1 id="agi-integrations-hero-title" className="agi-fl-h1">
-            <span className="agi-fl-h1-line">Plug AGI into</span>
+            <span className="agi-fl-h1-line">Plug AGI into</span>{' '}
             <span className="agi-fl-h1-line">
               <em className="agi-fl-h1-em">your stack.</em>
             </span>

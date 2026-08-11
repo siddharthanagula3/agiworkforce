@@ -174,7 +174,7 @@ exports[`Mobile SendPreview snapshots locks the Local turn rendered tree 1`] = `
       }
     }
   >
-    Llama 3.2 8B
+    Fixture Local Model
   </Text>
   <Text
     style={

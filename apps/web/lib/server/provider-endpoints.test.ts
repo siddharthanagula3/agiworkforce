@@ -13,10 +13,15 @@ vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: (...args: unknown[]) => insertMediaAsset(...args),
 }));
 
-import { providerApiUrl } from './provider-endpoints';
+import { googleVideoOutputHostDisposition, providerApiUrl } from './provider-endpoints';
 import { persistGeneratedFile } from './container-files';
 
-const ENV_KEYS = ['OPENAI_BASE_URL', 'ANTHROPIC_BASE_URL'] as const;
+const ENV_KEYS = [
+  'OPENAI_BASE_URL',
+  'ANTHROPIC_BASE_URL',
+  'GOOGLE_BASE_URL',
+  'OPENROUTER_BASE_URL',
+] as const;
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
@@ -38,6 +43,10 @@ describe('provider API root resolution', () => {
   it('falls back to the vendor default when no override is set', () => {
     expect(providerApiUrl('openai', 'models')).toBe('https://api.openai.com/v1/models');
     expect(providerApiUrl('anthropic', 'models')).toBe('https://api.anthropic.com/v1/models');
+    expect(providerApiUrl('google', 'operations/task-1')).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/operations/task-1',
+    );
+    expect(providerApiUrl('openrouter', 'videos')).toBe('https://openrouter.ai/api/v1/videos');
   });
 
   it('honours an allowlisted *_BASE_URL override', () => {
@@ -63,6 +72,30 @@ describe('provider API root resolution', () => {
   it('drops a plaintext override', () => {
     process.env['ANTHROPIC_BASE_URL'] = 'http://api.anthropic.com/v1';
     expect(providerApiUrl('anthropic', 'models')).toBe('https://api.anthropic.com/v1/models');
+  });
+
+  it('honours the installed Google SDK GOOGLE_BASE_URL convention without adding a version', () => {
+    process.env['GOOGLE_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/google/v1beta';
+    expect(providerApiUrl('google', 'operations/task-1')).toBe(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/google/v1beta/operations/task-1',
+    );
+  });
+
+  it('uses the shared OpenRouter base URL convention for video endpoints', () => {
+    process.env['OPENROUTER_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/openrouter';
+    expect(providerApiUrl('openrouter', 'videos/task-1/content?index=0')).toBe(
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/openrouter/videos/task-1/content?index=0',
+    );
+  });
+
+  it('classifies only canonical/configured Google API hosts and redirect-only storage hosts', () => {
+    process.env['GOOGLE_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/google/v1beta';
+
+    expect(googleVideoOutputHostDisposition('generativelanguage.googleapis.com')).toBe('api');
+    expect(googleVideoOutputHostDisposition('gateway.ai.cloudflare.com')).toBe('api');
+    expect(googleVideoOutputHostDisposition('storage.googleapis.com')).toBeNull();
+    expect(googleVideoOutputHostDisposition('storage.googleapis.com', true)).toBe('redirect');
+    expect(googleVideoOutputHostDisposition('attacker.example', true)).toBeNull();
   });
 });
 
@@ -168,8 +201,9 @@ describe('generated-file fetchers route through the resolved endpoint', () => {
 
     await persistGeneratedFile({
       userId: 'user_1',
+      organizationId: null,
       ref: { provider: 'openai', filename: 'report.pdf', containerId: 'cntr_1', fileId: 'file_1' },
-      model: 'gpt-5.6',
+      model: 'fixture-model',
     });
 
     expect(fetchSpy).toHaveBeenCalled();
@@ -184,8 +218,9 @@ describe('generated-file fetchers route through the resolved endpoint', () => {
 
     await persistGeneratedFile({
       userId: 'user_1',
+      organizationId: null,
       ref: { provider: 'anthropic', filename: 'report.pdf', fileId: 'file_abc' },
-      model: 'claude-sonnet-5',
+      model: 'fixture-model',
     });
 
     expect(fetchSpy).toHaveBeenCalled();
@@ -205,8 +240,9 @@ describe('generated-file fetchers route through the resolved endpoint', () => {
 
     await persistGeneratedFile({
       userId: 'user_1',
+      organizationId: null,
       ref: { provider: 'anthropic', filename: 'report.pdf', fileId: 'file_abc' },
-      model: 'claude-sonnet-5',
+      model: 'fixture-model',
     });
 
     const urls = fetchSpy.mock.calls.map((call) => String(call[0]));

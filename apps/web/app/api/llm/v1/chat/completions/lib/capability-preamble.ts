@@ -31,6 +31,7 @@ import { isValidIanaTimeZone } from '@agiworkforce/types';
 /** Human-readable line for each platform tool we know about. */
 const TOOL_DESCRIPTIONS: Record<string, string> = {
   web_search: 'search the live web and cite what you find',
+  search_maps: 'open a real map search card for places or nearby categories',
   web_fetch: 'fetch a specific URL and read its contents',
   url_fetch: 'fetch a specific URL and read its contents',
   execute_code:

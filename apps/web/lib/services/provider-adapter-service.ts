@@ -79,10 +79,11 @@ export const SUPPORTED_SERVER_PROVIDER_IDS: readonly string[] = Object.keys(SERV
 export const toApiModelId = toProviderApiModelId;
 
 /**
- * Resolve catalogued models through the shared registry and preserve the
- * ordered compatibility fallback for uncatalogued model IDs. The Web dispatch
- * key remains `openrouter`; construction translates it to the canonical
- * `open_router` adapter ID.
+ * Resolve models exclusively through the shared registry. Unknown or retired
+ * IDs fail closed instead of being guessed from a vendor-looking substring or
+ * silently sent to the OpenAI adapter. The Web dispatch key remains
+ * `openrouter`; construction translates it to the canonical `open_router`
+ * adapter ID.
  */
 export function resolveProviderFromModel(model: string): string {
   const catalogProvider = detectProviderFromModelId(model);
@@ -105,20 +106,7 @@ export function resolveProviderFromModel(model: string): string {
     return catalogProvider;
   }
 
-  const modelLower = model.toLowerCase();
-  if (modelLower.includes('gpt-')) return 'openai';
-  if (modelLower.includes('claude-')) return 'anthropic';
-  if (modelLower.includes('gemini-')) return 'google';
-  if (modelLower.includes('grok-')) return 'xai';
-  if (modelLower.includes('qwen')) return 'qwen';
-  if (modelLower.includes('kimi')) return 'moonshot';
-  if (modelLower.includes('deepseek')) return 'deepseek';
-  if (modelLower.includes('sonar')) return 'perplexity';
-  if (modelLower.includes('glm-')) return 'zhipu';
-  if (modelLower.includes('minimax')) return 'minimax';
-
-  // Default to OpenAI.
-  return 'openai';
+  throw new Error('Model is not registered in the canonical model catalog');
 }
 
 /**

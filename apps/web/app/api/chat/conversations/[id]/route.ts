@@ -26,6 +26,7 @@ import {
   type ChatMessageRow,
 } from '@/lib/server/neon-chat';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
+import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -44,14 +45,18 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
   const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
   const [conversation] = await db.query<ChatConversationRow>(
     `
       select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       from web_conversations
-      where id = $1 and user_id = $2 and deleted_at is null
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $3
+        and deleted_at is null
       limit 1
     `,
-    [id, userId],
+    [id, userId, organizationId],
   );
 
   if (!conversation) {
@@ -121,6 +126,8 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.validation('Invalid request body', validationResult.error);
   }
   const body = validationResult.data;
+  const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   const updates: Record<string, unknown> = {};
   if (body['title']) updates['title'] = body['title'];
@@ -149,7 +156,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (hasProjectIdUpdate && typeof targetProjectId === 'string' && targetProjectId.length > 0) {
     let ownedProject: { id: string } | undefined;
     try {
-      [ownedProject] = await getNeonChatDb().query<{ id: string }>(
+      [ownedProject] = await db.query<{ id: string }>(
         `select id
            from user_projects
           where id = $1 and user_id = $2 and is_archived = false and deleted_at is null
@@ -165,7 +172,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     }
   }
 
-  const [conversation] = await getNeonChatDb().query<ChatConversationRow>(
+  const [conversation] = await db.query<ChatConversationRow>(
     `
       update web_conversations
       set
@@ -177,7 +184,10 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         archived = case when $11::boolean then $12::boolean else archived end,
         is_temporary = case when $13::boolean then $14::boolean else is_temporary end,
         updated_at = now()
-      where id = $1 and user_id = $2 and deleted_at is null
+      where id = $1
+        and user_id = $2
+        and organization_id is not distinct from $15
+        and deleted_at is null
       returning id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
     `,
     [
@@ -195,6 +205,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
       updates['archived'] ?? false,
       hasIsTemporaryUpdate,
       updates['isTemporary'] ?? false,
+      organizationId,
     ],
   );
 
@@ -216,15 +227,20 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   if (rateLimitResponse) return rateLimitResponse;
 
   const { id } = await context.params;
+  const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId);
 
   try {
-    await getNeonChatDb().execute(
+    await db.execute(
       `
         update web_conversations
         set deleted_at = now(), updated_at = now()
-        where id = $1 and user_id = $2 and deleted_at is null
+        where id = $1
+          and user_id = $2
+          and organization_id is not distinct from $3
+          and deleted_at is null
       `,
-      [id, userId],
+      [id, userId, organizationId],
     );
   } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to delete conversation');

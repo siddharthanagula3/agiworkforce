@@ -69,6 +69,8 @@ export {
 } from './lib/modelAdmission';
 export {
   createChatModelInfo,
+  getManagedModelPresentationLabel,
+  getModelPresentationLabel,
   isChatModelSelectable,
   parseDiscoveredChatModels,
 } from './lib/modelInfo';
@@ -332,6 +334,7 @@ export { ToolTimeline } from './components/ToolTimeline';
 export type { ToolTimelineProps } from './components/ToolTimeline';
 export {
   AgentActivityTimeline,
+  hasCanonicalToolActivity,
   buildAgentActivitySummary,
 } from './components/AgentActivityTimeline';
 export type { AgentActivityTimelineProps } from './components/AgentActivityTimeline';

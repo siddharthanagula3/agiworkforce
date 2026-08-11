@@ -47,7 +47,7 @@ describe('useShareConversation', () => {
     const { result } = renderHook(() => useShareConversation('My session'));
 
     await act(async () => {
-      await result.current.share();
+      await result.current.share(30);
     });
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -56,15 +56,21 @@ describe('useShareConversation', () => {
     );
     const body = JSON.parse(fetchMock.mock.calls[0]?.[1]?.body as string);
     expect(Array.isArray(body.messages)).toBe(true);
+    expect(body.expires_in_days).toBe(30);
     expect(body.messages[0]).toMatchObject({ role: 'user', content: 'hello' });
-    expect(result.current.hasActiveShare).toBe(true);
+    expect(result.current.activeShare?.token).toBe('abc123');
   });
 
   it('revokes the active share via DELETE /api/share/[token]', async () => {
     vi.spyOn(global, 'fetch')
       .mockResolvedValueOnce(
         new Response(
-          JSON.stringify({ shareUrl: 'https://agiworkforce.com/share/abc123', token: 'abc123' }),
+          JSON.stringify({
+            shareUrl: 'https://agiworkforce.com/share/abc123',
+            token: 'abc123',
+            expiresAt: '2026-07-08T00:00:00.000Z',
+            messageCount: 1,
+          }),
           { status: 201 },
         ),
       )
@@ -73,7 +79,7 @@ describe('useShareConversation', () => {
     const { result } = renderHook(() => useShareConversation('My session'));
 
     await act(async () => {
-      await result.current.share();
+      await result.current.share(7);
     });
     await act(async () => {
       await result.current.revoke();
@@ -83,6 +89,6 @@ describe('useShareConversation', () => {
       '/api/share/abc123',
       expect.objectContaining({ method: 'DELETE' }),
     );
-    expect(result.current.hasActiveShare).toBe(false);
+    expect(result.current.activeShare).toBeNull();
   });
 });

@@ -32,7 +32,6 @@ vi.mock('./company-hub-store', () => ({}));
 vi.mock('@/features/chat/stores/artifacts-store', () => ({}));
 vi.mock('@/features/chat/stores/voice-input-store', () => ({}));
 vi.mock('@/features/chat/stores/style-store', () => ({}));
-vi.mock('@/features/plugins/stores/plugin-store', () => ({}));
 vi.mock('@/features/connectors/stores/tool-permissions-store', () => ({}));
 vi.mock('@agiworkforce/unified-chat', () => ({}));
 

@@ -167,7 +167,7 @@ mod integration {
         // Insert assistant message with cost tracking
         conn.execute(
             "INSERT INTO messages (conversation_id, user_id, role, content, tokens, cost, provider, model) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-            rusqlite::params![conv_id, user_id, "assistant", "I'm doing well, thank you!", 10, 0.0015, "openai", "gpt-4"],
+            rusqlite::params![conv_id, user_id, "assistant", "I'm doing well, thank you!", 10, 0.0015, "openai", "fixture-primary-model"],
         )
         .unwrap();
         let _assistant_msg_id = conn.last_insert_rowid();

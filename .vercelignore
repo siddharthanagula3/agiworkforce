@@ -10,6 +10,7 @@ out
 
 # Cache and Temporary Files
 .cache
+/tmp
 .vuepress/dist
 .serverless/
 .fusebox/
@@ -56,8 +57,12 @@ LICENSE
 *~
 .DS_Store
 
-# Monorepo - Include web + desktop (desktop needed for Vite SPA build)
-# /apps/desktop — KEPT: needed for build-with-chat.sh Vite SPA build
+# Monorepo - Website deployment only
+# The native Next.js /chat route replaced the old Desktop Vite SPA build.
+# apps/web/scripts/build-with-chat.sh now builds only @agiworkforce/web, so
+# uploading the ~75 MB Desktop tree wastes Vercel's source budget and can make
+# Hobby-team deployments fail before the build starts.
+/apps/desktop
 /apps/cli
 /apps/mobile
 /services

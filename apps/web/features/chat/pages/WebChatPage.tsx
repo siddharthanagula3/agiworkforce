@@ -19,12 +19,15 @@ import {
   isTemporaryConversationById,
   persistImageGenerationUserMessage,
   persistImageGenerationAssistantMessage,
+  requireImageMessagePersistence,
   // PER-29/PER-30: metadata builders that MERGE rather than replace, so a
   // failure or a pending regeneration cannot discard the retry parameters.
   imageGenerationFailureMetadata,
   imageRegenerationPendingMetadata,
   mergeImageGenerationMetadata,
 } from '../lib/imageGenerationPersistence';
+import { runDurableImageGenerationTurn } from '../lib/durableImageGenerationTurn';
+import { startVideoAfterTranscriptCommit } from '../lib/durableVideoGenerationTurn';
 import {
   useChatStore,
   selectConversationMessages,
@@ -35,10 +38,9 @@ import {
 } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-import { useModelStore } from '@shared/stores/model-store';
+import { resolveSelectableModelId, useModelStore } from '@shared/stores/model-store';
 import { useNotificationStore } from '@shared/stores/notification-store';
 import { useUIStore } from '@shared/stores/layout-store';
-import { fetchPreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { getBestAutoModeForTier } from '@shared/config/llm';
@@ -72,8 +74,9 @@ import {
   TerminalSquare,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
-import { useShareConversation } from '../hooks/use-share-conversation';
+import { ShareConversationDialog } from '../components/share/ShareConversationDialog';
 import { useArtifactCloudSync } from '../hooks/use-artifact-cloud-sync';
+import { useBrowserReplyReadyPreference } from '../hooks/use-browser-reply-ready-preference';
 import { _sharedArtifactStore } from '../stores/artifacts-store';
 import { useConversationBranches } from '../hooks/use-conversation-branches';
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
@@ -102,10 +105,13 @@ import {
 } from '@agiworkforce/ui';
 import { SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
+import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
 import { GlobalSearchDialog } from '../components/dialogs/GlobalSearchDialog';
 import { KeyboardShortcutsDialog } from '../components/dialogs/KeyboardShortcutsDialog';
 import { printConversation } from '../lib/print-conversation';
 import { ChatMessageList } from '../components/messages/ChatMessageList';
+import { ChatLoadingState } from '../components/messages/ChatLoadingState';
+import { ImageTranscriptRecoveryNotice } from '../components/ImageTranscriptRecoveryNotice';
 import { ChatComposerNew } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
 import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
@@ -151,7 +157,11 @@ import {
   type PendingEditRollback,
 } from '../lib/pendingEdit';
 import { runReplacingSend } from '../lib/replacingSend';
-import { isStaleActiveConversation } from '../lib/staleActiveConversation';
+import {
+  isConversationListPending,
+  isConversationRoutePending,
+  isStaleActiveConversation,
+} from '../lib/staleActiveConversation';
 import type { Message, MessageMetadata } from '@shared/stores/web-chat-store';
 import { LocalByokHandoffDialog, type ChatMessage } from '@agiworkforce/unified-chat';
 import { countWebSearchSources, type WebChatMessageMetadata } from '../types/message-metadata';
@@ -163,13 +173,29 @@ import {
   ProjectSettingsDialog,
 } from '@features/projects';
 import { webManagedCloudProjects } from '@features/projects/services/managed-cloud-projects';
-import { useMediaGeneration, MediaGenerationApiError } from '@/lib/hooks/useMediaGeneration';
+import {
+  acknowledgeProjectChatHandoff,
+  readProjectChatHandoff,
+} from '@features/projects/lib/project-chat-handoff';
+import {
+  useMediaGeneration,
+  MediaGenerationApiError,
+  type GeneratedImageResult,
+  type MediaPaywallRecoveryAction,
+} from '@/lib/hooks/useMediaGeneration';
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import {
-  IMAGE_ASPECT_OPTIONS,
   IMAGE_MODELS,
+  resolveImageGenerationRequestOptions,
   type ImageAspectRatio,
-} from '../components/Composer/ChatComposerNew';
+} from '../lib/imageGenerationOptions';
+import { resolveMediaPaywallSlot, runMediaPaywallRecovery } from '../lib/mediaPaywallRecovery';
+import {
+  imageTranscriptMutationKeys,
+  useImageTranscriptRecoveryStore,
+  type ImagePromptTranscriptRecovery,
+  type ImageTranscriptRecovery,
+} from '../stores/image-transcript-recovery-store';
 
 type SendMeta = {
   /** Composer work mode at send time ('chat' | 'agiwork'). */
@@ -190,6 +216,10 @@ type SendMeta = {
   skillName?: string;
   /** CAP-048: structured AGI Work goal captured by the composer. */
   agiWorkGoal?: AgiWorkGoalInput;
+};
+
+type NewImageGenerationTurn = Omit<ImagePromptTranscriptRecovery, 'phase' | 'status'> & {
+  temporary: boolean;
 };
 
 /**
@@ -430,6 +460,108 @@ async function patchConversationMessageMetadata(params: {
   }
 }
 
+interface VideoStartFailureProjection {
+  applied: boolean;
+  content: string;
+  model?: string;
+  provider?: 'google' | 'runway' | 'openrouter';
+  metadata: MessageMetadata;
+}
+
+function readVideoStartFailureProjection(value: unknown): VideoStartFailureProjection {
+  if (!value || typeof value !== 'object') throw new Error('Invalid video recovery response');
+  const response = value as Record<string, unknown>;
+  const message = response['message'];
+  if (typeof response['applied'] !== 'boolean' || !message || typeof message !== 'object') {
+    throw new Error('Invalid video recovery response');
+  }
+  const row = message as Record<string, unknown>;
+  const rawMetadata = row['metadata'];
+  if (!rawMetadata || typeof rawMetadata !== 'object' || Array.isArray(rawMetadata)) {
+    throw new Error('Invalid video recovery metadata');
+  }
+  const metadata = rawMetadata as Record<string, unknown>;
+  const status = metadata['videoStatus'];
+  if (
+    metadata['toolType'] !== 'video-generation' ||
+    (status !== 'queued' &&
+      status !== 'processing' &&
+      status !== 'completed' &&
+      status !== 'failed')
+  ) {
+    throw new Error('Invalid video recovery state');
+  }
+  const provider = row['provider'];
+  const safeProvider =
+    provider === 'google' || provider === 'runway' || provider === 'openrouter'
+      ? provider
+      : undefined;
+  const safeMetadata: MessageMetadata = {
+    toolType: 'video-generation',
+    videoStatus: status,
+    ...(typeof metadata['videoTaskId'] === 'string'
+      ? { videoTaskId: metadata['videoTaskId'] }
+      : {}),
+    ...(typeof metadata['videoModel'] === 'string' ? { videoModel: metadata['videoModel'] } : {}),
+    ...(metadata['videoProvider'] === 'google' ||
+    metadata['videoProvider'] === 'runway' ||
+    metadata['videoProvider'] === 'openrouter'
+      ? { videoProvider: metadata['videoProvider'] }
+      : {}),
+    ...(typeof metadata['videoProgress'] === 'number'
+      ? { videoProgress: metadata['videoProgress'] }
+      : {}),
+    ...(typeof metadata['videoUrl'] === 'string' ? { videoUrl: metadata['videoUrl'] } : {}),
+    ...(typeof metadata['thumbnailUrl'] === 'string'
+      ? { thumbnailUrl: metadata['thumbnailUrl'] }
+      : {}),
+    ...(typeof metadata['videoError'] === 'string' ? { videoError: metadata['videoError'] } : {}),
+    ...(typeof metadata['videoRetryable'] === 'boolean'
+      ? { videoRetryable: metadata['videoRetryable'] }
+      : {}),
+  };
+  return {
+    applied: response['applied'],
+    content: typeof row['content'] === 'string' ? row['content'] : '',
+    ...(typeof row['model'] === 'string' ? { model: row['model'] } : {}),
+    ...(safeProvider ? { provider: safeProvider } : {}),
+    metadata: safeMetadata,
+  };
+}
+
+async function persistDefiniteVideoStartFailure(params: {
+  conversationId: string;
+  messageId: string;
+  publicError: string;
+  authToken: string;
+}): Promise<VideoStartFailureProjection> {
+  const headers = await addCsrfHeaders({
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${params.authToken}`,
+  });
+  const response = await fetch(
+    `/api/chat/conversations/${params.conversationId}/messages/${params.messageId}`,
+    {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify({ videoStartFailure: { publicError: params.publicError } }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(await readChatMutationError(response, 'Failed to recover video transcript'));
+  }
+  return readVideoStartFailureProjection(await response.json());
+}
+
+const MOBILE_NAV_FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function mobileNavigationFocusable(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(MOBILE_NAV_FOCUSABLE)).filter(
+    (element) => element.offsetParent !== null || element === document.activeElement,
+  );
+}
+
 export default function WebChatPage() {
   useArtifactCloudSync();
 
@@ -468,7 +600,55 @@ export default function WebChatPage() {
   // Compact viewports render the sidebar as an off-canvas drawer instead of an
   // in-flow rail; this tracks whether that drawer is open.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileNavDrawerRef = useRef<HTMLDivElement>(null);
   const [workSessionPanelOpen, setWorkSessionPanelOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const trigger = mobileNavTriggerRef.current;
+    const drawer = mobileNavDrawerRef.current;
+    const focusFrame = requestAnimationFrame(() => {
+      const first = drawer ? mobileNavigationFocusable(drawer)[0] : undefined;
+      (first ?? drawer)?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // A portalled menu inside the drawer owns its first Escape press. Respect
+      // that dismissal instead of also tearing down the surrounding drawer.
+      if (event.defaultPrevented) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMobileNavOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab' || !drawer) return;
+
+      const focusable = mobileNavigationFocusable(drawer);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) {
+        event.preventDefault();
+        drawer.focus();
+        return;
+      }
+
+      const activeInsideDrawer = drawer.contains(document.activeElement);
+      if (event.shiftKey && (!activeInsideDrawer || document.activeElement === first)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (!activeInsideDrawer || document.activeElement === last)) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      cancelAnimationFrame(focusFrame);
+      document.removeEventListener('keydown', handleKeyDown);
+      trigger?.focus();
+    };
+  }, [mobileNavOpen]);
 
   // Hydrate server-persisted connector per-tool permission verdicts once when
   // signed in, so a "block/allow this tool" choice follows the user across
@@ -490,10 +670,11 @@ export default function WebChatPage() {
   // the Free workhorse, so the model unexpectedly changed after reload.
   const isWebsiteFreeTrial = billingPolicyReady && subscriptionTier === 'free';
   const freeTrialModelId = getBestAutoModeForTier('free');
+  const validatedSelectedModelId = resolveSelectableModelId(selectedModelId);
   const activeModelId =
-    isWebsiteFreeTrial && !FREE_TRIAL_MODELS.includes(selectedModelId)
+    isWebsiteFreeTrial && !FREE_TRIAL_MODELS.includes(validatedSelectedModelId)
       ? freeTrialModelId
-      : selectedModelId;
+      : validatedSelectedModelId;
   const selectedModel = availableModels.find((m) => m.id === activeModelId);
   const freeUsageLimitReached = useFreeTrialStore((s) => s.limitReached);
   const isTrialExhausted = isWebsiteFreeTrial && freeUsageLimitReached;
@@ -574,22 +755,6 @@ export default function WebChatPage() {
   // window for one conversation) instead of serialising the whole app.
   const sendingConversationsRef = useRef<Set<string>>(new Set());
 
-  // Consume any pending message written by the project-detail composer before
-  // navigating here. Reading once on mount prevents the value from surviving
-  // page refreshes.
-  useEffect(() => {
-    try {
-      const pending = sessionStorage.getItem('agi.project.pendingMessage');
-      if (pending) {
-        sessionStorage.removeItem('agi.project.pendingMessage');
-        sessionStorage.removeItem('agi.project.pendingProjectId');
-        setComposerPrefill(pending);
-      }
-    } catch {
-      // sessionStorage unavailable -- ignore
-    }
-  }, []);
-
   const [composerClearSignal, setComposerClearSignal] = useState(0);
   const [isUserTyping, setIsUserTyping] = useState(false);
   const [bareChatSessionId, setBareChatSessionId] = useState<string | null>(null);
@@ -604,7 +769,25 @@ export default function WebChatPage() {
   // new project as chat scope) vs the sidebar (navigate to the project page).
   const [createProjectFromComposer, setCreateProjectFromComposer] = useState(false);
   const [upgradePlanOpen, setUpgradePlanOpen] = useState(false);
+  const [upgradePlanTarget, setUpgradePlanTarget] = useState<UpgradeTarget | null>(null);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
+  const imageTranscriptRecoveries = useImageTranscriptRecoveryStore((state) => state.recoveries);
+  const setImageTranscriptRecovery = useImageTranscriptRecoveryStore((state) => state.setRecovery);
+  const removeImageTranscriptRecovery = useImageTranscriptRecoveryStore(
+    (state) => state.removeRecovery,
+  );
+  const removeImageTranscriptRecoveriesForMessages = useImageTranscriptRecoveryStore(
+    (state) => state.removeRecoveriesForMessages,
+  );
+  const tryAcquireImageTranscriptMutation = useImageTranscriptRecoveryStore(
+    (state) => state.tryAcquireMutation,
+  );
+  const releaseImageTranscriptMutation = useImageTranscriptRecoveryStore(
+    (state) => state.releaseMutation,
+  );
+  const isImageTranscriptMutationInFlight = useImageTranscriptRecoveryStore(
+    (state) => state.isMutationInFlight,
+  );
 
   // Dialog state — lifted from ChatSidebar so they live at the page level and
   // work with the shared <Sidebar> component (which has no dialog state).
@@ -714,7 +897,13 @@ export default function WebChatPage() {
    * A's Stop button in B's composer.
    */
   const displayedConversationId = urlConversationId ?? bareChatSessionId;
-
+  const displayedImageTranscriptRecoveries = useMemo(
+    () =>
+      Object.values(imageTranscriptRecoveries).filter(
+        (recovery) => recovery.conversationId === displayedConversationId,
+      ),
+    [displayedConversationId, imageTranscriptRecoveries],
+  );
   // Streaming send + store state
   const { sendMessage, stopGeneration, continueGeneration, resolveToolApproval } =
     useChatStreamRuntime();
@@ -770,9 +959,23 @@ export default function WebChatPage() {
   // Managed cloud is public-alpha-open: a signed-in user already reaches it.
   // The upgrade dialog only sells higher hosted capacity, it is not an access
   // gate, so opening it simply shows the plan comparison (no waitlist).
-  const handleOpenUpgradeDialog = useCallback(() => {
+  const handleOpenUpgradeDialog = useCallback((targetTier: UpgradeTarget | null = null) => {
+    setUpgradePlanTarget(targetTier);
     setUpgradePlanOpen(true);
   }, []);
+
+  const handlePaywallRecovery = useCallback(
+    (_messageId: string, requiredTier: string, recoveryAction: MediaPaywallRecoveryAction) => {
+      runMediaPaywallRecovery(
+        { recoveryAction, requiredTier },
+        {
+          openSettings,
+          openUpgrade: handleOpenUpgradeDialog,
+        },
+      );
+    },
+    [handleOpenUpgradeDialog, openSettings],
+  );
 
   // Route the upgrade CTA to the real Stripe checkout flow (same service the
   // billing dashboard uses). No waitlist email capture.
@@ -783,6 +986,7 @@ export default function WebChatPage() {
         return;
       }
       setUpgradePlanOpen(false);
+      setUpgradePlanTarget(null);
       const billingPeriod = annual ? 'yearly' : 'monthly';
       const hasActivePaidPlan =
         subscription != null &&
@@ -978,10 +1182,48 @@ export default function WebChatPage() {
         : null,
     [conversations, displayedConversationId],
   );
+  const displayedConversationIdRef = useRef(displayedConversationId);
+  displayedConversationIdRef.current = displayedConversationId;
+  const hydratedConversationModelRef = useRef<string | null>(null);
 
-  // Share current conversation
+  // A saved conversation owns its model. Restore that validated value when a
+  // chat is opened instead of silently continuing with whichever global
+  // default happened to be selected in the previous chat. The identity+model
+  // key prevents the Free-tier correction effect from fighting this on every
+  // render after a downgrade.
+  useEffect(() => {
+    const persistedModel = displayedConversation?.model;
+    if (!displayedConversationId || !persistedModel) return;
+    const hydrationKey = `${displayedConversationId}:${persistedModel}`;
+    if (hydratedConversationModelRef.current === hydrationKey) return;
+    hydratedConversationModelRef.current = hydrationKey;
+    setSelectedModelId(resolveSelectableModelId(persistedModel));
+  }, [displayedConversation?.model, displayedConversationId, setSelectedModelId]);
+
+  const handleConversationModelChange = useCallback(
+    async (nextModelId: string): Promise<boolean> => {
+      const modelId = resolveSelectableModelId(nextModelId);
+      const targetConversationId = displayedConversationId;
+      if (!targetConversationId) {
+        setSelectedModelId(modelId);
+        return true;
+      }
+
+      const saved = await updateConversation(targetConversationId, { model: modelId });
+      if (!saved) return false;
+      if (displayedConversationIdRef.current === targetConversationId) {
+        setSelectedModelId(modelId);
+      }
+      return true;
+    },
+    [displayedConversationId, setSelectedModelId, updateConversation],
+  );
+
+  // Public sharing is always a two-step action: the visible Share control opens
+  // a disclosure/expiry dialog, and only the dialog's explicit confirmation
+  // creates a public snapshot.
   const activeConversationTitle = displayedConversation?.title;
-  const { share, isSharing } = useShareConversation(activeConversationTitle);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
 
   // "Reply ready" browser notification: fires once per completed stream while
@@ -990,23 +1232,7 @@ export default function WebChatPage() {
   // grant, so no notification ever fired. Respects the user's saved
   // "browserReplyReady" preference from Settings > Notifications.
   const wasStreamingRef = useRef(false);
-  const browserReplyReadyRef = useRef(true);
-  useEffect(() => {
-    let cancelled = false;
-    fetchPreferenceNamespace<{ browserReplyReady: boolean }>('notifications', {
-      browserReplyReady: true,
-    })
-      .then((value) => {
-        if (!cancelled) browserReplyReadyRef.current = value.browserReplyReady;
-      })
-      .catch(() => {
-        // Non-fatal: keep the default (on) so a failed preferences fetch
-        // never silently disables a notification the user never turned off.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const browserReplyReady = useBrowserReplyReadyPreference();
 
   useEffect(() => {
     const justFinished = wasStreamingRef.current && !isStreaming;
@@ -1017,7 +1243,7 @@ export default function WebChatPage() {
     // is in the background." Don't interrupt an active, focused session.
     if (document.visibilityState !== 'hidden') return;
     if (Notification.permission !== 'granted') return;
-    if (!browserReplyReadyRef.current) return;
+    if (!browserReplyReady) return;
     if (chatError) return; // a failed turn isn't a "reply ready"
 
     const lastAssistant = [...displayedMessages].reverse().find((m) => m.role === 'assistant');
@@ -1037,7 +1263,7 @@ export default function WebChatPage() {
       priority: 'low',
       category: 'chat',
     });
-  }, [isStreaming, displayedMessages, chatError, displayedConversation]);
+  }, [isStreaming, displayedMessages, chatError, displayedConversation, browserReplyReady]);
 
   // On mount: if URL has a conversation ID, load it. Otherwise keep /chat as
   // the empty new-chat surface and create persistence only when the user sends.
@@ -1087,6 +1313,10 @@ export default function WebChatPage() {
         conversationId?: string;
         attachments?: File[];
         meta?: SendMeta;
+        userMessageId?: string;
+        assistantMessageId?: string;
+        /** Fires before provider egress once the exact user turn is durable. */
+        onTurnCommitted?: () => void;
       } = {},
     ) => {
       // Double-submit guard (Finding 7): bails out synchronously if a send is
@@ -1154,11 +1384,19 @@ export default function WebChatPage() {
         // at that moment instead of holding them for the whole stream -- the
         // window in which a reload showed a duplicated user message plus the
         // stale answer.
-        const doSend = (onTurnCommitted?: () => void) =>
+        const doSend = (replacementTurnCommitted?: () => void) =>
           sendMessage(content, {
             model: activeModelId,
+            userMessageId: options.userMessageId,
+            assistantMessageId: options.assistantMessageId,
             conversationId: convId,
-            onTurnCommitted,
+            onTurnCommitted:
+              replacementTurnCommitted || options.onTurnCommitted
+                ? () => {
+                    replacementTurnCommitted?.();
+                    options.onTurnCommitted?.();
+                  }
+                : undefined,
             attachments: resolvedAttachments,
             webSearch: options.meta?.webSearchEnabled,
             // Search implies fetch (ChatGPT/Claude parity): with Search on, the model
@@ -1215,18 +1453,62 @@ export default function WebChatPage() {
     ],
   );
 
-  const { generateImage, generateVideo } = useMediaGeneration();
+  // The project-detail composer is itself a Send control, not a prefill
+  // shortcut. Claim its handoff only after Clerk resolves, then acknowledge it
+  // when the user row is durable (before provider egress). The ref closes React
+  // Strict Mode replay while the claim is in flight; a pre-commit failure puts
+  // the exact text back in the composer instead of losing it.
+  const projectHandoffInFlightRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!authLoaded || !userId) return;
+    try {
+      const handoff = readProjectChatHandoff(sessionStorage, urlProjectId);
+      if (!handoff) return;
+      if (projectHandoffInFlightRef.current === handoff.id) return;
+
+      if (handoff.attachmentsUnavailable) {
+        acknowledgeProjectChatHandoff(sessionStorage, handoff.id);
+        setComposerPrefill(handoff.content);
+        toast.error('Reattach the project files, then send again. No model was called.');
+        return;
+      }
+
+      projectHandoffInFlightRef.current = handoff.id;
+      let committed = false;
+      void sendContent(handoff.content, {
+        userMessageId: handoff.userMessageId,
+        assistantMessageId: handoff.assistantMessageId,
+        attachments: handoff.attachments,
+        meta: {
+          ...handoff.meta,
+          projectId: handoff.projectId,
+          workMode: 'agiwork',
+          skillName: handoff.skillId ?? handoff.meta.skillName,
+        },
+        onTurnCommitted: () => {
+          acknowledgeProjectChatHandoff(sessionStorage, handoff.id);
+          committed = true;
+        },
+      }).finally(() => {
+        projectHandoffInFlightRef.current = null;
+        if (committed) return;
+        acknowledgeProjectChatHandoff(sessionStorage, handoff.id);
+        setComposerPrefill(handoff.content);
+        toast.error('The project turn did not start. Your draft is ready to send again.');
+      });
+    } catch {
+      // The source handler refuses navigation when storage is unavailable. If
+      // it becomes unavailable after navigation, keep the destination usable.
+    }
+  }, [authLoaded, sendContent, urlProjectId, userId]);
+
+  const { generateImage, startVideoGeneration, watchVideoGeneration } = useMediaGeneration();
 
   // ---------------------------------------------------------------------------
-  // Shared helper: resolve size + provider from composer options
+  // Shared helper: preserve exact catalog-supported ratios. Missing/retired
+  // model metadata cannot prove a provider, so the catalog helper omits both
+  // and lets the server select the deployment's configured default.
   // ---------------------------------------------------------------------------
-  const resolveImageParams = useCallback((aspectRatio: ImageAspectRatio, modelId?: string) => {
-    const aspectOption = IMAGE_ASPECT_OPTIONS.find((o) => o.id === aspectRatio);
-    const size = aspectOption?.size ?? '1024x1024';
-    const modelEntry = IMAGE_MODELS.find((m) => m.id === modelId);
-    const provider = modelEntry?.provider ?? 'google';
-    return { size, provider };
-  }, []);
 
   /**
    * PER-29/PER-30 — the message's CURRENT metadata, so a failure patch can be
@@ -1250,39 +1532,208 @@ export default function WebChatPage() {
     // AUDIT-FIX ROOT-CAUSE: image generation is a long async turn the user can
     // navigate away from, so the failure must land on the conversation it was
     // started in, not on whatever chat is displayed when it fails.
-    (msgId: string, raw: string, conversationId: string) => {
-      const isPaywall =
-        raw.includes('403') ||
-        raw.includes('plan_upgrade_required') ||
-        raw.includes('subscription_required');
+    (
+      msgId: string,
+      error: unknown,
+      conversationId: string,
+    ): { content: string; metadata: MessageMetadata } => {
+      const apiError = error instanceof MediaGenerationApiError ? error : null;
+      const raw = error instanceof Error ? error.message : String(error);
+      const paywall = apiError
+        ? resolveMediaPaywallSlot({
+            feature: 'image',
+            refusal: apiError,
+            currentTier: subscriptionTier,
+            usage: managedUsageSummary,
+          })
+        : null;
+      const content = paywall ? '' : `Image generation failed: ${raw}`;
       // PER-30: `metadata: undefined` used to REPLACE the metadata object on
       // the non-paywall branch (and the paywall branch replaced it with a
       // paywall-only object), discarding imageGenPrompt / imageGenAspect /
       // imageGenModel — exactly the fields Retry needs. Merge onto the current
       // metadata instead so a failed image can still be retried.
+      const metadata = imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
+        ...(paywall ? { paywall } : {}),
+        ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
+      });
       updateMessage(
         msgId,
         {
           isStreaming: false,
-          content: isPaywall ? '' : `Image generation failed: ${raw}`,
-          metadata: imageGenerationFailureMetadata(
-            readMessageMetadata(conversationId, msgId),
-            isPaywall
-              ? {
-                  paywall: {
-                    feature: 'image_generation',
-                    requiredTier: 'pro',
-                    reason:
-                      'Image generation requires a Pro or higher plan. Upgrade to generate images.',
-                  },
-                }
-              : {},
-          ),
+          content,
+          metadata,
         },
         conversationId,
       );
+      return { content, metadata };
     },
-    [updateMessage, readMessageMetadata],
+    [updateMessage, readMessageMetadata, subscriptionTier, managedUsageSummary],
+  );
+
+  /**
+   * One new-image transaction for both the initial composer submit and a
+   * prompt-save retry. The coordinator owns the durability order; this page
+   * action owns transcript state, billing/provider error presentation, and the
+   * exact recovery payload shown to the user.
+   */
+  const executeNewImageGenerationTurn = useCallback(
+    async (turn: NewImageGenerationTurn): Promise<void> => {
+      let generatedImage: GeneratedImageResult | null = null;
+      const updateOwnMessage = (id: string, updates: Partial<Message>) =>
+        updateMessage(id, updates, turn.conversationId);
+      const getAuthToken = async () => {
+        const token = await getToken();
+        if (!token) throw new Error('Not authenticated');
+        return token;
+      };
+      const resultMetadata = (imageUrl: string): MessageMetadata => ({
+        toolType: 'image-generation',
+        imageUrl,
+        imageGenPrompt: turn.prompt,
+        imageGenAspect: turn.requestedAspect,
+        ...((generatedImage?.model ?? turn.requestedModel)
+          ? { imageGenModel: generatedImage?.model ?? turn.requestedModel }
+          : {}),
+      });
+
+      const outcome = await runDurableImageGenerationTurn({
+        mode: 'new',
+        temporary: turn.temporary,
+        persistPrompt: async () => {
+          requireImageMessagePersistence(
+            await persistImageGenerationUserMessage({
+              conversationId: turn.conversationId,
+              messageId: turn.userMessageId,
+              content: turn.prompt,
+              getAuthToken,
+              updateMessage: updateOwnMessage,
+            }),
+          );
+        },
+        beforeGenerate: () => {
+          // A prompt-recovery notice has reached its commit point. Remove it
+          // before the paid request starts; any later transcript failure gets
+          // its own result-phase recovery using this same assistant UUID.
+          removeImageTranscriptRecovery(turn.assistantMessageId);
+          addMessage(
+            {
+              id: turn.assistantMessageId,
+              role: 'assistant',
+              content: '',
+              isStreaming: true,
+              createdAt: new Date().toISOString(),
+              metadata: {
+                toolType: 'image-generation',
+                imageGenPrompt: turn.prompt,
+                imageGenAspect: turn.requestedAspect,
+                ...(turn.requestedModel ? { imageGenModel: turn.requestedModel } : {}),
+              },
+            },
+            turn.conversationId,
+          );
+        },
+        generate: async () => {
+          generatedImage = await generateImage(turn.prompt, {
+            ...turn.imageRequest,
+            ...(!turn.temporary ? { conversationId: turn.conversationId } : {}),
+          });
+          return generatedImage.imageUrl;
+        },
+        onGenerated: (imageUrl) => {
+          updateOwnMessage(turn.assistantMessageId, {
+            content: '',
+            isStreaming: false,
+            metadata: resultMetadata(imageUrl),
+          });
+        },
+        persistResult: async (imageUrl) => {
+          requireImageMessagePersistence(
+            await persistImageGenerationAssistantMessage({
+              conversationId: turn.conversationId,
+              messageId: turn.assistantMessageId,
+              model: generatedImage?.model ?? turn.requestedModel,
+              metadata: resultMetadata(imageUrl),
+              getAuthToken,
+              updateMessage: updateOwnMessage,
+            }),
+          );
+        },
+      });
+
+      if (outcome.status === 'prompt-persistence-failed') {
+        setImageTranscriptRecovery({
+          phase: 'prompt',
+          status: 'failed',
+          conversationId: turn.conversationId,
+          userMessageId: turn.userMessageId,
+          assistantMessageId: turn.assistantMessageId,
+          prompt: turn.prompt,
+          requestedAspect: turn.requestedAspect,
+          imageRequest: turn.imageRequest,
+          ...(turn.requestedModel ? { requestedModel: turn.requestedModel } : {}),
+        });
+        return;
+      }
+
+      if (outcome.status === 'generation-failed') {
+        const failure = applyImageError(
+          turn.assistantMessageId,
+          outcome.error,
+          turn.conversationId,
+        );
+        if (!turn.temporary) {
+          const persistence = await persistImageGenerationAssistantMessage({
+            conversationId: turn.conversationId,
+            messageId: turn.assistantMessageId,
+            model: turn.requestedModel,
+            metadata: failure.metadata,
+            content: failure.content,
+            getAuthToken,
+            updateMessage: updateOwnMessage,
+          });
+          if (!persistence.ok) {
+            setImageTranscriptRecovery({
+              phase: 'result',
+              kind: 'generation-failure',
+              status: 'failed',
+              conversationId: turn.conversationId,
+              assistantMessageId: turn.assistantMessageId,
+              ...(failure.metadata.imageGenModel ? { model: failure.metadata.imageGenModel } : {}),
+              metadata: failure.metadata,
+              ...(failure.content ? { content: failure.content } : {}),
+            });
+          } else {
+            removeImageTranscriptRecovery(turn.assistantMessageId);
+          }
+        }
+        return;
+      }
+
+      if (outcome.status === 'result-persistence-failed') {
+        const metadata = resultMetadata(outcome.imageUrl);
+        setImageTranscriptRecovery({
+          phase: 'result',
+          status: 'failed',
+          conversationId: turn.conversationId,
+          assistantMessageId: turn.assistantMessageId,
+          ...(metadata.imageGenModel ? { model: metadata.imageGenModel } : {}),
+          metadata,
+        });
+        return;
+      }
+
+      removeImageTranscriptRecovery(turn.assistantMessageId);
+    },
+    [
+      addMessage,
+      applyImageError,
+      generateImage,
+      getToken,
+      removeImageTranscriptRecovery,
+      setImageTranscriptRecovery,
+      updateMessage,
+    ],
   );
 
   // ---------------------------------------------------------------------------
@@ -1305,7 +1756,12 @@ export default function WebChatPage() {
       const releaseSendWindow = claimSendWindow();
       void (async () => {
         try {
-          const { size, provider } = resolveImageParams(options.aspectRatio, options.modelId);
+          const imageRequest = resolveImageGenerationRequestOptions(
+            options.aspectRatio,
+            options.modelId,
+          );
+          const requestedAspect: ImageAspectRatio = imageRequest.aspectRatio ?? 'auto';
+          const requestedModel = imageRequest.model;
 
           // Ensure a conversation exists (lazy-create, same pattern as sendContent).
           let convId = displayedConversationId;
@@ -1323,106 +1779,44 @@ export default function WebChatPage() {
           }
           if (!convId) return;
 
-          // WEB-IMAGE-CHAT-PERSISTENCE-01: unlike sendContent (which streams
-          // through useChatStream and persists via saveMessageToDb on every
-          // turn), this composer-driven flow only ever touched the in-memory
-          // chatStore — the generated image bytes are durably stored by
-          // /api/media/image/generate, but the chat MESSAGE recording that it
-          // happened was never saved, so it vanished on reload. Persist both
-          // turns the same way useChatStream's sendMessage does (see
-          // features/chat/lib/imageGenerationPersistence.ts), skipping
-          // temporary conversations exactly like every other send path.
-          const isTemporaryConversation = isTemporaryConversationById(
+          const temporary = isTemporaryConversationById(
             useChatStore.getState().conversations,
             convId,
           );
-          const getAuthToken = async () => {
-            const token = await getToken();
-            if (!token) throw new Error('Not authenticated');
-            return token;
-          };
 
-          // User message (prompt)
           // AUDIT-FIX ROOT-CAUSE: every write below names the conversation this
           // generation belongs to, so switching chats mid-generation can no
           // longer inject the prompt, the placeholder, or the finished image
           // into a different transcript.
-          const updateOwnMessage = (id: string, updates: Partial<Message>) =>
-            updateMessage(id, updates, convId);
-
           const userMessageId = crypto.randomUUID();
-          addMessage(
-            {
-              id: userMessageId,
-              role: 'user',
-              content: prompt,
-              createdAt: new Date().toISOString(),
-            },
-            convId,
-          );
-          if (!isTemporaryConversation) {
-            void persistImageGenerationUserMessage({
-              conversationId: convId,
-              messageId: userMessageId,
-              content: prompt,
-              getAuthToken,
-              updateMessage: updateOwnMessage,
-            });
+          const assistantMessageId = crypto.randomUUID();
+          const mutationIds = [userMessageId, assistantMessageId];
+          if (!tryAcquireImageTranscriptMutation(mutationIds)) {
+            toast.error('This image turn is already being updated. Try again in a moment.');
+            return;
           }
-
-          // Placeholder assistant message while generating (isStreaming = true → state A)
-          const assistantMsgId = crypto.randomUUID();
-          addMessage(
-            {
-              id: assistantMsgId,
-              role: 'assistant',
-              content: '',
-              isStreaming: true,
-              createdAt: new Date().toISOString(),
-              metadata: {
-                toolType: 'image-generation',
-                imageGenPrompt: prompt,
-                imageGenAspect: options.aspectRatio,
-                imageGenModel: options.modelId,
-              },
-            },
-            convId,
-          );
-
           try {
-            const imageUrl = await generateImage(prompt, {
-              size,
-              provider,
-              model: options.modelId,
-            });
-            const finalMetadata: MessageMetadata = {
-              toolType: 'image-generation',
-              imageUrl,
-              imageGenPrompt: prompt,
-              imageGenAspect: options.aspectRatio,
-              imageGenModel: options.modelId,
-            };
-            updateOwnMessage(assistantMsgId, {
-              content: '',
-              isStreaming: false,
-              metadata: finalMetadata,
-            });
-            if (!isTemporaryConversation) {
-              void persistImageGenerationAssistantMessage({
-                conversationId: convId,
-                messageId: assistantMsgId,
-                model: options.modelId,
-                metadata: finalMetadata,
-                getAuthToken,
-                updateMessage: updateOwnMessage,
-              });
-            }
-          } catch (err) {
-            applyImageError(
-              assistantMsgId,
-              err instanceof Error ? err.message : String(err),
+            addMessage(
+              {
+                id: userMessageId,
+                role: 'user',
+                content: prompt,
+                createdAt: new Date().toISOString(),
+              },
               convId,
             );
+            await executeNewImageGenerationTurn({
+              conversationId: convId,
+              userMessageId,
+              assistantMessageId,
+              prompt,
+              requestedAspect,
+              imageRequest,
+              temporary,
+              ...(requestedModel ? { requestedModel } : {}),
+            });
+          } finally {
+            releaseImageTranscriptMutation(mutationIds);
           }
         } finally {
           sendingConversationsRef.current.delete(imageGuardKey);
@@ -1431,19 +1825,17 @@ export default function WebChatPage() {
       })();
     },
     [
-      resolveImageParams,
       displayedConversationId,
       urlConversationId,
       createConversation,
       activeModelId,
       activeProjectId,
       addMessage,
-      updateMessage,
-      generateImage,
-      applyImageError,
+      executeNewImageGenerationTurn,
+      releaseImageTranscriptMutation,
       router,
-      getToken,
       claimSendWindow,
+      tryAcquireImageTranscriptMutation,
     ],
   );
 
@@ -1458,11 +1850,23 @@ export default function WebChatPage() {
       messageId: string,
       opts: { prompt: string; aspectRatio: ImageAspectRatio; modelId?: string },
     ): Promise<string> => {
-      const { size, provider } = resolveImageParams(opts.aspectRatio, opts.modelId);
+      let generatedImage: GeneratedImageResult | null = null;
+      const imageRequest = resolveImageGenerationRequestOptions(opts.aspectRatio, opts.modelId);
+      const requestedAspect: ImageAspectRatio = imageRequest.aspectRatio ?? 'auto';
+      const requestedModel = imageRequest.model;
       // AUDIT-FIX ROOT-CAUSE: capture the owning conversation up front; the
       // regeneration awaits a slow provider call the user can navigate away
       // from, and every write below must still land on THIS transcript.
       const ownerConversationId = displayedConversationId;
+      if (!ownerConversationId) {
+        throw new Error(
+          'The owning conversation is unavailable, so the image was not regenerated.',
+        );
+      }
+      const ownerConversationIsTemporary = isTemporaryConversationById(
+        useChatStore.getState().conversations,
+        ownerConversationId,
+      );
 
       // PER-29: the pending state used to clear `metadata.imageUrl` and set
       // `isStreaming: true` BEFORE awaiting the provider, with no try/catch
@@ -1474,103 +1878,393 @@ export default function WebChatPage() {
       // parameters, and `isStreaming` is cleared in a `finally` that runs on
       // every exit.
       const previousMetadata = readMessageMetadata(ownerConversationId, messageId);
-      updateMessage(
-        messageId,
-        {
-          isStreaming: true,
-          metadata: imageRegenerationPendingMetadata(previousMetadata, {
-            prompt: opts.prompt,
-            aspectRatio: opts.aspectRatio,
-            ...(opts.modelId !== undefined ? { modelId: opts.modelId } : {}),
-          }),
-        },
-        ownerConversationId ?? undefined,
-      );
+      if (!tryAcquireImageTranscriptMutation([messageId])) {
+        throw new Error(
+          'Wait for this image card to finish saving before generating a new version.',
+        );
+      }
 
       try {
-        const imageUrl = await generateImage(opts.prompt, { size, provider, model: opts.modelId });
-        const finalMetadata: MessageMetadata = mergeImageGenerationMetadata(previousMetadata, {
-          toolType: 'image-generation',
-          imageUrl,
-          imageGenPrompt: opts.prompt,
-          imageGenAspect: opts.aspectRatio,
-          imageGenModel: opts.modelId,
-        });
         updateMessage(
           messageId,
           {
-            metadata: finalMetadata,
+            content: '',
+            isStreaming: true,
+            metadata: imageRegenerationPendingMetadata(previousMetadata, {
+              prompt: opts.prompt,
+              aspectRatio: requestedAspect,
+              ...(requestedModel ? { modelId: requestedModel } : {}),
+            }),
           },
-          ownerConversationId ?? undefined,
+          ownerConversationId,
         );
+        const getAuthToken = async () => {
+          const token = await getToken();
+          if (!token) throw new Error('Not authenticated');
+          return token;
+        };
+        const finalMetadata = (imageUrl: string): MessageMetadata =>
+          mergeImageGenerationMetadata(previousMetadata, {
+            toolType: 'image-generation',
+            imageUrl,
+            imageGenPrompt: opts.prompt,
+            imageGenAspect: requestedAspect,
+            imageRetryAt: undefined,
+            ...((generatedImage?.model ?? requestedModel)
+              ? { imageGenModel: generatedImage?.model ?? requestedModel }
+              : {}),
+          });
 
-        // WEB-IMAGE-CHAT-PERSISTENCE-01: this updates an EXISTING assistant
-        // message in place, so persist via the same message id — the route is
-        // idempotent on client-supplied id (ON CONFLICT), so this upserts the
-        // row saved when the image was first generated instead of duplicating it.
-        const convId = ownerConversationId;
-        if (convId) {
-          const isTemporaryConversation = isTemporaryConversationById(
-            useChatStore.getState().conversations,
-            convId,
-          );
-          if (!isTemporaryConversation) {
-            const getAuthToken = async () => {
-              const token = await getToken();
-              if (!token) throw new Error('Not authenticated');
-              return token;
-            };
-            void persistImageGenerationAssistantMessage({
-              conversationId: convId,
-              messageId,
-              model: opts.modelId,
-              metadata: finalMetadata,
-              getAuthToken,
-              updateMessage: (id, updates) => updateMessage(id, updates, convId),
+        const outcome = await runDurableImageGenerationTurn({
+          mode: 'regenerate',
+          temporary: ownerConversationIsTemporary,
+          beforeGenerate: () => undefined,
+          generate: async () => {
+            generatedImage = await generateImage(opts.prompt, {
+              ...imageRequest,
+              ...(!ownerConversationIsTemporary ? { conversationId: ownerConversationId } : {}),
             });
-          }
+            return generatedImage.imageUrl;
+          },
+          onGenerated: (imageUrl) => {
+            updateMessage(
+              messageId,
+              {
+                content: '',
+                metadata: finalMetadata(imageUrl),
+              },
+              ownerConversationId,
+            );
+          },
+          persistResult: async (imageUrl) => {
+            requireImageMessagePersistence(
+              await persistImageGenerationAssistantMessage({
+                conversationId: ownerConversationId,
+                messageId,
+                model: generatedImage?.model ?? requestedModel,
+                metadata: finalMetadata(imageUrl),
+                getAuthToken,
+                updateMessage: (id, updates) => updateMessage(id, updates, ownerConversationId),
+              }),
+            );
+          },
+        });
+
+        if (outcome.status === 'completed') {
+          removeImageTranscriptRecovery(messageId);
+          return outcome.imageUrl;
         }
 
-        return imageUrl;
-      } catch (error) {
-        // PER-29: put the card back in a usable state — the original image and
-        // every retry parameter survive, so the user can try again. Rethrown
-        // because ImageGenerationCard's edit panel awaits this promise and
-        // renders its own inline error from the rejection.
-        updateMessage(
-          messageId,
-          {
-            metadata: imageGenerationFailureMetadata(
-              readMessageMetadata(ownerConversationId, messageId) ?? previousMetadata,
-            ),
-          },
-          ownerConversationId ?? undefined,
-        );
-        throw error;
+        if (outcome.status === 'result-persistence-failed') {
+          const metadata = finalMetadata(outcome.imageUrl);
+          setImageTranscriptRecovery({
+            phase: 'result',
+            status: 'failed',
+            conversationId: ownerConversationId,
+            assistantMessageId: messageId,
+            ...(metadata.imageGenModel ? { model: metadata.imageGenModel } : {}),
+            metadata,
+          });
+          // The provider work succeeded. Resolve with that asset so the open
+          // revision panel displays it; the page-level notice above is the
+          // explicit persistence failure and retries only this same row.
+          return outcome.imageUrl;
+        }
+
+        const generationError = outcome.error;
+        // Put the card back in a usable state, then durably save that exact
+        // terminal state before rejecting back into the open revision panel.
+        // This preserves a structured Retry-After across a reload without
+        // issuing another provider request. A failed row save enters the same
+        // explicit transcript-recovery flow as an already-created asset.
+        const failure = applyImageError(messageId, generationError, ownerConversationId);
+        if (!ownerConversationIsTemporary) {
+          const persistence = await persistImageGenerationAssistantMessage({
+            conversationId: ownerConversationId,
+            messageId,
+            model: failure.metadata.imageGenModel,
+            metadata: failure.metadata,
+            content: failure.content,
+            getAuthToken,
+            updateMessage: (id, updates) => updateMessage(id, updates, ownerConversationId),
+          });
+          if (!persistence.ok) {
+            setImageTranscriptRecovery({
+              phase: 'result',
+              kind: 'generation-failure',
+              status: 'failed',
+              conversationId: ownerConversationId,
+              assistantMessageId: messageId,
+              ...(failure.metadata.imageGenModel ? { model: failure.metadata.imageGenModel } : {}),
+              metadata: failure.metadata,
+              ...(failure.content ? { content: failure.content } : {}),
+            });
+          } else {
+            removeImageTranscriptRecovery(messageId);
+          }
+        }
+        throw generationError;
       } finally {
         // PER-29: the spinner is cleared on EVERY exit, success or failure.
-        updateMessage(messageId, { isStreaming: false }, ownerConversationId ?? undefined);
+        updateMessage(messageId, { isStreaming: false }, ownerConversationId);
+        releaseImageTranscriptMutation([messageId]);
       }
     },
     [
-      resolveImageParams,
       updateMessage,
+      applyImageError,
       generateImage,
       displayedConversationId,
       getToken,
       readMessageMetadata,
+      releaseImageTranscriptMutation,
+      removeImageTranscriptRecovery,
+      setImageTranscriptRecovery,
+      tryAcquireImageTranscriptMutation,
     ],
   );
 
+  const handleRetryImageTranscriptRecovery = useCallback(
+    async (recovery: ImageTranscriptRecovery): Promise<void> => {
+      const mutationKeys = imageTranscriptMutationKeys(recovery);
+      const ownerMessages = selectConversationMessages(recovery.conversationId)(
+        useChatStore.getState(),
+      );
+      if (recovery.phase === 'prompt') {
+        const promptMessage = ownerMessages.find(
+          (message) => message.id === recovery.userMessageId && message.role === 'user',
+        );
+        if (!promptMessage || promptMessage.content !== recovery.prompt) {
+          removeImageTranscriptRecovery(recovery.assistantMessageId);
+          toast.error('That image prompt is no longer in this chat. No provider was called.');
+          return;
+        }
+      } else {
+        const resultMessage = ownerMessages.find(
+          (message) => message.id === recovery.assistantMessageId,
+        );
+        if (!resultMessage) {
+          removeImageTranscriptRecovery(recovery.assistantMessageId);
+          toast.error('That chat card was removed. The image remains available in Library.');
+          return;
+        }
+        if (resultMessage.isStreaming) {
+          toast.error('Wait for the current image update to finish, then retry saving its card.');
+          return;
+        }
+        if (resultMessage.metadata?.imageUrl !== recovery.metadata.imageUrl) {
+          toast.error('A newer image is already shown here, so the older card was not restored.');
+          return;
+        }
+      }
+
+      if (
+        recovery.phase === 'prompt' &&
+        sendingConversationsRef.current.has(recovery.conversationId)
+      ) {
+        toast.error('Wait for the current turn to finish, then retry saving this image prompt.');
+        return;
+      }
+
+      if (!tryAcquireImageTranscriptMutation(mutationKeys)) {
+        toast.error(
+          'Wait for the current chat change to finish, then retry saving this image turn.',
+        );
+        return;
+      }
+      setImageTranscriptRecovery({ ...recovery, status: 'retrying' });
+
+      let releaseSendWindow: (() => void) | undefined;
+      if (recovery.phase === 'prompt') {
+        sendingConversationsRef.current.add(recovery.conversationId);
+        releaseSendWindow = claimSendWindow();
+      }
+
+      try {
+        if (recovery.phase === 'prompt') {
+          await executeNewImageGenerationTurn({
+            conversationId: recovery.conversationId,
+            userMessageId: recovery.userMessageId,
+            assistantMessageId: recovery.assistantMessageId,
+            prompt: recovery.prompt,
+            requestedAspect: recovery.requestedAspect,
+            imageRequest: recovery.imageRequest,
+            temporary: false,
+            ...(recovery.requestedModel ? { requestedModel: recovery.requestedModel } : {}),
+          });
+          return;
+        }
+
+        const getAuthToken = async () => {
+          const token = await getToken();
+          if (!token) throw new Error('Not authenticated');
+          return token;
+        };
+        requireImageMessagePersistence(
+          await persistImageGenerationAssistantMessage({
+            conversationId: recovery.conversationId,
+            messageId: recovery.assistantMessageId,
+            model: recovery.model,
+            metadata: recovery.metadata,
+            ...(recovery.content ? { content: recovery.content } : {}),
+            getAuthToken,
+            updateMessage: (id, updates) => updateMessage(id, updates, recovery.conversationId),
+          }),
+        );
+        removeImageTranscriptRecovery(recovery.assistantMessageId);
+      } catch {
+        // The persistence mechanic already logs and toasts its exact error. Keep
+        // the durable asset + same client UUID available for another safe retry.
+        setImageTranscriptRecovery({ ...recovery, status: 'failed' });
+      } finally {
+        releaseImageTranscriptMutation(mutationKeys);
+        if (recovery.phase === 'prompt') {
+          sendingConversationsRef.current.delete(recovery.conversationId);
+        }
+        releaseSendWindow?.();
+      }
+    },
+    [
+      claimSendWindow,
+      executeNewImageGenerationTurn,
+      getToken,
+      releaseImageTranscriptMutation,
+      removeImageTranscriptRecovery,
+      setImageTranscriptRecovery,
+      tryAcquireImageTranscriptMutation,
+      updateMessage,
+    ],
+  );
+
+  const watchedVideoTasksRef = useRef<Set<string>>(new Set());
+  const autoResumedVideoTasksRef = useRef<Set<string>>(new Set());
+
+  /** Watch one durable task without ever repeating its provider-start POST. */
+  const watchVideoMessage = useCallback(
+    async (input: {
+      conversationId: string;
+      messageId: string;
+      taskId: string;
+      localJobId?: string;
+    }) => {
+      if (watchedVideoTasksRef.current.has(input.taskId)) return;
+      watchedVideoTasksRef.current.add(input.taskId);
+
+      const previous = readMessageMetadata(input.conversationId, input.messageId);
+      updateMessage(
+        input.messageId,
+        {
+          isStreaming: true,
+          content: '',
+          metadata: {
+            ...(previous ?? {}),
+            toolType: 'video-generation',
+            videoTaskId: input.taskId,
+            videoStatus:
+              previous?.videoStatus === 'processing' ? 'processing' : ('queued' as const),
+            videoError: undefined,
+          },
+        },
+        input.conversationId,
+      );
+
+      try {
+        const result = await watchVideoGeneration(input.taskId, {
+          ...(input.localJobId ? { localJobId: input.localJobId } : {}),
+        });
+        const current = readMessageMetadata(input.conversationId, input.messageId);
+        if (result.status === 'completed') {
+          updateMessage(
+            input.messageId,
+            {
+              content: '',
+              isStreaming: false,
+              metadata: {
+                ...(current ?? {}),
+                toolType: 'video-generation',
+                videoTaskId: input.taskId,
+                videoStatus: 'completed',
+                videoUrl: result.videoUrl,
+                ...(result.thumbnailUrl ? { thumbnailUrl: result.thumbnailUrl } : {}),
+                videoError: undefined,
+              },
+            },
+            input.conversationId,
+          );
+          return;
+        }
+        if (result.status === 'failed') {
+          updateMessage(
+            input.messageId,
+            {
+              content: `Video generation failed: ${result.error}`,
+              isStreaming: false,
+              metadata: {
+                ...(current ?? {}),
+                toolType: 'video-generation',
+                videoTaskId: input.taskId,
+                videoStatus: 'failed',
+                videoError: result.error,
+                videoRetryable: true,
+              },
+            },
+            input.conversationId,
+          );
+          return;
+        }
+
+        // Five minutes is only the browser observation deadline. The paid job
+        // remains active under Workflow ownership and this same bubble exposes
+        // a resume control; no failure row or second POST is created.
+        updateMessage(
+          input.messageId,
+          {
+            content: '',
+            isStreaming: false,
+            metadata: {
+              ...(current ?? {}),
+              toolType: 'video-generation',
+              videoTaskId: input.taskId,
+              videoStatus: result.taskStatus,
+              ...(result.progress === undefined ? {} : { videoProgress: result.progress }),
+              videoError: undefined,
+            },
+          },
+          input.conversationId,
+        );
+      } catch (error) {
+        // A status-network failure says nothing about the provider outcome.
+        // Keep the task resumable and let Workflow continue unattended.
+        const current = readMessageMetadata(input.conversationId, input.messageId);
+        updateMessage(
+          input.messageId,
+          {
+            content: '',
+            isStreaming: false,
+            metadata: {
+              ...(current ?? {}),
+              toolType: 'video-generation',
+              videoTaskId: input.taskId,
+              videoStatus:
+                current?.videoStatus === 'processing' ? 'processing' : ('queued' as const),
+              videoError:
+                error instanceof Error
+                  ? error.message
+                  : 'Could not check video status. The task is still resumable.',
+              videoRetryable: false,
+            },
+          },
+          input.conversationId,
+        );
+      } finally {
+        watchedVideoTasksRef.current.delete(input.taskId);
+      }
+    },
+    [readMessageMetadata, updateMessage, watchVideoGeneration],
+  );
+
   // ---------------------------------------------------------------------------
-  // handleGenerateVideo – called by composer; mirrors handleGenerateImage.
-  //
-  // The difference that matters is the in-flight window: the video task runs
-  // for a minute or more behind /api/media/video/status, and the assistant
-  // message is deliberately created with `toolType: 'video-generation'` and NO
-  // `videoUrl`, which is exactly the pair MessageBubble reads to render its
-  // shimmering placeholder. `videoUrl` is written only on completion, which is
-  // what flips the same bubble to the player + download affordance.
+  // handleGenerateVideo – durable ChatGPT-style start/watch split.
   // ---------------------------------------------------------------------------
   const handleGenerateVideo = useCallback(
     (prompt: string, videoOptions?: { modelId?: string }) => {
@@ -1617,55 +2311,95 @@ export default function WebChatPage() {
             },
             convId,
           );
-          if (!isTemporaryConversation) {
-            void persistImageGenerationUserMessage({
-              conversationId: convId,
-              messageId: userMessageId,
-              content: prompt,
-              getAuthToken,
-              updateMessage: updateOwnMessage,
-            });
-          }
-
-          const assistantMsgId = crypto.randomUUID();
+          let assistantMessageId = crypto.randomUUID();
+          const placeholderMetadata: MessageMetadata = {
+            toolType: 'video-generation',
+            videoStatus: 'queued',
+          };
           addMessage(
             {
-              id: assistantMsgId,
+              id: assistantMessageId,
               role: 'assistant',
               content: '',
               isStreaming: true,
               createdAt: new Date().toISOString(),
               // No videoUrl: the shimmer branch is keyed off its absence.
-              metadata: { toolType: 'video-generation' },
+              metadata: placeholderMetadata,
             },
             convId,
           );
 
           try {
-            const { videoUrl, thumbnailUrl } = await generateVideo(
-              prompt,
-              videoOptions?.modelId ? { modelId: videoOptions.modelId } : {},
-            );
-            const finalMetadata: MessageMetadata = {
-              toolType: 'video-generation',
-              videoUrl,
-              ...(thumbnailUrl ? { thumbnailUrl } : {}),
-            };
-            updateOwnMessage(assistantMsgId, {
-              content: '',
-              isStreaming: false,
-              metadata: finalMetadata,
+            const startResult = await startVideoAfterTranscriptCommit({
+              temporary: isTemporaryConversation,
+              persistPrompt: async () => {
+                requireImageMessagePersistence(
+                  await persistImageGenerationUserMessage({
+                    conversationId: convId,
+                    messageId: userMessageId,
+                    content: prompt,
+                    getAuthToken,
+                    updateMessage: updateOwnMessage,
+                  }),
+                );
+              },
+              persistPlaceholder: async () => {
+                const persisted = requireImageMessagePersistence(
+                  await persistImageGenerationAssistantMessage({
+                    conversationId: convId,
+                    messageId: assistantMessageId,
+                    model: undefined,
+                    metadata: placeholderMetadata,
+                    getAuthToken,
+                    updateMessage: updateOwnMessage,
+                  }),
+                );
+                assistantMessageId = persisted.messageId;
+              },
+              start: () =>
+                startVideoGeneration(prompt, {
+                  ...(videoOptions?.modelId ? { modelId: videoOptions.modelId } : {}),
+                  ...(!isTemporaryConversation
+                    ? { conversationId: convId, assistantMessageId }
+                    : {}),
+                }),
             });
-            if (!isTemporaryConversation) {
-              void persistImageGenerationAssistantMessage({
-                conversationId: convId,
-                messageId: assistantMsgId,
-                model: undefined,
-                metadata: finalMetadata,
-                getAuthToken,
-                updateMessage: updateOwnMessage,
+            if (!startResult.ok) {
+              const message = `Video was not started because the ${startResult.phase} could not be saved. Try again to recover this turn.`;
+              updateOwnMessage(assistantMessageId, {
+                content: message,
+                isStreaming: false,
+                metadata: {
+                  ...placeholderMetadata,
+                  videoStatus: 'failed',
+                  videoError: message,
+                },
               });
+              return;
             }
+
+            const started = startResult.started;
+            const startedMetadata: MessageMetadata = {
+              toolType: 'video-generation',
+              videoTaskId: started.taskId,
+              videoStatus: started.status,
+              videoProvider: started.provider,
+              videoModel: started.model,
+            };
+            updateOwnMessage(assistantMessageId, {
+              content: '',
+              model: started.model,
+              provider: started.provider,
+              isStreaming: true,
+              metadata: startedMetadata,
+            });
+            autoResumedVideoTasksRef.current.add(started.taskId);
+            await watchVideoMessage({
+              conversationId: convId,
+              messageId: assistantMessageId,
+              taskId: started.taskId,
+              localJobId: started.localJobId,
+            });
           } catch (err) {
             // A tier refusal must land as an InlinePaywallCard, not a toast or
             // a raw error bubble: ChatMessageList swaps the whole row for the
@@ -1673,26 +2407,89 @@ export default function WebChatPage() {
             // hook's own classification of the route's 403
             // (`code: 'plan_upgrade_required'`), so this does not re-parse
             // error strings.
-            const isPaywall = err instanceof MediaGenerationApiError && err.isPaywall;
-            updateOwnMessage(assistantMsgId, {
+            const paywall =
+              err instanceof MediaGenerationApiError
+                ? resolveMediaPaywallSlot({
+                    feature: 'video',
+                    refusal: err,
+                    currentTier: subscriptionTier,
+                    usage: managedUsageSummary,
+                  })
+                : null;
+            const publicError = err instanceof Error ? err.message : String(err);
+
+            // A MediaGenerationApiError proves that an HTTP response arrived.
+            // Persist that definite rejection only through the server CAS: if
+            // job creation already bound videoTaskId, the current durable row
+            // wins and is resumed instead of being overwritten. A fetch-level
+            // transport error is ambiguous and never enters this mutation.
+            if (!isTemporaryConversation && !paywall && err instanceof MediaGenerationApiError) {
+              try {
+                const projection = await persistDefiniteVideoStartFailure({
+                  conversationId: convId,
+                  messageId: assistantMessageId,
+                  publicError,
+                  authToken: await getAuthToken(),
+                });
+                updateOwnMessage(assistantMessageId, {
+                  content: projection.content,
+                  model: projection.model,
+                  provider: projection.provider,
+                  isStreaming: false,
+                  metadata: projection.metadata,
+                });
+                const taskId = projection.metadata.videoTaskId;
+                const status = projection.metadata.videoStatus;
+                if (
+                  !projection.applied &&
+                  typeof taskId === 'string' &&
+                  (status === 'queued' || status === 'processing')
+                ) {
+                  await watchVideoMessage({
+                    conversationId: convId,
+                    messageId: assistantMessageId,
+                    taskId,
+                  });
+                }
+                return;
+              } catch (projectionError) {
+                console.warn(
+                  '[video] Definite start failure could not be projected; reload recovery remains available.',
+                  projectionError,
+                );
+              }
+            }
+
+            const content = paywall
+              ? ''
+              : err instanceof MediaGenerationApiError
+                ? `Video generation failed: ${publicError}`
+                : `Video start response was interrupted: ${publicError}. Reload this chat to recover any accepted task before trying again.`;
+            const failureMetadata: MessageMetadata = {
+              toolType: 'video-generation',
+              videoStatus: 'failed',
+              videoError: content || undefined,
+              ...(paywall ? { paywall } : {}),
+            };
+            updateOwnMessage(assistantMessageId, {
               isStreaming: false,
-              content: isPaywall
-                ? ''
-                : `Video generation failed: ${err instanceof Error ? err.message : String(err)}`,
-              metadata: {
-                toolType: 'video-generation',
-                ...(isPaywall
-                  ? {
-                      paywall: {
-                        feature: 'video_generation',
-                        // billing-catalog.ts: video_generation → ['max_15x', 'enterprise'].
-                        requiredTier: 'max_15x',
-                        reason: 'Video generation is available on Max 15x and Enterprise plans.',
-                      },
-                    }
-                  : {}),
-              },
+              content,
+              metadata: failureMetadata,
             });
+            // A recognized pre-job account refusal is safe to persist. Other
+            // transport failures may have lost a response after the server
+            // bound a durable task; never overwrite that server-owned task id.
+            if (!isTemporaryConversation && paywall) {
+              await persistImageGenerationAssistantMessage({
+                conversationId: convId,
+                messageId: assistantMessageId,
+                model: undefined,
+                metadata: failureMetadata,
+                content,
+                getAuthToken,
+                updateMessage: updateOwnMessage,
+              });
+            }
           }
         } finally {
           sendingConversationsRef.current.delete(videoGuardKey);
@@ -1708,10 +2505,87 @@ export default function WebChatPage() {
       activeProjectId,
       addMessage,
       updateMessage,
-      generateVideo,
+      startVideoGeneration,
+      watchVideoMessage,
       router,
       getToken,
       claimSendWindow,
+      subscriptionTier,
+      managedUsageSummary,
+    ],
+  );
+
+  // A loaded queued/processing row resumes with status GET only. The set gives
+  // each task one automatic observation window per mounted page; after the
+  // five-minute deadline the explicit Resume button owns subsequent windows.
+  useEffect(() => {
+    if (!displayedConversationId) return;
+    for (const message of displayedMessages) {
+      const taskId = message.metadata?.videoTaskId;
+      const status = message.metadata?.videoStatus;
+      if (
+        message.role !== 'assistant' ||
+        typeof taskId !== 'string' ||
+        (status !== 'queued' && status !== 'processing') ||
+        autoResumedVideoTasksRef.current.has(taskId)
+      ) {
+        continue;
+      }
+      autoResumedVideoTasksRef.current.add(taskId);
+      void watchVideoMessage({
+        conversationId: displayedConversationId,
+        messageId: message.id,
+        taskId,
+      });
+    }
+  }, [displayedConversationId, displayedMessages, watchVideoMessage]);
+
+  const handleResumeVideo = useCallback(
+    (messageId: string) => {
+      if (!displayedConversationId) return;
+      const message = displayedMessages.find((candidate) => candidate.id === messageId);
+      const taskId = message?.metadata?.videoTaskId;
+      const status = message?.metadata?.videoStatus;
+      if (typeof taskId !== 'string' || (status !== 'queued' && status !== 'processing')) return;
+      void watchVideoMessage({
+        conversationId: displayedConversationId,
+        messageId,
+        taskId,
+      });
+    },
+    [displayedConversationId, displayedMessages, watchVideoMessage],
+  );
+
+  const handleRetryVideo = useCallback(
+    (messageId: string) => {
+      if (!displayedConversationId || isStreaming) return;
+      const assistantMessage = displayedMessages.find((candidate) => candidate.id === messageId);
+      if (
+        assistantMessage?.metadata?.videoStatus !== 'failed' ||
+        assistantMessage.metadata.videoRetryable !== true
+      ) {
+        return;
+      }
+      const retryPlan = planRegenerateRollback(displayedMessages, messageId);
+      const userMessage = retryPlan ? displayedMessages[retryPlan.userIndex] : undefined;
+      if (!userMessage) return;
+      if (isTrialExhausted) {
+        handleOpenUpgradeDialog();
+        return;
+      }
+      handleGenerateVideo(userMessage.content, {
+        ...(typeof assistantMessage.metadata.videoModel === 'string'
+          ? { modelId: assistantMessage.metadata.videoModel }
+          : {}),
+      });
+    },
+    [
+      displayedConversationId,
+      displayedMessages,
+      handleGenerateVideo,
+      handleOpenUpgradeDialog,
+      isStreaming,
+      isTrialExhausted,
     ],
   );
 
@@ -2245,15 +3119,33 @@ export default function WebChatPage() {
     async (ids: string[]): Promise<boolean> => {
       if (!displayedConversationId || ids.length === 0) return false;
       const conversationId = displayedConversationId;
-
-      const authToken = await getToken();
-      if (!authToken) {
-        setChatError('Not authenticated', conversationId);
+      const mutationIds = [...new Set(ids)];
+      if (!tryAcquireImageTranscriptMutation(mutationIds)) {
+        toast.error('Wait for this image turn to finish saving before deleting it.');
         return false;
       }
 
       try {
-        for (const messageId of ids) {
+        const temporary = isTemporaryConversationById(
+          useChatStore.getState().conversations,
+          conversationId,
+        );
+        if (temporary) {
+          // Temporary turns deliberately have no web_messages rows. Calling
+          // the durable DELETE route would return "Message not found" and
+          // leave an undismissable local card, so remove them locally only.
+          mutationIds.forEach((messageId) => deleteMessage(messageId, conversationId));
+          removeImageTranscriptRecoveriesForMessages(mutationIds);
+          return true;
+        }
+
+        const authToken = await getToken();
+        if (!authToken) {
+          setChatError('Not authenticated', conversationId);
+          return false;
+        }
+
+        for (const messageId of mutationIds) {
           await deleteConversationMessage({
             conversationId,
             messageId,
@@ -2264,6 +3156,7 @@ export default function WebChatPage() {
           // switch chats in between.
           deleteMessage(messageId, conversationId);
         }
+        removeImageTranscriptRecoveriesForMessages(mutationIds);
         return true;
       } catch (error) {
         setChatError(
@@ -2271,9 +3164,19 @@ export default function WebChatPage() {
           conversationId,
         );
         return false;
+      } finally {
+        releaseImageTranscriptMutation(mutationIds);
       }
     },
-    [deleteMessage, displayedConversationId, getToken, setChatError],
+    [
+      deleteMessage,
+      displayedConversationId,
+      getToken,
+      releaseImageTranscriptMutation,
+      removeImageTranscriptRecoveriesForMessages,
+      setChatError,
+      tryAcquireImageTranscriptMutation,
+    ],
   );
 
   // Server-only delete (best-effort). Used by the data-loss-safe replace flow to drop
@@ -2315,32 +3218,51 @@ export default function WebChatPage() {
         await send(() => {});
         return;
       }
+      const mutationIds = [...new Set(rollbackIds)];
+      if (!tryAcquireImageTranscriptMutation(mutationIds)) {
+        toast.error('Wait for this image turn to finish saving before replacing it.');
+        return;
+      }
       // AUDIT-FIX STR-22: fire the durable delete at COMMIT, not at stream end.
       // Deferring it until `send()` resolved meant the whole regeneration window
       // had both the old rows and the new user row on the server, so a reload
       // mid-regeneration showed a duplicated user message and the stale answer.
       // Idempotent, because runReplacingSend also calls deleteServer on commit.
       let serverRowsDeleted = false;
+      let serverDeletePromise: Promise<void> | undefined;
       const deleteReplacedServerRows = () => {
         if (serverRowsDeleted) return;
         serverRowsDeleted = true;
-        void deleteServerMessages(conversationId, rollbackIds);
+        serverDeletePromise = deleteServerMessages(conversationId, mutationIds);
       };
-      await runReplacingSend(
-        {
-          // AUDIT-FIX STR-22: snapshot/restore THIS conversation's transcript.
-          // Snapshotting the global array meant a restore-on-failure could write
-          // one conversation's messages over another's.
-          snapshot: () => selectConversationMessages(conversationId)(useChatStore.getState()),
-          removeLocal: (id) => deleteMessage(id, conversationId),
-          restore: (messages) => useChatStore.getState().setMessages(messages, conversationId),
-          deleteServer: () => deleteReplacedServerRows(),
-        },
-        rollbackIds,
-        () => send(deleteReplacedServerRows),
-      );
+      try {
+        await runReplacingSend(
+          {
+            // AUDIT-FIX STR-22: snapshot/restore THIS conversation's transcript.
+            // Snapshotting the global array meant a restore-on-failure could write
+            // one conversation's messages over another's.
+            snapshot: () => selectConversationMessages(conversationId)(useChatStore.getState()),
+            removeLocal: (id) => deleteMessage(id, conversationId),
+            restore: (messages) => useChatStore.getState().setMessages(messages, conversationId),
+            deleteServer: () => deleteReplacedServerRows(),
+          },
+          mutationIds,
+          () => send(deleteReplacedServerRows),
+        );
+        await serverDeletePromise;
+        if (serverRowsDeleted) removeImageTranscriptRecoveriesForMessages(mutationIds);
+      } finally {
+        releaseImageTranscriptMutation(mutationIds);
+      }
     },
-    [displayedConversationId, deleteMessage, deleteServerMessages],
+    [
+      displayedConversationId,
+      deleteMessage,
+      deleteServerMessages,
+      releaseImageTranscriptMutation,
+      removeImageTranscriptRecoveriesForMessages,
+      tryAcquireImageTranscriptMutation,
+    ],
   );
   sendReplacingMessagesRef.current = sendReplacingMessages;
 
@@ -2351,15 +3273,28 @@ export default function WebChatPage() {
     [deletePersistedMessages],
   );
 
-  // Paywall cards are synthetic (not persisted in DB). "Try later" should just
-  // remove the card from the local store without hitting the API.
+  // Media paywall rows are durable so recovery survives reload/cross-device.
+  // Dismissal must delete the server row too, or the card would reappear on
+  // the next hydration.
   const handlePaywallDismiss = useCallback(
     (id: string) => {
-      // AUDIT-FIX ROOT-CAUSE: a paywall card belongs to the transcript it is
-      // rendered in, not to whatever the store considers active.
-      deleteMessage(id, displayedConversationId ?? undefined);
+      const conversationId = displayedConversationId;
+      const message = conversationId
+        ? selectConversationMessages(conversationId)(useChatStore.getState()).find(
+            (candidate) => candidate.id === id,
+          )
+        : undefined;
+      const isPersistedMediaRefusal =
+        message?.metadata?.toolType === 'image-generation' ||
+        message?.metadata?.toolType === 'video-generation';
+      if (isPersistedMediaRefusal) {
+        void deletePersistedMessages([id]);
+        return;
+      }
+      // Legacy chat-stream quota cards are synthetic and have no server row.
+      deleteMessage(id, conversationId ?? undefined);
     },
-    [deleteMessage, displayedConversationId],
+    [deleteMessage, deletePersistedMessages, displayedConversationId],
   );
 
   const handleTypingChange = useCallback((typing: boolean) => {
@@ -2399,17 +3334,21 @@ export default function WebChatPage() {
   const handleShareSession = useCallback(
     (id: string) => {
       if (id === displayedConversationId) {
-        void share();
+        setShareDialogOpen(true);
       } else {
         router.push(`/chat/${id}`);
       }
     },
-    [displayedConversationId, share, router],
+    [displayedConversationId, router],
   );
 
   const handleEditMessage = useCallback(
     (id: string) => {
       if (!displayedConversationId || isStreaming) return;
+      if (isImageTranscriptMutationInFlight(id)) {
+        toast.error('Wait for this image turn to finish saving before editing it.');
+        return;
+      }
       const idx = displayedMessages.findIndex((m) => m.id === id);
       const msg = idx >= 0 ? displayedMessages[idx] : undefined;
       if (!msg || msg.role !== 'user') return;
@@ -2430,6 +3369,7 @@ export default function WebChatPage() {
     [
       displayedConversationId,
       displayedMessages,
+      isImageTranscriptMutationInFlight,
       isStreaming,
       isTrialExhausted,
       handleOpenUpgradeDialog,
@@ -2700,12 +3640,25 @@ export default function WebChatPage() {
   useEffect(() => {
     if (!showWorkSession) setWorkSessionPanelOpen(false);
   }, [showWorkSession]);
-  // AUDIT-FIX STR-7/BUG-12: `isLoading` is now strictly "a turn is running", so
-  // the conversation-open fetch has to be consulted explicitly here — otherwise
-  // navigating into a conversation flashes the new-chat greeting until its
-  // messages land.
+  // A URL-owned conversation must show its transcript skeleton from the FIRST
+  // paint. Clerk and useConversations start their async work in effects, so the
+  // hook loading flag alone has a one-render false-empty gap that flashes the
+  // new-chat greeting during a hard reload.
+  const isConversationTranscriptPending = isConversationRoutePending({
+    displayedConversationId,
+    activeConversationId,
+    displayedMessageCount: chatMessages.length,
+    authLoaded,
+    isConversationLoading,
+  });
+  const isConversationSidebarPending = isConversationListPending({
+    authLoaded,
+    isConversationLoading,
+    conversationCount: conversations.length,
+  });
   const isEmptyChat =
-    !displayedConversationId || (chatMessages.length === 0 && !isLoading && !isConversationLoading);
+    !displayedConversationId ||
+    (chatMessages.length === 0 && !isLoading && !isConversationTranscriptPending);
 
   // Count distinct research sources across all messages for the toggle badge.
   // Metadata may contain a flat result list or a legacy SearchResponse object.
@@ -2745,9 +3698,10 @@ export default function WebChatPage() {
   // destination paired with Code, not a second recents list. 'Artifacts' was
   // already removed (it linked to the
   // /gallery marketing page; artifacts open via the header ArtifactsToggleButton).
-  // Skills, Plugins, and Connectors now live in ONE place — the Settings modal — so the
-  // single 'Customize' entry opens that modal instead of navigating to /customize or a
-  // separate Directory modal (both removed).
+  // Skills, Plugins, and Connectors now live in the Settings modal. The top-level
+  // 'Customize' entry opens General because that is where the user's name, work
+  // profile, and cross-chat instructions are edited; Skills remains its own
+  // plainly labelled Settings item.
   const sidebarNavItems = useMemo<SidebarNavItem[]>(
     () => [
       {
@@ -2795,7 +3749,7 @@ export default function WebChatPage() {
         id: 'customize',
         label: 'Customize',
         icon: Settings,
-        onClick: () => openSettings('skills'),
+        onClick: () => openSettings('general'),
         isActive: false,
       },
     ],
@@ -2826,7 +3780,7 @@ export default function WebChatPage() {
             <span>Free plan</span>
             <button
               type="button"
-              onClick={handleOpenUpgradeDialog}
+              onClick={() => handleOpenUpgradeDialog()}
               className="font-medium text-primary hover:underline"
             >
               Upgrade
@@ -2879,6 +3833,7 @@ export default function WebChatPage() {
               <DropdownMenuSeparator />
             </>
           )}
+          <WorkspaceMenuItems onManage={() => openSettings('team')} />
           {/* CRIT-008: open in place — /settings/general only bounces to /chat. */}
           <DropdownMenuItem onClick={() => openSettings('general')}>
             <Settings className="mr-2 h-4 w-4" />
@@ -2914,7 +3869,7 @@ export default function WebChatPage() {
               "Upgrade" to max_15x accounts, which reads as a billing error next
               to the plan badge in the same sidebar. */}
           {hasSelfServeUpgradePath(subscriptionTier) ? (
-            <DropdownMenuItem onClick={handleOpenUpgradeDialog}>
+            <DropdownMenuItem onClick={() => handleOpenUpgradeDialog()}>
               <CreditCard className="mr-2 h-4 w-4" />
               {t('common:navUpgrade')}
             </DropdownMenuItem>
@@ -2965,6 +3920,14 @@ export default function WebChatPage() {
         />
       )}
       <div
+        id="chat-mobile-navigation"
+        ref={mobileNavDrawerRef}
+        role={isNarrowViewport && mobileNavOpen ? 'dialog' : undefined}
+        aria-modal={isNarrowViewport && mobileNavOpen ? true : undefined}
+        aria-label={isNarrowViewport && mobileNavOpen ? t('chat:openNavigation') : undefined}
+        aria-hidden={isNarrowViewport && !mobileNavOpen ? true : undefined}
+        inert={isNarrowViewport && !mobileNavOpen ? true : undefined}
+        tabIndex={isNarrowViewport && mobileNavOpen ? -1 : undefined}
         className={
           isNarrowViewport
             ? cn(
@@ -2980,7 +3943,7 @@ export default function WebChatPage() {
           activeSessionId={displayedConversationId ?? undefined}
           collapsed={isNarrowViewport ? false : effectiveSidebarCollapsed}
           isMobile={isNarrowViewport}
-          isLoading={isLoading && conversations.length === 0}
+          isLoading={isConversationSidebarPending}
           error={conversations.length === 0 ? chatError : null}
           mode="cloud"
           headerSlot={<SidebarWordmark />}
@@ -2989,7 +3952,10 @@ export default function WebChatPage() {
             handleNewChat();
           }}
           onToggleCollapse={handleToggleSidebar}
-          onOpenSearch={handleOpenSearch}
+          onOpenSearch={() => {
+            setMobileNavOpen(false);
+            handleOpenSearch();
+          }}
           navItems={sidebarNavItems}
           footerSlot={sidebarFooterSlot}
           // GOV-19: the two props the shared Sidebar's usage widget needs.
@@ -3023,7 +3989,11 @@ export default function WebChatPage() {
       </div>
 
       {/* Main area + artifact workbench */}
-      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <div
+        className="flex min-h-0 min-w-0 flex-1 overflow-hidden"
+        aria-hidden={isNarrowViewport && mobileNavOpen ? true : undefined}
+        inert={isNarrowViewport && mobileNavOpen ? true : undefined}
+      >
         {/*
          * sm:min-w-[360px] is a floor, not a preference. The three right-hand
          * panels (Artifacts 480px, Work session 380px, Research 360px) were each
@@ -3041,13 +4011,16 @@ export default function WebChatPage() {
                 : 'border-b border-[var(--chat-border-subtle)]',
             )}
           >
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
               {isNarrowViewport && (
                 <Button
+                  ref={mobileNavTriggerRef}
                   variant="ghost"
                   size="sm"
                   onClick={() => setMobileNavOpen(true)}
                   aria-label={t('chat:openNavigation')}
+                  aria-expanded={mobileNavOpen}
+                  aria-controls="chat-mobile-navigation"
                   className="-ml-1 h-8 w-8 p-0"
                 >
                   <Menu className="h-5 w-5" aria-hidden="true" />
@@ -3057,8 +4030,7 @@ export default function WebChatPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void share()}
-                  disabled={isSharing}
+                  onClick={() => setShareDialogOpen(true)}
                   className="gap-1.5"
                   aria-label={t('chat:shareConversation')}
                 >
@@ -3101,7 +4073,7 @@ export default function WebChatPage() {
                 />
               )}
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
               {hasMessages && (
                 <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
               )}
@@ -3137,6 +4109,17 @@ export default function WebChatPage() {
             </div>
           )}
 
+          {displayedImageTranscriptRecoveries.map((recovery) => (
+            <ImageTranscriptRecoveryNotice
+              key={recovery.assistantMessageId}
+              phase={recovery.phase}
+              resultKind={recovery.phase === 'result' ? recovery.kind : undefined}
+              retrying={recovery.status === 'retrying'}
+              onRetry={() => handleRetryImageTranscriptRecovery(recovery)}
+              onDismiss={() => removeImageTranscriptRecovery(recovery.assistantMessageId)}
+            />
+          ))}
+
           {/* Notification permission banner · shown during long generations */}
           {showNotifBanner && (
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[var(--chat-border-subtle)] bg-amber-500/10 px-4 py-2 text-sm">
@@ -3167,7 +4150,11 @@ export default function WebChatPage() {
           )}
 
           {/* Message list */}
-          {isEmptyChat ? (
+          {isConversationTranscriptPending ? (
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <ChatLoadingState className="mx-auto w-full max-w-[960px]" />
+            </div>
+          ) : isEmptyChat ? (
             <div className="min-h-0 flex-1 overflow-hidden">
               {/* Empty state: greeting banner + centered composer. */}
               <div className="mx-auto flex h-full w-full max-w-[960px] flex-col items-center justify-center gap-6 px-6">
@@ -3189,6 +4176,7 @@ export default function WebChatPage() {
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     sendPreviewPresentation={sendPreviewPresentation}
                     onUpgradeRequest={handleOpenUpgradeDialog}
+                    onModelChange={handleConversationModelChange}
                     onGenerateImage={handleGenerateImage}
                     onGenerateVideo={handleGenerateVideo}
                     projectPicker={composerProjectPicker}
@@ -3209,6 +4197,7 @@ export default function WebChatPage() {
                 <ToolApprovalProvider value={resolveToolApproval}>
                   <ChatMessageList
                     messages={chatMessages}
+                    currentTier={currentTier}
                     conversationId={displayedConversationId}
                     isLoading={isLoading && !isStreaming}
                     isUserTyping={isUserTyping}
@@ -3225,8 +4214,10 @@ export default function WebChatPage() {
                     onBranch={createBranch}
                     onSwitchBranch={switchBranch}
                     onRegenerateImage={handleRegenerateImageInPlace}
+                    onResumeVideo={handleResumeVideo}
+                    onRetryVideo={handleRetryVideo}
                     onSendMessage={setComposerPrefill}
-                    onPaywallUpgrade={handleOpenUpgradeDialog}
+                    onPaywallUpgrade={handlePaywallRecovery}
                     onPaywallDismiss={handlePaywallDismiss}
                   />
                 </ToolApprovalProvider>
@@ -3266,6 +4257,7 @@ export default function WebChatPage() {
                     attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
                     sendPreviewPresentation={sendPreviewPresentation}
                     onUpgradeRequest={handleOpenUpgradeDialog}
+                    onModelChange={handleConversationModelChange}
                     onGenerateImage={handleGenerateImage}
                     onGenerateVideo={handleGenerateVideo}
                     projectPicker={composerProjectPicker}
@@ -3299,9 +4291,19 @@ export default function WebChatPage() {
       />
       <UpgradePlanDialog
         open={upgradePlanOpen}
-        onOpenChange={setUpgradePlanOpen}
+        onOpenChange={(open) => {
+          setUpgradePlanOpen(open);
+          if (!open) setUpgradePlanTarget(null);
+        }}
         currentTier={currentTier}
+        targetTier={upgradePlanTarget}
         onUpgrade={(plan, annual) => void handleUpgradePlan(plan, annual)}
+      />
+      <ShareConversationDialog
+        key={displayedConversationId ?? 'empty-conversation'}
+        open={shareDialogOpen}
+        onOpenChange={setShareDialogOpen}
+        conversationTitle={activeConversationTitle}
       />
       <UpgradeConfirmDialog
         request={upgradeConfirm}

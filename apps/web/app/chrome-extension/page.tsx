@@ -91,7 +91,7 @@ export default function ChromeExtensionPage() {
             <div className="agi-fl-hero-copy">
               <p className="agi-fl-eyebrow">AGI in Chrome · coming soon</p>
               <h1 id="agi-fl-chrome-hero-title" className="agi-fl-h1">
-                <span className="agi-fl-h1-line">Your browser,</span>
+                <span className="agi-fl-h1-line">Your browser,</span>{' '}
                 <span className="agi-fl-h1-line">
                   <em className="agi-fl-h1-em">with context.</em>
                 </span>

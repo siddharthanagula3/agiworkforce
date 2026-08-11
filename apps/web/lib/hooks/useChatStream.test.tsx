@@ -3,7 +3,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { useThinkingStore } from '@shared/stores/thinking-store';
 import { useFreeTrialStore } from '@/features/chat/stores/freeTrialStore';
+import { listCanonicalModels } from '@agiworkforce/types';
 import { useChatStream, saveMessageToDb } from './useChatStream';
+
+const NON_REASONING_CHAT_MODEL = (() => {
+  const model = listCanonicalModels().find(
+    (candidate) =>
+      ['chat', 'search', 'multimodal'].includes(candidate.modelType) &&
+      candidate.reasoning?.capable !== true,
+  );
+  if (!model) throw new Error('Canonical non-reasoning chat fixture is missing');
+  return model.id;
+})();
+const MINIMAL_EFFORT_CHAT_MODEL = (() => {
+  const model = listCanonicalModels().find((candidate) =>
+    candidate.reasoning?.supportedEfforts?.includes('minimal'),
+  );
+  if (!model) throw new Error('Canonical minimal-effort chat fixture is missing');
+  return model.id;
+})();
 
 const authMocks = vi.hoisted(() => ({
   getToken: vi.fn(),
@@ -137,6 +155,103 @@ describe('useChatStream', () => {
       expect(
         useChatStore.getState().messages.some((m) => m.content === 'this must not vanish silently'),
       ).toBe(false);
+    });
+  });
+
+  describe('durable user-turn admission', () => {
+    const persistedConversation = {
+      ...TEMP_CONVERSATION,
+      id: 'conv-durable-admission',
+      isTemporary: false,
+    };
+
+    it('does not start provider egress until the user row is durable', async () => {
+      useChatStore.setState({
+        activeConversationId: persistedConversation.id,
+        conversations: [persistedConversation],
+      });
+      let finishUserSave!: (response: Response) => void;
+      const calls: string[] = [];
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/messages')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          calls.push(`save:${String(body['role'])}`);
+          if (body['role'] === 'user') {
+            return await new Promise<Response>((resolve) => {
+              finishUserSave = resolve;
+            });
+          }
+          return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+        }
+        if (url.includes('/api/llm/')) {
+          calls.push('provider');
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+              controller.close();
+            },
+          });
+          return new Response(stream, { status: 200, headers: new Headers() });
+        }
+        return new Response('{}', { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      let send!: Promise<boolean>;
+      act(() => {
+        send = result.current.sendMessage('admit this exact turn', {
+          conversationId: persistedConversation.id,
+        });
+      });
+
+      await vi.waitFor(() => expect(finishUserSave).toBeTypeOf('function'));
+      expect(calls).toEqual(['save:user']);
+
+      finishUserSave(
+        new Response(JSON.stringify({ message: { id: '11111111-1111-4111-8111-111111111111' } }), {
+          status: 200,
+        }),
+      );
+      await act(async () => {
+        await send;
+      });
+      await vi.waitFor(() => expect(calls).toEqual(['save:user', 'provider', 'save:assistant']));
+    });
+
+    it('never calls the provider when the durable user-row write fails', async () => {
+      useChatStore.setState({
+        activeConversationId: persistedConversation.id,
+        conversations: [persistedConversation],
+      });
+      const providerCalls: string[] = [];
+      vi.mocked(fetch).mockImplementation(async (input) => {
+        const url = String(input);
+        if (url.includes('/messages')) return new Response('{}', { status: 422 });
+        if (url.includes('/api/llm/')) providerCalls.push(url);
+        return new Response('{}', { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await expect(
+          result.current.sendMessage('do not bill this', {
+            conversationId: persistedConversation.id,
+          }),
+        ).resolves.toBe(false);
+      });
+
+      expect(providerCalls).toEqual([]);
+      expect(
+        useChatStore
+          .getState()
+          .messagesByConversation[
+            persistedConversation.id
+          ]?.some((message) => message.content === 'do not bill this'),
+      ).toBe(false);
+      expect(useChatStore.getState().error).toBe(
+        'Your message was not saved, so no model was called.',
+      );
     });
   });
 
@@ -413,6 +528,47 @@ describe('useChatStream', () => {
   });
 
   describe('durable Managed Cloud runs', () => {
+    it('shows an action status for ordinary chat before the provider responds', async () => {
+      let resolveResponse: ((response: Response) => void) | undefined;
+      vi.mocked(fetch).mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveResponse = resolve;
+          }),
+      );
+
+      const { result } = renderHook(() => useChatStream());
+      let send: Promise<boolean> | undefined;
+      act(() => {
+        send = result.current.sendMessage('answer this question', {
+          conversationId: TEMP_CONVERSATION.id,
+        });
+      });
+
+      await vi.waitFor(() => {
+        const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+        expect(assistant?.metadata?.agentActivity).toMatchObject({
+          status: 'running',
+          entries: [
+            expect.objectContaining({
+              kind: 'progress',
+              summary: 'Generating response',
+              status: 'running',
+            }),
+          ],
+        });
+      });
+
+      resolveResponse?.(new Response('data: [DONE]\n\n', { status: 200 }));
+      await send;
+
+      const assistant = useChatStore.getState().messages.find((m) => m.role === 'assistant');
+      expect(assistant?.metadata?.agentActivity).toMatchObject({
+        status: 'completed',
+        entries: [expect.objectContaining({ summary: 'Response ready', status: 'completed' })],
+      });
+    });
+
     it('shows an AGI Work action state before the provider emits its first event', async () => {
       let resolveResponse: ((response: Response) => void) | undefined;
       vi.mocked(fetch).mockImplementationOnce(
@@ -777,6 +933,65 @@ describe('useChatStream', () => {
       const assistantMsg = state.messages.find((m) => m.role === 'assistant');
       const searchEntry = assistantMsg?.metadata?.tools?.find((t) => t.name === 'web_search');
       expect(searchEntry, 'web_search tool entry should exist').toBeDefined();
+    });
+
+    it('persists user-visible tool status so the action trail survives reload', async () => {
+      const conversation = {
+        ...TEMP_CONVERSATION,
+        id: 'conv-tool-status-persist',
+        isTemporary: false,
+      };
+      useChatStore.setState({
+        activeConversationId: conversation.id,
+        conversations: [conversation],
+      });
+
+      const streamBody =
+        `data: ${JSON.stringify({ choices: [{ delta: { x_tool_status: { type: 'mcp_tool_use', name: 'skill', status: 'running', status_phrase: 'Reading skill' } } }] })}\n\n` +
+        `data: ${JSON.stringify({ choices: [{ delta: { x_tool_status: { type: 'mcp_tool_use', name: 'skill', status: 'completed' } } }] })}\n\n` +
+        `data: ${JSON.stringify({ choices: [{ delta: { content: 'Done.' }, finish_reason: 'stop' }] })}\n\n` +
+        'data: [DONE]\n\n';
+      const savedBodies: Array<Record<string, unknown>> = [];
+
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/messages')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          savedBodies.push(body);
+          return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+        }
+        if (url.includes('/api/llm/')) {
+          const stream = new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(streamBody));
+              controller.close();
+            },
+          });
+          return new Response(stream, { status: 200, headers: new Headers() });
+        }
+        return new Response('{}', { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      await act(async () => {
+        await result.current.sendMessage('use the selected skill', {
+          conversationId: conversation.id,
+        });
+      });
+      await vi.waitFor(() =>
+        expect(savedBodies.some((body) => body['role'] === 'assistant')).toBe(true),
+      );
+
+      const assistantSave = savedBodies.find((body) => body['role'] === 'assistant');
+      expect(assistantSave?.['metadata']).toMatchObject({
+        tools: [
+          {
+            name: 'skill',
+            status: 'completed',
+            statusPhrase: 'Reading skill',
+          },
+        ],
+      });
     });
   });
 
@@ -1247,6 +1462,66 @@ describe('useChatStream', () => {
       ).toMatchObject({ status: 'cancelled', stopReason: 'cancelled' });
     });
 
+    it('persists a cancelled assistant row when stopped before the first response byte', async () => {
+      useChatStore.setState({
+        conversations: [PERSISTED_CONV],
+        activeConversationId: PERSISTED_CONV.id,
+      });
+
+      const saveBodies: Array<Record<string, unknown>> = [];
+      let providerStarted!: () => void;
+      const providerStartedPromise = new Promise<void>((resolve) => {
+        providerStarted = resolve;
+      });
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (url.includes('/messages')) {
+          const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          saveBodies.push(body);
+          return new Response(JSON.stringify({ message: { id: body['id'] } }), { status: 200 });
+        }
+        if (url.includes('/api/llm/')) {
+          providerStarted();
+          return await new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('The user aborted a request.', 'AbortError')),
+              { once: true },
+            );
+          });
+        }
+        return new Response('{}', { status: 200 });
+      });
+
+      const { result } = renderHook(() => useChatStream());
+      let send!: Promise<boolean>;
+      act(() => {
+        send = result.current.sendMessage('question', { conversationId: PERSISTED_CONV.id });
+      });
+      await providerStartedPromise;
+
+      act(() => result.current.stopGeneration(PERSISTED_CONV.id));
+      await act(async () => {
+        await send;
+      });
+
+      const assistantSave = saveBodies.find((body) => body['role'] === 'assistant');
+      expect(assistantSave?.['content']).toBe(String.fromCharCode(0x200b));
+      expect(
+        (assistantSave?.['metadata'] as Record<string, unknown>)?.['agentActivity'],
+      ).toMatchObject({
+        status: 'cancelled',
+        stopReason: 'cancelled',
+        entries: [
+          expect.objectContaining({
+            progressId: 'local-starting',
+            status: 'cancelled',
+            summary: 'Response cancelled',
+          }),
+        ],
+      });
+    });
+
     it('APPENDS the continuation to the same assistant message and persists the merged text', async () => {
       useChatStore.setState({
         conversations: [PERSISTED_CONV],
@@ -1586,7 +1861,7 @@ describe('useChatStream', () => {
     await act(async () => {
       await result.current.sendMessage('latest news', {
         conversationId: TEMP_CONVERSATION.id,
-        model: 'sonar',
+        model: NON_REASONING_CHAT_MODEL,
         thinkingEnabled: true,
         thinkingEffort: 'high',
       });
@@ -1600,14 +1875,14 @@ describe('useChatStream', () => {
     expect(body['effort']).toBeUndefined();
   });
 
-  it('sends Gemini Flash-Lite minimal effort even when no separate thinking toggle is selected', async () => {
+  it('sends a catalog-supported minimal effort even when no separate thinking toggle is selected', async () => {
     mockSseStream([{ choices: [{ delta: { content: 'fast' }, finish_reason: 'stop' }] }]);
     const { result } = renderHook(() => useChatStream());
 
     await act(async () => {
       await result.current.sendMessage('classify this', {
         conversationId: TEMP_CONVERSATION.id,
-        model: 'gemini-3.5-flash-lite',
+        model: MINIMAL_EFFORT_CHAT_MODEL,
         thinkingEnabled: false,
         thinkingEffort: 'minimal' as never,
       });

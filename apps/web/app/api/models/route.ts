@@ -37,9 +37,24 @@ interface ModelCapabilities {
 }
 
 // Pricing in USD per 1M tokens (converted from inputCost/outputCost in models.json)
-interface ModelPricing {
+interface ModelInputTokenPricingTier {
+  thresholdTokens: number;
   inputPerMillion: number;
   outputPerMillion: number;
+  cachedInputPerMillion?: number;
+  cachedWritePerMillion?: number;
+  cachedWrite1hPerMillion?: number;
+}
+
+interface ModelPricing {
+  /** The scalar rates are the model's base band before input-length tiers apply. */
+  basis: 'base';
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cachedInputPerMillion?: number;
+  cachedWritePerMillion?: number;
+  cachedWrite1hPerMillion?: number;
+  inputTokenPricingTiers: ModelInputTokenPricingTier[];
 }
 
 // Canonical ModelEntry shape returned by this API
@@ -48,7 +63,8 @@ export interface ModelEntry {
   name: string;
   provider: string;
   category: 'chat' | 'code' | 'reasoning' | 'image' | 'video' | 'other';
-  contextWindow: number;
+  /** Null when token context is not applicable or not proven for this model. */
+  contextWindow: number | null;
   maxOutputTokens: number | null;
   pricing: ModelPricing;
   capabilities: ModelCapabilities;
@@ -98,11 +114,27 @@ function toModelEntry(raw: ModelMetadata): ModelEntry {
     name: raw.name,
     provider: raw.provider,
     category: toCategory(raw.modelType),
-    contextWindow: raw.contextWindow,
+    contextWindow: raw.contextWindow ?? null,
     maxOutputTokens: raw.maxOutputTokens ?? null,
     pricing: {
+      basis: 'base',
       inputPerMillion: raw.inputCost,
       outputPerMillion: raw.outputCost,
+      ...(raw.cached_input === undefined ? {} : { cachedInputPerMillion: raw.cached_input }),
+      ...(raw.cached_write === undefined ? {} : { cachedWritePerMillion: raw.cached_write }),
+      ...(raw.cached_write_1h === undefined
+        ? {}
+        : { cachedWrite1hPerMillion: raw.cached_write_1h }),
+      inputTokenPricingTiers: (raw.inputTokenPricingTiers ?? []).map((tier) => ({
+        thresholdTokens: tier.thresholdTokens,
+        inputPerMillion: tier.inputCost,
+        outputPerMillion: tier.outputCost,
+        ...(tier.cached_input === undefined ? {} : { cachedInputPerMillion: tier.cached_input }),
+        ...(tier.cached_write === undefined ? {} : { cachedWritePerMillion: tier.cached_write }),
+        ...(tier.cached_write_1h === undefined
+          ? {}
+          : { cachedWrite1hPerMillion: tier.cached_write_1h }),
+      })),
     },
     capabilities: {
       vision: caps.vision,

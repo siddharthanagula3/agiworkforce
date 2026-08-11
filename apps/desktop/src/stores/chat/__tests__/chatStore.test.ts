@@ -45,6 +45,8 @@ vi.mock('../../utils/localStorage', () => ({
 import { dbIdToUuid, uuidToDbId, clearIdMappings, useChatStore } from '../chatStore';
 import { useAppModeStore } from '../../appModeStore';
 
+const FIXTURE_MODEL_ID = 'fixture-model';
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
@@ -392,12 +394,12 @@ describe('chatStore action basics (H15)', () => {
       addMessage({
         role: 'assistant',
         content: 'Local answer',
-        metadata: { model: 'llama3', provider: 'ollama' },
+        metadata: { model: 'fixture-local-model', provider: 'ollama' },
       });
 
       const forkId = forkConversationForByok(sourceId, {
         title: 'Local thread (BYOK fork)',
-        model: 'gpt-5.6-sol',
+        model: FIXTURE_MODEL_ID,
         provider: 'openai',
       });
       const state = useChatStore.getState();
@@ -415,7 +417,7 @@ describe('chatStore action basics (H15)', () => {
       expect(state.messagesByConversation[forkId]).toHaveLength(2);
       expect(state.messagesByConversation[forkId]?.[0]?.pending).toBeUndefined();
       expect(state.messagesByConversation[forkId]?.[0]?.streaming).toBeUndefined();
-      expect(state.messagesByConversation[forkId]?.[1]?.metadata?.model).toBe('gpt-5.6-sol');
+      expect(state.messagesByConversation[forkId]?.[1]?.metadata?.model).toBe(FIXTURE_MODEL_ID);
       expect(state.messagesByConversation[forkId]?.[1]?.metadata?.provider).toBe('openai');
     });
 

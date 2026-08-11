@@ -17,6 +17,9 @@ jest.mock('../storage/db', () => ({
   getDb: jest.fn(async () => mockDb),
 }));
 
+const FIXTURE_MODEL_ID = 'fixture-installed-model';
+const FIXTURE_MODEL_PATH = 'file:///models/fixture-installed-model/model.gguf';
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockDb.runAsync.mockResolvedValue({ changes: 1, lastInsertRowId: 0 });
@@ -26,13 +29,13 @@ beforeEach(() => {
 
 function installedModel(): InstalledModel {
   return {
-    id: 'qwen3-4b',
+    id: FIXTURE_MODEL_ID,
     display_name: 'AGI Standard',
     runtime: 'local',
     format: 'gguf',
     size_bytes: 1234,
     sha256: 'a'.repeat(64),
-    local_path: 'file:///models/qwen3-4b/model.gguf',
+    local_path: FIXTURE_MODEL_PATH,
     installed_at: 1_790_000_000_000,
     last_used_at: null,
     capabilities: '{"text":true}',
@@ -44,13 +47,13 @@ describe('installed model storage repository', () => {
     await recordInstalledModel(installedModel());
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(expect.stringContaining('installed_models'), [
-      'qwen3-4b',
+      FIXTURE_MODEL_ID,
       'AGI Standard',
       'local',
       'gguf',
       1234,
       'a'.repeat(64),
-      'file:///models/qwen3-4b/model.gguf',
+      FIXTURE_MODEL_PATH,
       1_790_000_000_000,
       null,
       '{"text":true}',
@@ -59,19 +62,19 @@ describe('installed model storage repository', () => {
 
   it('maps fetched rows to InstalledModel', async () => {
     mockDb.getFirstAsync.mockResolvedValue({
-      id: 'qwen3-4b',
+      id: FIXTURE_MODEL_ID,
       display_name: 'AGI Standard',
       runtime: 'local',
       format: 'gguf',
       size_bytes: 1234,
       sha256: 'a'.repeat(64),
-      local_path: 'file:///models/qwen3-4b/model.gguf',
+      local_path: FIXTURE_MODEL_PATH,
       installed_at: 1,
       last_used_at: 2,
       capabilities: null,
     });
 
-    await expect(getInstalledModel('qwen3-4b')).resolves.toEqual({
+    await expect(getInstalledModel(FIXTURE_MODEL_ID)).resolves.toEqual({
       ...installedModel(),
       installed_at: 1,
       last_used_at: 2,
@@ -165,19 +168,19 @@ describe('installed model storage repository', () => {
   });
 
   it('removes installed model metadata by id', async () => {
-    await removeInstalledModel('qwen3-4b');
+    await removeInstalledModel(FIXTURE_MODEL_ID);
 
     expect(mockDb.runAsync).toHaveBeenCalledWith('DELETE FROM installed_models WHERE id = ?;', [
-      'qwen3-4b',
+      FIXTURE_MODEL_ID,
     ]);
   });
 
   it('updates last_used_at for a model after local inference', async () => {
-    await markInstalledModelUsed('qwen3-4b', 1_800_000_000_000);
+    await markInstalledModelUsed(FIXTURE_MODEL_ID, 1_800_000_000_000);
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       'UPDATE installed_models SET last_used_at = ? WHERE id = ?;',
-      [1_800_000_000_000, 'qwen3-4b'],
+      [1_800_000_000_000, FIXTURE_MODEL_ID],
     );
   });
 });

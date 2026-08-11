@@ -14,6 +14,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { evaluateModelEnvironment } from '@agiworkforce/types';
 import { environmentAvailability } from '../features/model-picker/modelConstants';
+import { requireCatalogModel } from './catalogModelFixtures';
+
+const CATALOG_BASE_MODEL_ID = requireCatalogModel().id;
 
 // ─── Suite 1: Pure unit — no mocks ───────────────────────────────────────────
 
@@ -94,18 +97,20 @@ describe('buildGroupedQuickPickItems — e2b-flagged synthetic model is filtered
 
     vi.doMock('@agiworkforce/types', async (importOriginal) => {
       const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+      const baseMeta = actual.getModelMetadataById(CATALOG_BASE_MODEL_ID);
+      if (!baseMeta) throw new Error('Catalog fixture metadata is required');
 
       const synthOption = {
         id: SYNTH_ID,
         label: 'Synthetic E2B Model',
-        provider: 'anthropic',
-        providerLabel: 'Anthropic',
+        provider: baseMeta.provider,
+        providerLabel: String(baseMeta.provider),
         description: 'Synthetic test model requiring E2B',
         detail: '',
       };
 
       const synthMeta = {
-        ...actual.getModelMetadataById('claude-sonnet-5'),
+        ...baseMeta,
         id: SYNTH_ID,
         name: 'Synthetic E2B Model',
         requiresEnvironment: 'e2b' as const,
@@ -133,18 +138,20 @@ describe('buildGroupedQuickPickItems — e2b-flagged synthetic model is filtered
 
     vi.doMock('@agiworkforce/types', async (importOriginal) => {
       const actual = await importOriginal<typeof import('@agiworkforce/types')>();
+      const baseMeta = actual.getModelMetadataById(CATALOG_BASE_MODEL_ID);
+      if (!baseMeta) throw new Error('Catalog fixture metadata is required');
 
       const synthOption = {
         id: SYNTH_ID,
         label: 'Synthetic Ungated Model',
-        provider: 'anthropic',
-        providerLabel: 'Anthropic',
+        provider: baseMeta.provider,
+        providerLabel: String(baseMeta.provider),
         description: 'Synthetic test model with no environment requirement',
         detail: '',
       };
 
       const synthMeta = {
-        ...actual.getModelMetadataById('claude-sonnet-5'),
+        ...baseMeta,
         id: SYNTH_ID,
         name: 'Synthetic Ungated Model',
         // requiresEnvironment is intentionally absent

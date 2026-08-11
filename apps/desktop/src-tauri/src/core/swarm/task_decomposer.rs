@@ -1,7 +1,7 @@
 //! Task Decomposition for Parallel Execution
 //!
-//! This module breaks complex tasks into parallelizable subtasks following
-//! Kimi K2.5's approach of dynamic task decomposition based on requirements.
+//! This module breaks complex tasks into parallelizable subtasks using dynamic
+//! task decomposition based on requirements.
 
 use super::{constants, SubtaskPriority, SubtaskStatus, SwarmError, SwarmResultType};
 use crate::core::agi::{Goal, Priority};

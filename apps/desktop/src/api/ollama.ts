@@ -27,7 +27,7 @@ export interface OllamaModelDetails {
   parameter_size: string;
   /** Quantization level (e.g., "Q4_0", "Q8_0") */
   quantization_level: string;
-  /** Model family (e.g., "llama", "mistral") */
+  /** Provider-reported model family */
   family: string;
   /** Model families this model belongs to */
   families: string[];
@@ -41,7 +41,7 @@ export interface OllamaModelDetails {
  * Represents an Ollama model with its metadata
  */
 export interface OllamaModel {
-  /** The model name (e.g., "llama3.2:latest") */
+  /** The provider-reported model name */
   name: string;
   /** Size of the model in bytes */
   size: number;
@@ -153,13 +153,13 @@ export async function ollamaListModels(baseUrl?: string): Promise<OllamaModel[]>
 /**
  * Get detailed information about a specific Ollama model.
  *
- * @param modelName - The name of the model (e.g., "llama3.2:latest" or "llama3.2")
+ * @param modelName - The provider-reported name of an installed model
  * @returns Model details including parameters and quantization
  * @throws Error if the model is not found or Ollama is not running
  *
  * @example
  * ```ts
- * const info = await ollamaGetModelInfo('llama3.2');
+ * const info = await ollamaGetModelInfo(selectedModel.name);
  * console.log(`Parameters: ${info.details.parameter_size}`);
  * ```
  */
@@ -185,12 +185,12 @@ export async function ollamaGetModelInfo(
  * Pull (download) a model from Ollama.
  * Resolves after Ollama finishes the download.
  *
- * @param modelName - The name of the model to pull (e.g., "llama3.2", "mistral:7b")
+ * @param modelName - The model name selected by the user
  * @throws Error if the model name is invalid or the request fails
  *
  * @example
  * ```ts
- * await ollamaPullModel('llama3.2');
+ * await ollamaPullModel(modelName);
  * console.log('Model download initiated');
  * ```
  */
@@ -218,7 +218,7 @@ export async function ollamaPullModel(modelName: string, baseUrl?: string): Prom
  *
  * @example
  * ```ts
- * await ollamaDeleteModel('llama3.2:latest');
+ * await ollamaDeleteModel(selectedModel.name);
  * console.log('Model deleted successfully');
  * ```
  */
@@ -309,7 +309,7 @@ export class OllamaClient {
         modelCount: models.length,
         error:
           models.length === 0
-            ? 'No models installed. Pull a model with: ollama pull llama3.2'
+            ? 'No models installed. Pull one with: ollama pull <model-name>'
             : undefined,
       };
     } catch (error) {

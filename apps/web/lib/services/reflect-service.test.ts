@@ -95,6 +95,7 @@ describe('managed Reflect recap aggregation', () => {
     await expect(
       loadManagedReflectRecap({
         userId: 'owner-1',
+        organizationId: null,
         range: '30d',
         timezone: 'UTC',
         db: { query } as never,
@@ -114,6 +115,7 @@ describe('managed Reflect recap aggregation', () => {
 
     await loadManagedReflectRecap({
       userId: 'owner-1',
+      organizationId: '11111111-1111-4111-8111-111111111111',
       range: '30d',
       timezone: 'UTC',
       db: { query } as never,
@@ -122,8 +124,10 @@ describe('managed Reflect recap aggregation', () => {
 
     const [sql, params] = query.mock.calls[1] as [string, unknown[]];
     expect(sql).toContain('wc.user_id = $1');
+    expect(sql).toContain('wc.organization_id is not distinct from $5::uuid');
     expect(sql).toContain('wc.is_temporary = false');
     expect(sql).toContain("excluded.metadata ? 'cloudAgentRun'");
     expect(params[0]).toBe('owner-1');
+    expect(params[4]).toBe('11111111-1111-4111-8111-111111111111');
   });
 });

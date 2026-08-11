@@ -4,7 +4,12 @@
  */
 export type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
 export type { CloudWorkMode } from '@agiworkforce/types';
-export type { PaywallErrorState, SendMessageOptions } from './chat/chatExecutionStore';
+export type { SendMessageOptions } from './chat/chatExecutionStore';
+export type { PaywallErrorState } from '@/src/features/chat/utils/paywallRecovery';
+export {
+  paywallActivityErrorFromApiError,
+  paywallErrorStateFromApiError,
+} from '@/src/features/chat/utils/paywallRecovery';
 
 export { useChatMessageStore, useChatCloudMessageStore } from './chat/chatMessageStore';
 export { useChatExecutionStore } from './chat/chatExecutionStore';
@@ -16,7 +21,8 @@ import { useChatViewStore } from './chat/chatViewStore';
 import type { ChatMessage, ConversationSummary } from '@/types/chat';
 import type { ForkConversationOptions } from './chat/chatMessageStore';
 import type { ChatMode, ChatStyle, ToolAccess, ChatFeatures } from './chat/chatViewStore';
-import type { PaywallErrorState, SendMessageOptions } from './chat/chatExecutionStore';
+import type { SendMessageOptions } from './chat/chatExecutionStore';
+import type { PaywallErrorState } from '@/src/features/chat/utils/paywallRecovery';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { CloudWorkMode } from '@agiworkforce/types';
 
@@ -60,6 +66,7 @@ export interface CombinedChatState {
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
+  setConversationModel: (id: string, model: string) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
   markConversationRead: (id: string) => void;
@@ -171,6 +178,7 @@ function buildCombinedState(
     deleteConversation: msg.deleteConversation,
     loadMessages: msg.loadMessages,
     renameConversation: msg.renameConversation,
+    setConversationModel: msg.setConversationModel,
     pinConversation: msg.pinConversation,
     makeConversationPermanent: msg.makeConversationPermanent,
     markConversationRead: msg.markConversationRead,

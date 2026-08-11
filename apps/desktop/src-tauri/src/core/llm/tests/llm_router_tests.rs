@@ -56,7 +56,7 @@ mod tests {
                 tool_call_id: None,
                 multimodal_content: None,
             }],
-            model: "gpt-4".to_string(),
+            model: "fixture-request-model".to_string(),
             temperature: Some(0.7),
             max_tokens: Some(1000),
             stream: false,
@@ -67,7 +67,7 @@ mod tests {
         };
 
         assert_eq!(request.messages.len(), 1);
-        assert_eq!(request.model, "gpt-4");
+        assert_eq!(request.model, "fixture-request-model");
         assert_eq!(request.temperature, Some(0.7));
         assert!(!request.stream);
     }
@@ -116,7 +116,7 @@ mod tests {
     fn test_router_preferences_with_provider() {
         let prefs = RouterPreferences {
             provider: Some(Provider::Ollama),
-            model: Some("llama3".to_string()),
+            model: Some("fixture-local-model".to_string()),
             strategy: RoutingStrategy::LocalFirst,
             context: None,
             prefer_cloud_credits: false,
@@ -126,7 +126,7 @@ mod tests {
         };
 
         assert_eq!(prefs.provider, Some(Provider::Ollama));
-        assert_eq!(prefs.model, Some("llama3".to_string()));
+        assert_eq!(prefs.model, Some("fixture-local-model".to_string()));
         assert_eq!(prefs.strategy, RoutingStrategy::LocalFirst);
     }
 
@@ -134,13 +134,13 @@ mod tests {
     fn test_route_candidate_creation() {
         let candidate = RouteCandidate {
             provider: Provider::OpenAI,
-            model: "gpt-4".to_string(),
+            model: "fixture-request-model".to_string(),
             reason: "Preferred provider",
             strategy: None,
         };
 
         assert_eq!(candidate.provider, Provider::OpenAI);
-        assert_eq!(candidate.model, "gpt-4");
+        assert_eq!(candidate.model, "fixture-request-model");
         assert_eq!(candidate.reason, "Preferred provider");
     }
 
@@ -213,7 +213,7 @@ mod tests {
                     multimodal_content: None,
                 },
             ],
-            model: "gpt-4".to_string(),
+            model: "fixture-request-model".to_string(),
             temperature: Some(0.8),
             max_tokens: Some(2000),
             stream: true,
@@ -287,9 +287,9 @@ mod route_with_retry_tests {
             ..Default::default()
         });
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-5"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5.6-sol"),
-            ModelCandidate::new(Provider::Google, "gemini-3-pro-preview"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-primary-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-secondary-model"),
+            ModelCandidate::new(Provider::Google, "fixture-tertiary-model"),
         ];
 
         let attempt_count = Arc::new(AtomicUsize::new(0));
@@ -331,17 +331,19 @@ mod route_with_retry_tests {
         // Pre-mark Anthropic as rate-limited
         chain.rate_limit_tracker().record_rate_limit(
             Provider::Anthropic,
-            Some("claude-sonnet-5"),
+            Some("fixture-primary-model"),
             None,
         );
-        chain
-            .rate_limit_tracker()
-            .record_rate_limit(Provider::OpenAI, Some("gpt-5.6-sol"), None);
+        chain.rate_limit_tracker().record_rate_limit(
+            Provider::OpenAI,
+            Some("fixture-secondary-model"),
+            None,
+        );
 
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-5"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5.6-sol"),
-            ModelCandidate::new(Provider::Google, "gemini-3-pro-preview"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-primary-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-secondary-model"),
+            ModelCandidate::new(Provider::Google, "fixture-tertiary-model"),
         ];
 
         let invoked_providers = Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -394,8 +396,8 @@ mod route_with_retry_tests {
             ..Default::default()
         });
         let candidates = vec![
-            ModelCandidate::new(Provider::Anthropic, "claude-sonnet-5"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5.6-sol"),
+            ModelCandidate::new(Provider::Anthropic, "fixture-primary-model"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-secondary-model"),
         ];
 
         let result = chain
@@ -423,7 +425,7 @@ mod route_with_retry_tests {
         });
         let candidates = vec![
             ModelCandidate::new(Provider::Anthropic, "claude"),
-            ModelCandidate::new(Provider::OpenAI, "gpt-5"),
+            ModelCandidate::new(Provider::OpenAI, "fixture-primary-model"),
         ];
 
         let anthropic_attempts = Arc::new(AtomicUsize::new(0));
@@ -455,7 +457,9 @@ mod route_with_retry_tests {
 // M14 fix: Import the actual constant instead of hardcoding a local copy.
 #[cfg(test)]
 mod router_fallback_tests {
-    use crate::core::llm::llm_router::SESSION_COST_SAFETY_CAP;
+    use crate::core::llm::llm_router::{
+        record_non_streaming_cost, record_streaming_cost, SESSION_COST_SAFETY_CAP,
+    };
 
     #[test]
     fn test_session_cost_cap_value_is_fifty_dollars() {
@@ -510,6 +514,31 @@ mod router_fallback_tests {
         assert!(
             cost > SESSION_COST_SAFETY_CAP,
             "$50.01 must trigger the session cost cap"
+        );
+    }
+
+    #[test]
+    fn two_streaming_calls_accumulate_and_the_second_crosses_the_cap() {
+        let cumulative = parking_lot::Mutex::new(0.0);
+        let per_request = SESSION_COST_SAFETY_CAP * 0.6;
+
+        assert!(record_streaming_cost(&cumulative, per_request).is_ok());
+        let second = record_streaming_cost(&cumulative, per_request);
+        assert!(second.is_err());
+        assert!(
+            *cumulative.lock() > SESSION_COST_SAFETY_CAP,
+            "completed streaming charges must remain cumulative even when the latest call crosses the cap"
+        );
+    }
+
+    #[test]
+    fn completed_non_streaming_call_is_recorded_before_cap_error() {
+        let cumulative = parking_lot::Mutex::new(SESSION_COST_SAFETY_CAP * 0.9);
+        let result = record_non_streaming_cost(&cumulative, SESSION_COST_SAFETY_CAP * 0.2);
+        assert!(result.is_err());
+        assert!(
+            *cumulative.lock() > SESSION_COST_SAFETY_CAP,
+            "already-spent non-streaming cost must remain recorded when it crosses the cap"
         );
     }
 

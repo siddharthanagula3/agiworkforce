@@ -20,7 +20,7 @@ describe('web managed compute gate', () => {
     // With the env var unset, managed compute is GA/open and the gate allows.
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
-      model: 'gpt-test',
+      model: 'fixture-model',
     });
 
     expect(response).toBeNull();
@@ -32,7 +32,7 @@ describe('web managed compute gate', () => {
       request({ [MANAGED_COMPUTE_ORG_HEADER]: 'org-1' }),
       {
         provider: 'anthropic',
-        model: 'claude-test',
+        model: 'fixture-model',
       },
     );
 
@@ -45,7 +45,7 @@ describe('web managed compute gate', () => {
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
-      model: 'gpt-test',
+      model: 'fixture-model',
     });
 
     expect(response?.status).toBe(403);
@@ -70,7 +70,7 @@ describe('web managed compute gate', () => {
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '0';
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
-      model: 'gpt-5.6-terra',
+      model: 'fixture-model',
       isFreeTrial: true,
     });
 
@@ -85,7 +85,7 @@ describe('web managed compute gate', () => {
     delete process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV];
     const response = buildManagedComputeGateResponse(request(), {
       provider: 'openai',
-      model: 'gpt-5.6-terra',
+      model: 'fixture-model',
       isFreeTrial: true,
     });
 

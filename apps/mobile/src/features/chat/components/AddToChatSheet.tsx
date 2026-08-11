@@ -1,4 +1,4 @@
-import { useCallback, forwardRef, useMemo } from 'react';
+import { useCallback, forwardRef, useEffect, useMemo } from 'react';
 import { View, Pressable, ScrollView } from 'react-native';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
@@ -29,6 +29,7 @@ import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import {
   enterMediaMode,
   exitMediaMode,
+  clearInvalidMediaModelSelections,
   listMediaModels,
   resolveMediaModelId,
 } from '@/src/features/chat/actions/mediaMode';
@@ -93,6 +94,9 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   const features = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
+  // The selected media model is UI state, not an imperative lookup: subscribe
+  // to it so a newly picked row receives its checkmark in the same render turn.
+  const selectedMediaModel = useChatViewStore((s) => s.selectedMediaModel);
   const setMediaModel = useChatViewStore((s) => s.setMediaModel);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const tier = useTierStore((s) => s.tier);
@@ -122,8 +126,14 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   // options are Cloud-only. Each is additionally hidden when the canonical
   // registry slot has no capable model, so the sheet never offers an output kind
   // that would fail at send time.
-  const imageModelId = resolveMediaModelId('image');
-  const videoModelId = resolveMediaModelId('video');
+  const imageModelId = resolveMediaModelId('image', selectedMediaModel);
+  const videoModelId = resolveMediaModelId('video', selectedMediaModel);
+  // Persisted choices can become invalid when the catalog changes. Reconcile
+  // after render so the stale id is actually removed (and cannot reactivate if
+  // its lifecycle later changes) without mutating Zustand during render.
+  useEffect(() => {
+    clearInvalidMediaModelSelections();
+  }, [selectedMediaModel]);
   const showImageOption =
     FEATURES.imageGen &&
     appMode === 'cloud' &&
@@ -140,9 +150,8 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     canUseBillingPlanCapability(tier, 'video_generation');
   // No model name on the Image/Video rows any more: the model list rendered
   // under the active kind names it, and a second copy up here went stale the
-  // moment the user picked a different one. Defaults stay Google — the
-  // registry's image_generation and video_generation slots resolve to
-  // gemini-3.1-flash-image and veo-3.1.
+  // moment the user picked a different one. Defaults remain owned by the
+  // registry's image_generation and video_generation slots.
   const canUseConnectors = grantedCapabilities.includes('canUseConnectors');
 
   // Local and cloud projects live in physically separate stores; read the one
@@ -529,8 +538,8 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               ) : null}
               {/* Model catalog for the ACTIVE kind. Picking Image or Video is
                   only half the decision — the catalog carries several models
-                  per kind at very different prices (Veo 3.1 at $0.40/s vs Veo
-                  3.1 Lite at $0.05/s), so the choice belongs to the user. */}
+                  per kind at very different prices, so the choice belongs to
+                  the user. */}
               {mediaMode !== 'text' ? (
                 <View style={{ paddingTop: 4, paddingBottom: 2 }}>
                   <Text

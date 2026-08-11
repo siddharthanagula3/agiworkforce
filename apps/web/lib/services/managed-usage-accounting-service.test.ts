@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { listCanonicalModels } from '@agiworkforce/types';
 
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
   LLMCostCalculator: {
-    calculateCost: vi.fn(() => 9),
+    calculateCostDollars: vi.fn(() => 0.09),
   },
 }));
 
@@ -36,7 +37,21 @@ const reservation = {
   estimatedCostCents: 4,
 } as unknown as ManagedUsageRequestReservation;
 
+const TIERED_MODEL = (() => {
+  const candidate = listCanonicalModels().find(
+    (model) => (model.inputTokenPricingTiers?.length ?? 0) > 0,
+  );
+  const firstTier = candidate?.inputTokenPricingTiers?.[0];
+  if (!candidate || !firstTier) throw new Error('Expected a catalog tiered-pricing fixture');
+  return { ...candidate, firstTier };
+})();
+
 describe('managed usage accounting', () => {
+  beforeEach(() => {
+    vi.mocked(LLMCostCalculator.calculateCostDollars).mockReset().mockReturnValue(0.09);
+    vi.mocked(finalizeManagedUsageRequest).mockClear();
+  });
+
   it('aggregates each provider call including cache-token pricing dimensions', () => {
     const usage = createObservedProviderUsage();
 
@@ -65,6 +80,24 @@ describe('managed usage accounting', () => {
       cacheWriteTokens: 30,
       cacheWrite1hTokens: 7,
       reasoningTokens: 11,
+      providerCallObservations: [
+        {
+          inputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 40,
+          cacheWriteTokens: 10,
+          cacheWrite1hTokens: 3,
+          reasoningTokens: 5,
+        },
+        {
+          inputTokens: 200,
+          outputTokens: 30,
+          cacheReadTokens: 50,
+          cacheWriteTokens: 20,
+          cacheWrite1hTokens: 4,
+          reasoningTokens: 6,
+        },
+      ],
     });
     expect(hasObservedProviderUsage(usage)).toBe(true);
   });
@@ -81,14 +114,18 @@ describe('managed usage accounting', () => {
       reason: 'tool_loop_completed',
     });
 
-    expect(LLMCostCalculator.calculateCost).toHaveBeenCalledWith('anthropic', 'claude-test', {
-      promptTokens: 300,
-      completionTokens: 50,
-      totalTokens: 350,
-      cacheReadInputTokens: 0,
-      cacheCreationInputTokens: 0,
-      cacheCreation1hInputTokens: 0,
-    });
+    expect(LLMCostCalculator.calculateCostDollars).toHaveBeenCalledWith(
+      'anthropic',
+      'claude-test',
+      {
+        promptTokens: 300,
+        completionTokens: 50,
+        totalTokens: 350,
+        cacheReadInputTokens: 0,
+        cacheCreationInputTokens: 0,
+        cacheCreation1hInputTokens: 0,
+      },
+    );
     expect(finalizeManagedUsageRequest).toHaveBeenCalledWith({
       ...reservation,
       outcome: 'completed',
@@ -101,6 +138,99 @@ describe('managed usage accounting', () => {
         outputTokens: 50,
       }),
     });
+  });
+
+  it('prices provider calls independently, then rounds their exact sum once', async () => {
+    const fixtureThreshold = 100;
+    vi.mocked(LLMCostCalculator.calculateCostDollars).mockImplementation(
+      (_provider, _model, usage) =>
+        (usage.promptTokens / 20_000) * (usage.promptTokens > fixtureThreshold ? 2 : 1),
+    );
+    const pricing = { provider: 'fixture-provider', model: 'fixture-tiered-model' };
+
+    const twoSubthresholdCalls = createObservedProviderUsage();
+    accumulateObservedProviderUsage(
+      twoSubthresholdCalls,
+      { inputTokens: 75, outputTokens: 0 },
+      pricing,
+    );
+    accumulateObservedProviderUsage(
+      twoSubthresholdCalls,
+      { inputTokens: 75, outputTokens: 0 },
+      pricing,
+    );
+    await finalizeObservedManagedUsage({
+      reservation,
+      ...pricing,
+      usage: twoSubthresholdCalls,
+      reason: 'fixture_two_calls',
+    });
+    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostCents).toBe(1);
+
+    const oneLongCall = createObservedProviderUsage();
+    accumulateObservedProviderUsage(oneLongCall, { inputTokens: 150, outputTokens: 0 }, pricing);
+    await finalizeObservedManagedUsage({
+      reservation,
+      ...pricing,
+      usage: oneLongCall,
+      reason: 'fixture_one_call',
+    });
+    expect(vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostCents).toBe(2);
+    expect(
+      vi
+        .mocked(LLMCostCalculator.calculateCostDollars)
+        .mock.calls.map((call) => call[2].promptTokens),
+    ).toEqual([75, 75, 150]);
+  });
+
+  it('does not apply a catalog input tier across two request boundaries', async () => {
+    const threshold = TIERED_MODEL.firstTier.thresholdTokens;
+    const subthresholdTokens = Math.floor(threshold * 0.75);
+    vi.mocked(LLMCostCalculator.calculateCostDollars).mockImplementation(
+      (_provider, _model, usage) =>
+        (usage.promptTokens / 1_000_000) *
+        (usage.promptTokens > threshold
+          ? TIERED_MODEL.firstTier.inputCost
+          : TIERED_MODEL.inputCost),
+    );
+    const pricing = {
+      provider: TIERED_MODEL.provider,
+      model: TIERED_MODEL.id,
+    };
+
+    const twoSubthresholdCalls = createObservedProviderUsage();
+    for (let call = 0; call < 2; call += 1) {
+      accumulateObservedProviderUsage(
+        twoSubthresholdCalls,
+        { inputTokens: subthresholdTokens, outputTokens: 0 },
+        pricing,
+      );
+    }
+    await finalizeObservedManagedUsage({
+      reservation,
+      ...pricing,
+      usage: twoSubthresholdCalls,
+      reason: 'catalog_two_calls',
+    });
+    const twoCallCost = vi
+      .mocked(finalizeManagedUsageRequest)
+      .mock.calls.at(-1)?.[0].actualCostCents;
+
+    const oneLongCall = createObservedProviderUsage();
+    accumulateObservedProviderUsage(
+      oneLongCall,
+      { inputTokens: subthresholdTokens * 2, outputTokens: 0 },
+      pricing,
+    );
+    await finalizeObservedManagedUsage({
+      reservation,
+      ...pricing,
+      usage: oneLongCall,
+      reason: 'catalog_one_call',
+    });
+    expect(
+      vi.mocked(finalizeManagedUsageRequest).mock.calls.at(-1)?.[0].actualCostCents,
+    ).toBeGreaterThan(twoCallCost ?? Number.POSITIVE_INFINITY);
   });
 
   it('uses the reservation estimate only when a provider emits no usage', async () => {

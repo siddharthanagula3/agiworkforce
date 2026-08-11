@@ -2,6 +2,8 @@ import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 
+const FIXTURE_MODEL_ID = 'fixture-model';
+
 export const handlers = [
   http.post('https://api.openai.com/v1/chat/completions', async () => {
     //api.openai.com/v1/chat/completions', async () => {//api.openai.com/v1/chat/completions', async () => {
@@ -9,7 +11,7 @@ export const handlers = [
       id: 'chatcmpl-test',
       object: 'chat.completion',
       created: Date.now(),
-      model: 'gpt-5.6-sol',
+      model: FIXTURE_MODEL_ID,
       choices: [
         {
           index: 0,
@@ -40,7 +42,7 @@ export const handlers = [
           text: 'This is a test response from Anthropic',
         },
       ],
-      model: 'claude-opus-5',
+      model: FIXTURE_MODEL_ID,
       stop_reason: 'end_turn',
       usage: {
         input_tokens: 10,
@@ -52,7 +54,7 @@ export const handlers = [
   http.post('http://localhost:11434/api/chat', async () => {
     //localhost:11434/api/chat', async () => {
     return HttpResponse.json({
-      model: 'llama3',
+      model: 'fixture-local-model',
       created_at: new Date().toISOString(),
       message: {
         role: 'assistant',

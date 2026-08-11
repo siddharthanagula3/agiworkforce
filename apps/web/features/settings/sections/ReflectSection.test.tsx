@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReflectSection } from './ReflectSection';
+import { SettingsSectionNavigationProvider } from '../components/SettingsSectionLink';
 
 const recap = {
   range: '30d',
@@ -88,6 +89,7 @@ describe('ReflectSection', () => {
   });
 
   it('shows a real memory-required state instead of an empty fabricated recap', async () => {
+    const onNavigate = vi.fn();
     vi.mocked(fetch).mockImplementation(() =>
       response(
         {
@@ -99,13 +101,15 @@ describe('ReflectSection', () => {
         409,
       ),
     );
-    render(<ReflectSection />);
+    render(
+      <SettingsSectionNavigationProvider onNavigate={onNavigate}>
+        <ReflectSection />
+      </SettingsSectionNavigationProvider>,
+    );
 
     expect(await screen.findByText('Memory is off')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Capabilities settings' })).toHaveAttribute(
-      'href',
-      '/settings/capabilities',
-    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open Capabilities settings' }));
+    expect(onNavigate).toHaveBeenCalledWith('capabilities');
     expect(screen.queryByText('Writing led your past 30 days')).toBeNull();
   });
 });

@@ -244,6 +244,10 @@ const config = {
   },
   plugins: [
     'expo-asset',
+    // StoreKit 2 / Google Play Billing. Native subscriptions and consumable
+    // top-ups require a development/preview/production build; Expo Go cannot
+    // load this native module.
+    'expo-iap',
     // Embeds the Newsreader faces used by the AGI wordmark so the brand
     // lockup renders in the real typeface instead of a Georgia fallback.
     'expo-font',
@@ -379,7 +383,7 @@ const config = {
     // the whole app to use_frameworks!.
     './native/ios/withClerkModularHeaders.cjs',
     // Tier 1 Android: wires AGIAICoreModule + AGIAICorePackage into the generated android/ project.
-    // Injects com.google.mlkit:genai-common gradle dep + registers AGIAICorePackage in MainApplication.kt.
+    // Injects com.google.mlkit:genai-prompt + registers AGIAICorePackage in MainApplication.kt.
     './native/android/withAGIAICore.cjs',
     // Share-sheet / PROCESS_TEXT ingestion: patches the generated MainActivity.kt
     // so ACTION_SEND EXTRA_TEXT and ACTION_PROCESS_TEXT are rewritten into the

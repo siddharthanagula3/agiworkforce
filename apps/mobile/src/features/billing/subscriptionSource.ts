@@ -36,6 +36,14 @@ export interface SubscriptionOwnerGuard {
  */
 const UNATTRIBUTED_SOURCE_LABEL = 'another platform';
 
+const TERMINAL_SUBSCRIPTION_STATUSES = new Set([
+  'none',
+  'canceled',
+  'cancelled',
+  'expired',
+  'incomplete_expired',
+]);
+
 export function subscriptionSourceLabel(source: MobileBillingSource): string {
   switch (source) {
     case 'stripe':
@@ -78,10 +86,17 @@ export function getSubscriptionOwnerGuard(
   status: string,
 ): SubscriptionOwnerGuard {
   const entitled = isEntitledSubscriptionStatus(status);
+  // A recoverable-but-unentitled subscription (for example `past_due`) still
+  // belongs to its recorded billing system. Entitlement correctly fails
+  // closed, but ownership must remain locked there until the subscription is
+  // terminal; otherwise Mobile can offer a second purchase while the first
+  // provider is still trying to collect payment.
+  const hasRecoverableRecordedOwner =
+    source !== 'none' && !TERMINAL_SUBSCRIPTION_STATUSES.has(status.trim().toLowerCase());
   const managementUrl = subscriptionManagementUrl(source);
 
   return {
-    blocked: entitled,
+    blocked: entitled || hasRecoverableRecordedOwner,
     sourceLabel: subscriptionSourceLabel(source),
     managementUrl,
     managementActionLabel:

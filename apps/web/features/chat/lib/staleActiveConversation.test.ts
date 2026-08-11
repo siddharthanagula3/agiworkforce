@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { isStaleActiveConversation } from './staleActiveConversation';
+import {
+  isConversationListPending,
+  isConversationRoutePending,
+  isStaleActiveConversation,
+} from './staleActiveConversation';
 
 /**
  * Bug 3 (model-switch dialog over-triggers on an empty chat).
@@ -78,6 +82,66 @@ describe('isStaleActiveConversation', () => {
         isStreaming: false,
         isLoading: false,
         isSending: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isConversationRoutePending', () => {
+  it('covers the first-paint gap before auth and transcript loading begin', () => {
+    expect(
+      isConversationRoutePending({
+        displayedConversationId: 'fixture-conversation',
+        activeConversationId: null,
+        displayedMessageCount: 0,
+        authLoaded: false,
+        isConversationLoading: false,
+      }),
+    ).toBe(true);
+  });
+
+  it('stops loading when a matching empty conversation has resolved', () => {
+    expect(
+      isConversationRoutePending({
+        displayedConversationId: 'fixture-conversation',
+        activeConversationId: 'fixture-conversation',
+        displayedMessageCount: 0,
+        authLoaded: true,
+        isConversationLoading: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('shows available transcript messages without waiting for the sidebar list fetch', () => {
+    expect(
+      isConversationRoutePending({
+        displayedConversationId: 'fixture-conversation',
+        activeConversationId: 'fixture-conversation',
+        displayedMessageCount: 2,
+        authLoaded: true,
+        isConversationLoading: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isConversationListPending', () => {
+  it('shows loading before auth can begin the first list fetch', () => {
+    expect(
+      isConversationListPending({
+        authLoaded: false,
+        isConversationLoading: false,
+        conversationCount: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it('keeps loaded conversation rows visible during later operations', () => {
+    expect(
+      isConversationListPending({
+        authLoaded: true,
+        isConversationLoading: true,
+        conversationCount: 3,
       }),
     ).toBe(false);
   });

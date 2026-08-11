@@ -206,6 +206,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
     availability?.deploymentEnabled === true &&
     availability.storageReady === true &&
     availability.planEntitled === true;
+  const canRun = canCreate;
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -237,7 +238,7 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
 
   async function handleRun(event: FormEvent) {
     event.preventDefault();
-    if (!selectedSession || !command.trim() || running) return;
+    if (!canRun || !selectedSession || !command.trim() || running) return;
     const submitted = command.trim();
     setCommand('');
     setRunning(true);
@@ -620,13 +621,18 @@ export function CloudCodePage({ api = cloudCodeApi }: CloudCodePageProps) {
                               : 'Run a command…'
                           }
                           maxLength={2000}
-                          disabled={running || selectedSession.state !== 'ready'}
+                          disabled={!canRun || running || selectedSession.state !== 'ready'}
                           aria-label="Terminal command"
                         />
                         <button
                           className={styles['primaryButton']}
                           type="submit"
-                          disabled={running || !command.trim() || selectedSession.state !== 'ready'}
+                          disabled={
+                            !canRun ||
+                            running ||
+                            !command.trim() ||
+                            selectedSession.state !== 'ready'
+                          }
                         >
                           {running ? <Loader2 className={styles['spin']} size={14} /> : 'Run'}
                         </button>

@@ -17,17 +17,7 @@
     "lmstudio": "LM Studio"
   },
   "models": {
-    "auto": "자동 (권장)",
-    "claude-sonnet": "Claude Sonnet",
-    "claude-opus": "Claude Opus",
-    "claude-haiku": "Claude Haiku",
-    "gpt-5.6-sol": "GPT-5.6 Sol",
-    "gpt-5.6-luna": "GPT-5.6 Luna",
-    "gemini-pro": "Gemini Pro",
-    "gemini-flash": "Gemini Flash",
-    "mistral": "Mistral",
-    "mixtral": "Mixtral",
-    "codellama": "CodeLlama"
+    "auto": "자동 (권장)"
   },
   "selectProvider": "제공업체 선택",
   "selectModel": "모델 선택",

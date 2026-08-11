@@ -1,5 +1,5 @@
 // @agiworkforce/local-llm — runtime tier selector and local inference API.
-// PRD-MOBILE §8 §9. Tier 1 = Apple Foundation Models / Gemini Nano AICore.
+// PRD-MOBILE §8 §9. Tier 1 = OS-resident Apple / Google inference runtimes.
 // Tier 2 = react-native-executorch. Tier 3 = llama.rn (universal fallback).
 
 export { localGenerate, selectTier, getCapabilities, refreshCapabilities } from './selector';
@@ -43,6 +43,7 @@ export type {
   LlamaContentPart,
 } from './multimodal';
 export {
+  getLocalModelCatalog,
   getModelById,
   getModelsForRole,
   getShippableModels,

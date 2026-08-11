@@ -140,7 +140,9 @@ pub async fn cache_clear_by_type(
             // Tool caches are managed per-execution by AgiExecutor instances.
             // They automatically clear when executions complete.
             // No global tool cache to clear, but we log the request for visibility.
-            tracing::info!("Tool cache clear requested - tool caches are per-execution and auto-clear on completion");
+            tracing::info!(
+                "Tool cache clear requested - tool caches are per-execution and auto-clear on completion"
+            );
             Ok(())
         }
         "codebase" => {
@@ -432,7 +434,7 @@ mod tests {
 
         conn.execute(
             "INSERT INTO cache_entries (cache_key, provider, model, prompt_hash, response, tokens, cost, created_at, last_used_at, expires_at, hit_count, cost_saved, tokens_saved)
-             VALUES ('key1', 'openai', 'gpt-4', 'hash1', 'response1', 100, 0.01, '2024-01-01', '2024-01-01', '2024-12-31', 5, 0.05, 500)",
+             VALUES ('key1', 'openai', 'fixture-primary-model', 'hash1', 'response1', 100, 0.01, '2024-01-01', '2024-01-01', '2024-12-31', 5, 0.05, 500)",
             [],
         )
         .unwrap();

@@ -113,6 +113,27 @@ function walk(dir, out = []) {
 }
 
 /**
+ * Tailwind's source detector is intentionally broader than the runtime token
+ * walker above: test files, JavaScript modules, and MDX can all contain class
+ * candidates even though they are not useful inputs to the custom-property
+ * reference check. Keep those files in the arbitrary-utility safety scan.
+ */
+function walkTailwindSources(dir, out = []) {
+  const abs = path.join(root, dir);
+  if (!fs.existsSync(abs)) return out;
+  for (const entry of fs.readdirSync(abs, { withFileTypes: true })) {
+    const rel = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (['node_modules', 'dist', '.next', 'src-tauri'].includes(entry.name)) continue;
+      walkTailwindSources(rel, out);
+    } else if (/\.(?:[cm]?[jt]sx?|mdx)$/.test(entry.name)) {
+      out.push(rel);
+    }
+  }
+  return out;
+}
+
+/**
  * Font variables declared through next/font (`variable: '--font-x'`) are injected
  * onto the document element at runtime, so they are defined even though no
  * stylesheet declares them.
@@ -231,10 +252,41 @@ function checkPortalOverlays() {
   }
 }
 
+/**
+ * Tailwind v4 scans raw source text, including comments. A prose placeholder
+ * that still looks like an arbitrary utility is therefore executable input to
+ * the CSS compiler. For example, a comment containing a z-index utility with
+ * an angle-bracket placeholder produced `var(--z-<layer>,…)`, made globals.css
+ * unparsable, and returned HTTP 500 before the sign-in screen rendered.
+ */
+const INVALID_TAILWIND_ARBITRARY_CANDIDATE =
+  /(?:[!@a-z0-9_:/.-]+)-\[[^\]\n]*(?:<[^>\n]+>|…)[^\]\n]*\]/gi;
+
+function checkInvalidTailwindArbitraryCandidates() {
+  const files = new Set([
+    ...walkTailwindSources('apps/web'),
+    ...walkTailwindSources('packages/ui'),
+  ]);
+  for (const file of files) {
+    fs.readFileSync(path.join(root, file), 'utf8')
+      .split('\n')
+      .forEach((line, index) => {
+        for (const match of line.matchAll(INVALID_TAILWIND_ARBITRARY_CANDIDATE)) {
+          errors.push(
+            `${file}:${index + 1} contains an invalid Tailwind arbitrary-utility candidate ` +
+              `(${match[0]}). Tailwind scans comments too; describe the pattern in prose ` +
+              `without bracket-utility syntax or use a real CSS value.`,
+          );
+        }
+      });
+  }
+}
+
 const errors = [];
 let referenced = 0;
 
 checkPortalOverlays();
+checkInvalidTailwindArbitraryCandidates();
 
 for (const surface of SURFACES) {
   const { declared, hslTriplets } = declaredTokens(surface.stylesheets);

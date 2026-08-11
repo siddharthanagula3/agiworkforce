@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
+import { getModelsForTierAndSurface } from '@agiworkforce/types';
 import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
 import { useConversations, useProjectConversations } from './useConversations';
 
@@ -35,6 +36,44 @@ const WIRE_CONVERSATION = {
   created_at: '2026-07-16T00:00:00.000Z',
   updated_at: '2026-07-16T00:00:00.000Z',
 };
+
+const DEEP_LINK_MODEL = getModelsForTierAndSurface('max', 'web/cloud-chat', {
+  modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+})[0];
+if (!DEEP_LINK_MODEL) throw new Error('Expected a selectable Web cloud-chat model fixture');
+
+const DEEP_LINK_CONVERSATION = {
+  ...WIRE_CONVERSATION,
+  id: 'c0ffee00-0000-4000-8000-000000000099',
+  title: 'Older direct link',
+  model: DEEP_LINK_MODEL.id,
+};
+
+function deferredResponse() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function conversationListResponse(conversations: (typeof WIRE_CONVERSATION)[] = []) {
+  return new Response(JSON.stringify({ conversations, hasMore: false, nextOffset: 0 }), {
+    status: 200,
+  });
+}
+
+function conversationDetailResponse() {
+  return new Response(
+    JSON.stringify({
+      conversation: DEEP_LINK_CONVERSATION,
+      messages: [],
+      total: 0,
+      hasMore: false,
+    }),
+    { status: 200 },
+  );
+}
 
 /**
  * Route the hook's two fetch shapes: the mount-time GET list and the
@@ -120,19 +159,6 @@ describe('useConversations.updateConversation', () => {
   });
 
   it('updates the shared project count after a conversation move succeeds', async () => {
-    useChatStore.getState().setConversations([
-      {
-        id: WIRE_CONVERSATION.id,
-        title: WIRE_CONVERSATION.title,
-        model: WIRE_CONVERSATION.model,
-        projectId: null,
-        isPinned: false,
-        isStarred: false,
-        isArchived: false,
-        createdAt: WIRE_CONVERSATION.created_at,
-        updatedAt: WIRE_CONVERSATION.updated_at,
-      },
-    ]);
     vi.stubGlobal(
       'fetch',
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
@@ -144,13 +170,19 @@ describe('useConversations.updateConversation', () => {
             { status: 200 },
           );
         }
-        return new Response(JSON.stringify({ conversations: [], hasMore: false, nextOffset: 0 }), {
-          status: 200,
-        });
+        return new Response(
+          JSON.stringify({ conversations: [WIRE_CONVERSATION], hasMore: false, nextOffset: 0 }),
+          { status: 200 },
+        );
       }),
     );
 
     const { result } = renderHook(() => useConversations());
+    await waitFor(() =>
+      expect(
+        useChatStore.getState().conversations.some(({ id }) => id === WIRE_CONVERSATION.id),
+      ).toBe(true),
+    );
     await act(async () => {
       await result.current.updateConversation(WIRE_CONVERSATION.id, {
         projectId: 'proj-123',
@@ -160,6 +192,118 @@ describe('useConversations.updateConversation', () => {
     expect(useChatProjectStore.getState().projects[0]?.conversationIds).toEqual([
       WIRE_CONVERSATION.id,
     ]);
+  });
+
+  it('persists a catalog model change and mirrors the server value into the conversation', async () => {
+    const selectedModel = getModelsForTierAndSurface('max', 'web/cloud-chat', {
+      modelTypes: ['chat', 'code', 'reasoning', 'multimodal', 'search'],
+    })[0];
+    expect(selectedModel).toBeDefined();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === 'PUT') {
+          expect(JSON.parse(String(init.body))).toMatchObject({ model: selectedModel!.id });
+          return new Response(
+            JSON.stringify({
+              conversation: { ...WIRE_CONVERSATION, model: selectedModel!.id },
+            }),
+            { status: 200 },
+          );
+        }
+        return new Response(
+          JSON.stringify({ conversations: [WIRE_CONVERSATION], hasMore: false, nextOffset: 0 }),
+          { status: 200 },
+        );
+      }),
+    );
+
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() =>
+      expect(
+        useChatStore.getState().conversations.some(({ id }) => id === WIRE_CONVERSATION.id),
+      ).toBe(true),
+    );
+    await act(async () => {
+      expect(
+        await result.current.updateConversation(WIRE_CONVERSATION.id, {
+          model: selectedModel!.id,
+        }),
+      ).toBe(true);
+    });
+
+    expect(
+      useChatStore.getState().conversations.find(({ id }) => id === WIRE_CONVERSATION.id)?.model,
+    ).toBe(selectedModel!.id);
+  });
+});
+
+describe('useConversations.loadConversation pagination races', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+    authMocks.getToken.mockResolvedValue('session-token');
+  });
+
+  it('upserts a deep-linked detail after the first sidebar page has loaded', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) =>
+        String(input).includes(DEEP_LINK_CONVERSATION.id)
+          ? conversationDetailResponse()
+          : conversationListResponse([WIRE_CONVERSATION]),
+      ),
+    );
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() =>
+      expect(useChatStore.getState().conversations).toContainEqual(
+        expect.objectContaining({ id: WIRE_CONVERSATION.id }),
+      ),
+    );
+
+    await act(async () => {
+      expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+    });
+
+    expect(useChatStore.getState().conversations).toContainEqual(
+      expect.objectContaining({
+        id: DEEP_LINK_CONVERSATION.id,
+        model: DEEP_LINK_CONVERSATION.model,
+      }),
+    );
+  });
+
+  it('preserves a deep-linked detail when the first sidebar page resolves later', async () => {
+    const list = deferredResponse();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) =>
+        String(input).includes(DEEP_LINK_CONVERSATION.id)
+          ? Promise.resolve(conversationDetailResponse())
+          : list.promise,
+      ),
+    );
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1));
+
+    await act(async () => {
+      expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+    });
+    await act(async () => {
+      list.resolve(conversationListResponse([WIRE_CONVERSATION]));
+      await list.promise;
+    });
+
+    await waitFor(() =>
+      expect(useChatStore.getState().conversations).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: DEEP_LINK_CONVERSATION.id,
+            model: DEEP_LINK_CONVERSATION.model,
+          }),
+          expect.objectContaining({ id: WIRE_CONVERSATION.id }),
+        ]),
+      ),
+    );
   });
 });
 

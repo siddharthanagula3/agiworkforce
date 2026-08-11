@@ -21,17 +21,20 @@ fn perplexity_model_for_task(task: &str) -> String {
     models_config::get_task_model(&Provider::Perplexity, task).to_string()
 }
 
-/// Look up an image/video generation model's wire API ID from the catalog.
-/// Falls back to the catalog key itself if no `apiModelId` override is set.
+/// Look up an active image/video generation model's wire API ID from the
+/// catalog. An absent capability returns `None`; callers must not manufacture
+/// a provider model fallback.
 /// Source of truth: `packages/contracts/types/src/models.json` (models section).
-fn gen_model_api_id(catalog_key: &str) -> String {
-    models_config::get_api_model_id(catalog_key)
+fn gen_model_api_id(provider: &Provider, model_type: &str, quality_tier: &str) -> Option<String> {
+    let catalog_id = models_config::get_model_by_type_and_tier(provider, model_type, quality_tier)?;
+    Some(models_config::get_api_model_id(catalog_id))
 }
 
-/// Ollama fallback model for local inference.
-/// Source of truth: `packages/contracts/types/src/models.json` (providers.ollama.defaultModel).
-fn ollama_default_model() -> String {
-    models_config::get_default_model(&Provider::Ollama).to_string()
+/// A local default exists only when the runtime supplied one. The static cloud
+/// catalog must not manufacture an Ollama model name.
+fn ollama_default_model() -> Option<String> {
+    let model = models_config::get_default_model(&Provider::Ollama);
+    (!model.is_empty()).then(|| model.to_string())
 }
 
 pub struct APIRouter {
@@ -66,14 +69,11 @@ impl APIRouter {
             ],
         );
 
-        routing_rules.insert(
-            UseCase::ImageGen,
-            vec![
-                APIProvider::GPTImage,
-                APIProvider::StableDiffusion,
-                APIProvider::Midjourney,
-            ],
-        );
+        // Only catalog-backed providers participate in automatic routing.
+        // Generic adapters may remain available for future catalog entries,
+        // but retired or unconfigured providers are not advertised as live
+        // fallbacks.
+        routing_rules.insert(UseCase::ImageGen, vec![APIProvider::GPTImage]);
 
         routing_rules.insert(UseCase::VideoGen, vec![APIProvider::Veo3]);
 
@@ -144,7 +144,7 @@ impl APIRouter {
             estimated_cost: Some(estimated_cost),
             estimated_latency: Some(estimated_latency),
             fallbacks,
-            model: Some(model),
+            model,
             config: None,
         }
     }
@@ -154,11 +154,11 @@ impl APIRouter {
         use_case: UseCase,
         provider: APIProvider,
         context: &PromptContext,
-    ) -> (String, String) {
+    ) -> (String, Option<String>) {
         match (use_case, provider) {
             (UseCase::Automation, APIProvider::Claude) => (
                 "Claude excels at understanding complex automation workflows and providing detailed step-by-step instructions.".to_string(),
-                claude_model_for_task("chat"),
+                Some(claude_model_for_task("chat")),
             ),
             (UseCase::Coding, APIProvider::Claude) => {
                 let model = if matches!(context.complexity, Some(super::Complexity::Complex)) {
@@ -169,36 +169,33 @@ impl APIRouter {
                 (
                     "Claude is optimal for code generation with strong reasoning capabilities."
                         .to_string(),
-                    model,
+                    Some(model),
                 )
             },
             (UseCase::Coding, APIProvider::GPT) => (
                 "GPT provides excellent code generation with broad language support.".to_string(),
-                openai_model_for_task("code_generation"),
+                Some(openai_model_for_task("code_generation")),
             ),
             (UseCase::DocumentCreation, APIProvider::GPT) => (
                 "GPT excels at creative writing and document generation with natural language.".to_string(),
-                openai_model_for_task("chat"),
+                Some(openai_model_for_task("chat")),
             ),
             (UseCase::Search, APIProvider::Perplexity) => (
                 "Perplexity is specifically designed for search queries with up-to-date web information.".to_string(),
-                perplexity_model_for_task("chat"),
+                Some(perplexity_model_for_task("chat")),
             ),
             (UseCase::ImageGen, APIProvider::GPTImage) => (
-                "GPT Image 2 provides high-quality image generation with strong prompt understanding.".to_string(),
-                gen_model_api_id("gpt-image-2"),
-            ),
-            (UseCase::ImageGen, APIProvider::StableDiffusion) => (
-                "Stable Diffusion offers flexible, cost-effective image generation.".to_string(),
-                gen_model_api_id("stable-diffusion-xl"),
+                "OpenAI provides high-quality image generation with strong prompt understanding."
+                    .to_string(),
+                gen_model_api_id(&Provider::OpenAI, "image", "best"),
             ),
             (UseCase::VideoGen, APIProvider::Veo3) => (
-                "Veo3 is Google's advanced video generation model with high-quality output.".to_string(),
-                gen_model_api_id("veo-3.1"),
+                "Google provides advanced video generation with high-quality output.".to_string(),
+                gen_model_api_id(&Provider::Google, "video", "best"),
             ),
             (UseCase::GeneralQA, APIProvider::GPT) => (
                 "GPT provides versatile, accurate responses for general questions.".to_string(),
-                openai_model_for_task("chat"),
+                Some(openai_model_for_task("chat")),
             ),
             (UseCase::GeneralQA, APIProvider::Ollama) => (
                 "Ollama provides free local inference for general questions.".to_string(),
@@ -206,7 +203,7 @@ impl APIRouter {
             ),
             _ => (
                 format!("Using {} for {} task", provider.as_str(), use_case.as_str()),
-                "default".to_string(),
+                None,
             ),
         }
     }
@@ -219,8 +216,6 @@ impl APIRouter {
             APIProvider::Perplexity => 0.001,
             APIProvider::Ollama => 0.0,
             APIProvider::GPTImage => 0.04,
-            APIProvider::StableDiffusion => 0.002,
-            APIProvider::Midjourney => 0.01,
             APIProvider::Veo3 => 0.1,
         };
 
@@ -235,8 +230,6 @@ impl APIRouter {
             APIProvider::Claude => 1200,
             APIProvider::Perplexity => 2000,
             APIProvider::GPTImage => 5000,
-            APIProvider::StableDiffusion => 3000,
-            APIProvider::Midjourney => 10000,
             APIProvider::Veo3 => 30000,
         }
     }
@@ -299,5 +292,34 @@ mod tests {
         let router = APIRouter::new();
         let fallbacks = router.get_fallback_providers(UseCase::Coding);
         assert!(fallbacks.contains(&APIProvider::GPT));
+    }
+
+    #[test]
+    fn image_route_uses_only_an_active_catalog_model() {
+        let router = APIRouter::new();
+        let context = PromptContext {
+            language: None,
+            framework: None,
+            domain: None,
+            complexity: None,
+        };
+        let route = router.create_route(UseCase::ImageGen, &context, false);
+        let selected = route
+            .model
+            .expect("image route must select a catalog model");
+        let entry = models_config::get_all_model_entries()
+            .values()
+            .find(|entry| {
+                entry.provider == "openai"
+                    && entry.capabilities.image_gen
+                    && entry.deprecated != Some(true)
+            })
+            .expect("catalog must expose an active OpenAI image model");
+
+        assert_eq!(
+            selected,
+            entry.api_model_id.as_deref().unwrap_or(entry.id.as_str())
+        );
+        assert!(router.get_fallback_providers(UseCase::ImageGen).is_empty());
     }
 }

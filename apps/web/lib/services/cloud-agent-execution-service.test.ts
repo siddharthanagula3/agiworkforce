@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { listCanonicalModels } from '@agiworkforce/types';
+import { calculateObservedProviderUsageCostDollars } from './managed-usage-accounting-service';
+import { LLMCostCalculator } from './llm-cost-calculator';
 import {
   CloudAgentExecutionConflictError,
   attachCloudAgentWorkflow,
@@ -15,6 +18,14 @@ const RUN_ID = '0190a000-0000-7000-8000-000000000001';
 const OPERATION_ID = '0190a000-0000-7000-8000-000000000002';
 const LEASE_TOKEN = '0190a000-0000-7000-8000-000000000003';
 const INPUT_HASH = 'a'.repeat(64);
+const TIERED_MODEL = (() => {
+  const candidate = listCanonicalModels().find(
+    (model) => (model.inputTokenPricingTiers?.length ?? 0) > 0,
+  );
+  const firstTier = candidate?.inputTokenPricingTiers?.[0];
+  if (!candidate || !firstTier) throw new Error('Expected a catalog tiered-pricing fixture');
+  return { ...candidate, firstTier };
+})();
 
 const RUNNING_ROW = {
   id: OPERATION_ID,
@@ -281,6 +292,7 @@ describe('cloud agent execution service', () => {
         cache_write_tokens: '7',
         cache_write_1h_tokens: '3',
         reasoning_tokens: '11',
+        provider_usage_receipts: [],
       },
     ]);
 
@@ -300,8 +312,108 @@ describe('cloud agent execution service', () => {
       reasoningTokens: 11,
     });
     expect(db.query).toHaveBeenCalledWith(
-      expect.stringMatching(/operation_kind = 'provider'[\s\S]*status = 'completed'/i),
+      expect.stringMatching(
+        /jsonb_agg\(usage order by created_at, operation_key\)[\s\S]*operation_kind = 'provider'[\s\S]*status = 'completed'/i,
+      ),
       [RUN_ID, 'user-1', 'agi.chat.web.request-1'],
     );
+  });
+
+  it('rebuilds two subthreshold call observations from durable provider receipts', async () => {
+    const observation = (costDollars: number) => ({
+      inputTokens: 75,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      reasoningTokens: 0,
+      provider: 'fixture-provider',
+      model: 'fixture-tiered-model',
+      costDollars,
+    });
+    vi.mocked(db.query).mockResolvedValueOnce([
+      {
+        provider_calls: '2',
+        input_tokens: '150',
+        output_tokens: '0',
+        cache_read_tokens: '0',
+        cache_write_tokens: '0',
+        cache_write_1h_tokens: '0',
+        reasoning_tokens: '0',
+        provider_usage_receipts: [
+          {
+            providerCostDollars: 0.00375,
+            providerCallObservations: [observation(0.00375)],
+          },
+          {
+            providerCostDollars: 0.00375,
+            providerCallObservations: [observation(0.00375)],
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      getCloudAgentExecutionUsage(db, {
+        userId: 'user-1',
+        runId: RUN_ID,
+        billingIdempotencyKey: 'agi.chat.web.request-2',
+      }),
+    ).resolves.toMatchObject({
+      providerCalls: 2,
+      inputTokens: 150,
+      providerCostDollars: 0.0075,
+      providerCallObservations: [observation(0.00375), observation(0.00375)],
+    });
+  });
+
+  it('synthesizes request boundaries from historical top-level usage receipts', async () => {
+    const subthresholdTokens = Math.floor(TIERED_MODEL.firstTier.thresholdTokens * 0.75);
+    const legacyReceipt = {
+      inputTokens: subthresholdTokens,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+      reasoningTokens: 0,
+    };
+    vi.mocked(db.query).mockResolvedValueOnce([
+      {
+        provider_calls: '2',
+        input_tokens: String(subthresholdTokens * 2),
+        output_tokens: '0',
+        cache_read_tokens: '0',
+        cache_write_tokens: '0',
+        cache_write_1h_tokens: '0',
+        reasoning_tokens: '0',
+        provider_usage_receipts: [legacyReceipt, legacyReceipt],
+      },
+    ]);
+
+    const usage = await getCloudAgentExecutionUsage(db, {
+      userId: 'user-1',
+      runId: RUN_ID,
+      billingIdempotencyKey: 'agi.chat.web.request-legacy',
+    });
+    expect(usage.providerCallObservations?.map((call) => call.inputTokens)).toEqual([
+      subthresholdTokens,
+      subthresholdTokens,
+    ]);
+
+    const fallbackPricing = {
+      provider: TIERED_MODEL.provider,
+      model: TIERED_MODEL.id,
+    };
+    const separatedCost = calculateObservedProviderUsageCostDollars(usage, fallbackPricing);
+    const incorrectlyAggregatedCost = LLMCostCalculator.calculateCostDollars(
+      fallbackPricing.provider,
+      fallbackPricing.model,
+      {
+        promptTokens: subthresholdTokens * 2,
+        completionTokens: 0,
+        totalTokens: subthresholdTokens * 2,
+      },
+    );
+    expect(incorrectlyAggregatedCost).toBeGreaterThan(separatedCost);
   });
 });

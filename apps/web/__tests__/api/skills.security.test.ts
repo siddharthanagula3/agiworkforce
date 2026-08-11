@@ -30,8 +30,19 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn().mockResolvedValue({ userId: 'user_test' }),
 }));
 
+vi.mock('@/lib/services/plugin-installation-service', () => ({
+  listEnabledPluginIds: vi.fn().mockResolvedValue(new Set(['research-pack'])),
+  listEnabledPluginIdsForUser: vi.fn().mockResolvedValue(new Set(['research-pack'])),
+}));
+
+vi.mock('@/lib/server/neon-db', () => ({
+  getNeonDb: vi.fn(() => ({})),
+}));
+
 import { GET as listSkills } from '@/app/api/skills/route';
 import { GET as getSkillBody } from '@/app/api/skills/[name]/route';
+import { GET as downloadSkill } from '@/app/api/skills/[name]/download/route';
+import { resetManagedSkillCatalogCacheForTests } from '@/lib/services/skill-catalog-service';
 
 function request(path: string, origin?: string): NextRequest {
   return new NextRequest(`http://localhost${path}`, {
@@ -45,6 +56,12 @@ describe('skills API security contract', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    const { getClerkAuthUser } = await import('@/lib/api-auth');
+    vi.mocked(getClerkAuthUser).mockResolvedValue({ userId: 'user_test' } as never);
+    const { listEnabledPluginIds, listEnabledPluginIdsForUser } =
+      await import('@/lib/services/plugin-installation-service');
+    vi.mocked(listEnabledPluginIds).mockResolvedValue(new Set(['research-pack']));
+    vi.mocked(listEnabledPluginIdsForUser).mockResolvedValue(new Set(['research-pack']));
     tempSkillsRoot = await mkdtemp(join(tmpdir(), 'agi-skills-api-'));
     const skillDir = join(tempSkillsRoot, 'design-review');
     await mkdir(skillDir, { recursive: true });
@@ -63,10 +80,12 @@ describe('skills API security contract', () => {
     process.env['SKILLS_LAYERS'] = JSON.stringify([
       { rootDir: tempSkillsRoot, source: 'personal' },
     ]);
+    resetManagedSkillCatalogCacheForTests();
   });
 
   afterEach(async () => {
     delete process.env['SKILLS_LAYERS'];
+    resetManagedSkillCatalogCacheForTests();
     if (tempSkillsRoot) {
       await rm(tempSkillsRoot, { recursive: true, force: true });
       tempSkillsRoot = null;
@@ -82,11 +101,12 @@ describe('skills API security contract', () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get('access-control-allow-origin')).toBe('https://tauri.localhost');
-    expect(json.skills).toHaveLength(1);
-    expect(json.skills[0]).toEqual({
+    expect(json.skills).toContainEqual({
       name: 'design-review',
       description: 'Review UI for release polish.',
       source: 'personal',
+      lifecycle: 'included',
+      downloadable: false,
     });
     expect(body).not.toContain('/Users/');
     expect(body).not.toContain('SKILL.md');
@@ -107,6 +127,44 @@ describe('skills API security contract', () => {
     await expect(
       getSkillBody(request('/api/skills/design-review'), {
         params: Promise.resolve({ name: 'design-review' }),
+      }),
+    ).rejects.toThrow('Unauthorized');
+  });
+
+  it('downloads only an included bundled SKILL.md with attachment headers', async () => {
+    const response = await downloadSkill(request('/api/skills/code-review/download'), {
+      params: Promise.resolve({ name: 'code-review' }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-disposition')).toBe('attachment; filename="SKILL.md"');
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(await response.text()).toContain('name: code-review');
+  });
+
+  it('offers and downloads an enabled plugin-owned bundled skill', async () => {
+    const listResponse = await listSkills(request('/api/skills'));
+    const listBody = (await listResponse.json()) as {
+      skills: Array<{ name: string; downloadable: boolean }>;
+    };
+    expect(listBody.skills).toContainEqual(
+      expect.objectContaining({ name: 'literature-review', downloadable: true }),
+    );
+
+    const response = await downloadSkill(request('/api/skills/literature-review/download'), {
+      params: Promise.resolve({ name: 'literature-review' }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('name: literature-review');
+  });
+
+  it('requires auth before downloading a bundled skill', async () => {
+    const { getClerkAuthUser } = await import('@/lib/api-auth');
+    vi.mocked(getClerkAuthUser).mockRejectedValueOnce(new Error('Unauthorized'));
+
+    await expect(
+      downloadSkill(request('/api/skills/code-review/download'), {
+        params: Promise.resolve({ name: 'code-review' }),
       }),
     ).rejects.toThrow('Unauthorized');
   });

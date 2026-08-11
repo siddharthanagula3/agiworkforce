@@ -9,6 +9,9 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { getDefaultModelFor } from '@agiworkforce/types';
+
+const FREE_CHAT_MODEL = getDefaultModelFor('free', 'chat');
 
 const safetyMocks = vi.hoisted(() => ({ enforce: vi.fn() }));
 
@@ -63,7 +66,7 @@ function requestWithMessages(
       'x-agi-surface': 'web',
     },
     body: JSON.stringify({
-      model: 'gemini-3.5-flash-lite',
+      model: FREE_CHAT_MODEL,
       messages,
       stream: false,
     }),

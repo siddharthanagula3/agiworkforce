@@ -317,13 +317,11 @@ export const MediaLab: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <MediaGenerationProgress
                 type="image"
                 provider={
-                  (imageProvider === 'google_imagen' || imageProvider === 'google_imagen_lite'
+                  (imageProvider === 'google_balanced' || imageProvider === 'google_fast'
                     ? 'google'
-                    : imageProvider === 'dalle'
+                    : imageProvider === 'openai'
                       ? 'openai'
-                      : imageProvider === 'stable_diffusion'
-                        ? 'stability'
-                        : undefined) as MediaGenProvider | undefined
+                      : undefined) as MediaGenProvider | undefined
                 }
                 model={currentProviderModel}
                 prompt={imagePrompt}

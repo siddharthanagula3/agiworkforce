@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { getAutoRoutingProfiles, getModelsForTierAndSurface } from '@agiworkforce/types';
-import { AVAILABLE_MODELS, useModelStore } from './model-store';
+import { AVAILABLE_MODELS, resolveSelectableModelId, useModelStore } from './model-store';
 
 describe('web model selection trust boundary', () => {
   it('classifies Auto routing profiles as managed cloud without fake model metadata', () => {
-    useModelStore.getState().setSelectedModel('auto-balanced');
+    const selectableAutoProfile = getAutoRoutingProfiles()[0];
+    expect(selectableAutoProfile).toBeDefined();
+    useModelStore.getState().setSelectedModel(selectableAutoProfile!.id);
 
-    expect(useModelStore.getState().selectedModelId).toBe('auto-balanced');
+    expect(useModelStore.getState().selectedModelId).toBe(selectableAutoProfile!.id);
     expect(useModelStore.getState().selectedProvider).toBe('managed_cloud');
   });
 
@@ -47,7 +49,41 @@ describe('web model selection trust boundary', () => {
 
     await useModelStore.persist.rehydrate();
 
-    expect(useModelStore.getState().selectedModelId).toBe('auto');
+    expect(useModelStore.getState().selectedModelId).toBe(getAutoRoutingProfiles()[0]!.id);
     expect(useModelStore.getState().selectedProvider).toBe('managed_cloud');
+  });
+
+  it('repairs a same-version stale model instead of sending the hidden retired ID', async () => {
+    localStorage.setItem(
+      'agi-model-store',
+      JSON.stringify({
+        state: {
+          selectedModelId: 'removed-provider-model',
+          selectedProvider: 'anthropic',
+        },
+        version: 5,
+      }),
+    );
+
+    await useModelStore.persist.rehydrate();
+
+    expect(useModelStore.getState().selectedModelId).toBe(getAutoRoutingProfiles()[0]!.id);
+    expect(useModelStore.getState().selectedProvider).toBe('managed_cloud');
+  });
+
+  it('rejects stale setter values and mismatched provider hints at the store boundary', () => {
+    useModelStore.getState().setSelectedModel('removed-provider-model', 'anthropic');
+    expect(useModelStore.getState().selectedModelId).toBe(getAutoRoutingProfiles()[0]!.id);
+    expect(useModelStore.getState().selectedProvider).toBe('managed_cloud');
+    expect(resolveSelectableModelId('removed-provider-model')).toBe(
+      getAutoRoutingProfiles()[0]!.id,
+    );
+
+    const liveManualModel = AVAILABLE_MODELS.find(
+      (model) => model.providerKey !== 'managed_cloud' && model.availability !== 'coming_soon',
+    );
+    expect(liveManualModel).toBeDefined();
+    useModelStore.getState().setSelectedModel(liveManualModel!.id, 'fixture-provider');
+    expect(useModelStore.getState().selectedProvider).toBe(liveManualModel!.providerKey);
   });
 });

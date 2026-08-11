@@ -6,8 +6,13 @@ import { createError } from '@/lib/errors';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  INTERACTIVE_CARDS_MAX_PER_MESSAGE,
+  INTERACTIVE_CARDS_METADATA_KEY,
+} from '@agiworkforce/types';
+import {
   MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH,
   managedCloudMetadataLength,
+  readPersistedInteractiveCards,
 } from '@agiworkforce/cloud-contracts';
 
 export type ChatConversationRow = {
@@ -71,11 +76,23 @@ export async function requireCurrentUserId(request?: NextRequest): Promise<strin
  */
 export function normalizeMessageMetadata(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const length = managedCloudMetadataLength(value);
+  const normalized = { ...(value as Record<string, unknown>) };
+  const rawCards = normalized[INTERACTIVE_CARDS_METADATA_KEY];
+  if (Array.isArray(rawCards) && rawCards.length > INTERACTIVE_CARDS_MAX_PER_MESSAGE) {
+    throw createError.validation(
+      `Message metadata contains too many interactive cards (${rawCards.length}, limit ${INTERACTIVE_CARDS_MAX_PER_MESSAGE}).`,
+    );
+  }
+  if (rawCards !== undefined) {
+    const cards = readPersistedInteractiveCards(normalized);
+    if (cards.length > 0) normalized[INTERACTIVE_CARDS_METADATA_KEY] = cards;
+    else delete normalized[INTERACTIVE_CARDS_METADATA_KEY];
+  }
+  const length = managedCloudMetadataLength(normalized);
   if (length > MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH) {
     throw createError.validation(
       `Message metadata is too large (${length} characters, limit ${MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH}). Upload large payloads such as generated images to storage and reference them by id instead of embedding them in the message.`,
     );
   }
-  return value as Record<string, unknown>;
+  return normalized;
 }

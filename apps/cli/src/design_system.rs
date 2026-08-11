@@ -429,19 +429,13 @@ mod tests {
 
     #[test]
     fn capability_tier_for_known_models() {
-        // Use API model IDs as they appear in models.json apiModelId fields.
-        // The `Fastest` tier had Haiku 4.5 as its example until that model was
-        // retired 2026-07-27; no Anthropic model carries qualityTier=fast now.
-        // sonnet-5 → apiModelId=claude-sonnet-5, qualityTier=balanced → Balanced
-        assert_eq!(
-            capability_for_model("claude-sonnet-5"),
-            CapabilityTier::Balanced
-        );
-        // opus-5 → apiModelId=claude-opus-5, qualityTier=best → MostCapable
-        assert_eq!(
-            capability_for_model("claude-opus-5"),
-            CapabilityTier::MostCapable
-        );
+        for model in crate::model_catalog::catalog().all() {
+            let expected = crate::model_catalog::quality_tier_for_model(&model.id)
+                .as_deref()
+                .map(CapabilityTier::from)
+                .unwrap_or(CapabilityTier::Balanced);
+            assert_eq!(capability_for_model(&model.id), expected, "{}", model.id);
+        }
         // default fallback for models not in the shared catalog (e.g. local Ollama)
         assert_eq!(
             capability_for_model("some-unknown-model"),

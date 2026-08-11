@@ -36,7 +36,7 @@ import * as TTS from '@/src/features/voice/services/tts';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/text';
-import { useChatStore } from '@/stores/chatStore';
+import { paywallErrorStateFromApiError, useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import {
   DEFAULT_CLOUD_MODEL_ID,
@@ -68,6 +68,8 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
 import { PICKABLE_DOCUMENT_MIME_TYPES } from '@/services/docParser';
+import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
+import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 
 function getTimeOfDayGreeting(): string {
   const hour = new Date().getHours();
@@ -137,7 +139,10 @@ export default function ChatTabScreen() {
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const clerkUserId = useAuthStore((s) => s.clerkUserId);
+  const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
+  const skillSelection = useMobileSkillSelectionStore((s) => s.selection);
+  const clearSelectedSkill = useMobileSkillSelectionStore((s) => s.clearSkill);
   const waitlistJoined = useWaitlistStore((s) => s.joined);
   const waitlistRank = useWaitlistStore((s) => s.rank);
   const subscriptionTier = useTierStore((s) => s.tier);
@@ -145,9 +150,23 @@ export default function ChatTabScreen() {
   const installedModelIds = useModelInstallStore((s) => s.installedModelIds);
   const readySystemModelIds = useModelInstallStore((s) => s.readySystemModelIds);
   const activeMode = appMode;
+  const selectedSkillName =
+    activeMode === 'cloud' && clerkUserId && skillSelection?.ownerId === clerkUserId
+      ? skillSelection.name
+      : undefined;
+
+  useEffect(() => {
+    if (
+      isClerkLoaded &&
+      skillSelection &&
+      (!clerkUserId || skillSelection.ownerId !== clerkUserId)
+    ) {
+      clearSelectedSkill();
+    }
+  }, [clearSelectedSkill, clerkUserId, isClerkLoaded, skillSelection]);
   // Only a model the picker can actually select counts as "ready" (SIX-21).
   // `readySystemModelIds` reports the OS-resident tier-1 row (Apple
-  // Intelligence / Gemini Nano), but `service.ts` deliberately filters
+  // Intelligence / AICore), but `service.ts` deliberately filters
   // system-runtime-only rows out of LOCAL_MODEL_LIST, so `resolveLocalModelRef`
   // can never resolve one. Counting those ids hid this banner on a fresh
   // install on an Apple-Intelligence device: no model was selectable, nothing
@@ -256,20 +275,23 @@ export default function ChatTabScreen() {
         // Same value the SendPreview disclosure above the composer describes.
         if (!modelForSend) return false;
         const trimmed = text.trim();
+        const skillNameForTurn = activeMode === 'cloud' ? selectedSkillName : undefined;
 
         // Video is checked BEFORE image: in Video mode every send is a video
         // request, and the image classifier would otherwise claim prompts that
         // merely sound visual.
-        const videoRequest = resolveMobileVideoGenerationRequest({
-          executionMode: activeMode,
-          text: trimmed,
-          mediaMode,
-          subscriptionTier,
-          isClerkSignedIn,
-          ownerId: clerkUserId,
-          grantedCapabilities,
-          isOnline,
-        });
+        const videoRequest = skillNameForTurn
+          ? ({ status: 'not_requested' } as const)
+          : resolveMobileVideoGenerationRequest({
+              executionMode: activeMode,
+              text: trimmed,
+              mediaMode,
+              subscriptionTier,
+              isClerkSignedIn,
+              ownerId: clerkUserId,
+              grantedCapabilities,
+              isOnline,
+            });
         if (videoRequest.status === 'blocked') {
           Alert.alert(videoRequest.alert.title, videoRequest.alert.message);
           return false;
@@ -294,11 +316,7 @@ export default function ChatTabScreen() {
             fail: failVideoGeneration,
             remove: deleteMessage,
             onPaywall: (error) => {
-              setPaywallError({
-                feature: error.feature,
-                requiredTier: error.requiredTier,
-                reason: error.reason,
-              });
+              setPaywallError(paywallErrorStateFromApiError(error));
             },
             onUnexpectedError: (error) => {
               console.warn('[ChatTabScreen] Video generation failed:', error);
@@ -309,20 +327,22 @@ export default function ChatTabScreen() {
           return true;
         }
 
-        const imageRequest = resolveMobileImageGenerationRequest({
-          executionMode: activeMode,
-          text: trimmed,
-          mediaMode,
-          selection: modelForSend,
-          subscriptionTier,
-          hasAttachments: Boolean(attachments?.length),
-          globalImageGenerationEnabled: FEATURES.imageGen,
-          imageGenerationEnabled,
-          isClerkSignedIn,
-          ownerId: clerkUserId,
-          grantedCapabilities,
-          isOnline,
-        });
+        const imageRequest = skillNameForTurn
+          ? ({ status: 'not_requested' } as const)
+          : resolveMobileImageGenerationRequest({
+              executionMode: activeMode,
+              text: trimmed,
+              mediaMode,
+              selection: modelForSend,
+              subscriptionTier,
+              hasAttachments: Boolean(attachments?.length),
+              globalImageGenerationEnabled: FEATURES.imageGen,
+              imageGenerationEnabled,
+              isClerkSignedIn,
+              ownerId: clerkUserId,
+              grantedCapabilities,
+              isOnline,
+            });
 
         // Image output is a specialist media route, not a chat-completions
         // response. The canonical classifier handles both /image and natural
@@ -350,11 +370,7 @@ export default function ChatTabScreen() {
             fail: failImageGeneration,
             remove: deleteMessage,
             onPaywall: (error) => {
-              setPaywallError({
-                feature: error.feature,
-                requiredTier: error.requiredTier,
-                reason: error.reason,
-              });
+              setPaywallError(paywallErrorStateFromApiError(error));
             },
             onUnexpectedError: (error) => {
               console.warn('[ChatTabScreen] Image generation failed:', error);
@@ -371,18 +387,29 @@ export default function ChatTabScreen() {
           titleSource.length > 40 ? titleSource.slice(0, 40).trim() + '...' : titleSource;
         const conversationId = await createConversation(title);
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
-        const sendOptions = mode ? TASK_CHIP_SEND_CONTEXT[mode] : undefined;
+        const sendOptions = {
+          ...(mode ? TASK_CHIP_SEND_CONTEXT[mode] : {}),
+          ...(skillNameForTurn ? { skillName: skillNameForTurn } : {}),
+        };
         // Resolve true the moment the store commits the user message so the
         // home composer clears its "new-chat" draft on acceptance — a send
         // blocked by a pre-flight gate keeps the text for when the user
         // returns to this screen.
         if (dispatchOptions?.awaitCompletion) {
-          return await sendMessage(conversationId, trimmed, modelForSend, attachments, sendOptions);
+          const accepted = await sendMessage(
+            conversationId,
+            trimmed,
+            modelForSend,
+            attachments,
+            sendOptions,
+          );
+          if (accepted && skillNameForTurn) clearSelectedSkill();
+          return accepted;
         }
-        return resolveOnAcceptedSend(
+        const accepted = await resolveOnAcceptedSend(
           (onAccepted) =>
             sendMessage(conversationId, trimmed, modelForSend, attachments, {
-              ...(sendOptions ?? {}),
+              ...sendOptions,
               onAccepted,
             }),
           (err) => {
@@ -392,6 +419,8 @@ export default function ChatTabScreen() {
             setSendError('Message could not be sent. Please try again.');
           },
         );
+        if (accepted && skillNameForTurn) clearSelectedSkill();
+        return accepted;
       } catch (err) {
         // Conversation creation failed — tell the user and keep the draft so
         // they can retry (the home tab has no error banner, so Alert here).
@@ -423,6 +452,8 @@ export default function ChatTabScreen() {
       deleteMessage,
       setPaywallError,
       setSendError,
+      selectedSkillName,
+      clearSelectedSkill,
     ],
   );
 
@@ -467,7 +498,7 @@ export default function ChatTabScreen() {
   // point routes a signed-out user to Clerk sign-in; ClerkTokenBridge flips
   // cloudUnlocked on success. Local stays the free, account-less default.
   const handleOpenCloudAccess = useCallback(() => {
-    router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+    router.push(beginCloudPostAuthIntent());
   }, [router]);
 
   const handleTapLocalMode = useCallback(() => {
@@ -488,7 +519,7 @@ export default function ChatTabScreen() {
     // cloudUnlocked via ClerkTokenBridge and Cloud becomes usable. Local stays the
     // free, account-less default.
     if (!cloudUnlocked) {
-      router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
+      router.push(beginCloudPostAuthIntent());
       return;
     }
     // The toggle ONLY switches modes — model selection belongs to the
@@ -843,6 +874,8 @@ export default function ChatTabScreen() {
                   ? { scope: 'cloud', ownerId: clerkUserId }
                   : undefined
             }
+            selectedSkillName={selectedSkillName}
+            onClearSelectedSkill={clearSelectedSkill}
           />
         )}
       </KeyboardAvoidingView>

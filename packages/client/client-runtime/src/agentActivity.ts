@@ -581,7 +581,20 @@ export function finishAgentActivityLocally(
   const entryStatus = options.status;
   let entries = current.entries.map((entry): AgentActivityEntry => {
     if (entry.kind === 'progress' && entry.status === 'running') {
-      return { ...entry, status: entryStatus, completedAtMs: options.completedAtMs };
+      const localTerminalSummary =
+        entry.progressId === 'local-starting'
+          ? options.status === 'completed'
+            ? 'Response ready'
+            : options.status === 'cancelled'
+              ? 'Response cancelled'
+              : 'Response failed'
+          : undefined;
+      return {
+        ...entry,
+        ...(localTerminalSummary ? { summary: localTerminalSummary } : {}),
+        status: entryStatus,
+        completedAtMs: options.completedAtMs,
+      };
     }
     if (
       entry.kind === 'tool' &&

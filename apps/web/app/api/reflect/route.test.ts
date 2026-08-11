@@ -3,14 +3,19 @@ import { NextRequest } from 'next/server';
 import { ManagedCloudReflectRecapSchema } from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 
-const { mockGetClerkAuthUser, mockLoadRecap } = vi.hoisted(() => ({
+const { mockGetClerkAuthUser, mockLoadRecap, mockResolveActiveOrganizationId } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockLoadRecap: vi.fn(),
+  mockResolveActiveOrganizationId: vi.fn(),
 }));
 
 vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockGetClerkAuthUser }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/services/reflect-service', () => ({ loadManagedReflectRecap: mockLoadRecap }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
@@ -45,6 +50,7 @@ describe('GET /api/reflect', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'owner-1' });
+    mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
     mockLoadRecap.mockResolvedValue({ kind: 'recap', recap });
   });
 
@@ -53,6 +59,7 @@ describe('GET /api/reflect', () => {
     expect(response.status).toBe(200);
     expect(mockLoadRecap).toHaveBeenCalledWith({
       userId: 'owner-1',
+      organizationId: '11111111-1111-4111-8111-111111111111',
       range: '30d',
       timezone: 'America/Chicago',
     });

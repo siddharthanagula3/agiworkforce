@@ -7,7 +7,7 @@
  *   3. 5-turn sticky-pivot logic that boosts confidence on the running mode.
  *
  * Heuristics aim for 75–85% accuracy on their own; the LLM fallback (a
- * Gemini 3.5 Flash-Lite call wired in a higher layer) handles the remainder
+ * registry-selected lightweight call wired in a higher layer) handles the remainder
  * when `confidence < 0.6`.
  *
  * Vercel React Best Practices applied:

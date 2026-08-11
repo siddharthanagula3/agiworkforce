@@ -14,7 +14,7 @@ const awaitingRun: CloudAgentRun = {
   workMode: 'agiwork',
   state: 'awaiting_input',
   provider: 'anthropic',
-  model: 'claude-opus-5',
+  model: 'fixture-task-model',
   lastEventSequence: 12,
   cancellationRequestedAt: null,
   completedAt: null,
@@ -148,7 +148,7 @@ describe('Tasks pending-approval inbox', () => {
       }),
     );
 
-    await screen.findByText('claude-opus-5');
+    await screen.findByText('Unavailable model');
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
   });
 });

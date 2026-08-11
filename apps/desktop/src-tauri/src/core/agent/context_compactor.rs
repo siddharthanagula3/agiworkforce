@@ -58,17 +58,22 @@ pub const DEFAULT_CONTEXT_WINDOW: usize = 128_000;
 ///
 /// Compaction budgets are meaningless without one: a flat budget either throws
 /// away most of a million-token window or fails to free room in a small one.
-pub fn resolve_context_window(model: Option<&str>) -> usize {
+/// Unknown Local/BYOK model ids retain the conservative fallback. A KNOWN
+/// catalog model whose context is absent returns `None`; treating a media API
+/// such as Runway as a 128k chat model would invent a token contract and route
+/// it into the chat compactor.
+pub fn resolve_context_window(model: Option<&str>) -> Option<usize> {
     let Some(model) = model.map(str::trim).filter(|model| !model.is_empty()) else {
-        return DEFAULT_CONTEXT_WINDOW;
+        return Some(DEFAULT_CONTEXT_WINDOW);
     };
     let canonical_model_id = models_config::get_canonicalized_id(model);
-    models_config::config()
-        .models
-        .get(&canonical_model_id)
-        .map(|entry| entry.context_window as usize)
-        .filter(|window| *window > 0)
-        .unwrap_or(DEFAULT_CONTEXT_WINDOW)
+    match models_config::config().models.get(&canonical_model_id) {
+        Some(entry) => entry
+            .context_window
+            .and_then(|window| usize::try_from(window).ok())
+            .filter(|window| *window > 0),
+        None => Some(DEFAULT_CONTEXT_WINDOW),
+    }
 }
 
 impl CompactionConfig {
@@ -388,20 +393,39 @@ mod tests {
 
     #[test]
     fn compaction_budgets_scale_with_the_catalog_context_window() {
-        let wide = resolve_context_window(Some("claude-opus-5"));
+        let wide_model = models_config::get_all_model_entries()
+            .values()
+            .filter_map(|entry| entry.context_window.map(|window| (entry, window)))
+            .max_by_key(|(_, window)| *window)
+            .map(|(entry, _)| entry)
+            .expect("catalog must include a prompt-consuming model");
+        let wide = resolve_context_window(Some(&wide_model.id))
+            .expect("chat models must publish a token context window");
         assert!(
             wide > DEFAULT_CONTEXT_WINDOW,
-            "claude-opus-5 should report its catalog window, got {wide}"
+            "the widest catalog model should report its window, got {wide}"
         );
-        assert_eq!(resolve_context_window(None), DEFAULT_CONTEXT_WINDOW);
+        assert_eq!(resolve_context_window(None), Some(DEFAULT_CONTEXT_WINDOW));
         assert_eq!(
             resolve_context_window(Some("  ")),
-            DEFAULT_CONTEXT_WINDOW,
+            Some(DEFAULT_CONTEXT_WINDOW),
             "a blank model name is unknown, not a zero window"
         );
         assert_eq!(
             resolve_context_window(Some("some-byok-local-model")),
-            DEFAULT_CONTEXT_WINDOW
+            Some(DEFAULT_CONTEXT_WINDOW)
+        );
+        let contextless_media_model = models_config::get_all_model_entries()
+            .values()
+            .find(|entry| {
+                entry.context_window.is_none()
+                    && (entry.capabilities.image_gen || entry.capabilities.video_gen)
+            })
+            .expect("catalog must include a contextless media model");
+        assert_eq!(
+            resolve_context_window(Some(&contextless_media_model.id)),
+            None,
+            "a known contextless media model must not inherit the unknown-model fallback"
         );
 
         let config = CompactionConfig::for_context_window(wide);

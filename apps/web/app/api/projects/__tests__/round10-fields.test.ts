@@ -25,6 +25,7 @@ const {
   mockNeonQuery,
   mockNeonExecute,
   mockGetSubscription,
+  mockResolveActiveOrganizationId,
 } = vi.hoisted(() => {
   const mockSingle = vi.fn();
   const mockSelect = vi.fn();
@@ -36,6 +37,7 @@ const {
   const mockNeonQuery = vi.fn();
   const mockNeonExecute = vi.fn();
   const mockGetSubscription = vi.fn();
+  const mockResolveActiveOrganizationId = vi.fn();
   return {
     mockFrom,
     mockUpdate,
@@ -47,6 +49,7 @@ const {
     mockNeonQuery,
     mockNeonExecute,
     mockGetSubscription,
+    mockResolveActiveOrganizationId,
   };
 });
 
@@ -84,6 +87,9 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: mockGetSubscription },
+}));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
 
 // ── Route imports (after mocks) ───────────────────────────────────────────────
@@ -139,6 +145,7 @@ function wireAuthAndDb() {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockNeonExecute.mockResolvedValue(1);
   mockGetSubscription.mockResolvedValue({ plan_tier: 'free' });
+  mockResolveActiveOrganizationId.mockResolvedValue(null);
 }
 
 // Set up neon query chain: db.query() resolves with row array (update/select returning *)
@@ -197,6 +204,7 @@ describe('GET /api/projects · conversation counts', () => {
       .map((call) => String(call[0]))
       .find((sql) => sql.includes('from user_projects'));
     expect(projectSql).toContain('conversation_count');
+    expect(projectSql).toContain('c.organization_id is not distinct from $5::uuid');
   });
 });
 
@@ -234,6 +242,21 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
     ).toBe(true);
     const json = (await res.json()) as { project: { metadata?: Record<string, unknown> } };
     expect(json.project.metadata?.['starred']).toBe(true);
+  });
+
+  it('updates only the owner row in the active organization workspace', async () => {
+    const organizationId = '11111111-1111-4111-8111-111111111111';
+    mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
+    setupUpdateChain({ data: { ...BASE_DB_ROW, name: 'Scoped update' }, error: null });
+
+    const res = await PUT(makePutRequest('proj-1', { name: 'Scoped update' }), {
+      params: Promise.resolve({ id: 'proj-1' }),
+    });
+
+    expect(res.status).toBe(200);
+    const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/organization_id is not distinct from \$\d+::uuid/i);
+    expect(params.at(-1)).toBe(organizationId);
   });
 
   it('round-trips defaultPrivacyMode, defaultProviderMode, allowedSurfaces, defaultModelId, importedFrom', async () => {
@@ -403,6 +426,28 @@ describe('GET and DELETE /api/projects/[id] · tombstone safety', () => {
 
     expect(res.status).toBe(404);
   });
+
+  it('soft-deletes only the owner row in the active organization workspace', async () => {
+    const organizationId = '11111111-1111-4111-8111-111111111111';
+    mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
+    mockNeonExecute.mockResolvedValue(1);
+
+    const res = await DELETE(makeProjectRequest('proj-1', 'DELETE'), {
+      params: Promise.resolve({ id: 'proj-1' }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockNeonExecute).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('organization_id is not distinct from $3::uuid'),
+      ['proj-1', 'user-abc', organizationId],
+    );
+    expect(mockNeonExecute).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('organization_id is not distinct from $3::uuid'),
+      ['proj-1', 'user-abc', organizationId],
+    );
+  });
 });
 
 describe('POST /api/projects · round-10 fields', () => {
@@ -450,6 +495,22 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(params).toContain(1);
   });
 
+  it.each([
+    ['Personal', null],
+    ['organization', '11111111-1111-4111-8111-111111111111'],
+  ] as const)('binds a new project to the active %s workspace', async (_label, organizationId) => {
+    mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
+    setupInsertChain({ data: { ...BASE_DB_ROW, id: 'proj-scoped' }, error: null });
+
+    const res = await POST(makePostRequest({ name: 'Scoped project' }));
+
+    expect(res.status).toBe(201);
+    const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/insert into user_projects \(user_id, organization_id,/i);
+    expect(params[0]).toBe('user-abc');
+    expect(params[1]).toBe(organizationId);
+  });
+
   it('creates the project and complete conversation membership through one transaction', async () => {
     mockNeonQuery
       .mockResolvedValueOnce([{ ...BASE_DB_ROW, id: 'proj-new', name: 'New Project' }])
@@ -466,12 +527,12 @@ describe('POST /api/projects · round-10 fields', () => {
     expect(mockNeonExecute).toHaveBeenNthCalledWith(
       1,
       expect.stringContaining('set project_id = null'),
-      ['user-abc', 'proj-new', ['chat-1', 'chat-2']],
+      ['user-abc', 'proj-new', ['chat-1', 'chat-2'], null],
     );
     expect(mockNeonExecute).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('set project_id = $2'),
-      ['user-abc', 'proj-new', ['chat-1', 'chat-2']],
+      ['user-abc', 'proj-new', ['chat-1', 'chat-2'], null],
     );
   });
 

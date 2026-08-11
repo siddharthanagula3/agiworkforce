@@ -30,13 +30,7 @@ import type { NotificationSettings } from '../../hooks/useNotifications';
 import { Button } from '@/ui/Button';
 import { SectionErrorBoundary } from '@/ui/SectionErrorBoundary';
 import { useConfirm } from '@/ui/ConfirmDialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { useConnectorsStore } from '../../stores/connectorsStore';
 
 import { GeneralTab } from './tabs/General';
@@ -310,7 +304,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const handleOllamaEnabledChange = useCallback(
     (enabled: boolean) => {
       if (enabled) {
-        const modelToSet = selectedOllamaModel || ollamaModels[0] || 'llama3';
+        const modelToSet = selectedOllamaModel || ollamaModels[0] || '';
         setDefaultModel('ollama', modelToSet);
         setSelectedOllamaModel(modelToSet);
       } else {

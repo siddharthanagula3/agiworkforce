@@ -89,7 +89,7 @@ export const SkillMentionPicker: React.FC<SkillMentionPickerProps> = ({
     const list = listRef.current;
     if (!list) return;
     const selected = list.children[selectedIndex] as HTMLElement | undefined;
-    selected?.scrollIntoView({ block: 'nearest' });
+    selected?.scrollIntoView?.({ block: 'nearest' });
   }, [selectedIndex]);
 
   if (filtered.length === 0) return null;

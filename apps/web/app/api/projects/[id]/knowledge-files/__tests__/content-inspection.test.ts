@@ -39,11 +39,15 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: vi.fn(async () => ({ plan_tier: 'pro' })) },
 }));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: vi.fn(async () => null),
+}));
 // The only storage boundary. `objectKeyFromStorageUri` stays faithful to the
 // real one for the opaque-key form the presign route hands out.
 vi.mock('@/lib/server/object-storage', () => ({
   getObject: mockGetObject,
   deleteObject: mockDeleteObject,
+  isObjectStorageConfigured: () => true,
   objectKeyFromStorageUri: (value: string) => value,
 }));
 

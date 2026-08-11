@@ -19,6 +19,21 @@ const FIXTURE = path.join(root, 'apps/cli/test-fixture-stale-model-id.md');
 const LABEL_FIXTURE = path.join(root, 'apps/cli/test-fixture-stale-model-label.ts');
 const DOC_LABEL_FIXTURE = path.join(root, 'docs/test-fixture-retired-opus-label.md');
 const TEST_LABEL_FIXTURE = path.join(root, 'apps/cli/tests/test-fixture-retired-opus-label.ts');
+const curation = JSON.parse(
+  fs.readFileSync(
+    path.join(root, 'packages/ai/model-registry/catalog/models.curation.json'),
+    'utf8',
+  ),
+);
+const currentOpenAIModel = curation.providers?.openai?.defaultModel;
+if (typeof currentOpenAIModel !== 'string') {
+  throw new Error('Canonical OpenAI default model is missing');
+}
+const currentMajor = Number(currentOpenAIModel.match(/^gpt-(\d+)/i)?.[1]);
+if (!Number.isInteger(currentMajor) || currentMajor < 2) {
+  throw new Error('Canonical OpenAI default model does not expose a numeric generation');
+}
+const retiredFixtureId = `gpt-${currentMajor - 1}.fixture-retired`;
 
 // Run the guard and return { exitCode, stdout, stderr }.
 function runGuard() {
@@ -46,7 +61,7 @@ function assert(label, condition) {
   }
 }
 
-console.log('test: guard detects bare gpt-5.4 in .md files');
+console.log('test: guard detects a catalog-absent numeric GPT identifier in .md files');
 
 try {
   // Test 1: guard output MUST mention the fixture file when it contains a stale ID.
@@ -60,23 +75,25 @@ try {
       '',
       '```bash',
       '# The following line contains a removed model ID that the guard must catch:',
-      'agi -m gpt-5.4 "hello"',
+      `agi -m ${retiredFixtureId} "hello"`,
       '```',
       '',
-      '<!-- this HTML comment line is skipped: gpt-5.4 should NOT produce a violation here -->',
+      `<!-- this HTML comment line is skipped: ${retiredFixtureId} should NOT produce a violation here -->`,
       '',
     ].join('\n'),
   );
   const { output: outStale } = runGuard();
   assert(
-    'guard output mentions fixture .md file when it contains bare gpt-5.4',
+    'guard output mentions fixture .md file when it contains a catalog-absent GPT identifier',
     outStale.includes(FIXTURE_REL),
   );
 
   // Test 2: guard output MUST NOT mention the fixture file after stale ID is removed.
   fs.writeFileSync(
     FIXTURE,
-    ['# Fixture — clean version', '', '```bash', 'agi -m gpt-5.5 "hello"', '```', ''].join('\n'),
+    ['# Fixture — clean version', '', '```bash', 'agi -m fixture-model "hello"', '```', ''].join(
+      '\n',
+    ),
   );
   const { output: outClean } = runGuard();
   assert(
@@ -91,7 +108,7 @@ try {
     [
       '# Fixture — stale id only in HTML comment',
       '',
-      '<!-- gpt-5.4 appears ONLY inside a comment; must not trigger a violation -->',
+      `<!-- ${retiredFixtureId} appears ONLY inside a comment; must not trigger a violation -->`,
       '',
     ].join('\n'),
   );

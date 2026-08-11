@@ -31,22 +31,10 @@ import {
   AlertDialogTitle,
 } from '@/ui/AlertDialog';
 import { Button } from '@/ui/Button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { Input } from '@/ui/Input';
 import { Label } from '@/ui/Label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
 
 const PROVIDER_PRESETS: Record<string, string> = {
@@ -303,7 +291,7 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
             <Label htmlFor="cm-displayName">Display Name</Label>
             <Input
               id="cm-displayName"
-              placeholder="e.g. Groq Llama 3.3 70B"
+              placeholder="e.g. Team inference model"
               value={form.displayName}
               onChange={(e) => handleFieldChange('displayName', e.target.value)}
             />
@@ -339,7 +327,7 @@ function ModelFormDialog({ open, initial, onClose, onSave }: ModelFormDialogProp
             <Label htmlFor="cm-modelId">Model ID</Label>
             <Input
               id="cm-modelId"
-              placeholder="e.g. llama-3.3-70b-versatile"
+              placeholder="e.g. provider-model-name"
               value={form.modelId}
               onChange={(e) => handleFieldChange('modelId', e.target.value)}
             />

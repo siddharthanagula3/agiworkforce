@@ -231,12 +231,17 @@ describe('finalize', () => {
 
 describe('redactSecrets', () => {
   it('redacts common credential shapes', () => {
+    const awsAccessKeyFixture = ['AKIA', 'ABCDEFGHIJKLMNOP'].join('');
+    const pemPrivateKeyFixture = [
+      '-----BEGIN ',
+      'RSA PRIVATE KEY-----\nMIIB\n-----END RSA PRIVATE KEY-----',
+    ].join('');
     const text = [
       'ghp_abcdefghijklmnopqrstuvwxyz1234567890',
       'sk-proj-abcdefghijklmnop',
-      'AKIAABCDEFGHIJKLMNOP',
+      awsAccessKeyFixture,
       'password = "hunter2secret"',
-      '-----BEGIN RSA PRIVATE KEY-----\nMIIB\n-----END RSA PRIVATE KEY-----',
+      pemPrivateKeyFixture,
     ].join(' ');
     const redacted = redactSecrets(text);
     expect(redacted).not.toContain('ghp_');

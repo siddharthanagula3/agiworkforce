@@ -17,10 +17,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockQuery, mockResolveSharedProjectScope } = vi.hoisted(() => ({
-  mockQuery: vi.fn(),
-  mockResolveSharedProjectScope: vi.fn(),
-}));
+const { mockQuery, mockResolveSharedProjectScope, mockResolveActiveOrganizationId } = vi.hoisted(
+  () => ({
+    mockQuery: vi.fn(),
+    mockResolveSharedProjectScope: vi.fn(),
+    mockResolveActiveOrganizationId: vi.fn(),
+  }),
+);
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
@@ -36,6 +39,9 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/services/org-sharing-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/org-sharing-service')>()),
   resolveSharedProjectScope: mockResolveSharedProjectScope,
+}));
+vi.mock('@/lib/services/active-workspace-service', () => ({
+  resolveActiveOrganizationId: mockResolveActiveOrganizationId,
 }));
 
 import { GET as LIST_PROJECTS } from '../route';
@@ -67,14 +73,30 @@ function listRequest(): never {
 beforeEach(() => {
   vi.clearAllMocks();
   mockResolveSharedProjectScope.mockResolvedValue(null);
+  mockResolveActiveOrganizationId.mockResolvedValue(null);
 });
 
 describe('GET /api/projects · shared projects', () => {
+  it.each([
+    ['Personal', null],
+    ['organization', ORG],
+  ] as const)('scopes owned rows to the active %s workspace', async (_label, organizationId) => {
+    mockResolveActiveOrganizationId.mockResolvedValue(organizationId);
+    mockQuery.mockResolvedValue([]);
+
+    await LIST_PROJECTS(listRequest());
+
+    const [sql, params] = mockQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/p\.organization_id is not distinct from \$5::uuid/i);
+    expect(params[4]).toBe(organizationId);
+  });
+
   it('binds the server-derived shared id set and keeps the ownership predicate', async () => {
     mockResolveSharedProjectScope.mockResolvedValue({
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
     });
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockQuery.mockResolvedValue([projectRow({ is_org_shared: true })]);
 
     const response = await LIST_PROJECTS(listRequest());
@@ -85,8 +107,10 @@ describe('GET /api/projects · shared projects', () => {
     // shared id set. Dropping either is a defect — dropping the second silently
     // removes the feature, dropping the fence entirely exposes every project.
     expect(sql).toMatch(/p\.user_id = \$1 or p\.id = any\(\$4::uuid\[\]\)/i);
+    expect(sql).toMatch(/p\.organization_id is not distinct from \$5::uuid/i);
     expect((params as unknown[])[0]).toBe('member-1');
     expect((params as unknown[])[3]).toEqual([SHARED_PROJECT]);
+    expect((params as unknown[])[4]).toBe(ORG);
   });
 
   it('binds an EMPTY id set for a user in no organization, so nothing widens', async () => {
@@ -119,6 +143,7 @@ describe('GET /api/projects · shared projects', () => {
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
     });
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockQuery.mockResolvedValue([
       projectRow({ is_org_shared: true }),
       projectRow({ id: 'own-1', user_id: 'member-1', is_org_shared: false }),
@@ -142,6 +167,7 @@ describe('GET /api/projects/[id] · shared project detail', () => {
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
     });
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     mockQuery
       .mockResolvedValueOnce([]) // owner read: not theirs
       .mockResolvedValueOnce([projectRow({ is_org_shared: true })]);
@@ -156,6 +182,7 @@ describe('GET /api/projects/[id] · shared project detail', () => {
 
     const [sharedSql, sharedParams] = mockQuery.mock.calls[1]!;
     expect(sharedSql).toMatch(/p\.id = any\(\$3::uuid\[\]\)/i);
+    expect(sharedSql).toMatch(/p\.organization_id is not distinct from \$4::uuid/i);
     expect((sharedParams as unknown[])[2]).toEqual([SHARED_PROJECT]);
   });
 
@@ -164,6 +191,7 @@ describe('GET /api/projects/[id] · shared project detail', () => {
       organizationId: ORG,
       projectIds: [SHARED_PROJECT],
     });
+    mockResolveActiveOrganizationId.mockResolvedValue(ORG);
     // Owner read misses; the shared read is fenced to the shared id set, so a
     // foreign uuid matches nothing.
     mockQuery.mockResolvedValue([]);

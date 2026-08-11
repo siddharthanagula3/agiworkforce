@@ -4,8 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { errorHandler } from '../../src/middleware/errorHandler';
 import { creditsRouter } from '../../src/routes/credits';
 
-const { rpcMock } = vi.hoisted(() => ({
+const { fromMock, rpcMock, subscriptionMaybeSingleMock } = vi.hoisted(() => ({
+  fromMock: vi.fn(),
   rpcMock: vi.fn(),
+  subscriptionMaybeSingleMock: vi.fn(),
 }));
 
 vi.mock('../../src/middleware/auth', () => ({
@@ -26,7 +28,7 @@ vi.mock('../../src/middleware/rateLimit', () => ({
 }));
 
 vi.mock('../../src/lib/neonClients', () => ({
-  getUserScopedClient: vi.fn(() => ({ rpc: rpcMock })),
+  getUserScopedClient: vi.fn(() => ({ from: fromMock, rpc: rpcMock })),
 }));
 
 function createApp() {
@@ -40,6 +42,15 @@ function createApp() {
 describe('creditsRouter GET /balance', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    subscriptionMaybeSingleMock.mockResolvedValue({
+      data: { plan_tier: 'pro', status: 'active' },
+      error: null,
+    });
+    fromMock.mockReturnValue({
+      select: () => ({
+        eq: () => ({ maybeSingle: subscriptionMaybeSingleMock }),
+      }),
+    });
   });
 
   it('returns only percentage, reset, and availability metadata', async () => {
@@ -68,6 +79,7 @@ describe('creditsRouter GET /balance', () => {
       usage_percentage: 33.33,
       reset_at: '2099-08-01T00:00:00.000Z',
       has_usage_remaining: true,
+      usage_visible: true,
     });
     expect(response.body.seconds_until_reset).toBeGreaterThan(0);
     expect(Object.keys(response.body).sort()).toEqual([
@@ -75,11 +87,13 @@ describe('creditsRouter GET /balance', () => {
       'reset_at',
       'seconds_until_reset',
       'usage_percentage',
+      'usage_visible',
     ]);
     expect(JSON.stringify(response.body)).not.toMatch(/account|cents|allocated|remaining_cents/i);
   });
 
   it('returns a closed empty status when no active ledger exists', async () => {
+    subscriptionMaybeSingleMock.mockResolvedValue({ data: null, error: null });
     rpcMock.mockResolvedValue({
       data: [
         {
@@ -97,11 +111,65 @@ describe('creditsRouter GET /balance', () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
-      usage_percentage: 0,
+      usage_percentage: null,
       reset_at: null,
       seconds_until_reset: 0,
       has_usage_remaining: false,
+      usage_visible: false,
     });
+  });
+
+  it('withholds an active Free-plan allowance percentage at the API boundary', async () => {
+    subscriptionMaybeSingleMock.mockResolvedValue({
+      data: { plan_tier: 'free', status: 'active' },
+      error: null,
+    });
+    rpcMock.mockResolvedValue({
+      data: [
+        {
+          account_id: 'account-private',
+          credits_allocated_cents: 1_500,
+          credits_used_cents: 500,
+          credits_remaining_cents: 1_000,
+          period_end: '2099-08-01T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    });
+
+    const response = await request(createApp()).get('/api/credits/balance');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      usage_percentage: null,
+      usage_visible: false,
+      has_usage_remaining: true,
+    });
+    expect(JSON.stringify(response.body)).not.toContain('33.33');
+  });
+
+  it('fails closed when subscription visibility cannot be verified', async () => {
+    subscriptionMaybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: 'subscription lookup failed' },
+    });
+    rpcMock.mockResolvedValue({
+      data: [
+        {
+          account_id: 'account-private',
+          credits_allocated_cents: 1_500,
+          credits_used_cents: 500,
+          credits_remaining_cents: 1_000,
+          period_end: '2099-08-01T00:00:00.000Z',
+        },
+      ],
+      error: null,
+    });
+
+    const response = await request(createApp()).get('/api/credits/balance');
+
+    expect(response.status).toBe(503);
+    expect(JSON.stringify(response.body)).not.toMatch(/33\.33|usage_percentage/i);
   });
 });
 

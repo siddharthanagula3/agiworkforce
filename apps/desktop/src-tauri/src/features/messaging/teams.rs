@@ -362,13 +362,19 @@ impl TeamsClient {
             // `crate::sys::support_bundle`), so only its length is recorded.
             "message" => {
                 tracing::info!(
-                    text_chars = activity.text.as_ref().map_or(0, |text| text.chars().count()),
+                    text_chars = activity
+                        .text
+                        .as_ref()
+                        .map_or(0, |text| text.chars().count()),
                     "Received Teams message"
                 );
             }
             "mention" => {
                 tracing::info!(
-                    text_chars = activity.text.as_ref().map_or(0, |text| text.chars().count()),
+                    text_chars = activity
+                        .text
+                        .as_ref()
+                        .map_or(0, |text| text.chars().count()),
                     "Bot was mentioned in Teams"
                 );
             }

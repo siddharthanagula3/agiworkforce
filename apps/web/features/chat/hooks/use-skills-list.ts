@@ -1,23 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { z } from 'zod';
+import {
+  ManagedSkillsResponseSchema,
+  type ManagedSkillSummary,
+} from '@agiworkforce/cloud-contracts';
+import { SKILL_CATALOG_CHANGED_EVENT } from '@shared/events/skill-catalog-events';
 
-export interface SkillItem {
-  name: string;
-  description: string;
-  source: string;
-}
-
-const SkillsListResponseSchema = z.object({
-  skills: z.array(
-    z.object({
-      name: z.string().min(1).max(200),
-      description: z.string(),
-      source: z.string().min(1),
-    }),
-  ),
-});
+export type SkillItem = Pick<ManagedSkillSummary, 'name' | 'description' | 'source'>;
 
 export interface UseSkillsListResult {
   skills: SkillItem[];
@@ -37,23 +27,31 @@ export function useSkillsList(): UseSkillsListResult {
 
   useEffect(() => {
     let cancelled = false;
-    void (async () => {
+    const load = async () => {
+      setLoading(true);
+      setError(null);
       try {
-        const res = await fetch('/api/skills');
+        const res = await fetch('/api/skills', { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const parsed = SkillsListResponseSchema.safeParse(await res.json());
+        const parsed = ManagedSkillsResponseSchema.safeParse(await res.json());
         if (!parsed.success) throw new Error('Invalid skills response');
         if (!cancelled) {
-          setSkills(parsed.data.skills);
+          setSkills(parsed.data.skills.filter((skill) => skill.lifecycle === 'included'));
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       } finally {
         if (!cancelled) setLoading(false);
       }
-    })();
+    };
+    const handleCatalogChanged = () => {
+      void load();
+    };
+    window.addEventListener(SKILL_CATALOG_CHANGED_EVENT, handleCatalogChanged);
+    void load();
     return () => {
       cancelled = true;
+      window.removeEventListener(SKILL_CATALOG_CHANGED_EVENT, handleCatalogChanged);
     };
   }, []);
 

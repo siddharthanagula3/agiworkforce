@@ -3,12 +3,13 @@
  *
  * `allModelMap` holds the local models plus one preview cloud model per
  * provider, not the whole cloud catalog. getDisplayName looked only there, so
- * the Models screen showed "gpt-5.6-terra" as the active model while the
- * composer chip — which uses getShortDisplayName and its cloud-aware lookup —
- * showed "GPT-5.6 Terra" for the same selection.
+ * the Models screen showed a raw wire ID as the active model while the composer
+ * chip — which uses getShortDisplayName and its cloud-aware lookup — showed the
+ * friendly catalog label for the same selection.
  */
 import {
   getDisplayName,
+  getManagedDisplayName,
   getModelListForCloudAccess,
   getShortDisplayName,
 } from '@/src/features/model-picker/service';
@@ -42,5 +43,9 @@ describe('model display names', () => {
 
   it('still falls back to the id for a model no registry knows', () => {
     expect(getDisplayName('not-a-real-model-id')).toBe('not-a-real-model-id');
+  });
+
+  it('does not expose an unknown historical Managed Cloud id', () => {
+    expect(getManagedDisplayName('fixture-retired-managed-model')).toBe('Unavailable model');
   });
 });

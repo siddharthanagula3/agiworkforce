@@ -211,7 +211,7 @@ export function buildManagedReflectRecap(input: {
     {
       dimension: 'diligence' as const,
       title: 'Work revisited over time',
-      observation: `${multiDayConversations} sampled conversations stayed active across at least one day.`,
+      observation: `${multiDayConversations} sampled ${multiDayConversations === 1 ? 'conversation' : 'conversations'} stayed active across at least one day.`,
       nextStep:
         'Before sharing important output, verify sources, ownership, and how AI contributed.',
       href: '/settings/time-focus',
@@ -246,6 +246,7 @@ export function buildManagedReflectRecap(input: {
 
 export async function loadManagedReflectRecap(input: {
   userId: string;
+  organizationId: string | null;
   range: ManagedCloudReflectRange;
   timezone: string;
   db?: DatabaseAdapter;
@@ -286,6 +287,7 @@ export async function loadManagedReflectRecap(input: {
             count(*) over()::int as total_conversations
        from public.web_conversations wc
       where wc.user_id = $1
+        and wc.organization_id is not distinct from $5::uuid
         and wc.deleted_at is null
         and wc.is_temporary = false
         and wc.created_at >= $2
@@ -298,7 +300,13 @@ export async function loadManagedReflectRecap(input: {
         )
       order by wc.created_at desc
       limit $4`,
-    [input.userId, period.start.toISOString(), period.end.toISOString(), MAX_REFLECT_CONVERSATIONS],
+    [
+      input.userId,
+      period.start.toISOString(),
+      period.end.toISOString(),
+      MAX_REFLECT_CONVERSATIONS,
+      input.organizationId,
+    ],
   );
   const totalConversations = rows.length > 0 ? Number(rows[0]?.total_conversations ?? 0) : 0;
   const conversations = rows.map((row) => ({

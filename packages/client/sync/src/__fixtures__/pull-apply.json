@@ -274,7 +274,7 @@
               "conversation_id": "c1",
               "role": "assistant",
               "content": "second",
-              "model": "gpt-5.4",
+              "model": "fixture-model",
               "provider": "openai",
               "input_tokens": 0,
               "output_tokens": 0,

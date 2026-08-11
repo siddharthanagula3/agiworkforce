@@ -13,7 +13,10 @@ vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: vi.fn(),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', () => ({
-  LLMCostCalculator: { calculateCost: vi.fn(() => 7) },
+  LLMCostCalculator: {
+    calculateCost: vi.fn(() => 7),
+    calculateCostDollars: vi.fn(() => 0.07),
+  },
 }));
 import { buildToolLoopStream } from './tool-loop-anthropic';
 import { createObservedProviderUsage } from '@/lib/services/managed-usage-accounting-service';
@@ -30,11 +33,13 @@ import {
 } from './research-loop';
 import { saveResearchReport } from '@/lib/services/research-report-service';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
 
 // buildToolLoopStream(provider, processed, stepRequest, responseModel) -- the
 // per-step llmRequest is argument index 2.
 const streamRequestMock = vi.mocked(buildToolLoopStream);
+const GOOGLE_CHAT_MODEL = requireProviderDefaultModel('google');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -110,14 +115,14 @@ function planSteps(plan: Record<string, unknown> | undefined): Array<Record<stri
 function makeProcessed(): ProcessedRequest {
   return {
     requestId: 'req-1',
-    requestedModel: 'gemini-3.6-flash',
+    requestedModel: GOOGLE_CHAT_MODEL,
     provider: 'google',
     estimatedCostCents: 2,
     quotaFeature: 'chat',
     isFlagshipRequest: false,
-    chatRequest: { model: 'gemini-3.6-flash' },
+    chatRequest: { model: GOOGLE_CHAT_MODEL },
     llmRequest: {
-      model: 'gemini-3.6-flash',
+      model: GOOGLE_CHAT_MODEL,
       messages: [{ role: 'user', content: 'research the topic' }],
       max_tokens: 2048,
       tools: [{ google_search: {} }],
@@ -832,7 +837,7 @@ describe('durable report persistence', () => {
             userId: BILLING.userId,
             requestId: 'req-1',
             conversationId: null,
-            model: 'gemini-3.6-flash',
+            model: GOOGLE_CHAT_MODEL,
             provider: 'google',
             ...report,
           }),

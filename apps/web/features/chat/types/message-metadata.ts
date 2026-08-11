@@ -101,6 +101,8 @@ export interface PaywallSlot {
   feature: string;
   requiredTier: string;
   reason?: string;
+  /** Recovery implied by the server code; legacy slots default to upgrade. */
+  recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
   /**
    * GOV-20 — presentation flags from `classifyManagedQuotaErrorCode`. Optional
    * so an already-persisted paywall slot written before this existed still
@@ -233,9 +235,19 @@ export interface WebChatMessageMetadata {
   imageGenAspect?: string;
   /** Model id used for image generation. */
   imageGenModel?: string;
+  /** Bounded provider/gateway retry instant for the explicit image retry control. */
+  imageRetryAt?: string;
   imageData?: unknown;
   videoUrl?: string;
   thumbnailUrl?: string;
+  videoTaskId?: string;
+  videoStatus?: 'queued' | 'processing' | 'completed' | 'failed';
+  videoProvider?: 'google' | 'runway' | 'openrouter';
+  videoModel?: string;
+  videoProgress?: number;
+  videoError?: string;
+  /** True only when the prior attempt is known terminal and a new paid attempt is safe. */
+  videoRetryable?: boolean;
   videoData?: unknown;
   documentData?: unknown;
   computeSession?: unknown;

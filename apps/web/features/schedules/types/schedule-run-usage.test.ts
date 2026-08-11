@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { getModels, isModelLive } from '@agiworkforce/types';
 
-import { formatCostCents, formatTokenCount, scheduleRunUsage } from './index';
+import { formatCostCents, formatTokenCount, scheduleModelLabel, scheduleRunUsage } from './index';
 import type { ScheduleRun } from './index';
 
 /**
@@ -39,14 +40,14 @@ describe('scheduleRunUsage', () => {
     const usage = scheduleRunUsage(
       run({
         text: 'done',
-        model: 'claude-sonnet-5',
+        model: 'fixture-model',
         provider: 'anthropic',
         usage: { promptTokens: 1200, completionTokens: 300, totalTokens: 1500, costCents: 0.45 },
       }),
     );
 
     expect(usage).toEqual({
-      model: 'claude-sonnet-5',
+      model: 'fixture-model',
       provider: 'anthropic',
       totalTokens: 1500,
       costCents: 0.45,
@@ -61,10 +62,10 @@ describe('scheduleRunUsage', () => {
   });
 
   it('keeps partial data rather than discarding the whole record', () => {
-    const usage = scheduleRunUsage(run({ model: 'claude-sonnet-5' }));
+    const usage = scheduleRunUsage(run({ model: 'fixture-model' }));
 
     expect(usage).toEqual({
-      model: 'claude-sonnet-5',
+      model: 'fixture-model',
       provider: null,
       totalTokens: null,
       costCents: null,
@@ -108,5 +109,16 @@ describe('formatTokenCount', () => {
     expect(formatTokenCount(999)).toBe('999');
     expect(formatTokenCount(1500)).toBe('1.5K');
     expect(formatTokenCount(2_400_000)).toBe('2.4M');
+  });
+});
+
+describe('scheduleModelLabel', () => {
+  it('renders canonical managed model names and hides retired identifiers', () => {
+    const currentModel = getModels().find(
+      (model) => isModelLive(model) && model.modelType !== 'image' && model.modelType !== 'video',
+    );
+    expect(currentModel).toBeTruthy();
+    expect(scheduleModelLabel(currentModel?.id)).toBe(currentModel?.name);
+    expect(scheduleModelLabel('fixture-retired-schedule-model')).toBe('Unavailable model');
   });
 });

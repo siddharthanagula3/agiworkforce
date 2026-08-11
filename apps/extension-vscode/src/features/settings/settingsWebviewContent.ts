@@ -413,7 +413,7 @@ export function getSettingsWebviewContent(
        * An input sharing a stack with a button must take the remaining space, not
        * compete with it. width:100% on the input plus an intrinsic-width button
        * left Model preference about 103px wide — narrower than the model ids it
-       * exists to display ("gemini-3.5-flash-lite"), so the field truncated its
+       * exists to display (including long catalog IDs), so the field truncated its
        * own value. min-width:0 is what allows the flex child to shrink at all.
        */
       .control-stack > .text-input,

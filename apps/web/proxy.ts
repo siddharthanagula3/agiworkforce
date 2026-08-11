@@ -158,6 +158,7 @@ const isPublicApiRoute = createRouteMatcher([
 
 const isClerkSessionRoute = createRouteMatcher([
   '/__clerk/(.*)',
+  '/login/complete',
   '/chat(.*)',
   '/library(.*)',
   '/schedules(.*)',
@@ -231,7 +232,14 @@ export const proxy: NextMiddleware = async (request, event) => {
     return attachApiCors(request, buildCspResponse(request));
   }
 
-  if (isClerkSessionRoute(request)) {
+  // The root page is auth-aware: app/page.tsx calls auth() so signed-in users
+  // land in the product while signed-out users see marketing. It therefore
+  // needs Clerk's request context even though it is publicly reachable. Use a
+  // native exact-path check here instead of teaching Clerk's deprecated route
+  // matcher about a non-auth path. When `/` bypasses clerkMiddleware(), the
+  // signed-in RSC render throws "auth() was called but Clerk can't detect usage
+  // of clerkMiddleware()".
+  if (request.nextUrl.pathname === '/' || isClerkSessionRoute(request)) {
     const response = await clerkAwareProxy(request, event);
     return response ? attachApiCors(request, response) : response;
   }
@@ -254,11 +262,15 @@ export const config = {
      *   Excluding the path is the defense-in-depth fix. (WEB-4 audit fix,
      *   2026-05-03; routes also retain `export const runtime = 'nodejs'`
      *   to ensure Stripe SDK HMAC works.)
+     * - api/media/video/openrouter-webhook — same raw-body HMAC boundary for
+     *   signed provider terminal events; the route verifies bytes before JSON.
+     * - api/mobile/iap/*-notifications — store-owned callbacks authenticate
+     *   their Apple JWS / Google Pub/Sub OIDC payloads and have no Clerk session.
      * - api/llm/v1/audio/transcriptions — multipart/form-data; same
      *   class of risk if proxy ever needs to inspect.
      */
-    '/((?!_next/static|_next/image|favicon.ico|\\.well-known/workflow/|api/stripe-webhook|api/llm/v1/audio|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-    '/(api|trpc)(.*)',
+    '/((?!_next/static|_next/image|favicon.ico|\\.well-known/workflow/|api/stripe-webhook|api/media/video/openrouter-webhook|api/mobile/iap/apple-notifications|api/mobile/iap/google-notifications|api/llm/v1/audio|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api/stripe-webhook$|api/media/video/openrouter-webhook$|api/mobile/iap/apple-notifications$|api/mobile/iap/google-notifications$|api/llm/v1/audio)(?:api|trpc)(?:/.*)?)',
     '/__clerk/(.*)',
   ],
 };
