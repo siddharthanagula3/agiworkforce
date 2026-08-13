@@ -32,13 +32,66 @@ describe('map search card capability', () => {
     expect(parsed.tools).toHaveLength(1);
     expect(parsed.tools?.[0]?.function.name).toBe('search_maps');
     expect(parsed.tools?.[0]?.function.description).not.toBe('untrusted');
+    expect(parsed.tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'search_maps' },
+    });
+  });
+
+  it('offers the same card contract to a capable Mobile caller', () => {
+    const parsed = request();
+
+    applyMapSearchCardCapability(parsed, {
+      surface: 'mobile',
+      toolsCapable: true,
+      userMessage: 'Plan a driving route from Austin to Marfa.',
+    });
+
+    expect(parsed.tools).toHaveLength(1);
+    expect(parsed.tools?.[0]?.function.name).toBe('search_maps');
+    expect(parsed.tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'search_maps' },
+    });
+  });
+
+  it('offers the display-only map card to a capable Chrome caller', () => {
+    const parsed = request({
+      x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
+    });
+
+    applyMapSearchCardCapability(parsed, {
+      surface: 'chrome',
+      toolsCapable: true,
+      userMessage: 'Show coffee shops near me on a map.',
+    });
+
+    expect(parsed.tools).toHaveLength(1);
+    expect(parsed.tools?.[0]?.function.name).toBe('search_maps');
+    expect(parsed.tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'search_maps' },
+    });
+  });
+
+  it('preserves an explicit caller tool choice', () => {
+    const parsed = request({ tool_choice: 'none' });
+
+    applyMapSearchCardCapability(parsed, {
+      surface: 'mobile',
+      toolsCapable: true,
+      userMessage: 'Show coffee shops on a map.',
+    });
+
+    expect(parsed.tools?.[0]?.function.name).toBe('search_maps');
+    expect(parsed.tool_choice).toBe('none');
   });
 
   it.each([
     [
       'unsupported surface',
       {
-        surface: 'mobile' as const,
+        surface: 'desktop' as const,
         toolsCapable: true,
         userMessage: 'Show this on a map.',
       },

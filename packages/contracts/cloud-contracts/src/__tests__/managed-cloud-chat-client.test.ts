@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createManagedCloudChatClient } from '../managed-cloud-chat-client';
-import { MANAGED_CLOUD_DEFAULT_MODEL_SELECTION } from '../conversations';
+import {
+  MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '../conversations';
 
 const rawConversation = {
   id: '0190a000-0000-7000-8000-0000000000aa',
@@ -137,6 +141,28 @@ describe('createManagedCloudChatClient', () => {
       ),
     ).rejects.toThrow('rate limited');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('carries an explicit organization or Personal scope on reads and mutations', async () => {
+    const organizationId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({ conversation: rawConversation, messages: [], total: 0, hasMore: false }),
+      )
+      .mockResolvedValueOnce(response({ success: true }));
+    const client = createManagedCloudChatClient({ fetchImpl });
+
+    await client.getConversation(rawConversation.id, {}, { organizationId });
+    await client.deleteConversation(rawConversation.id, { organizationId: null });
+
+    const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
+    expect(calls[0]?.[1].headers).toMatchObject({
+      [MANAGED_CLOUD_ORGANIZATION_HEADER]: organizationId,
+    });
+    expect(calls[1]?.[1].headers).toMatchObject({
+      [MANAGED_CLOUD_ORGANIZATION_HEADER]: MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+    });
   });
 
   it('propagates one caller signal through persistence request methods', async () => {

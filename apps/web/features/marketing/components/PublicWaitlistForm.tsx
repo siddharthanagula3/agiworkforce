@@ -17,7 +17,7 @@ type FormState = 'idle' | 'submitting' | 'success' | 'error';
 export function PublicWaitlistForm({
   source = 'website',
   ctaLabel = 'Join Waitlist',
-  successMessage = "You're on the list. We'll email you when AGI Cloud access opens for your address.",
+  successMessage = "You're on the list. We'll email you when the Enterprise program opens for your requirements.",
 }: {
   source?: WaitlistModalSource;
   ctaLabel?: string;

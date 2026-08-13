@@ -30,8 +30,8 @@ export default function SalesTeamsPage() {
           </h1>
           <p className="agi-fl-lede">
             Research, outreach drafts, deal-room briefings, and pipeline triage. Provider choice
-            through your own keys on Desktop and CLI, with a visible label on every route your
-            account context takes.
+            through your own keys on Desktop, CLI, and VS Code, with a visible label on every route
+            your account context takes.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
@@ -88,7 +88,7 @@ export default function SalesTeamsPage() {
             },
             {
               k: 'BYOK',
-              v: 'Pay providers directly on Desktop and CLI. Use your existing API budget.',
+              v: 'Pay providers directly on Desktop, CLI, and VS Code. Use your existing API budget.',
             },
             {
               k: 'Tools',
@@ -104,7 +104,7 @@ export default function SalesTeamsPage() {
         <FinalCta
           eyebrow="Start now"
           title="Brief better, route deliberately."
-          body="Bring your own keys on Desktop and the CLI, and keep account context under your control while the team works."
+          body="Bring your own keys on Desktop, CLI, and VS Code, and keep account context under your control while the team works."
           ctas={[
             { href: '/download', label: 'Get AGI Desktop' },
             { href: '/byok', label: 'Set Up BYOK' },

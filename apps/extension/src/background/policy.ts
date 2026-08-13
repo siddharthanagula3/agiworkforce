@@ -138,6 +138,14 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   SWITCH_TAB: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_COOKIE: { senderClass: 'extension-page-only', allowsCrossTab: true },
 
+  // ── Conversation cloud persistence — side panel / options only. ─────────
+  // These enqueue an authenticated write (or delete) of the user's transcript
+  // to their AGI account. An allowlisted page must never be able to trigger or
+  // delete account-side history, so both are fail-closed even though the local
+  // handlers do no DOM work.
+  SYNC_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  DELETE_CLOUD_CONVERSATION: { senderClass: 'extension-page-only', allowsCrossTab: true },
+
   // ── Memories, quick mode, tab groups — side panel only. ─────────────────
   // These handlers landed after the C-02/C-03 sweep and silently inherited
   // DEFAULT_POLICY, so any content script on an allowlisted origin could read,
@@ -155,6 +163,7 @@ export const MESSAGE_POLICY: Record<string, MessageTypePolicy> = {
   DELETE_MEMORY: { senderClass: 'extension-page-only', allowsCrossTab: true },
   GET_QUICK_MODE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   SET_QUICK_MODE: { senderClass: 'extension-page-only', allowsCrossTab: true },
+  GET_TAB_GROUP_STATE: { senderClass: 'extension-page-only', allowsCrossTab: true },
   ADD_TAB_TO_GROUP: { senderClass: 'extension-page-only', allowsCrossTab: true },
   REMOVE_TAB_FROM_GROUP: { senderClass: 'extension-page-only', allowsCrossTab: true },
 

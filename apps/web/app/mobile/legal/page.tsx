@@ -3,6 +3,15 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { COMING_SOON_LABEL, SURFACE_STATUS } from '@/lib/marketing-constants';
+import {
+  CONTACT_EMAIL,
+  CONTACT_SUBJECTS,
+  LEGAL_ENTITY,
+  LEGAL_ENTITY_DESCRIPTOR,
+  NOTICE_ADDRESS,
+  POLICY_LAST_UPDATED,
+  contactMailto,
+} from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Mobile Legal · Privacy Policy and Terms of Service',
@@ -26,11 +35,9 @@ export const metadata = buildMetadata({
  */
 const MOBILE_UNRELEASED = SURFACE_STATUS.mobile === COMING_SOON_LABEL;
 
-const EFFECTIVE_DATE = '2026-07-12';
-const COMPANY = 'AGI Automation LLC';
-const COMPANY_STATE = 'a United States limited liability company';
-const SUPPORT_EMAIL = 'support@agiworkforce.com';
-const PRIVACY_EMAIL = 'privacy@agiworkforce.com';
+const EFFECTIVE_DATE = POLICY_LAST_UPDATED.mobile;
+const COMPANY = LEGAL_ENTITY;
+const COMPANY_STATE = LEGAL_ENTITY_DESCRIPTOR;
 
 export default function MobileLegalPage() {
   return (
@@ -182,8 +189,8 @@ export default function MobileLegalPage() {
             for inference. Cloud mode may involve AGI processing according to the user-selected
             mode. Account data is processed with your consent for authentication, invite, and
             support workflows. You may request deletion at any time by emailing{' '}
-            <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
-              {PRIVACY_EMAIL}
+            <a href={contactMailto(CONTACT_SUBJECTS.privacy)} style={{ color: 'var(--agi-amber)' }}>
+              {CONTACT_EMAIL}
             </a>
             .
           </p>
@@ -205,8 +212,8 @@ export default function MobileLegalPage() {
             connection with invite and authentication workflows falls under Art. 6(1)(b) GDPR
             (performance of a contract). You have the right of access, rectification, erasure,
             restriction, data portability, and objection. Exercise these rights by emailing{' '}
-            <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
-              {PRIVACY_EMAIL}
+            <a href={contactMailto(CONTACT_SUBJECTS.privacy)} style={{ color: 'var(--agi-amber)' }}>
+              {CONTACT_EMAIL}
             </a>
             . AGI Automation LLC has not yet designated an EU representative under Art. 27 GDPR.
             Until it does, address privacy requests to AGI Automation LLC directly; the
@@ -269,8 +276,8 @@ export default function MobileLegalPage() {
             AGI Mobile is not intended for children. We do not knowingly collect personal data from
             children under 13 (US), under 16 (EU), or under 18 (India). If you believe a child has
             provided personal data, contact{' '}
-            <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
-              {PRIVACY_EMAIL}
+            <a href={contactMailto(CONTACT_SUBJECTS.privacy)} style={{ color: 'var(--agi-amber)' }}>
+              {CONTACT_EMAIL}
             </a>
             .
           </p>
@@ -288,15 +295,14 @@ export default function MobileLegalPage() {
           </h3>
           <p style={{ color: 'var(--agi-ink-2)', fontSize: 15, lineHeight: 1.7 }}>
             Privacy questions:{' '}
-            <a href={`mailto:${PRIVACY_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
-              {PRIVACY_EMAIL}
+            <a href={contactMailto(CONTACT_SUBJECTS.privacy)} style={{ color: 'var(--agi-amber)' }}>
+              {CONTACT_EMAIL}
             </a>
             . General support:{' '}
-            <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
-              {SUPPORT_EMAIL}
+            <a href={contactMailto()} style={{ color: 'var(--agi-amber)' }}>
+              {CONTACT_EMAIL}
             </a>
-            . Mailing address: {COMPANY}, 1309 Coffeen Avenue STE 1200, Sheridan, Wyoming 82801,
-            USA.
+            . Mailing address: {COMPANY}, {NOTICE_ADDRESS}.
           </p>
         </section>
 
@@ -408,9 +414,10 @@ export default function MobileLegalPage() {
             <div className="agi-colophon-row">
               <span className="agi-colophon-key">Changes</span>
               <span className="agi-colophon-val">
-                {COMPANY} may update these terms. Material changes will be communicated via an
-                in-app notice at least 14 days before taking effect. Continued use after the
-                effective date constitutes acceptance.
+                {COMPANY} may update these terms. The current revision date is published at the top
+                of this page. We do not promise an email or in-app notice until that delivery path
+                exists. Continued use after a posted effective date constitutes acceptance to the
+                extent permitted by law.
               </span>
             </div>
             <div className="agi-colophon-row">
@@ -424,12 +431,12 @@ export default function MobileLegalPage() {
               <span className="agi-colophon-key">Contact</span>
               <span className="agi-colophon-val">
                 Legal queries:{' '}
-                <a href="mailto:legal@agiworkforce.com" style={{ color: 'var(--agi-amber)' }}>
-                  legal@agiworkforce.com
+                <a href={contactMailto('Mobile legal')} style={{ color: 'var(--agi-amber)' }}>
+                  {CONTACT_EMAIL}
                 </a>
                 . Support:{' '}
-                <a href={`mailto:${SUPPORT_EMAIL}`} style={{ color: 'var(--agi-amber)' }}>
-                  {SUPPORT_EMAIL}
+                <a href={contactMailto()} style={{ color: 'var(--agi-amber)' }}>
+                  {CONTACT_EMAIL}
                 </a>
                 .
               </span>

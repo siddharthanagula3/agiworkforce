@@ -84,6 +84,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
             "width": 32,
           }
         }
+        testID="chat.composer.plus"
       >
         <View
           color="#888"
@@ -404,6 +405,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
               "width": 34,
             }
           }
+          testID="chat.composer.plus.stacked"
         >
           <View
             color="#888"

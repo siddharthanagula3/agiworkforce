@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Platform, ScrollView, Share, View } from 'react-native';
+import { Image } from 'expo-image';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { useNavigation } from '@react-navigation/native';
+// From `expo-router`, not `@react-navigation/native` — see the note in
+// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
+// navigation package, so the raw hook can land on a different context
+// instance than the one expo-router's navigator provides.
+import { useNavigation } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BarChart3,
@@ -24,6 +29,7 @@ import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 import { GeneratedImage } from '@/src/features/chat/components/GeneratedImage';
+import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -268,6 +274,56 @@ interface ArtifactCardProps {
   style?: object;
 }
 
+function ArtifactImagePreview({
+  artifact,
+  width,
+  height,
+}: {
+  artifact: MobileArtifact;
+  width: number;
+  height: number;
+}) {
+  const c = useThemeColors();
+  // The detail preview and Library already resolve the same durable image
+  // through this owner-scoped source hook. The grid previously ignored the
+  // URL entirely and always painted a generic icon, despite having valid data.
+  const { source, status } = useGeneratedImageSource(artifact.content, false);
+
+  if (status === 'ready' && source) {
+    return (
+      <Image
+        testID={`artifact-image-thumbnail-${artifact.id}`}
+        source={source}
+        style={{ width, height }}
+        contentFit="cover"
+        transition={150}
+        cachePolicy="memory"
+        accessibilityLabel={artifact.previewLines[0] ?? artifact.title}
+      />
+    );
+  }
+
+  return (
+    <View
+      className="absolute inset-0 items-center justify-center px-3"
+      style={{ backgroundColor: c.surfaceHover }}
+    >
+      <ImageIcon size={30} color={artifact.accentColor} />
+      <Text
+        className="text-[10px] leading-[14px] mt-2"
+        numberOfLines={2}
+        style={{ color: c.textSecondary, textAlign: 'center' }}
+      >
+        {status === 'authorizing'
+          ? 'Loading image…'
+          : status === 'signed-out'
+            ? 'Sign in to view'
+            : 'Image unavailable'}
+      </Text>
+    </View>
+  );
+}
+
 function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
   const c = useThemeColors();
   const previewHeight = Math.max(120, Math.round(width * 0.72));
@@ -301,19 +357,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
 
         {/* Code / text preview area */}
         {isImage ? (
-          <View
-            className="absolute inset-0 items-center justify-end px-3 pb-3"
-            style={{ backgroundColor: c.surfaceHover }}
-          >
-            <ImageIcon size={30} color={artifact.accentColor} />
-            <Text
-              className="text-[10px] leading-[14px] mt-2"
-              numberOfLines={2}
-              style={{ color: c.textSecondary, textAlign: 'center' }}
-            >
-              {artifact.previewLines[0] ?? 'Generated image'}
-            </Text>
-          </View>
+          <ArtifactImagePreview artifact={artifact} width={width} height={previewHeight} />
         ) : (
           <View
             className="absolute inset-0 justify-end px-3 pb-3 pt-10"

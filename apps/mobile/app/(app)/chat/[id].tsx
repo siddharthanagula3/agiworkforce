@@ -13,7 +13,11 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useNavigation } from '@react-navigation/native';
+// From `expo-router`, not `@react-navigation/native` — see the note in
+// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
+// navigation package, so the raw hook can land on a different context
+// instance than the one expo-router's navigator provides.
+import { useNavigation } from 'expo-router';
 import { MoreHorizontal, WifiOff, SquarePen, Menu } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -191,6 +195,9 @@ export default function ChatScreen() {
   const completeVideoGeneration = useChatStore((s) => s.completeVideoGeneration);
   const failVideoGeneration = useChatStore((s) => s.failVideoGeneration);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
+  const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
+  const videoResolution = useChatViewStore((s) => s.videoResolution);
+  const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
   const markConversationRead = useChatStore((s) => s.markConversationRead);
   const imageGenerationEnabled = useChatStore((s) => s.features.imageGen);
 
@@ -294,35 +301,21 @@ export default function ChatScreen() {
   }, [id, setCurrentConversationId, loadMessages, markConversationRead]);
 
   // ---------------------------------------------------------------------------
-  // Voice playback -- speak completed assistant messages aloud.
-  // Declared early so handleSend / handleBack can reference stopSpeaking.
+  // Voice playback.
+  //
+  // A TYPED chat never speaks on its own. This screen used to auto-speak every
+  // completed assistant message, gated on `settings.voiceEnabled` — but that
+  // setting is labelled "Voice Input / Use the microphone for dictation and
+  // voice conversations" and defaults to ON, so an input preference was
+  // silently driving speech OUTPUT and every reply in a silent, typed
+  // conversation was read aloud (founder 2026-08-13).
+  //
+  // Reading a reply aloud now has exactly two deliberate entry points, both
+  // still wired: voice mode, which speaks through `useVoiceConversation`, and
+  // the per-message play control in MessageBubble. `stopSpeaking` is kept so
+  // navigating away or sending again still cuts off whichever of those started.
   // ---------------------------------------------------------------------------
-  const { speak, stop: stopSpeaking } = useVoicePlayback();
-  const voiceEnabled = useSettingsStore((s) => s.voiceEnabled);
-
-  /**
-   * Track the ID of the last assistant message we started speaking so we
-   * don't re-trigger TTS on every re-render or when unrelated state changes.
-   */
-  const lastSpokenIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const lastMsg = conversationMessages[conversationMessages.length - 1];
-
-    // Only speak completed (non-streaming) assistant messages with content,
-    // and only when the user has voice playback enabled in Voice Settings.
-    if (
-      voiceEnabled &&
-      lastMsg &&
-      lastMsg.role === 'assistant' &&
-      !lastMsg.isStreaming &&
-      lastMsg.content.trim() &&
-      lastMsg.id !== lastSpokenIdRef.current
-    ) {
-      lastSpokenIdRef.current = lastMsg.id;
-      speak(lastMsg.content);
-    }
-  }, [conversationMessages, speak, voiceEnabled]);
+  const { stop: stopSpeaking } = useVoicePlayback();
 
   // Stop any ongoing speech when the user navigates away from this screen.
   useEffect(() => {
@@ -352,8 +345,8 @@ export default function ChatScreen() {
       stopSpeaking?.();
       if (conversationExecutionMode === 'cloud' && !FEATURES.cloudChat) {
         Alert.alert(
-          'AGI Cloud is not ready on mobile',
-          'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
+          'AGI Cloud is unavailable in this build',
+          'This build has Cloud chat turned off. Local Mode remains available and stays on this device.',
         );
         return false;
       }
@@ -388,6 +381,10 @@ export default function ChatScreen() {
         executionMode: conversationExecutionMode,
         text: trimmedInput,
         mediaMode,
+        // Video output shape from the composer sheet; the resolver narrows
+        // these to the wire contract's literal unions.
+        aspectRatio: videoAspectRatio,
+        resolution: videoResolution,
         subscriptionTier,
         isClerkSignedIn,
         ownerId: clerkUserId,
@@ -406,6 +403,8 @@ export default function ChatScreen() {
           displayText: finalText,
           prompt: videoRequest.prompt,
           model: videoRequest.model,
+          aspectRatio: videoRequest.aspectRatio,
+          resolution: videoRequest.resolution,
           ownerId: videoRequest.ownerId,
           begin: beginVideoGeneration,
           progress: updateVideoGenerationProgress,
@@ -439,6 +438,7 @@ export default function ChatScreen() {
         ownerId: clerkUserId,
         grantedCapabilities,
         isOnline,
+        aspectRatio: imageAspectRatio,
       });
 
       // Image output is dispatched through the canonical media route for both
@@ -456,6 +456,7 @@ export default function ChatScreen() {
           displayText: finalText,
           prompt: imageRequest.prompt,
           model: imageRequest.model,
+          aspectRatio: imageRequest.aspectRatio,
           ownerId: imageRequest.ownerId,
           begin: beginImageGeneration,
           complete: completeImageGeneration,

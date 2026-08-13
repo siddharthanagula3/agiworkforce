@@ -207,7 +207,26 @@ impl LocalChatTurnHost {
         let prefix = format!("tool_call_{}", self.next_prefix_index);
         self.next_prefix_index += 1;
 
-        let (chat, normalized) = chat_outcome_from_route(outcome, &prefix);
+        let (mut chat, normalized) = chat_outcome_from_route(outcome, &prefix);
+        let (normalized, rejected_tool_names) =
+            filter_advertised_tool_calls(normalized, self.tools.as_deref());
+        if !rejected_tool_names.is_empty() {
+            warn!(
+                rejected_tools = ?rejected_tool_names,
+                "[Chat] Ignoring provider tool calls that were not advertised for this turn"
+            );
+            if normalized.is_empty() && chat.text.trim().is_empty() {
+                chat.text = "This model tried to use an action that was not available for this turn, so nothing was run. Please retry or enable the required capability.".to_string();
+            }
+            chat.tool_calls = normalized
+                .iter()
+                .map(|stc| CoreToolCall {
+                    id: stc.id.clone(),
+                    name: stc.name.clone(),
+                    arguments: parse_args(&stc.arguments),
+                })
+                .collect();
+        }
         self.pending_calls = normalized;
 
         // Track the "last completion wins" reasoning fields exactly like the
@@ -217,7 +236,7 @@ impl LocalChatTurnHost {
             .response
             .reasoning_tokens
             .or(outcome.response.thinking_tokens);
-        self.final_content = outcome.response.content.clone();
+        self.final_content = chat.text.clone();
         self.request_cost.record(outcome);
         self.last_outcome = outcome.clone();
 

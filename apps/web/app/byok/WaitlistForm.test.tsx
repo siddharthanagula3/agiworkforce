@@ -65,7 +65,7 @@ describe('WaitlistForm · CSRF error handling', () => {
     submitForm();
 
     await waitFor(() => {
-      expect(screen.getByText('Sign in to request Cloud access.')).toBeInTheDocument();
+      expect(screen.getByText('Sign in to save this early-access request.')).toBeInTheDocument();
     });
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
       'href',

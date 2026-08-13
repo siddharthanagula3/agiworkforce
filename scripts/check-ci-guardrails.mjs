@@ -485,7 +485,12 @@ requireNotIncludes('scripts/release.sh', 'gh release create');
 requireIncludes('scripts/release.sh', 'v-desktop-${VERSION}');
 
 requireIncludes('vercel.json', '"path": "/api/cron/reset-credits"');
-requireIncludes('vercel.json', '"source": "/v1/chat/completions"');
+// API-host aliases are owned by one contract shared by Next rewrites and
+// Proxy pass-through. Root vercel.json rewrites are ignored for this Next
+// project and must not become a second, inert route table.
+requireIncludes('apps/web/lib/api-host-route-contract.ts', "source: '/v1/chat/completions'");
+requireIncludes('apps/web/next.config.ts', 'API_HOST_REWRITE_ROUTES.map');
+requireNotIncludes('vercel.json', '"source": "/v1/chat/completions"');
 requireIncludes('vercel.json', 'pnpm install --frozen-lockfile');
 // The Vercel project's Root Directory is the repo root, so the ROOT
 // vercel.json is the only one Vercel reads (apps/web/vercel.json was dead

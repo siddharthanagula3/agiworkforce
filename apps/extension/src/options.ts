@@ -14,8 +14,13 @@ import { getExtensionTokensCssAuto } from './tokens';
 import { clearAuthToken, getAuthToken } from './features/cloud-bridge/freeTrialClient';
 import { isClerkExtensionAuthConfigured, openClerkSignIn } from './features/cloud-bridge/clerkAuth';
 import { beginOptionsAccountRefresh } from './features/options/account-state';
+import {
+  normalizeApprovedSiteOrigin,
+  sanitizeApprovedSiteOrigins,
+  selectApprovedSiteOrigin,
+} from './features/options/site-allowlist';
+import { SITE_ALLOWLIST_STORAGE_KEY } from './background/policy';
 
-const SITE_ALLOWLIST_KEY = 'agi_site_allowlist';
 const API_KEY_STORAGE_KEY = 'agi_api_key';
 const AUTOFILL_PROFILE_KEY = 'agi_autofill_profile';
 const DEV_BEARER_KEY = 'agi_dev_bearer_token';
@@ -169,6 +174,12 @@ function injectStyles(): void {
         scroll-behavior: auto !important;
       }
     }
+    @media (forced-colors: active) {
+      .opt-toggle { border: 1px solid CanvasText; }
+      .opt-toggle::after { background: CanvasText; box-shadow: none; }
+      .opt-toggle:checked { background: Highlight; }
+      .opt-toggle:checked::after { background: HighlightText; }
+    }
     /* Allowlist */
     .opt-allowlist-body {
       padding: 12px 16px;
@@ -297,15 +308,27 @@ function injectStyles(): void {
       border-collapse: collapse;
     }
 
-    .opt-shortcuts-table td {
+    .opt-shortcuts-table td,
+    .opt-shortcuts-table th {
       padding: 10px 16px;
       font-size: 12px;
       border-bottom: 1px solid var(--agi-ext-border);
+      text-align: left;
     }
 
-    .opt-shortcuts-table tr:last-child td { border-bottom: none; }
+    .opt-shortcuts-table tr:last-child td,
+    .opt-shortcuts-table tr:last-child th { border-bottom: none; }
 
-    .opt-shortcuts-table td:first-child { color: var(--agi-ext-text-muted); }
+    .opt-shortcuts-table th {
+      color: var(--agi-ext-text-muted);
+      font-weight: 400;
+    }
+
+    .opt-shortcuts-table + .opt-save-status {
+      display: block;
+      padding: 10px 16px 14px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
 
     .opt-shortcut-kbd {
       display: inline-flex;
@@ -421,6 +444,13 @@ function injectStyles(): void {
       background: color-mix(in srgb, var(--agi-ext-accent) 80%, black);
     }
 
+    .opt-btn-primary:disabled,
+    .opt-btn-danger:disabled,
+    .opt-allowlist-item-remove:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+
     .opt-save-status {
       font-size: 11px;
       color: var(--agi-ext-text-muted);
@@ -428,6 +458,22 @@ function injectStyles(): void {
 
     .opt-save-status.saved {
       color: var(--agi-ext-success, #22c55e);
+    }
+
+    .opt-save-status.error {
+      color: var(--agi-ext-danger);
+    }
+
+    .opt-sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
 
     /* Dev bearer token section */
@@ -464,6 +510,321 @@ function injectStyles(): void {
 
     .opt-bearer-input:focus {
       border-color: var(--agi-ext-accent);
+    }
+
+    /* ── Chrome settings visual system ──────────────────────────────────── */
+    body {
+      color-scheme: dark;
+      background: var(--agi-ext-bg);
+      letter-spacing: -0.005em;
+    }
+
+    @media (prefers-color-scheme: light) {
+      body { color-scheme: light; }
+    }
+
+    button,
+    input,
+    textarea,
+    select { font: inherit; }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
+    }
+
+    .opt-shell {
+      display: grid;
+      grid-template-columns: 238px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .opt-sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 26px;
+      padding: 26px 18px 22px;
+      border-right: 1px solid var(--agi-ext-border);
+      background: color-mix(in srgb, var(--agi-ext-bg) 94%, black);
+    }
+
+    .opt-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 34px;
+      padding: 0 8px;
+    }
+
+    .opt-brand-mark {
+      width: 28px;
+      height: 28px;
+      object-fit: contain;
+    }
+
+    .opt-brand-name {
+      color: var(--agi-ext-text);
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.025em;
+    }
+
+    .opt-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    .opt-nav-item {
+      width: 100%;
+      min-height: 42px;
+      padding: 0 13px;
+      border: 0;
+      border-radius: 11px;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      text-align: left;
+      transition: background 140ms ease, color 140ms ease;
+    }
+
+    .opt-nav-item:hover {
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text);
+    }
+
+    .opt-nav-item.active {
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      font-weight: 600;
+      box-shadow: inset 3px 0 0 var(--agi-ext-accent);
+    }
+
+    .opt-page {
+      width: 100%;
+      max-width: 1160px;
+      margin: 0 auto;
+      padding: 42px 48px 64px;
+      gap: 22px;
+    }
+
+    .opt-header {
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 2px 14px;
+      border-bottom: 0;
+    }
+
+    .opt-header-title {
+      font-size: 28px;
+      font-weight: 650;
+      letter-spacing: -0.035em;
+    }
+
+    .opt-header-sub {
+      margin-top: 7px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .opt-header-account {
+      min-height: 40px;
+      padding: 0 15px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 11px;
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 140ms ease, border-color 140ms ease;
+    }
+
+    .opt-header-account:hover {
+      border-color: color-mix(in srgb, var(--agi-ext-accent) 45%, var(--agi-ext-border));
+      background: var(--agi-ext-hover);
+    }
+
+    .opt-section {
+      scroll-margin-top: 72px;
+      border-color: var(--agi-ext-border-strong);
+      border-radius: 16px;
+      background: color-mix(in srgb, var(--agi-ext-surface) 92%, var(--agi-ext-bg));
+      box-shadow: 0 10px 30px color-mix(in srgb, black 5%, transparent);
+    }
+
+    .opt-section-header {
+      padding: 19px 22px 15px;
+      border-bottom-color: var(--agi-ext-border);
+    }
+
+    .opt-section-title {
+      color: var(--agi-ext-text);
+      font-size: 17px;
+      font-weight: 620;
+      letter-spacing: -0.02em;
+      text-transform: none;
+    }
+
+    .opt-row {
+      min-height: 68px;
+      padding: 15px 22px;
+      border-bottom-color: var(--agi-ext-border);
+    }
+
+    .opt-row-label { font-size: 13px; font-weight: 550; }
+    .opt-row-hint { max-width: 680px; margin-top: 4px; font-size: 12px; line-height: 1.5; }
+
+    .opt-toggle {
+      width: 42px;
+      height: 24px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 999px;
+      background: var(--agi-ext-overlay);
+    }
+
+    .opt-toggle::after {
+      width: 16px;
+      height: 16px;
+      top: 3px;
+      left: 3px;
+    }
+
+    .opt-toggle:checked::after { transform: translateX(18px); }
+
+    .opt-allowlist-body,
+    .opt-bearer-body { padding: 17px 22px 20px; }
+
+    .opt-allowlist-help,
+    .opt-bearer-help { max-width: 720px; font-size: 12px; }
+
+    .opt-allowlist-current-row { margin-top: 14px; }
+
+    .opt-allowlist-item,
+    kbd,
+    .opt-field input,
+    .opt-field textarea,
+    .opt-field select,
+    .opt-bearer-input {
+      border-color: var(--agi-ext-border-strong);
+      background: var(--agi-ext-bg);
+    }
+
+    .opt-allowlist-item { min-height: 38px; padding-inline: 12px; border-radius: 10px; }
+    .opt-allowlist-toggle-btn,
+    .opt-btn-danger,
+    .opt-btn-primary {
+      min-height: 36px;
+      padding: 7px 14px;
+      border-radius: 10px;
+    }
+
+    .opt-profile-grid {
+      padding: 18px 22px;
+      gap: 15px 18px;
+    }
+
+    .opt-field { gap: 7px; }
+    .opt-field label { font-size: 11.5px; }
+    .opt-field input,
+    .opt-field textarea,
+    .opt-field select,
+    .opt-bearer-input {
+      min-height: 40px;
+      padding: 9px 11px;
+      border-radius: 10px;
+    }
+
+    .opt-profile-actions { padding: 14px 22px 18px; }
+
+    .opt-shortcuts-table td,
+    .opt-shortcuts-table th {
+      padding: 14px 22px;
+      font-size: 12.5px;
+    }
+
+    kbd { min-width: 25px; padding: 3px 7px; border-radius: 7px; text-align: center; }
+    .opt-link { font-size: 12px; text-decoration: none; }
+    .opt-version { padding-top: 4px; opacity: 0.72; }
+
+    @media (max-width: 900px) {
+      .opt-shell { grid-template-columns: 204px minmax(0, 1fr); }
+      .opt-page { padding: 34px 30px 52px; }
+    }
+
+    @media (max-width: 700px) {
+      .opt-shell { display: block; }
+      .opt-sidebar {
+        position: sticky;
+        z-index: 20;
+        width: 100%;
+        height: auto;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border-right: 0;
+        border-bottom: 1px solid var(--agi-ext-border);
+        overflow: hidden;
+      }
+      .opt-brand { padding: 0 6px 0 0; }
+      .opt-brand-name { display: none; }
+      .opt-nav {
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-direction: row;
+        gap: 4px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .opt-nav::-webkit-scrollbar { display: none; }
+      .opt-nav-item { width: auto; min-height: 36px; padding-inline: 11px; white-space: nowrap; }
+      .opt-nav-item.active { box-shadow: inset 0 -2px 0 var(--agi-ext-accent); }
+      .opt-page { padding: 28px 16px 42px; }
+      .opt-header { align-items: flex-start; }
+      .opt-header-title { font-size: 23px; }
+      .opt-header-account { min-height: 36px; padding-inline: 11px; }
+      .opt-row,
+      .opt-section-header,
+      .opt-allowlist-body,
+      .opt-bearer-body,
+      .opt-profile-grid,
+      .opt-profile-actions { padding-inline: 16px; }
+    }
+
+    @media (max-width: 420px) {
+      .opt-sidebar {
+        gap: 4px;
+        padding-inline: 6px;
+      }
+
+      .opt-brand {
+        flex: 0 0 22px;
+        padding: 0;
+      }
+
+      .opt-brand-mark {
+        width: 22px;
+        height: 22px;
+      }
+
+      .opt-nav {
+        gap: 1px;
+      }
+
+      .opt-nav-item {
+        min-height: 34px;
+        padding-inline: 5px;
+        font-size: 10px;
+        letter-spacing: -0.02em;
+        text-align: center;
+      }
     }
   `);
   document.adoptedStyleSheets = [sheet];
@@ -502,16 +863,22 @@ function el<K extends keyof HTMLElementTagNameMap>(
 // ── Allowlist helpers ────────────────────────────────────────────────────────
 
 async function loadAllowlist(): Promise<string[]> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(SITE_ALLOWLIST_KEY, (result) => {
-      const raw = result[SITE_ALLOWLIST_KEY];
-      resolve(Array.isArray(raw) ? (raw as string[]) : []);
+  return new Promise((resolve, reject) => {
+    chrome.storage.local.get(SITE_ALLOWLIST_STORAGE_KEY, (result) => {
+      const runtimeError = chrome.runtime.lastError;
+      if (runtimeError) {
+        reject(new Error(runtimeError.message || 'Approved sites could not be read.'));
+        return;
+      }
+      resolve(sanitizeApprovedSiteOrigins(result[SITE_ALLOWLIST_STORAGE_KEY]));
     });
   });
 }
 
 async function saveAllowlist(list: string[]): Promise<void> {
-  await chrome.storage.local.set({ [SITE_ALLOWLIST_KEY]: list });
+  await chrome.storage.local.set({
+    [SITE_ALLOWLIST_STORAGE_KEY]: sanitizeApprovedSiteOrigins(list),
+  });
 }
 
 // ── Build page ───────────────────────────────────────────────────────────────
@@ -519,48 +886,153 @@ async function saveAllowlist(list: string[]): Promise<void> {
 function buildPage(): void {
   injectStyles();
 
-  const page = el('div', { class: 'opt-page' });
+  const shell = el('div', { class: 'opt-shell' });
+  const sidebar = el('aside', { class: 'opt-sidebar', 'aria-label': 'Settings navigation' });
+  const brand = el('div', { class: 'opt-brand' });
+  brand.appendChild(
+    el('img', {
+      class: 'opt-brand-mark',
+      src: chrome.runtime.getURL('icons/icon32.png'),
+      alt: '',
+      width: '28',
+      height: '28',
+    }),
+  );
+  brand.appendChild(el('span', { class: 'opt-brand-name' }, 'AGI'));
+  sidebar.appendChild(brand);
+
+  const nav = el('nav', { class: 'opt-nav' });
+  const navItems: Array<{ label: string; target: string }> = [
+    { label: 'Permissions', target: 'opt-permissions' },
+    { label: 'Account', target: 'opt-account' },
+    { label: 'Preferences', target: 'opt-preferences' },
+    { label: 'Shortcuts', target: 'opt-shortcuts' },
+    { label: 'Help', target: 'opt-help' },
+  ];
+  const navButtons: HTMLButtonElement[] = [];
+
+  const scrollToSettingsSection = (target: string): void => {
+    const reduceMotion =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document
+      .getElementById(target)
+      ?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  };
+
+  const setActiveNavButton = (active: HTMLButtonElement): void => {
+    for (const button of navButtons) {
+      const selected = button === active;
+      button.classList.toggle('active', selected);
+      if (selected) button.setAttribute('aria-current', 'location');
+      else button.removeAttribute('aria-current');
+    }
+  };
+
+  for (const [index, item] of navItems.entries()) {
+    const navButton = el(
+      'button',
+      {
+        class: `opt-nav-item${index === 0 ? ' active' : ''}`,
+        type: 'button',
+        'data-target': item.target,
+        'aria-controls': item.target,
+        ...(index === 0 ? { 'aria-current': 'location' } : {}),
+      },
+      item.label,
+    ) as HTMLButtonElement;
+    navButton.addEventListener('click', () => {
+      scrollToSettingsSection(item.target);
+      setActiveNavButton(navButton);
+      navButton.scrollIntoView({ behavior: 'auto', block: 'nearest', inline: 'center' });
+    });
+    navButtons.push(navButton);
+    nav.appendChild(navButton);
+  }
+  sidebar.appendChild(nav);
+
+  const page = el('main', { class: 'opt-page' });
 
   // Header
   const header = el('div', { class: 'opt-header' });
   const headerText = el('div');
-  headerText.appendChild(el('div', { class: 'opt-header-title' }, 'AGI Options'));
+  headerText.appendChild(el('h1', { class: 'opt-header-title' }, 'AGI Chrome settings'));
   headerText.appendChild(
-    el('div', { class: 'opt-header-sub' }, 'Browser automation extension settings'),
+    el(
+      'div',
+      { class: 'opt-header-sub' },
+      'Manage browser permissions, preferences, and account access.',
+    ),
   );
   header.appendChild(headerText);
+  const headerAccountButton = el(
+    'button',
+    { class: 'opt-header-account', type: 'button' },
+    'Account',
+  ) as HTMLButtonElement;
+  headerAccountButton.addEventListener('click', () => {
+    scrollToSettingsSection('opt-account');
+  });
+  header.appendChild(headerAccountButton);
   page.appendChild(header);
 
   // ── Section: Permissions ──────────────────────────────────────────────────
 
-  const permSection = el('div', { class: 'opt-section' });
+  const permSection = el('section', { class: 'opt-section', id: 'opt-permissions' });
   const permHeader = el('div', { class: 'opt-section-header' });
-  permHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Permissions'));
+  permHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Permissions'));
   permSection.appendChild(permHeader);
 
   // Task notifications toggle
   const notifRow = el('div', { class: 'opt-row' });
   const notifLeft = el('div');
-  notifLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Task notifications'));
   notifLeft.appendChild(
-    el('div', { class: 'opt-row-hint' }, 'Show a Chrome notification when a scheduled task fires.'),
+    el('div', { class: 'opt-row-label', id: 'opt-notif-label' }, 'Task notifications'),
   );
+  notifLeft.appendChild(
+    el(
+      'div',
+      { class: 'opt-row-hint', id: 'opt-notif-description' },
+      'Show a Chrome notification when a scheduled task fires.',
+    ),
+  );
+  const notifStatus = el('div', {
+    class: 'opt-row-hint',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-atomic': 'true',
+  });
+  notifLeft.appendChild(notifStatus);
   notifRow.appendChild(notifLeft);
 
   const notifToggle = el('input', {
     type: 'checkbox',
     class: 'opt-toggle',
     id: 'opt-notif-toggle',
+    'aria-labelledby': 'opt-notif-label',
+    'aria-describedby': 'opt-notif-description',
   }) as HTMLInputElement;
 
   // Load saved preference (default true — matches user intent when they schedule tasks)
   chrome.storage.local.get({ agi_task_notifications: true }, (items) => {
     notifToggle.checked = items['agi_task_notifications'] !== false;
   });
-  notifToggle.addEventListener('change', () => {
-    chrome.storage.local
-      .set({ agi_task_notifications: notifToggle.checked })
-      .catch((err: unknown) => console.warn('[Options] Failed to save notif pref:', err));
+  notifToggle.addEventListener('change', async () => {
+    const next = notifToggle.checked;
+    notifToggle.disabled = true;
+    notifStatus.textContent = 'Saving…';
+    try {
+      await chrome.storage.local.set({ agi_task_notifications: next });
+      notifStatus.textContent = next
+        ? 'Task notifications enabled.'
+        : 'Task notifications disabled.';
+    } catch (err: unknown) {
+      notifToggle.checked = !next;
+      notifStatus.textContent = 'Could not save this preference. Please try again.';
+      console.warn('[Options] Failed to save notif pref:', err);
+    } finally {
+      notifToggle.disabled = false;
+    }
   });
 
   notifRow.appendChild(notifToggle);
@@ -587,7 +1059,7 @@ function buildPage(): void {
     el(
       'p',
       { class: 'opt-allowlist-help' },
-      'Pages on these origins can run AGI automation in their tab. Add the current site, then reload it.',
+      'Approved origins can run AGI browser automation in their tab. The optional page assistant can also send up to 30,000 characters of redacted visible page text from an approved origin to AGI Managed Cloud. Add the current site, then reload it.',
     ),
   );
 
@@ -603,6 +1075,7 @@ function buildPage(): void {
     'Add',
   ) as HTMLButtonElement;
   addBtn.disabled = true;
+  let currentSiteOrigin: string | null = null;
   currentRow.appendChild(currentOriginLabel);
   currentRow.appendChild(addBtn);
   allowlistBody.appendChild(currentRow);
@@ -613,8 +1086,20 @@ function buildPage(): void {
     { class: 'opt-allowlist-empty', id: 'opt-allowlist-empty' },
     'No sites allowlisted yet.',
   );
+  const allowlistStatus = el('p', {
+    class: 'opt-save-status',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-atomic': 'true',
+  });
   allowlistBody.appendChild(allowlistUl);
   allowlistBody.appendChild(allowlistEmpty);
+  allowlistBody.appendChild(allowlistStatus);
+
+  function setAllowlistStatus(message: string, error = false): void {
+    allowlistStatus.textContent = message;
+    allowlistStatus.className = `opt-save-status${error ? ' error' : ''}`;
+  }
 
   async function refreshAllowlist(): Promise<void> {
     const origins = await loadAllowlist();
@@ -633,9 +1118,20 @@ function buildPage(): void {
         '×',
       ) as HTMLButtonElement;
       removeBtn.addEventListener('click', async () => {
-        const list = await loadAllowlist();
-        await saveAllowlist(list.filter((o) => o !== origin));
-        await refreshAllowlist();
+        removeBtn.disabled = true;
+        setAllowlistStatus(`Removing ${origin}…`);
+        try {
+          const list = await loadAllowlist();
+          await saveAllowlist(list.filter((o) => o !== origin));
+          await refreshAllowlist();
+          setAllowlistStatus(`${origin} removed.`);
+        } catch (error: unknown) {
+          removeBtn.disabled = false;
+          setAllowlistStatus(
+            error instanceof Error ? error.message : 'Could not update approved sites.',
+            true,
+          );
+        }
       });
       li.appendChild(originSpan);
       li.appendChild(removeBtn);
@@ -643,12 +1139,16 @@ function buildPage(): void {
     }
     // Update add/remove button for the current origin
     const stored = await loadAllowlist();
-    const currentOrigin = currentOriginLabel.textContent ?? '';
-    if (currentOrigin && currentOrigin !== '—') {
-      const isAdded = stored.includes(currentOrigin);
+    if (currentSiteOrigin) {
+      const isAdded = stored.includes(currentSiteOrigin);
       addBtn.textContent = isAdded ? 'Remove' : 'Add';
       addBtn.className = isAdded ? 'opt-allowlist-toggle-btn remove' : 'opt-allowlist-toggle-btn';
       addBtn.disabled = false;
+      addBtn.removeAttribute('title');
+    } else {
+      addBtn.textContent = 'Add';
+      addBtn.className = 'opt-allowlist-toggle-btn';
+      addBtn.disabled = true;
     }
   }
 
@@ -663,23 +1163,10 @@ function buildPage(): void {
   // no site is found, and "Add" — the page's only site-permission control —
   // stays permanently disabled showing "—". Query every tab and fall back to the
   // most recently accessed http(s) one, which is the page the user came from.
-  const isHttpTab = (t: chrome.tabs.Tab): boolean => {
-    if (!t.url) return false;
-    try {
-      const proto = new URL(t.url).protocol;
-      return proto === 'http:' || proto === 'https:';
-    } catch {
-      return false;
-    }
-  };
-
   chrome.tabs.query({}, (tabs) => {
-    const candidates = tabs.filter(isHttpTab);
-    const siteTab =
-      candidates.find((t) => t.active) ??
-      candidates.sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
-    if (siteTab?.url) {
-      currentOriginLabel.textContent = new URL(siteTab.url).origin;
+    currentSiteOrigin = selectApprovedSiteOrigin(tabs);
+    if (currentSiteOrigin) {
+      currentOriginLabel.textContent = currentSiteOrigin;
       addBtn.disabled = false;
     } else {
       // Explain the dash instead of leaving a dead control next to it.
@@ -687,21 +1174,38 @@ function buildPage(): void {
       addBtn.disabled = true;
       addBtn.title = 'Open a website in a tab, then reopen Options to approve it.';
     }
-    void refreshAllowlist();
+    void refreshAllowlist().catch((error: unknown) => {
+      addBtn.disabled = true;
+      setAllowlistStatus(
+        error instanceof Error ? error.message : 'Approved sites could not be loaded.',
+        true,
+      );
+    });
   });
 
   addBtn.addEventListener('click', async () => {
-    const origin = currentOriginLabel.textContent ?? '';
-    if (!origin || origin === '—') return;
-    const list = await loadAllowlist();
-    const isAdded = list.includes(origin);
-    if (isAdded) {
-      await saveAllowlist(list.filter((o) => o !== origin));
-    } else {
-      list.push(origin);
-      await saveAllowlist(list);
+    const origin = normalizeApprovedSiteOrigin(currentSiteOrigin);
+    if (!origin) return;
+    addBtn.disabled = true;
+    setAllowlistStatus('Saving approved sites…');
+    try {
+      const list = await loadAllowlist();
+      const isAdded = list.includes(origin);
+      if (isAdded) {
+        await saveAllowlist(list.filter((o) => o !== origin));
+      } else {
+        list.push(origin);
+        await saveAllowlist(list);
+      }
+      await refreshAllowlist();
+      setAllowlistStatus(isAdded ? `${origin} removed.` : `${origin} approved.`);
+    } catch (error: unknown) {
+      addBtn.disabled = false;
+      setAllowlistStatus(
+        error instanceof Error ? error.message : 'Could not update approved sites.',
+        true,
+      );
     }
-    await refreshAllowlist();
   });
 
   permSection.appendChild(allowlistBody);
@@ -709,9 +1213,9 @@ function buildPage(): void {
 
   // ── Section: Account ──────────────────────────────────────────────────────
 
-  const accountSection = el('div', { class: 'opt-section' });
+  const accountSection = el('section', { class: 'opt-section', id: 'opt-account' });
   const accountHeader = el('div', { class: 'opt-section-header' });
-  accountHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Account'));
+  accountHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Account'));
   accountSection.appendChild(accountHeader);
 
   const renderAccountRow = (signedIn: boolean, unavailable = false, loading = false): void => {
@@ -750,34 +1254,30 @@ function buildPage(): void {
         isClerkExtensionAuthConfigured() ? 'Sign in' : 'Unavailable',
       ) as HTMLButtonElement;
       signInBtn.disabled = !isClerkExtensionAuthConfigured();
+      let signInAction: 'open' | 'check' = 'open';
       signInBtn.addEventListener('click', async () => {
-        const restoreLabel = signInBtn.textContent ?? 'Sign in';
-        signInBtn.textContent = 'Opening…';
+        const action = signInAction;
+        signInBtn.textContent = action === 'open' ? 'Opening…' : 'Checking…';
         signInBtn.disabled = true;
         try {
-          await openClerkSignIn();
-          // Sign-in completes in ANOTHER tab, so this page never learns about it.
-          // The button used to stop at a permanently disabled "Sign-in opened",
-          // stranding anyone who finished signing in or closed the auth tab —
-          // the row still said "Sign in" and nothing could be clicked. Offer an
-          // explicit re-check instead, matching the side panel.
-          signInBtn.textContent = 'Check sign-in';
-          signInBtn.disabled = false;
-          signInBtn.onclick = async () => {
-            signInBtn.textContent = 'Checking…';
-            signInBtn.disabled = true;
-            try {
-              await beginOptionsAccountRefresh(
-                getAuthToken,
-                ({ signedIn: s2, unavailable: u2, loading: l2 }) => renderAccountRow(s2, u2, l2),
-              );
-            } finally {
-              signInBtn.textContent = 'Check sign-in';
-              signInBtn.disabled = false;
-            }
-          };
+          if (action === 'open') {
+            await openClerkSignIn();
+            // Sign-in completes in another tab. Keep this one handler and
+            // advance it to an explicit account re-check; stacking `onclick`
+            // on top of this addEventListener made the second click perform
+            // both actions at once.
+            signInAction = 'check';
+            signInBtn.textContent = 'Check sign-in';
+            signInBtn.disabled = false;
+            return;
+          }
+
+          await beginOptionsAccountRefresh(
+            getAuthToken,
+            ({ signedIn: s2, unavailable: u2, loading: l2 }) => renderAccountRow(s2, u2, l2),
+          );
         } catch {
-          signInBtn.textContent = restoreLabel;
+          signInBtn.textContent = action === 'open' ? 'Sign in' : 'Check sign-in';
           signInBtn.disabled = false;
         }
       });
@@ -823,9 +1323,9 @@ function buildPage(): void {
 
   // ── Section: Autofill Profile ─────────────────────────────────────────────
 
-  const profileSection = el('div', { class: 'opt-section' });
+  const profileSection = el('section', { class: 'opt-section', id: 'opt-preferences' });
   const profileHeader = el('div', { class: 'opt-section-header' });
-  profileHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Autofill Profile'));
+  profileHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Autofill Profile'));
   profileHeader.appendChild(
     el(
       'div',
@@ -905,13 +1405,29 @@ function buildPage(): void {
     { class: 'opt-btn-primary' },
     'Save profile',
   ) as HTMLButtonElement;
-  const saveStatus = el('span', { class: 'opt-save-status' }, '');
+  const saveStatus = el(
+    'span',
+    {
+      class: 'opt-save-status',
+      role: 'status',
+      'aria-live': 'polite',
+      'aria-atomic': 'true',
+    },
+    '',
+  );
   profileActions.appendChild(saveProfileBtn);
   profileActions.appendChild(saveStatus);
   profileSection.appendChild(profileActions);
+  let profileStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Load saved profile into inputs
   chrome.storage.local.get([AUTOFILL_PROFILE_KEY], (result) => {
+    const runtimeError = chrome.runtime.lastError;
+    if (runtimeError) {
+      saveStatus.textContent = 'Could not load the saved profile.';
+      saveStatus.className = 'opt-save-status error';
+      return;
+    }
     const saved = result[AUTOFILL_PROFILE_KEY] as Record<string, string> | undefined;
     if (!saved) return;
     for (const field of PROFILE_FIELDS) {
@@ -926,13 +1442,28 @@ function buildPage(): void {
       const input = profileInputs[field.key];
       if (input?.value.trim()) profile[field.key] = input.value.trim();
     }
-    await chrome.storage.local.set({ [AUTOFILL_PROFILE_KEY]: profile });
-    saveStatus.textContent = 'Saved';
-    saveStatus.className = 'opt-save-status saved';
-    setTimeout(() => {
-      saveStatus.textContent = '';
-      saveStatus.className = 'opt-save-status';
-    }, 2000);
+    saveProfileBtn.disabled = true;
+    if (profileStatusTimer !== null) {
+      clearTimeout(profileStatusTimer);
+      profileStatusTimer = null;
+    }
+    saveStatus.textContent = 'Saving…';
+    saveStatus.className = 'opt-save-status';
+    try {
+      await chrome.storage.local.set({ [AUTOFILL_PROFILE_KEY]: profile });
+      saveStatus.textContent = 'Saved';
+      saveStatus.className = 'opt-save-status saved';
+      profileStatusTimer = setTimeout(() => {
+        saveStatus.textContent = '';
+        saveStatus.className = 'opt-save-status';
+        profileStatusTimer = null;
+      }, 2000);
+    } catch {
+      saveStatus.textContent = 'Could not save this profile. Please try again.';
+      saveStatus.className = 'opt-save-status error';
+    } finally {
+      saveProfileBtn.disabled = false;
+    }
   });
 
   page.appendChild(profileSection);
@@ -941,11 +1472,9 @@ function buildPage(): void {
   // bundles expose only the official Clerk Native API flow and never ask a
   // user to copy a session cookie out of DevTools.
   if (import.meta.env.DEV) {
-    const bearerSection = el('div', { class: 'opt-section' });
+    const bearerSection = el('section', { class: 'opt-section', id: 'opt-cloud-auth' });
     const bearerHeader = el('div', { class: 'opt-section-header' });
-    bearerHeader.appendChild(
-      el('div', { class: 'opt-section-title' }, 'Computer Use — Cloud Auth'),
-    );
+    bearerHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Computer Use — Cloud Auth'));
     bearerSection.appendChild(bearerHeader);
 
     const bearerBody = el('div', { class: 'opt-bearer-body' });
@@ -1013,36 +1542,81 @@ function buildPage(): void {
 
   // ── Section: Shortcuts ────────────────────────────────────────────────────
 
-  const shortcutsSection = el('div', { class: 'opt-section' });
+  const shortcutsSection = el('section', { class: 'opt-section', id: 'opt-shortcuts' });
   const shortcutsHeader = el('div', { class: 'opt-section-header' });
-  shortcutsHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Keyboard Shortcuts'));
+  shortcutsHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Keyboard Shortcuts'));
   shortcutsSection.appendChild(shortcutsHeader);
 
   const table = el('table', { class: 'opt-shortcuts-table' });
-  const shortcuts: Array<[string, string[]]> = [
-    ['Open side panel', ['Cmd/Ctrl', 'Shift', 'A']],
-    ['Capture page', ['Cmd/Ctrl', 'Shift', 'C']],
-  ];
-  for (const [action, keys] of shortcuts) {
+  const shortcutCaption = el(
+    'caption',
+    { class: 'opt-sr-only' },
+    'Current Chrome keyboard shortcuts',
+  );
+  table.appendChild(shortcutCaption);
+  const shortcutBody = document.createElement('tbody');
+  table.appendChild(shortcutBody);
+  const shortcutStatus = el(
+    'p',
+    {
+      class: 'opt-save-status',
+      role: 'status',
+      'aria-live': 'polite',
+      'aria-atomic': 'true',
+    },
+    'Loading current shortcuts…',
+  );
+  const shortcutLabels: Readonly<Record<string, string>> = {
+    _execute_action: 'Open side panel',
+    capture_page: 'Capture page',
+  };
+
+  function appendShortcutRow(action: string, shortcut: string | undefined): void {
     const tr = document.createElement('tr');
-    const tdAction = document.createElement('td');
+    const tdAction = document.createElement('th');
+    tdAction.scope = 'row';
     tdAction.textContent = action;
     const tdKeys = document.createElement('td');
-    const kbdSpan = el('span', { class: 'opt-shortcut-kbd' });
-    for (let i = 0; i < keys.length; i++) {
-      const k = document.createElement('kbd');
-      k.textContent = keys[i] ?? '';
-      kbdSpan.appendChild(k);
-      if (i < keys.length - 1) {
-        kbdSpan.appendChild(document.createTextNode(' + '));
+    if (shortcut) {
+      const keys = shortcut
+        .split('+')
+        .map((key) => key.trim())
+        .filter(Boolean);
+      const kbdSpan = el('span', { class: 'opt-shortcut-kbd' });
+      for (let i = 0; i < keys.length; i++) {
+        const k = document.createElement('kbd');
+        k.textContent = keys[i] ?? '';
+        kbdSpan.appendChild(k);
+        if (i < keys.length - 1) {
+          kbdSpan.appendChild(document.createTextNode(' + '));
+        }
       }
+      tdKeys.appendChild(kbdSpan);
+    } else {
+      tdKeys.textContent = 'Not assigned';
     }
-    tdKeys.appendChild(kbdSpan);
     tr.appendChild(tdAction);
     tr.appendChild(tdKeys);
-    table.appendChild(tr);
+    shortcutBody.appendChild(tr);
   }
+
+  chrome.commands.getAll((commands) => {
+    const runtimeError = chrome.runtime.lastError;
+    shortcutBody.replaceChildren();
+    if (runtimeError) {
+      shortcutStatus.textContent = 'Current Chrome shortcuts could not be loaded.';
+      shortcutStatus.className = 'opt-save-status error';
+      return;
+    }
+    const commandByName = new Map(commands.map((command) => [command.name ?? '', command]));
+    for (const [name, label] of Object.entries(shortcutLabels)) {
+      appendShortcutRow(label, commandByName.get(name)?.shortcut);
+    }
+    shortcutStatus.textContent =
+      'Change these bindings from Chrome’s Extensions → Keyboard shortcuts page.';
+  });
   shortcutsSection.appendChild(table);
+  shortcutsSection.appendChild(shortcutStatus);
   page.appendChild(shortcutsSection);
 
   // ── Section: Help ─────────────────────────────────────────────────────────
@@ -1052,9 +1626,9 @@ function buildPage(): void {
   // only exit was to guess the marketing site. Every destination below is a
   // route that exists in `apps/web/app` today; do not add one that does not.
 
-  const helpSection = el('div', { class: 'opt-section' });
+  const helpSection = el('section', { class: 'opt-section', id: 'opt-help' });
   const helpHeader = el('div', { class: 'opt-section-header' });
-  helpHeader.appendChild(el('div', { class: 'opt-section-title' }, 'Help'));
+  helpHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Help'));
   helpSection.appendChild(helpHeader);
 
   const HELP_LINKS: Array<{ label: string; hint: string; path: string; cta: string }> = [
@@ -1105,7 +1679,32 @@ function buildPage(): void {
   const ver = chrome.runtime.getManifest().version;
   page.appendChild(el('p', { class: 'opt-version' }, `AGI v${ver}`));
 
-  document.body.appendChild(page);
+  shell.appendChild(sidebar);
+  shell.appendChild(page);
+  document.body.appendChild(shell);
+
+  if (typeof IntersectionObserver === 'function') {
+    const sectionObserver = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visible) return;
+        const activeTarget = visible.target.id;
+        for (const button of navButtons) {
+          const selected = button.dataset['target'] === activeTarget;
+          button.classList.toggle('active', selected);
+          if (selected) button.setAttribute('aria-current', 'location');
+          else button.removeAttribute('aria-current');
+        }
+      },
+      { rootMargin: '-18% 0px -65% 0px', threshold: [0, 0.25, 0.6] },
+    );
+    for (const item of navItems) {
+      const section = document.getElementById(item.target);
+      if (section) sectionObserver.observe(section);
+    }
+  }
   void beginOptionsAccountRefresh(
     getAuthToken,
     ({ signedIn, unavailable, loading }) => renderAccountRow(signedIn, unavailable, loading),

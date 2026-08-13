@@ -5,9 +5,9 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 
 export const metadata = buildMetadata({
-  title: 'Env-based BYOK in v1',
+  title: 'Provider-key configuration',
   description:
-    'How to configure provider API keys via environment variables in AGI v1. Self-hosted .env.local setup and desktop OS keychain reference.',
+    'Configure provider credentials for a self-hosted AGI deployment, Desktop, CLI, or VS Code without crossing trust boundaries.',
   path: '/docs/byok-env',
 });
 
@@ -26,17 +26,18 @@ export default function ByokEnvDocsPage() {
               Docs
             </Link>
             <span style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 6px' }}>/</span>
-            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Env-based BYOK</span>
+            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>Provider keys</span>
           </nav>
-          <h1 className="agi-page-h1">Env-based BYOK in v1</h1>
+          <h1 className="agi-page-h1">Provider-key configuration</h1>
           <p className="agi-page-lede">
-            AGI v1 supports bring-your-own-key via environment variables. Set the provider key in
-            your environment and AGI picks it up automatically. No UI form required.
+            Self-hosted AGI deployments read operator-managed provider keys from environment
+            variables. Desktop, CLI, and VS Code each provide a local credential flow for
+            user-managed BYOK. Hosted Web and Mobile do not expose BYOK key entry.
           </p>
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Quick start (self-hosted / web)</p>
+          <p className="agi-section-eyebrow">Quick start (self-hosted operator)</p>
           <div className="agi-callout">
             <h2 className="agi-callout-h">1. Create or edit .env.local</h2>
             <p className="agi-callout-p">
@@ -105,31 +106,30 @@ GOOGLE_API_KEY=AIza...
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Desktop (OS keychain)</p>
+          <p className="agi-section-eyebrow">Desktop (encrypted local storage)</p>
           <div className="agi-callout">
-            <h2 className="agi-callout-h">Desktop reads from OS keychain</h2>
+            <h2 className="agi-callout-h">Desktop writes to its encrypted local vault</h2>
             <p className="agi-callout-p">
-              On macOS the desktop app reads keys from Keychain Access under the service name{' '}
-              <code style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>agiworkforce</code>. On
-              Windows it uses Credential Manager. On Linux it uses the Secret Service API
-              (libsecret). Keys stored there take precedence over{' '}
-              <code style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>PROVIDER_API_KEY</code>{' '}
-              environment variables.
+              Tauri Desktop encrypts provider keys in local application storage and activates the
+              selected direct-provider route without sending the key to AGI managed cloud. The CLI
+              uses the operating system keyring; VS Code uses SecretStorage. These stores are
+              surface-local and do not sync provider keys between apps.
             </p>
           </div>
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">Private-beta key entry</p>
+          <p className="agi-section-eyebrow">Desktop key entry</p>
           <p style={{ fontSize: 14, color: 'var(--text-2)', margin: '0 0 16px' }}>
-            UI key entry, OS-keychain write, and revoke-all are private-beta flows. Until those
-            routes are public, env vars are the supported path.
+            Desktop can add provider keys during onboarding or in Settings → Models &amp; Keys. The
+            native runtime writes them to secure local storage; self-hosted Web deployments continue
+            to use environment variables. BYOK is not configured in AGI’s hosted Web or Mobile apps.
           </p>
           <Link
-            href="/waitlist"
+            href="/byok"
             style={{ fontSize: 14, color: 'var(--agi-amber)', textDecoration: 'underline' }}
           >
-            Join Team &amp; Enterprise early access &rarr;
+            Compare supported BYOK surfaces &rarr;
           </Link>
         </section>
 

@@ -138,7 +138,8 @@ export const UsageDashboard: React.FC = () => {
               </p>
               {subscription.current_period_end > 0 ? (
                 <p className="text-xs text-muted-foreground mt-1">
-                  Renews: {new Date(subscription.current_period_end * 1000).toLocaleDateString()}
+                  {subscription.cancel_at_period_end ? 'Access ends' : 'Renews'}:{' '}
+                  {new Date(subscription.current_period_end * 1000).toLocaleDateString()}
                 </p>
               ) : null}
             </div>

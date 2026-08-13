@@ -84,6 +84,18 @@ function makeStripeSubscription() {
   };
 }
 
+function mockSubscriptionRow(row: Record<string, unknown>) {
+  // Authentication reads profiles before the route reads subscriptions, so a
+  // one-shot DB result would be consumed before it reaches the owner guard.
+  dbMocks.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('from subscriptions')) return [row];
+    if (sql.includes('from profiles')) {
+      return [{ stripe_customer_id: row['stripe_customer_id'] ?? null }];
+    }
+    return [];
+  });
+}
+
 describe('POST /api/upgrade/preview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -93,7 +105,7 @@ describe('POST /api/upgrade/preview', () => {
           {
             status: 'active',
             plan_tier: 'max',
-            stripe_subscription_id: null,
+            stripe_subscription_id: 'sub_live123',
             stripe_customer_id: 'cus_123',
           },
         ];
@@ -102,6 +114,7 @@ describe('POST /api/upgrade/preview', () => {
       return [];
     });
     dbMocks.execute.mockResolvedValue(1);
+    stripeMocks.retrieveSubscription.mockResolvedValue(makeStripeSubscription());
     stripeMocks.listSubscriptions.mockResolvedValue({ data: [makeStripeSubscription()] });
     pricingMocks.getPriceSelectionForCurrency.mockResolvedValue({
       priceId: 'price_max_15x_monthly',
@@ -127,7 +140,7 @@ describe('POST /api/upgrade/preview', () => {
     });
   });
 
-  it('recovers an owned live subscription before falling back to full-price checkout', async () => {
+  it('previews an owned live Stripe subscription', async () => {
     const response = await POST(makeRequest());
 
     expect(response.status).toBe(200);
@@ -137,16 +150,9 @@ describe('POST /api/upgrade/preview', () => {
       currency: 'usd',
       previewToken: expect.any(String),
     });
-    expect(stripeMocks.listSubscriptions).toHaveBeenCalledWith(
-      expect.objectContaining({
-        customer: 'cus_123',
-        status: 'all',
-      }),
-    );
-    expect(dbMocks.execute).toHaveBeenCalledWith(
-      expect.stringContaining('stripe_subscription_id'),
-      expect.arrayContaining(['sub_live123', 'cus_123', 'user_123']),
-    );
+    expect(stripeMocks.retrieveSubscription).toHaveBeenCalledWith('sub_live123', {
+      expand: ['items.data.price'],
+    });
     const subscriptionDetails =
       stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details;
     expect(subscriptionDetails).toMatchObject({
@@ -158,8 +164,13 @@ describe('POST /api/upgrade/preview', () => {
     ).toEqual(expect.any(Number));
   });
 
-  it('returns the localized full price when no prior Stripe charge can be credited', async () => {
-    stripeMocks.listSubscriptions.mockResolvedValueOnce({ data: [] });
+  it('returns localized full-price checkout for an ended organization-managed plan', async () => {
+    mockSubscriptionRow({
+      status: 'canceled',
+      plan_tier: 'max',
+      stripe_subscription_id: null,
+      stripe_customer_id: null,
+    });
 
     const response = await POST(makeRequest());
 
@@ -175,6 +186,8 @@ describe('POST /api/upgrade/preview', () => {
       },
     });
     expect(pricingMocks.getLocalizedPricingCatalog).toHaveBeenCalledWith('US');
+    expect(stripeMocks.retrieveSubscription).not.toHaveBeenCalled();
+    expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
   });
 
   it('sends a genuine free user to localized full-price checkout', async () => {
@@ -207,21 +220,34 @@ describe('POST /api/upgrade/preview', () => {
     expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
   });
 
-  it('fails closed when the fallback Stripe customer cannot be verified', async () => {
-    dbMocks.query
-      .mockResolvedValueOnce([
-        {
-          status: 'active',
-          plan_tier: 'max',
-          stripe_subscription_id: null,
-          stripe_customer_id: null,
-        },
-      ])
-      .mockRejectedValueOnce(new Error('database unavailable'));
+  it('does not recover an active subscription whose billing owner is unverified', async () => {
+    mockSubscriptionRow({
+      status: 'active',
+      plan_tier: 'max',
+      stripe_subscription_id: 'not-a-stripe-subscription-id',
+      stripe_customer_id: 'cus_123',
+    });
 
     const response = await POST(makeRequest());
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(409);
+    expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
+    expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
+  });
+
+  it('sends an ended Apple subscription to full-price checkout, never Stripe proration', async () => {
+    mockSubscriptionRow({
+      status: 'expired',
+      plan_tier: 'max',
+      stripe_subscription_id: null,
+      stripe_customer_id: null,
+      apple_original_transaction_id: 'apple-tx-ended',
+    });
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: 'checkout_required' } });
     expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
     expect(stripeMocks.createInvoicePreview).not.toHaveBeenCalled();
   });

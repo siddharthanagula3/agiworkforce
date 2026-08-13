@@ -738,9 +738,10 @@ impl McpExecutor {
                 Some(tool) => tool.input_schema,
                 None => {
                     tracing::debug!(
-                            "[McpExecutor] Tool '{}' not found in server '{}' cache — skipping schema validation",
-                            tool_name, server_name
-                        );
+                        "[McpExecutor] Tool '{}' not found in server '{}' cache — skipping schema validation",
+                        tool_name,
+                        server_name
+                    );
                     return Ok(());
                 }
             },

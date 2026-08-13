@@ -2,17 +2,11 @@
 /**
  * SIX-21 — a fresh install must always end up with a model it can actually use.
  *
- * On an Apple-Intelligence (tier-1) device the OS-resident row is reported as
- * ready by `useModelInstallStore.readySystemModelIds`, but `service.ts`
- * deliberately filters system-runtime-only rows out of `LOCAL_MODEL_LIST`, so
- * `resolveLocalModelRef` can never resolve one. That produced two false
- * signals on a clean install:
- *   1. onboarding recommended it, claimed "already on your device · zero
- *      download", and skipped the download screen entirely;
- *   2. the chat tab then suppressed the "Download a model to chat" banner,
- *      leaving no offer and no selectable model — the first send failed.
- *
- * These tests lock both halves.
+ * On an Apple-Intelligence (tier-1) device the OS-resident row reported by
+ * `readySystemModelIds` must also exist in `LOCAL_MODEL_LIST`; otherwise the
+ * native runtime is detected but cannot be selected or auto-routed. These
+ * tests lock the catalog, onboarding recommendation, and chat readiness to the
+ * same capability result while keeping retired ids fail-closed.
  */
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -24,6 +18,14 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockReplace = jest.fn();
 const mockPush = jest.fn();
 jest.mock('expo-router', () => ({
+  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
+  // @react-navigation/native: the monorepo resolves several copies of that
+  // package and importing from it crashed the app at launch. The mock has to
+  // follow the production import or every screen using them throws here.
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    const React = require('react');
+    React.useEffect(() => cb(), []);
+  },
   useRouter: () => ({
     push: mockPush,
     replace: mockReplace,
@@ -260,15 +262,15 @@ beforeEach(() => {
   useChatAppModeStore.setState({ appMode: 'local' });
 });
 
-describe('the system-runtime row is not selectable for chat', () => {
+describe('the system-runtime row is selectable for chat', () => {
   it('is the premise of both fixes below', () => {
-    expect(isSelectableLocalCatalogModel(SYSTEM_RUNTIME_MODEL as never)).toBe(false);
+    expect(isSelectableLocalCatalogModel(SYSTEM_RUNTIME_MODEL as never)).toBe(true);
     expect(isSelectableLocalCatalogModel(DOWNLOADABLE_MODEL as never)).toBe(true);
   });
 });
 
 describe('onboarding on a tier-1 (Apple Intelligence) device', () => {
-  it('recommends a downloadable model instead of claiming a built-in one is ready', async () => {
+  it('recommends the detected built-in model without a download', async () => {
     const { getByTestId, queryByText } = render(<OnboardingScreen />);
 
     await act(async () => {
@@ -279,28 +281,24 @@ describe('onboarding on a tier-1 (Apple Intelligence) device', () => {
       expect(getByTestId('onboarding-device-tier-screen')).toBeTruthy();
     });
 
-    // The CTA must offer a download, not "Continue" straight into a chat with
-    // no usable model.
     await waitFor(() => {
-      expect(getByTestId('device-tier-download-btn').props.accessibilityLabel).toBe(
-        'Download model',
-      );
+      expect(getByTestId('device-tier-download-btn').props.accessibilityLabel).toBe('Continue');
     });
-    expect(queryByText('Already on your device · Zero download')).toBeNull();
-    expect(queryByText('A built-in local model is ready to use.')).toBeNull();
+    expect(queryByText('Already on your device · Zero download')).toBeTruthy();
+    expect(queryByText('A built-in local model is ready to use.')).toBeTruthy();
     expect(
       queryByText('Download one local model to start private chats on this device.'),
-    ).toBeTruthy();
+    ).toBeNull();
     // Nothing was finished — the user still has to complete the download.
     expect(mockReplace).not.toHaveBeenCalled();
   });
 });
 
 describe('chat tab download banner', () => {
-  it('still offers the download when only an unselectable system model is "ready"', () => {
+  it('hides the download when the detected system model is ready', () => {
     mockReadySystemModelIds = [SYSTEM_RUNTIME_MODEL.id];
-    const { getByTestId } = render(<ChatTabScreen />);
-    expect(getByTestId('download-model-banner')).toBeTruthy();
+    const { queryByTestId } = render(<ChatTabScreen />);
+    expect(queryByTestId('download-model-banner')).toBeNull();
   });
 
   it('still offers the download when the only installed id left the catalog', () => {

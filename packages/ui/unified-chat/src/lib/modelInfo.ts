@@ -11,6 +11,14 @@ export interface DiscoveredChatModel {
   provider: string;
   isLocal: boolean;
   isByok: boolean;
+  runtimeCapabilities?: RuntimeModelCapabilities;
+}
+
+export interface RuntimeModelCapabilities {
+  tools: boolean;
+  vision: boolean;
+  thinking: boolean;
+  contextWindow: number;
 }
 
 export interface DiscoveredChatModelRecord {
@@ -18,6 +26,28 @@ export interface DiscoveredChatModelRecord {
   name: string;
   provider: string;
   available?: boolean;
+  runtimeCapabilities?: RuntimeModelCapabilities;
+}
+
+function parseRuntimeModelCapabilities(input: unknown): RuntimeModelCapabilities | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const value = input as Record<string, unknown>;
+  if (
+    typeof value['tools'] !== 'boolean' ||
+    typeof value['vision'] !== 'boolean' ||
+    typeof value['thinking'] !== 'boolean' ||
+    typeof value['contextWindow'] !== 'number' ||
+    !Number.isFinite(value['contextWindow']) ||
+    value['contextWindow'] < 0
+  ) {
+    return undefined;
+  }
+  return {
+    tools: value['tools'],
+    vision: value['vision'],
+    thinking: value['thinking'],
+    contextWindow: Math.floor(value['contextWindow']),
+  };
 }
 
 /**
@@ -55,11 +85,21 @@ export function parseDiscoveredChatModels(input: unknown): DiscoveredChatModelRe
     const name = typeof record['name'] === 'string' ? record['name'].trim() : '';
     const provider = typeof record['provider'] === 'string' ? record['provider'].trim() : '';
     const available = record['available'];
+    const runtimeCapabilities = parseRuntimeModelCapabilities(record['runtimeCapabilities']);
 
     if (!id || !name || !provider) return [];
     if (available !== undefined && typeof available !== 'boolean') return [];
+    if (record['runtimeCapabilities'] !== undefined && !runtimeCapabilities) return [];
 
-    return [{ id, name, provider, ...(available === undefined ? {} : { available }) }];
+    return [
+      {
+        id,
+        name,
+        provider,
+        ...(available === undefined ? {} : { available }),
+        ...(runtimeCapabilities ? { runtimeCapabilities } : {}),
+      },
+    ];
   });
 }
 
@@ -84,6 +124,7 @@ function toPresentationTier(qualityTier: ModelQualityTier | undefined): ModelInf
  */
 export function createChatModelInfo(model: DiscoveredChatModel): ModelInfo {
   const metadata = getModelMetadataById(model.id);
+  const runtime = model.runtimeCapabilities;
   const availability: ModelAvailability = metadata?.availability ?? 'live';
 
   return {
@@ -91,13 +132,13 @@ export function createChatModelInfo(model: DiscoveredChatModel): ModelInfo {
     name: metadata?.name ?? model.name,
     provider: metadata?.provider ?? model.provider,
     tier: toPresentationTier(metadata?.qualityTier),
-    supportsThinking: metadata?.capabilities.thinking ?? false,
-    supportsVision: metadata?.capabilities.vision ?? false,
-    supportsTools: metadata?.capabilities.tools ?? false,
-    contextWindow: metadata?.contextWindow ?? 0,
+    supportsThinking: metadata?.capabilities.thinking ?? runtime?.thinking ?? false,
+    supportsVision: metadata?.capabilities.vision ?? runtime?.vision ?? false,
+    supportsTools: metadata?.capabilities.tools ?? runtime?.tools ?? false,
+    contextWindow: metadata?.contextWindow ?? runtime?.contextWindow ?? 0,
     isLocal: model.isLocal,
     isByok: model.isByok,
-    metadataSource: metadata ? 'registry' : 'unknown',
+    metadataSource: metadata ? 'registry' : runtime ? 'runtime' : 'unknown',
     availability,
     ...(metadata?.unavailableReason ? { unavailableReason: metadata.unavailableReason } : {}),
   };

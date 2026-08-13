@@ -721,7 +721,30 @@ fn spawn_streaming_chat(
                 let mut final_credits = stream_data.credits;
                 let final_finish_reason = stream_data.finish_reason.clone();
                 let was_stopped = stream_data.was_stopped;
-                let tool_calls = stream_data.tool_calls;
+                let (tool_calls, rejected_tool_names) = filter_advertised_tool_calls(
+                    stream_data.tool_calls,
+                    llm_request.tools.as_deref(),
+                );
+                if !rejected_tool_names.is_empty() {
+                    warn!(
+                        rejected_tools = ?rejected_tool_names,
+                        "[Chat] Ignoring provider tool calls that were not advertised for this turn"
+                    );
+                    if tool_calls.is_empty() && full_content.trim().is_empty() {
+                        let fallback = "This model tried to use an action that was not available for this turn, so nothing was run. Please retry or enable the required capability.";
+                        full_content.push_str(fallback);
+                        let _ = runtime.app_handle.emit(
+                            "chat:stream-chunk",
+                            serde_json::json!({
+                                "conversation_id": conversation.id,
+                                "message_id": frontend_message_id,
+                                "delta": fallback,
+                                "content": full_content.clone(),
+                                "has_pending_messages": has_pending_messages()
+                            }),
+                        );
+                    }
+                }
                 let has_tool_calls = !tool_calls.is_empty();
                 let mut tool_failure_summaries: Vec<String> = Vec::new();
 
@@ -1088,7 +1111,17 @@ fn spawn_streaming_chat(
                                                 continue;
                                             }
 
-                                            let new_tool_calls = followup_data.tool_calls;
+                                            let (new_tool_calls, rejected_tool_names) =
+                                                filter_advertised_tool_calls(
+                                                    followup_data.tool_calls,
+                                                    llm_request.tools.as_deref(),
+                                                );
+                                            if !rejected_tool_names.is_empty() {
+                                                warn!(
+                                                    rejected_tools = ?rejected_tool_names,
+                                                    "[Chat] Ignoring unadvertised provider tool calls in follow-up"
+                                                );
+                                            }
                                             if !new_tool_calls.is_empty() {
                                                 info!(
                                                     "[Chat] Follow-up streaming response has {} more tool call(s) (iteration {})",

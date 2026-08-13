@@ -1,4 +1,5 @@
 use super::*;
+use crate::sys::security::egress_policy::PublicHttpClient;
 
 // HTML extraction utilities from search_tools module
 use super::search_tools::{extract_title, process_response_body};
@@ -44,7 +45,7 @@ impl ToolExecutor {
                 timeout_ms: Some(30000),
             };
 
-            match api_state.execute_request(request).await {
+            match api_state.execute_public_request(request).await {
                 Ok(response) => {
                     // If response body is HTML, extract readable text instead of
                     // returning raw HTML that would be useless to the LLM
@@ -132,8 +133,11 @@ impl ToolExecutor {
         }
 
         // Perform the download
-        let client = reqwest::Client::new();
-        match client.get(&url).send().await {
+        let client = PublicHttpClient::new();
+        let request = client
+            .get(&url)
+            .map_err(|error| anyhow!("Download destination blocked: {error}"))?;
+        match request.send().await {
             Ok(response) => {
                 if !response.status().is_success() {
                     return Ok(ToolResult {
@@ -267,9 +271,10 @@ impl ToolExecutor {
         let part = reqwest::multipart::Part::bytes(file_content).file_name(file_name.to_string());
         let form = reqwest::multipart::Form::new().part("file", part);
 
-        let client = reqwest::Client::new();
+        let client = PublicHttpClient::new();
         let response = client
             .post(url)
+            .map_err(|error| anyhow!("Upload destination blocked: {error}"))?
             .multipart(form)
             .send()
             .await

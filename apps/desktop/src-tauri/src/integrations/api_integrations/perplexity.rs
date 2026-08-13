@@ -39,12 +39,8 @@ impl PerplexityModel {
                         && entry.capabilities.research
                         && !entry.capabilities.thinking
                 }
-                Self::Reasoning => {
-                    entry.quality_tier == "balanced" && entry.capabilities.thinking
-                }
-                Self::DeepResearch => {
-                    entry.quality_tier == "best" && entry.capabilities.research
-                }
+                Self::Reasoning => entry.quality_tier == "balanced" && entry.capabilities.thinking,
+                Self::DeepResearch => entry.quality_tier == "best" && entry.capabilities.research,
             }
         };
 
@@ -342,10 +338,7 @@ mod tests {
     fn test_perplexity_model_from_str() {
         let fast = PerplexityModel::Fast.as_str();
         let pro = PerplexityModel::Thorough.as_str();
-        assert_eq!(
-            PerplexityModel::from_str(fast),
-            Some(PerplexityModel::Fast)
-        );
+        assert_eq!(PerplexityModel::from_str(fast), Some(PerplexityModel::Fast));
         assert_eq!(
             PerplexityModel::from_str(pro),
             Some(PerplexityModel::Thorough)

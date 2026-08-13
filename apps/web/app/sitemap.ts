@@ -125,6 +125,8 @@ const routes: RouteConfig[] = [
   { path: '/accessibility', priority: 0.6, changeFrequency: 'yearly' },
   { path: '/refund-policy', priority: 0.6, changeFrequency: 'yearly' },
   { path: '/cookies', priority: 0.5, changeFrequency: 'yearly' },
+  { path: '/copyright', priority: 0.5, changeFrequency: 'yearly' },
+  { path: '/model-licenses', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/legal', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/legal/eu-representative', priority: 0.4, changeFrequency: 'monthly' },
 
@@ -133,7 +135,7 @@ const routes: RouteConfig[] = [
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const lastModified = new Date('2026-07-08');
+  const lastModified = new Date('2026-08-13');
   return routes.map((route) => ({
     url: `${SITE_URL}${route.path}`,
     lastModified,

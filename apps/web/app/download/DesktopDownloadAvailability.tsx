@@ -11,6 +11,16 @@ type Availability =
   | { state: 'empty' }
   | { state: 'error' };
 
+type CloudAvailability =
+  | { state: 'loading' }
+  | {
+      state: 'available';
+      version: string;
+      architectures: { arm64: boolean; x64: boolean };
+    }
+  | { state: 'empty' }
+  | { state: 'error' };
+
 function isSignedLinuxManifest(value: unknown): value is {
   version: string;
   platforms: { 'linux-x86_64': { url: string; signature: string } };
@@ -46,15 +56,35 @@ function Alternatives() {
   );
 }
 
-function isCloudDesktopManifest(value: unknown): value is { version: string } {
+function isCloudDesktopManifest(value: unknown): value is {
+  version: string;
+  architectures: { arm64: boolean; x64: boolean };
+} {
   if (!value || typeof value !== 'object') return false;
   const manifest = value as Record<string, unknown>;
-  return typeof manifest['version'] === 'string' && manifest['version'].trim() !== '';
+  const architectures = manifest['architectures'];
+  const platforms = manifest['platforms'];
+  const arm64 = (architectures as Record<string, unknown> | undefined)?.['arm64'];
+  const x64 = (architectures as Record<string, unknown> | undefined)?.['x64'];
+  return (
+    typeof manifest['version'] === 'string' &&
+    manifest['version'].trim() !== '' &&
+    platforms !== null &&
+    typeof platforms === 'object' &&
+    (platforms as Record<string, unknown>)['mac'] === true &&
+    architectures !== null &&
+    typeof architectures === 'object' &&
+    typeof arm64 === 'boolean' &&
+    typeof x64 === 'boolean' &&
+    (arm64 || x64)
+  );
 }
 
 export function DesktopDownloadAvailability() {
   const [availability, setAvailability] = useState<Availability>({ state: 'loading' });
-  const [cloudAvailability, setCloudAvailability] = useState<Availability>({ state: 'loading' });
+  const [cloudAvailability, setCloudAvailability] = useState<CloudAvailability>({
+    state: 'loading',
+  });
   const requestId = useRef(0);
   const cloudRequestId = useRef(0);
 
@@ -111,7 +141,11 @@ export function DesktopDownloadAvailability() {
         throw new Error('Release lookup returned an invalid cloud desktop manifest');
       }
 
-      setCloudAvailability({ state: 'available', version: manifest.version });
+      setCloudAvailability({
+        state: 'available',
+        version: manifest.version,
+        architectures: manifest.architectures,
+      });
     } catch (error) {
       if (signal?.aborted || currentRequest !== cloudRequestId.current) return;
       setCloudAvailability({ state: 'error' });
@@ -164,12 +198,24 @@ export function DesktopDownloadAvailability() {
                 AGI Cloud (cloud accounts only) · signed and notarized · version{' '}
                 {cloudAvailability.version}
               </p>
-              <a
-                href="/api/download?platform=mac&app=cloud"
-                className="agi-fl-cta agi-fl-cta--primary"
-              >
-                Download AGI Cloud for macOS
-              </a>
+              <div className="flex flex-wrap gap-3">
+                {cloudAvailability.architectures.arm64 && (
+                  <a
+                    href="/api/download?platform=mac&app=cloud&arch=arm64"
+                    className="agi-fl-cta agi-fl-cta--primary"
+                  >
+                    Download for Apple silicon
+                  </a>
+                )}
+                {cloudAvailability.architectures.x64 && (
+                  <a
+                    href="/api/download?platform=mac&app=cloud&arch=x64"
+                    className="agi-fl-cta agi-fl-cta--secondary"
+                  >
+                    Download for Intel Mac
+                  </a>
+                )}
+              </div>
             </div>
           )}
 

@@ -18,6 +18,21 @@ interface PriceMappingEntry {
   interval: BillingInterval;
 }
 
+/** Stripe resource IDs are case-sensitive; normalization may remove whitespace only. */
+function normalizePriceId(priceId: string): string {
+  return priceId.trim();
+}
+
+function registerPrice(
+  mapping: Record<string, PriceMappingEntry>,
+  priceId: string | undefined,
+  entry: PriceMappingEntry,
+): void {
+  if (!priceId) return;
+  const normalizedId = normalizePriceId(priceId);
+  if (normalizedId) mapping[normalizedId] = entry;
+}
+
 /**
  * Tiers a free-form `PRICE_ID_OVERRIDES` entry may name.
  *
@@ -45,24 +60,21 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   // is display-only, Stripe treats each currency as its own Price object.
   const basicMonthlyUsd = process.env['STRIPE_PRICE_BASIC_MONTHLY_USD'];
   const basicMonthlyInr = process.env['STRIPE_PRICE_BASIC_MONTHLY_INR'];
-  if (basicMonthlyUsd)
-    mapping[basicMonthlyUsd.toLowerCase()] = { tier: 'basic', interval: 'monthly' };
-  if (basicMonthlyInr)
-    mapping[basicMonthlyInr.toLowerCase()] = { tier: 'basic', interval: 'monthly' };
+  registerPrice(mapping, basicMonthlyUsd, { tier: 'basic', interval: 'monthly' });
+  registerPrice(mapping, basicMonthlyInr, { tier: 'basic', interval: 'monthly' });
 
   // Pro tier
   const proMonthly = process.env['STRIPE_PRICE_PRO_MONTHLY'];
   const proYearly = process.env['STRIPE_PRICE_PRO_YEARLY'];
-  if (proMonthly) mapping[proMonthly.toLowerCase()] = { tier: 'pro', interval: 'monthly' };
-  if (proYearly) mapping[proYearly.toLowerCase()] = { tier: 'pro', interval: 'yearly' };
+  registerPrice(mapping, proMonthly, { tier: 'pro', interval: 'monthly' });
+  registerPrice(mapping, proYearly, { tier: 'pro', interval: 'yearly' });
 
   // Max tier — monthly only; no yearly price
   const maxMonthly = process.env['STRIPE_PRICE_MAX_MONTHLY'];
-  if (maxMonthly) mapping[maxMonthly.toLowerCase()] = { tier: 'max', interval: 'monthly' };
+  registerPrice(mapping, maxMonthly, { tier: 'max', interval: 'monthly' });
 
   const max15xMonthly = process.env['STRIPE_PRICE_MAX_15X_MONTHLY'];
-  if (max15xMonthly)
-    mapping[max15xMonthly.toLowerCase()] = { tier: 'max_15x', interval: 'monthly' };
+  registerPrice(mapping, max15xMonthly, { tier: 'max_15x', interval: 'monthly' });
 
   // Team tier — per-seat, monthly only, USD and INR Prices on one product.
   // Registering these is what lets the webhook provision a Team purchase at all:
@@ -72,21 +84,19 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   // not on the Price, so there is exactly one Price per currency.
   const teamMonthlyUsd = process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'];
   const teamMonthlyInr = process.env['STRIPE_PRICE_TEAM_MONTHLY_INR'];
-  if (teamMonthlyUsd) mapping[teamMonthlyUsd.toLowerCase()] = { tier: 'team', interval: 'monthly' };
-  if (teamMonthlyInr) mapping[teamMonthlyInr.toLowerCase()] = { tier: 'team', interval: 'monthly' };
+  registerPrice(mapping, teamMonthlyUsd, { tier: 'team', interval: 'monthly' });
+  registerPrice(mapping, teamMonthlyInr, { tier: 'team', interval: 'monthly' });
   // Team yearly ($240/seat/yr, Decision #22) — USD-only, no INR yearly Price.
   // Registering it is what lets the webhook provision a yearly Team purchase;
   // an unregistered Price would throw after the customer was charged.
   const teamYearlyUsd = process.env['STRIPE_PRICE_TEAM_YEARLY_USD'];
-  if (teamYearlyUsd) mapping[teamYearlyUsd.toLowerCase()] = { tier: 'team', interval: 'yearly' };
+  registerPrice(mapping, teamYearlyUsd, { tier: 'team', interval: 'yearly' });
 
   // Enterprise tier (if configured)
   const enterpriseMonthly = process.env['STRIPE_PRICE_ENTERPRISE_MONTHLY'];
   const enterpriseYearly = process.env['STRIPE_PRICE_ENTERPRISE_YEARLY'];
-  if (enterpriseMonthly)
-    mapping[enterpriseMonthly.toLowerCase()] = { tier: 'enterprise', interval: 'monthly' };
-  if (enterpriseYearly)
-    mapping[enterpriseYearly.toLowerCase()] = { tier: 'enterprise', interval: 'yearly' };
+  registerPrice(mapping, enterpriseMonthly, { tier: 'enterprise', interval: 'monthly' });
+  registerPrice(mapping, enterpriseYearly, { tier: 'enterprise', interval: 'yearly' });
 
   return mapping;
 }
@@ -102,7 +112,7 @@ function getPriceIdMapping(): Record<string, PriceMappingEntry> {
 }
 
 // Allow additional overrides via PRICE_ID_OVERRIDES env var
-// Format: PRICE_ID_OVERRIDES=price_1,hobby:price_2,pro
+// Format: PRICE_ID_OVERRIDES=price_1,basic,monthly:price_2,pro,yearly
 function loadOverrides(): Record<string, PriceMappingEntry> {
   const baseMapping = getPriceIdMapping();
   const overrides: Record<string, PriceMappingEntry> = { ...baseMapping };
@@ -113,11 +123,13 @@ function loadOverrides(): Record<string, PriceMappingEntry> {
     for (const pair of pairs) {
       const [priceId, tier, interval] = pair.trim().split(',');
       if (priceId && tier) {
-        const normalizedTier = tier.toLowerCase() as BillingPlanTier;
+        const normalizedTier = tier.trim().toLowerCase() as BillingPlanTier;
         if (!STRIPE_BILLED_TIERS.has(normalizedTier)) continue;
-        overrides[priceId.toLowerCase()] = {
+        const normalizedId = normalizePriceId(priceId);
+        if (!normalizedId) continue;
+        overrides[normalizedId] = {
           tier: normalizedTier,
-          interval: interval === 'yearly' ? 'yearly' : 'monthly',
+          interval: interval?.trim().toLowerCase() === 'yearly' ? 'yearly' : 'monthly',
         };
       }
     }
@@ -148,7 +160,7 @@ export function getPlanTierFromPriceId(priceId: string | null | undefined): stri
     return null;
   }
 
-  const normalizedId = priceId.toLowerCase().trim();
+  const normalizedId = normalizePriceId(priceId);
   const tier = getTierMapping()[normalizedId]?.tier;
 
   if (!tier) {
@@ -203,11 +215,23 @@ export function getAllRegisteredPriceIds(): string[] {
 }
 
 /**
+ * Get the canonical Prices this deployment actively configures for sale.
+ *
+ * This intentionally excludes PRICE_ID_OVERRIDES. Overrides may retain an old,
+ * inactive Price so historical subscriptions still map to the right
+ * entitlement; requiring those legacy objects to remain checkout-active would
+ * make the health check reject a valid migration.
+ */
+export function getConfiguredStripePriceIds(): string[] {
+  return Object.keys(getPriceIdMapping());
+}
+
+/**
  * Check if a price ID is registered
  */
 export function isPriceIdRegistered(priceId: string | null | undefined): boolean {
   if (!priceId) return false;
-  return priceId.toLowerCase() in getTierMapping();
+  return normalizePriceId(priceId) in getTierMapping();
 }
 
 /**

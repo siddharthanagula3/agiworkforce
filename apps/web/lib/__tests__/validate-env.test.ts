@@ -87,7 +87,7 @@ describe('validateRequiredEnvVars · database URL either-or check', () => {
 });
 
 // Import after mocks are registered (see top of file).
-import { validateProductionKeyTypes } from '../validate-env';
+import { validateProductionKeyTypes, validateStripeKeyModeConsistency } from '../validate-env';
 
 describe('validateProductionKeyTypes · test keys in production', () => {
   let savedEnv: NodeJS.ProcessEnv;
@@ -131,5 +131,54 @@ describe('validateProductionKeyTypes · test keys in production', () => {
     delete process.env['VERCEL_ENV'];
     process.env['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'] = 'pk_test_aGFuZHk';
     expect(validateProductionKeyTypes().warnings).toHaveLength(0);
+  });
+});
+
+describe('validateStripeKeyModeConsistency', () => {
+  let savedEnv: NodeJS.ProcessEnv;
+
+  beforeEach(() => {
+    savedEnv = { ...process.env };
+    delete process.env['STRIPE_SECRET_KEY'];
+    delete process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
+  });
+
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) {
+      if (!(key in savedEnv)) delete process.env[key];
+    }
+    Object.assign(process.env, savedEnv);
+  });
+
+  it('rejects a test secret paired with a live publishable key', () => {
+    process.env['STRIPE_SECRET_KEY'] = 'sk_test_server';
+    process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'] = 'pk_live_browser';
+
+    const result = validateStripeKeyModeConsistency();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([expect.stringContaining('Stripe key mode mismatch')]);
+  });
+
+  it('accepts a restricted live key paired with a live publishable key', () => {
+    process.env['STRIPE_SECRET_KEY'] = 'rk_live_server';
+    process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'] = 'pk_live_browser';
+
+    expect(validateStripeKeyModeConsistency()).toEqual({
+      valid: true,
+      errors: [],
+      warnings: [],
+    });
+  });
+
+  it('rejects an otherwise-consistent test key pair in Production', () => {
+    process.env['VERCEL_ENV'] = 'production';
+    process.env['STRIPE_SECRET_KEY'] = 'rk_test_server';
+    process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'] = 'pk_test_browser';
+
+    const result = validateStripeKeyModeConsistency();
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toEqual([expect.stringContaining('Production deployment')]);
   });
 });

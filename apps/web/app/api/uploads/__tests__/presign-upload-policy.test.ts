@@ -2,10 +2,8 @@
  * Upload type/size policy at the presign boundary.
  *
  * The presigned PUT stamps the object with the caller's declared Content-Type
- * and the R2 bucket is public, so anything this route signs for is
- * world-readable under that type the moment the browser's PUT lands. The
- * per-kind policy is therefore the last enforceable gate, and it has to hold
- * for `avatar` and `knowledge-file`, not only `chat-attachment`.
+ * and avatars still use the public R2 bucket. Chat attachments are private,
+ * while every kind still needs a narrow type policy before a PUT is signed.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -15,11 +13,13 @@ const {
   mockGetClerkAuthUser,
   mockNeonQuery,
   mockGetPresignedUploadUrl,
+  mockGetPresignedPrivateUploadUrl,
   mockResolveActiveOrganizationId,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
   mockGetPresignedUploadUrl: vi.fn(),
+  mockGetPresignedPrivateUploadUrl: vi.fn(),
   mockResolveActiveOrganizationId: vi.fn(),
 }));
 
@@ -44,7 +44,9 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 vi.mock('@/lib/server/object-storage', () => ({
   isObjectStorageConfigured: vi.fn(() => true),
+  isPrivateObjectStorageConfigured: vi.fn(() => true),
   getPresignedUploadUrl: mockGetPresignedUploadUrl,
+  getPresignedPrivateUploadUrl: mockGetPresignedPrivateUploadUrl,
   deleteObject: vi.fn(),
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -79,6 +81,9 @@ beforeEach(() => {
   mockGetPresignedUploadUrl.mockResolvedValue({
     uploadUrl: 'https://r2.test/signed',
     publicUrl: 'https://cdn.test/object',
+  });
+  mockGetPresignedPrivateUploadUrl.mockResolvedValue({
+    uploadUrl: 'https://r2.test/private-signed',
   });
 });
 
@@ -148,7 +153,7 @@ describe('POST /api/uploads/presign · type policy', () => {
     expect(mockGetPresignedUploadUrl).toHaveBeenCalledTimes(1);
   });
 
-  it('still signs a PDF knowledge file', async () => {
+  it('signs a PDF knowledge file only for the private bucket', async () => {
     const response = await POST(
       presignRequest({
         kind: 'knowledge-file',
@@ -160,11 +165,39 @@ describe('POST /api/uploads/presign · type policy', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(mockGetPresignedUploadUrl).toHaveBeenCalledTimes(1);
+    expect(mockGetPresignedPrivateUploadUrl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: expect.stringMatching(/^knowledge-files\/projects\/proj-1\//),
+        contentType: 'application/pdf',
+      }),
+    );
+    expect(mockGetPresignedUploadUrl).not.toHaveBeenCalled();
     expect(mockNeonQuery).toHaveBeenCalledWith(
       expect.stringContaining('organization_id is not distinct from $3::uuid'),
       ['proj-1', 'user-abc', '11111111-1111-4111-8111-111111111111'],
     );
+  });
+
+  it('signs chat attachments only for the private bucket and returns no public locator', async () => {
+    const response = await POST(
+      presignRequest({
+        kind: 'chat-attachment',
+        fileName: 'notes.txt',
+        mimeType: 'text/plain',
+        byteCount: 128,
+      }),
+    );
+    const body = (await response.json()) as Record<string, unknown>;
+
+    expect(response.status).toBe(200);
+    expect(mockGetPresignedPrivateUploadUrl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: expect.stringMatching(/^chat-attachments\/user-abc\//),
+        contentType: 'text/plain',
+      }),
+    );
+    expect(mockGetPresignedUploadUrl).not.toHaveBeenCalled();
+    expect(body).not.toHaveProperty('publicUrl');
   });
 
   it('does not sign a knowledge upload for a project outside the active workspace', async () => {

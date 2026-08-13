@@ -6,8 +6,9 @@ vi.mock('@/lib/logger', () => ({ logger: { warn: (...a: unknown[]) => warn(...a)
 const storeMedia = vi.fn();
 const insertMediaAsset = vi.fn();
 vi.mock('@/lib/server/media-storage', () => ({
-  isMediaStorageConfigured: () => true,
+  isGeneratedMediaStorageConfigured: () => true,
   storeMedia: (...args: unknown[]) => storeMedia(...args),
+  deleteStoredMedia: vi.fn(),
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: (...args: unknown[]) => insertMediaAsset(...args),
@@ -173,8 +174,8 @@ describe('generated-file fetchers route through the resolved endpoint', () => {
     process.env['OPENAI_API_KEY'] = 'sk-test';
     process.env['ANTHROPIC_API_KEY'] = 'ak-test';
     storeMedia.mockResolvedValue({
-      url: 'https://blob.example/media/file/u/x.pdf',
-      pathname: 'media/file/u/x.pdf',
+      url: 'private-media/file/owner/x.pdf',
+      pathname: 'private-media/file/owner/x.pdf',
       byteSize: 5,
       contentType: 'application/pdf',
     });

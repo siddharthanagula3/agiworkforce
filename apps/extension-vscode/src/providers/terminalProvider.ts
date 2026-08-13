@@ -21,6 +21,7 @@
  */
 
 import * as vscode from 'vscode';
+import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import {
   getActiveWorkspaceFolderSync,
@@ -638,17 +639,10 @@ export function activateTerminal(
               return;
             }
 
-            const message = err instanceof Error ? err.message : String(err);
-            vscode.window
-              .showErrorMessage(
-                `AGI Workforce: Failed to explain terminal output — ${message}`,
-                'Set API Key',
-              )
-              .then((choice) => {
-                if (choice === 'Set API Key') {
-                  vscode.commands.executeCommand('agi-workforce.setApiKey');
-                }
-              });
+            await showCloudUtilityErrorActions(err, {
+              title: 'AGI Workforce: Failed to explain terminal output',
+              retry: () => vscode.commands.executeCommand('agi-workforce.explainTerminal'),
+            });
           }
         },
       );
@@ -720,17 +714,10 @@ export function activateTerminal(
               return;
             }
 
-            const message = err instanceof Error ? err.message : String(err);
-            vscode.window
-              .showErrorMessage(
-                `AGI Workforce: Failed to suggest command — ${message}`,
-                'Set API Key',
-              )
-              .then((choice) => {
-                if (choice === 'Set API Key') {
-                  vscode.commands.executeCommand('agi-workforce.setApiKey');
-                }
-              });
+            await showCloudUtilityErrorActions(err, {
+              title: 'AGI Workforce: Failed to suggest command',
+              retry: () => vscode.commands.executeCommand('agi-workforce.suggestCommand'),
+            });
           }
         },
       );

@@ -18,11 +18,27 @@ vi.stubGlobal('fetch', fetchMock);
 import { GET as getTauriUpdate } from '../[target]/[version]/route';
 import { GET as checkRelease } from '../check/route';
 import { GET as getLatestRelease } from '../latest/[platform]/route';
+import { GET as getLatestCloudRelease } from '../desktop-cloud/latest/route';
 import { GET as downloadDesktop } from '../../download/route';
 
 const RAW_APPIMAGE = 'AGI.Workforce_1.10.0_amd64.AppImage';
 const RAW_APPIMAGE_URL = `https://github.com/siddharthanagula3/agiworkforce/releases/download/v-desktop-1.10.0/${RAW_APPIMAGE}`;
 const RAW_SIGNATURE_URL = `${RAW_APPIMAGE_URL}.sig`;
+const CLOUD_ARM64_DMG = 'AGI-Cloud-1.2.0-arm64.dmg';
+const CLOUD_X64_DMG = 'AGI-Cloud-1.2.0-x64.dmg';
+const CLOUD_RELEASE_BASE_URL =
+  'https://github.com/siddharthanagula3/agiworkforce/releases/download/v-cloud-desktop-1.2.0';
+const CLOUD_ARM64_DMG_URL = `${CLOUD_RELEASE_BASE_URL}/${CLOUD_ARM64_DMG}`;
+const CLOUD_X64_DMG_URL = `${CLOUD_RELEASE_BASE_URL}/${CLOUD_X64_DMG}`;
+
+function cloudDesktopRelease() {
+  return githubRelease(20, 'v-cloud-desktop-1.2.0', {
+    assets: [
+      githubAsset(201, CLOUD_ARM64_DMG, CLOUD_ARM64_DMG_URL),
+      githubAsset(202, CLOUD_X64_DMG, CLOUD_X64_DMG_URL),
+    ],
+  });
+}
 
 function githubAsset(id: number, name: string, browserDownloadUrl: string) {
   return {
@@ -246,6 +262,52 @@ describe('desktop release routes', () => {
       expect.stringMatching(/\/releases\?per_page=/),
       expect.any(Object),
     );
+  });
+
+  it('reports the exact AGI Cloud macOS architectures that are published', async () => {
+    fetchMock.mockResolvedValue(Response.json([cloudDesktopRelease()]));
+
+    const response = await getLatestCloudRelease(
+      makeRequest('https://agi.example/api/releases/desktop-cloud/latest'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      version: '1.2.0',
+      platforms: { mac: true },
+      architectures: { arm64: true, x64: true },
+    });
+  });
+
+  it('streams the requested AGI Cloud architecture without cross-architecture fallback', async () => {
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === CLOUD_X64_DMG_URL) {
+        return new Response('x64-dmg-bytes', {
+          status: 200,
+          headers: { 'content-length': '13', 'content-type': 'application/x-apple-diskimage' },
+        });
+      }
+      return Response.json([cloudDesktopRelease()]);
+    });
+
+    const response = await downloadDesktop(
+      makeRequest('https://agi.example/api/download?platform=mac&app=cloud&arch=x64'),
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('x64-dmg-bytes');
+    expect(fetchMock).toHaveBeenCalledWith(CLOUD_X64_DMG_URL, expect.any(Object));
+    expect(fetchMock).not.toHaveBeenCalledWith(CLOUD_ARM64_DMG_URL, expect.any(Object));
+  });
+
+  it('rejects an unknown AGI Cloud architecture before fetching a release', async () => {
+    const response = await downloadDesktop(
+      makeRequest('https://agi.example/api/download?platform=mac&app=cloud&arch=universal'),
+    );
+
+    expect(response.status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('preserves the download route allowlist for selected release assets', async () => {

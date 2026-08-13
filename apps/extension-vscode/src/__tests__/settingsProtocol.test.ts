@@ -9,7 +9,6 @@ const validValues: MutableConfigValues = {
   apiEndpoint: 'https://agiworkforce.com/api/llm/v1',
   model: 'auto',
   cliPath: 'agi',
-  streamingEnabled: true,
   'composer.followUpBehavior': 'queue',
   contextLines: 50,
   telemetryEnabled: false,
@@ -22,13 +21,9 @@ const validValues: MutableConfigValues = {
   'agent.mode': 'auto',
   'agent.effort': 'medium',
   'agent.thinking': false,
-  'mcp.enabled': false,
   'desktopBridge.enabled': false,
   'desktopBridge.port': 8787,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
-  useProviderStream: false,
-  gatewayUrl: 'https://api.agiworkforce.com',
-  tier: 'byok',
 };
 
 describe('settings webview protocol', () => {

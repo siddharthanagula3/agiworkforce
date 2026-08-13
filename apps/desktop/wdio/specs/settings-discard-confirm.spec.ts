@@ -6,7 +6,7 @@
 // which re-fetches settings from the Rust-side disk file and overwrites the
 // live Zustand store -- silently discarding any edit that wasn't explicitly
 // committed via "Save Changes", with zero warning. AgentsSettings.tsx
-// ("Always Use Agent Mode") and PersonalizationSettings.tsx (Name/Occupation/
+// ("Timeout Warnings") and PersonalizationSettings.tsx (Name/Occupation/
 // Bio/sliders) both write directly to that same store and are not
 // self-saving, so they were both silently affected.
 //
@@ -16,7 +16,7 @@
 // was real.
 //
 // This spec drives the real dialog (no mocks) and asserts:
-//  1. Toggling "Always Use Agent Mode" then closing via the X button now
+//  1. Toggling "Timeout Warnings" then closing via the X button now
 //     surfaces an explicit "Discard unsaved changes?" confirmation instead of
 //     silently discarding.
 //  2. Choosing "Keep editing" leaves the edit intact and the panel open.
@@ -30,12 +30,10 @@
 // Neither assertion path calls "Save Changes", so this test does not mutate
 // the developer machine's real persisted settings file.
 
-import * as fs from 'node:fs';
-import { waitForSettingsReady } from '../support/close-settings';
+import { closeAnySettingsDialog, waitForSettingsReady } from '../support/close-settings';
+import { resolveScreenDir } from '../support/dom';
 
-const SCREEN_DIR =
-  '/private/tmp/claude-501/-Users-siddhartha-Desktop-agiworkforce/75367813-fb2a-4a49-bdcd-6412347c218f/scratchpad/desktop-qa-screens/settings-discard';
-fs.mkdirSync(SCREEN_DIR, { recursive: true });
+const SCREEN_DIR = resolveScreenDir('settings-discard');
 
 function clickButtonWithText(containerSelector: string, text: string) {
   return browser.execute(
@@ -57,8 +55,7 @@ function clickButtonWithText(containerSelector: string, text: string) {
 function settingsContentRoot() {
   return browser.execute(() => {
     const nav = document.querySelector('nav[aria-label="Settings sections"]');
-    const dialog = nav?.closest('[role="dialog"]') ?? document.querySelector('[role="dialog"]');
-    return !!dialog?.querySelector('.flex-1.flex.flex-col.min-w-0');
+    return Boolean(nav?.nextElementSibling);
   });
 }
 
@@ -128,6 +125,16 @@ function isSaveChangesDisabled() {
   });
 }
 
+function dialogHasButton(label: string) {
+  return browser.execute((text) => {
+    const nav = document.querySelector('nav[aria-label="Settings sections"]');
+    const dialog = nav?.closest('[role="dialog"]') ?? document.querySelector('[role="dialog"]');
+    return Array.from(dialog?.querySelectorAll('button') ?? []).some(
+      (button) => (button.textContent ?? '').trim() === text,
+    );
+  }, label) as Promise<boolean>;
+}
+
 async function openSettings() {
   const gear = await $('button[aria-label="Settings"]');
   await gear.waitForDisplayed({ timeout: 15000 });
@@ -155,7 +162,13 @@ function clickDialogXClose() {
 }
 
 describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', () => {
-  it('toggling Agent Mode then closing via X surfaces a discard confirmation, and "Keep editing" preserves the edit', async () => {
+  afterEach(async () => {
+    if (!(await closeAnySettingsDialog())) {
+      throw new Error('Settings remained open after discard-spec cleanup');
+    }
+  });
+
+  it('toggling Timeout Warnings then closing via X surfaces a discard confirmation, and "Keep editing" preserves the edit', async () => {
     await browser.pause(1500);
     await openSettings();
 
@@ -167,22 +180,22 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     // The Agents tab content is React.lazy behind Suspense — wait for the
     // switch itself rather than a fixed pause (measured: 1300ms can lose the
     // race even on an idle machine).
-    await browser.waitUntil(async () => (await getSwitchState('agents-agentMode')) !== null, {
+    await browser.waitUntil(async () => (await getSwitchState('agents-timeoutWarnings')) !== null, {
       timeout: 15_000,
       interval: 250,
-      timeoutMsg: 'The Agents tab never rendered its Agent Mode switch',
+      timeoutMsg: 'The Agents tab never rendered its Timeout Warnings switch',
     });
 
-    const before = await getSwitchState('agents-agentMode');
-    console.log('Agent Mode switch state before toggle:', before);
+    const before = await getSwitchState('agents-timeoutWarnings');
+    console.log('Timeout Warnings switch state before toggle:', before);
     expect(before === 'true' || before === 'false').toBe(true);
 
-    const toggled = await clickById('agents-agentMode');
+    const toggled = await clickById('agents-timeoutWarnings');
     expect(toggled).toBe(true);
     await browser.pause(300);
 
-    const afterToggle = await getSwitchState('agents-agentMode');
-    console.log('Agent Mode switch state after toggle:', afterToggle);
+    const afterToggle = await getSwitchState('agents-timeoutWarnings');
+    console.log('Timeout Warnings switch state after toggle:', afterToggle);
     expect(afterToggle).not.toBe(before);
 
     // Close via the X button (top-right of the dialog) -- one of the paths
@@ -231,17 +244,21 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     const settingsStillOpen = await settingsContentRoot();
     expect(settingsStillOpen).toBe(true);
 
-    const afterKeepEditing = await getSwitchState('agents-agentMode');
-    console.log('Agent Mode switch state after Keep editing:', afterKeepEditing);
+    const afterKeepEditing = await getSwitchState('agents-timeoutWarnings');
+    console.log('Timeout Warnings switch state after Keep editing:', afterKeepEditing);
     expect(afterKeepEditing).toBe(afterToggle); // edit preserved, not reverted
 
     // Restore original value so we don't leave the toggle mutated, then close
     // via X again -- this time hasUnsavedChanges should be false (back at
     // baseline) so the close should go through with NO confirmation prompt.
-    await clickById('agents-agentMode');
-    await browser.pause(300);
-    const restored = await getSwitchState('agents-agentMode');
+    await clickById('agents-timeoutWarnings');
+    const restored = await getSwitchState('agents-timeoutWarnings');
     expect(restored).toBe(before);
+    await browser.waitUntil(async () => (await isSaveChangesDisabled()) === true, {
+      timeout: 10_000,
+      interval: 100,
+      timeoutMsg: 'Restoring Timeout Warnings did not return Settings to its clean baseline',
+    });
 
     const closedAgainViaX = await clickDialogXClose();
     expect(closedAgainViaX).toBe(true);
@@ -285,10 +302,14 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
 
     const setOk = await setInputValueViaReactChange('personalization-name', probeName);
     expect(setOk).toBe(true);
-    // PersonalizationSettings.tsx debounces the store commit 400ms after the
-    // last edit before calling setPersonalization(); wait past that before
-    // asserting on hasUnsavedChanges/Save-enabled state.
-    await browser.pause(700);
+    // Personalization writes to the shared Settings draft synchronously. Wait
+    // for the parent snapshot effect to expose that draft through the footer
+    // rather than sleeping for the retired debounce implementation.
+    await browser.waitUntil(async () => (await isSaveChangesDisabled()) === false, {
+      timeout: 10_000,
+      interval: 100,
+      timeoutMsg: 'Personalization edit did not enable Save Changes',
+    });
 
     const disabledAfterEdit = await isSaveChangesDisabled();
     console.log(
@@ -307,13 +328,22 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     const alertShown = await alertDialogVisible();
     expect(alertShown).toBe(true);
 
-    const discarded = await clickButtonWithText('[role="alertdialog"]', 'Discard changes');
-    expect(discarded).toBe(true);
+    let discarded = false;
     await browser.waitUntil(
-      async () =>
-        browser.execute(() => !document.querySelector('nav[aria-label="Settings sections"]')),
-      { timeout: 5000, timeoutMsg: 'Settings panel did not close after "Discard changes"' },
+      async () => {
+        if (await alertDialogVisible()) {
+          discarded = await clickButtonWithText('[role="alertdialog"]', 'Discard changes');
+          return false;
+        }
+        return !(await settingsContentRoot());
+      },
+      {
+        timeout: 15_000,
+        interval: 250,
+        timeoutMsg: 'Settings panel did not close after "Discard changes"',
+      },
     );
+    expect(discarded).toBe(true);
 
     const navGone = await browser.execute(
       () => !document.querySelector('nav[aria-label="Settings sections"]'),
@@ -340,5 +370,94 @@ describe('Settings discard-confirmation (DESKTOP-SETTINGS-SILENT-DISCARD-01)', (
     console.log('Personalization name after discard + reopen:', JSON.stringify(nameAfterDiscard));
     await browser.saveScreenshot(`${SCREEN_DIR}/04-personalization-reverted-after-discard.png`);
     expect(nameAfterDiscard).toBe(originalName);
+
+    expect(await clickDialogXClose()).toBe(true);
+    await browser.waitUntil(async () => !(await settingsContentRoot()), {
+      timeout: 5_000,
+      timeoutMsg: 'Clean Settings panel did not close after verification',
+    });
+  });
+
+  it('keeps deferred Save and Cancel controls after switching to a self-saving tab', async () => {
+    await openSettings();
+    expect(
+      await clickButtonWithText('nav[aria-label="Settings sections"]', 'Personalization'),
+    ).toBe(true);
+    await browser.waitUntil(async () => (await getInputValue('personalization-name')) !== null, {
+      timeout: 15_000,
+      interval: 100,
+      timeoutMsg: 'The Personalization tab never rendered its name input',
+    });
+
+    const originalName = (await getInputValue('personalization-name')) ?? '';
+    const probeName = `QA-Cross-Tab-Discard-${Date.now()}`;
+    expect(await setInputValueViaReactChange('personalization-name', probeName)).toBe(true);
+    await browser.waitUntil(async () => (await isSaveChangesDisabled()) === false, {
+      timeout: 10_000,
+      interval: 100,
+      timeoutMsg: 'Deferred Personalization edit did not enable Save Changes',
+    });
+
+    expect(await clickButtonWithText('nav[aria-label="Settings sections"]', 'Cowork')).toBe(true);
+    await browser.waitUntil(
+      async () =>
+        (await dialogHasButton('Save Changes')) &&
+        (await dialogHasButton('Cancel')) &&
+        !(await dialogHasButton('Close')),
+      {
+        timeout: 10_000,
+        interval: 100,
+        timeoutMsg: 'Self-saving tab replaced the global dirty Save/Cancel footer',
+      },
+    );
+    expect((await $('body').getText()).includes('Changes in this section apply immediately.')).toBe(
+      false,
+    );
+    await browser.saveScreenshot(`${SCREEN_DIR}/05-dirty-footer-survives-self-saving-tab.png`);
+
+    expect(await clickButtonWithText('[role="dialog"]', 'Cancel')).toBe(true);
+    await browser.waitUntil(alertDialogVisible, {
+      timeout: 5_000,
+      interval: 100,
+      timeoutMsg: 'Cancel did not surface the discard confirmation',
+    });
+    expect(await clickButtonWithText('[role="alertdialog"]', 'Keep editing')).toBe(true);
+    await browser.waitUntil(async () => !(await alertDialogVisible()), {
+      timeout: 5_000,
+      interval: 100,
+      timeoutMsg: 'Keep editing did not return to Settings',
+    });
+    expect(await settingsContentRoot()).toBe(true);
+
+    expect(await clickButtonWithText('[role="dialog"]', 'Cancel')).toBe(true);
+    await browser.waitUntil(alertDialogVisible, {
+      timeout: 5_000,
+      interval: 100,
+      timeoutMsg: 'Second Cancel did not surface the discard confirmation',
+    });
+    expect(await clickButtonWithText('[role="alertdialog"]', 'Discard changes')).toBe(true);
+    await browser.waitUntil(async () => !(await settingsContentRoot()), {
+      timeout: 5_000,
+      interval: 100,
+      timeoutMsg: 'Discard changes did not close Settings',
+    });
+
+    await openSettings();
+    expect(
+      await clickButtonWithText('nav[aria-label="Settings sections"]', 'Personalization'),
+    ).toBe(true);
+    await browser.waitUntil(async () => (await getInputValue('personalization-name')) !== null, {
+      timeout: 15_000,
+      interval: 100,
+      timeoutMsg: 'Personalization name did not render after discard and reopen',
+    });
+    expect(await getInputValue('personalization-name')).toBe(originalName);
+    expect(await clickDialogXClose()).toBe(true);
+    await browser.waitUntil(async () => !(await settingsContentRoot()), {
+      timeout: 5_000,
+      interval: 100,
+      timeoutMsg: 'Clean Settings panel did not close after cross-tab verification',
+    });
+    expect(await alertDialogVisible()).toBe(false);
   });
 });

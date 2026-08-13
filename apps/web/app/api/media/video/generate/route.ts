@@ -413,9 +413,17 @@ function validateProviderVideoRequest(
     if (!model.videoGeneration.durationSecs.includes(durationSecs)) {
       throw createError.validation(`${model.name} does not support ${durationSecs}-second output.`);
     }
-    if (!resolveVideoGenerationOutputSize(model, resolution, aspectRatio)) {
+    const outputSize = resolveVideoGenerationOutputSize(model, resolution, aspectRatio);
+    if (!outputSize) {
       throw createError.validation(
         `${model.name} does not support ${resolution} output at ${aspectRatio}.`,
+      );
+    }
+    // A size may permit fewer durations than the model overall — Veo allows
+    // 4/6/8s at 720p but only 8s at 1080p and 4k.
+    if (outputSize.durationSecs && !outputSize.durationSecs.includes(durationSecs)) {
+      throw createError.validation(
+        `${model.name} ${resolution} output requires duration_secs to be ${outputSize.durationSecs.join(' or ')}.`,
       );
     }
     if (generateAudio && !model.videoGeneration.supportsAudio) {

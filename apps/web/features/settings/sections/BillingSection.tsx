@@ -37,6 +37,11 @@ interface Invoice {
   invoice_pdf: string | null;
 }
 
+type BillingListState<T> =
+  | { status: 'idle' | 'loading'; items: T[] }
+  | { status: 'ready'; items: T[] }
+  | { status: 'error'; items: T[]; message: string };
+
 function formatDate(ts: number | null): string {
   if (!ts) return 'Never';
   return new Date(ts * 1000).toLocaleDateString('en-US', {
@@ -57,14 +62,13 @@ function formatIsoDate(iso: string): string {
  * Who bills this plan, and where it can actually be managed.
  *
  * `subscription_source` is derived server-side in `/api/me` from the
- * subscription row: `stripe` when there is a `stripe_subscription_id`, then
- * `apple`/`google` for the store transaction columns (migration 0046), and
- * `manual` for a row provisioned without any of them. Because `stripe` is
- * checked first, an `apple`/`google` row provably has NO Stripe subscription
- * and no Stripe-held card, so only those two lose the portal button here — a
- * `manual` row keeps it, since such an account can still own a Stripe customer
- * carrying earlier invoices. Labels mirror Mobile's `subscriptionSource.ts` so
- * both surfaces name the owner the same way.
+ * subscription row only when its provider identifiers name one unambiguous
+ * owner: `stripe`, `apple`, `google`, or `manual`. Contradictory identifiers
+ * omit the optional field so clients fail closed. Portal, card, invoice,
+ * and top-up controls are rendered only for an explicit `stripe` source;
+ * operator-provisioned plans must not imply a Stripe customer exists. Labels
+ * mirror Mobile's `subscriptionSource.ts` so both surfaces name the owner the
+ * same way.
  */
 const BILLING_SOURCE_LABEL: Record<string, string> = {
   stripe: 'AGI Workforce (card on file)',
@@ -78,6 +82,14 @@ const STORE_SUBSCRIPTION_URL: Record<string, string> = {
   google: 'https://play.google.com/store/account/subscriptions',
 };
 
+const TERMINAL_BILLING_STATUSES = new Set([
+  'none',
+  'canceled',
+  'cancelled',
+  'expired',
+  'incomplete_expired',
+]);
+
 function formatMoney(minorUnits: number, currency: string): string {
   try {
     return new Intl.NumberFormat('en-US', {
@@ -90,14 +102,14 @@ function formatMoney(minorUnits: number, currency: string): string {
 }
 
 const FREE_PLAN_FEATURES = [
-  'Chat on web, iOS, Android, and your desktop',
+  'Use limited managed Cloud chat on Web and supported app surfaces',
   'Generate code and visualize data',
   'Write, edit, and create content',
   'Analyze text and images',
   'Ability to search the web',
   'Create files and execute code',
-  'Connect local models via Ollama or LM Studio',
-  'Bring your own supported API keys',
+  'Use Local mode without an AGI subscription on supported native surfaces',
+  'Use provider BYOK without an AGI subscription on Desktop, CLI, and VS Code',
 ];
 
 function PlanIcon({ tier }: { tier: string }) {
@@ -178,6 +190,10 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 export function BillingSection() {
   const subscription = useBillingStore((s) => s.subscription);
+  const billingInitialized = useBillingStore((s) => s.initialized);
+  const billingLoading = useBillingStore((s) => s.isLoading);
+  const billingError = useBillingStore((s) => s.error);
+  const refreshUser = useBillingStore((s) => s.refreshUser);
 
   // "Manage billing" and "Update payment method" are Stripe Customer Portal
   // actions, but both were `<Link href="/billing">` — the old duplicate billing
@@ -189,6 +205,7 @@ export function BillingSection() {
   const [topUpAmountUsd, setTopUpAmountUsd] = useState(MIN_TOP_UP_AMOUNT_USD);
   const [topUpPending, setTopUpPending] = useState(false);
   const [topUpError, setTopUpError] = useState<string | null>(null);
+  const [billingDetailsRefresh, setBillingDetailsRefresh] = useState(0);
 
   async function openPortal() {
     if (portalPending) return;
@@ -227,10 +244,30 @@ export function BillingSection() {
   const storeManagementUrl = billingSource ? (STORE_SUBSCRIPTION_URL[billingSource] ?? null) : null;
   const isStoreBilled = storeManagementUrl !== null;
 
-  const isManagedPaid = !isFreeTier && subscription?.status === 'active';
-  /** Only a Stripe-billed account has a Stripe customer to read cards/invoices from. */
-  const hasStripeBilling = isManagedPaid && !isStoreBilled;
-  const canBuyTopUps = hasStripeBilling && billingSource === 'stripe';
+  const isManagedPaid = !isFreeTier && ['active', 'trialing'].includes(subscription?.status ?? '');
+  const billingStatus = (subscription?.status ?? 'none').trim().toLowerCase();
+  const billingOwnerTerminal = TERMINAL_BILLING_STATUSES.has(billingStatus);
+  const canAdjustPlan =
+    isFreeTier ||
+    billingOwnerTerminal ||
+    (billingSource === 'stripe' && ['active', 'trialing'].includes(billingStatus));
+  const planChangeBlockedCopy =
+    billingSource === 'apple'
+      ? 'Change or cancel this subscription with Apple before starting web billing.'
+      : billingSource === 'google'
+        ? 'Change or cancel this subscription with Google Play before starting web billing.'
+        : billingSource === 'manual'
+          ? 'This plan is managed by your organization. Contact an administrator to change it.'
+          : billingSource === 'stripe'
+            ? 'Resolve the current billing status in Manage billing before changing plans.'
+            : 'Billing ownership is not verified. Refresh your account before changing plans.';
+  /**
+   * Billing ownership is independent from current entitlement. A past-due,
+   * unpaid, or canceled Stripe subscriber still needs their invoices, saved
+   * payment method, and Customer Portal to recover or inspect the account.
+   */
+  const hasStripeBilling = billingInitialized && billingSource === 'stripe';
+  const canBuyTopUps = isManagedPaid && billingSource === 'stripe';
   const selectedTopUpUnits = topUpUnitsForUsd(topUpAmountUsd);
   const invalidTopUpLabel =
     topUpAmountUsd < MIN_TOP_UP_AMOUNT_USD
@@ -253,51 +290,79 @@ export function BillingSection() {
 
   // Real Stripe data (empty for free/unbilled users — the routes return [] when
   // there is no Stripe customer, which we render as an honest empty state).
-  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[] | null>(null);
-  const [invoices, setInvoices] = useState<Invoice[] | null>(null);
+  const [paymentMethods, setPaymentMethods] = useState<BillingListState<PaymentMethod>>({
+    status: 'idle',
+    items: [],
+  });
+  const [invoices, setInvoices] = useState<BillingListState<Invoice>>({
+    status: 'idle',
+    items: [],
+  });
 
   useEffect(() => {
     let cancelled = false;
     // Only paid/managed accounts have a Stripe customer; skip the calls for
     // free users, and for store-billed rows whose card and receipts live with
     // Apple or Google, to avoid pointless 200-empty round-trips.
-    if (!hasStripeBilling) {
-      setPaymentMethods([]);
-      setInvoices([]);
+    if (!billingInitialized || billingLoading) {
+      setPaymentMethods({ status: 'idle', items: [] });
+      setInvoices({ status: 'idle', items: [] });
       return;
     }
+    if (!hasStripeBilling) {
+      setPaymentMethods({ status: 'ready', items: [] });
+      setInvoices({ status: 'ready', items: [] });
+      return;
+    }
+    setPaymentMethods({ status: 'loading', items: [] });
+    setInvoices({ status: 'loading', items: [] });
     void (async () => {
-      try {
-        const [pmRes, invRes] = await Promise.all([
-          fetch('/api/billing/payment-methods', { credentials: 'include' }),
-          fetch('/api/billing/invoices', { credentials: 'include' }),
-        ]);
-        if (!cancelled && pmRes.ok) {
-          const json = (await pmRes.json()) as { payment_methods?: PaymentMethod[] };
-          setPaymentMethods(json.payment_methods ?? []);
-        } else if (!cancelled) {
-          setPaymentMethods([]);
-        }
-        if (!cancelled && invRes.ok) {
-          const json = (await invRes.json()) as { invoices?: Invoice[] };
-          setInvoices(json.invoices ?? []);
-        } else if (!cancelled) {
-          setInvoices([]);
-        }
-      } catch {
-        if (!cancelled) {
-          setPaymentMethods([]);
-          setInvoices([]);
-        }
-      }
+      const [paymentResult, invoiceResult] = await Promise.allSettled([
+        fetch('/api/billing/payment-methods', { credentials: 'include' }).then(async (response) => {
+          if (!response.ok)
+            throw new Error(`Payment methods could not be loaded (${response.status}).`);
+          const json = (await response.json()) as { payment_methods?: PaymentMethod[] };
+          return json.payment_methods ?? [];
+        }),
+        fetch('/api/billing/invoices', { credentials: 'include' }).then(async (response) => {
+          if (!response.ok) throw new Error(`Invoices could not be loaded (${response.status}).`);
+          const json = (await response.json()) as { invoices?: Invoice[] };
+          return json.invoices ?? [];
+        }),
+      ]);
+      if (cancelled) return;
+      setPaymentMethods(
+        paymentResult.status === 'fulfilled'
+          ? { status: 'ready', items: paymentResult.value }
+          : {
+              status: 'error',
+              items: [],
+              message:
+                paymentResult.reason instanceof Error
+                  ? paymentResult.reason.message
+                  : 'Payment methods could not be loaded.',
+            },
+      );
+      setInvoices(
+        invoiceResult.status === 'fulfilled'
+          ? { status: 'ready', items: invoiceResult.value }
+          : {
+              status: 'error',
+              items: [],
+              message:
+                invoiceResult.reason instanceof Error
+                  ? invoiceResult.reason.message
+                  : 'Invoices could not be loaded.',
+            },
+      );
     })();
     return () => {
       cancelled = true;
     };
-  }, [hasStripeBilling]);
+  }, [billingDetailsRefresh, billingInitialized, billingLoading, hasStripeBilling]);
 
   const defaultCard =
-    paymentMethods?.find((pm) => pm.is_default)?.card ?? paymentMethods?.[0]?.card;
+    paymentMethods.items.find((pm) => pm.is_default)?.card ?? paymentMethods.items[0]?.card;
 
   function usageBadgeText(): string | null {
     if (tier === 'pro') return '5x more usage than Basic';
@@ -308,6 +373,32 @@ export function BillingSection() {
   }
 
   const badgeText = usageBadgeText();
+
+  if (!billingInitialized || billingLoading) {
+    return (
+      <div role="status" aria-live="polite" style={{ color: 'var(--text-3)', fontSize: 14 }}>
+        Loading your billing account…
+      </div>
+    );
+  }
+
+  if (billingError && !subscription) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
+        <p role="alert" style={{ margin: 0, color: 'var(--danger, #b3261e)', fontSize: 14 }}>
+          We couldn&rsquo;t load your billing account. Your plan has not been changed.
+        </p>
+        <button
+          type="button"
+          onClick={() => void refreshUser()}
+          style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 'var(--radius-md)' }}
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
@@ -416,7 +507,15 @@ export function BillingSection() {
                 </Row>
               )}
               {subscription?.current_period_end && (
-                <Row label="Renews">
+                <Row
+                  label={
+                    subscription.cancel_at_period_end
+                      ? 'Cancels on'
+                      : isManagedPaid
+                        ? 'Renews on'
+                        : 'Current period ends'
+                  }
+                >
                   <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
                     {formatDate(subscription.current_period_end)}
                   </span>
@@ -439,22 +538,36 @@ export function BillingSection() {
             gap: 8,
           }}
         >
-          <SettingsPageLink
-            href="/pricing"
-            style={{
-              padding: '7px 14px',
-              background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary, #c8892a)',
-              border: 'none',
-              borderRadius: 'var(--radius)',
-              color: isFreeTier ? 'var(--bg-base, #09090b)' : '#fff',
-              fontSize: 13,
-              fontWeight: 600,
-              textDecoration: 'none',
-              cursor: 'pointer',
-            }}
-          >
-            {isFreeTier ? 'Upgrade plan' : 'Adjust plan'}
-          </SettingsPageLink>
+          {canAdjustPlan ? (
+            <SettingsPageLink
+              href="/pricing"
+              style={{
+                padding: '7px 14px',
+                background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary, #c8892a)',
+                border: 'none',
+                borderRadius: 'var(--radius)',
+                color: isFreeTier ? 'var(--bg-base, #09090b)' : '#fff',
+                fontSize: 13,
+                fontWeight: 600,
+                textDecoration: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {isFreeTier ? 'Upgrade plan' : 'Adjust plan'}
+            </SettingsPageLink>
+          ) : (
+            <span
+              role="status"
+              style={{
+                alignSelf: 'center',
+                color: 'var(--text-3)',
+                fontSize: 13,
+                lineHeight: 1.4,
+              }}
+            >
+              {planChangeBlockedCopy}
+            </span>
+          )}
           {/* A store-owned subscription cannot be managed in the Stripe portal —
               send the user to the store that actually holds it. */}
           {!isFreeTier && isStoreBilled && (
@@ -475,7 +588,7 @@ export function BillingSection() {
               {billingSource === 'apple' ? 'Manage in the App Store' : 'Manage on Google Play'}
             </a>
           )}
-          {!isFreeTier && !isStoreBilled && (
+          {hasStripeBilling && (
             <button
               type="button"
               onClick={openPortal}
@@ -553,11 +666,13 @@ export function BillingSection() {
                   honest "no method on file" line while loading is null, and a
                   neutral prompt when the account genuinely has none. */}
               <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                {paymentMethods === null
+                {paymentMethods.status === 'loading' || paymentMethods.status === 'idle'
                   ? 'Loading payment method…'
-                  : defaultCard
-                    ? `${defaultCard.brand.charAt(0).toUpperCase() + defaultCard.brand.slice(1)} •••• ${defaultCard.last4} · expires ${String(defaultCard.exp_month).padStart(2, '0')}/${defaultCard.exp_year}`
-                    : 'No card on file'}
+                  : paymentMethods.status === 'error'
+                    ? 'Payment method unavailable'
+                    : defaultCard
+                      ? `${defaultCard.brand.charAt(0).toUpperCase() + defaultCard.brand.slice(1)} •••• ${defaultCard.last4} · expires ${String(defaultCard.exp_month).padStart(2, '0')}/${defaultCard.exp_year}`
+                      : 'No card on file'}
               </span>
             </div>
             <button
@@ -574,9 +689,26 @@ export function BillingSection() {
                 cursor: portalPending ? 'progress' : 'pointer',
               }}
             >
-              {portalPending ? 'Opening…' : defaultCard ? 'Update' : 'Add payment method'}
+              {portalPending
+                ? 'Opening…'
+                : paymentMethods.status === 'error'
+                  ? 'Open billing portal'
+                  : defaultCard
+                    ? 'Update'
+                    : 'Add payment method'}
             </button>
           </div>
+          {paymentMethods.status === 'error' && (
+            <div
+              role="alert"
+              style={{ padding: '0 20px 16px', color: 'var(--danger, #b3261e)', fontSize: 13 }}
+            >
+              {paymentMethods.message}{' '}
+              <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
+                Try again
+              </button>
+            </div>
+          )}
         </section>
       )}
 
@@ -700,7 +832,7 @@ export function BillingSection() {
         }}
       >
         <SectionHeader title="Invoices" />
-        {invoices && invoices.length > 0 ? (
+        {invoices.status === 'ready' && invoices.items.length > 0 ? (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
@@ -730,12 +862,14 @@ export function BillingSection() {
                 </tr>
               </thead>
               <tbody>
-                {invoices.map((inv, idx) => (
+                {invoices.items.map((inv, idx) => (
                   <tr
                     key={inv.id}
                     style={{
                       borderBottom:
-                        idx < invoices.length - 1 ? '1px solid var(--settings-border)' : 'none',
+                        idx < invoices.items.length - 1
+                          ? '1px solid var(--settings-border)'
+                          : 'none',
                     }}
                   >
                     <td
@@ -785,16 +919,28 @@ export function BillingSection() {
               </tbody>
             </table>
           </div>
+        ) : invoices.status === 'error' ? (
+          <div
+            role="alert"
+            style={{ padding: '16px 20px', color: 'var(--danger, #b3261e)', fontSize: 13 }}
+          >
+            {invoices.message}{' '}
+            <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
+              Try again
+            </button>
+          </div>
         ) : (
           <div style={{ padding: '16px 20px' }}>
             <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-              {invoices === null
+              {invoices.status === 'loading' || invoices.status === 'idle'
                 ? 'Loading invoices…'
                 : isStoreBilled
                   ? `Receipts for this plan are issued by ${BILLING_SOURCE_LABEL[billingSource as string]} and are not available here.`
-                  : isFreeTier
-                    ? 'Invoices appear here once you are billed on a paid plan.'
-                    : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
+                  : billingSource === 'manual'
+                    ? 'Invoices for this plan are provided by your organization and are not available here.'
+                    : isFreeTier
+                      ? 'Invoices appear here once you are billed on a paid plan.'
+                      : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
             </p>
           </div>
         )}

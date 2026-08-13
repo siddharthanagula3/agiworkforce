@@ -12,6 +12,8 @@
  * remain because they model the data the web API returns.
  */
 
+import type { SubscriptionSource } from '../lib/cloudAccountTypes';
+
 export interface CustomerInfo {
   id: string;
   stripe_customer_id: string;
@@ -32,6 +34,7 @@ export interface SubscriptionInfo {
   current_period_start: number;
   current_period_end: number;
   cancel_at_period_end: boolean;
+  subscription_source: SubscriptionSource;
   cancel_at?: number;
   canceled_at?: number;
   trial_start?: number;

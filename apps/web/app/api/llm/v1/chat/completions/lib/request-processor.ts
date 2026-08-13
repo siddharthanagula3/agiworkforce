@@ -104,7 +104,7 @@ import {
 } from '@/lib/services/skill-catalog-service';
 import { listEnabledPluginIdsForUser } from '@/lib/services/plugin-installation-service';
 import { resolveCloudChatSurface, type CloudChatSurface } from '@/lib/free-chat-surface-policy';
-import { buildCapabilityPreamble } from './capability-preamble';
+import { buildCapabilityPreamble, extractToolNames } from './capability-preamble';
 import {
   createManagedOfficeFileToolDefinition,
   MANAGED_OFFICE_FILE_TOOL_NAME,
@@ -503,10 +503,16 @@ export function applyMapSearchCardCapability(
   params: { surface: CloudChatSurface; toolsCapable: boolean; userMessage: string },
 ): void {
   if (
-    params.surface !== 'web' ||
+    (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
-    !/\b(map|maps|mapped|nearby|near me|on a map|where is|where are)\b/i.test(params.userMessage) ||
+    // Route/trip/direction wording is included because that is what people
+    // actually type when they want a map. "calculate the trip from Texas to
+    // Las Vegas" matched none of the map-only words, so the tool was never
+    // offered and the model answered with a pasted link instead.
+    !/\b(map|maps|mapped|nearby|near me|where is|where are|route|routes|directions|drive from|driving from|road ?trip|itinerary|how far)\b/i.test(
+      params.userMessage,
+    ) ||
     !request.x_interactive_cards?.supported.includes('map-search.v1')
   ) {
     return;
@@ -515,6 +521,17 @@ export function applyMapSearchCardCapability(
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MAP_SEARCH_TOOL_NAME),
     createMapSearchToolDefinition(),
   ];
+  // The caller proved it can render the card and the user explicitly asked for
+  // a map. Treat that as an execution instruction, not an optional suggestion
+  // the model may ignore. Preserve an explicit API caller choice; app surfaces
+  // normally omit it. The map loop emits the validated card and terminates the
+  // turn after this single call, so no second-step tool-choice reset is needed.
+  if (request.tool_choice === undefined) {
+    request.tool_choice = {
+      type: 'function',
+      function: { name: MAP_SEARCH_TOOL_NAME },
+    };
+  }
 }
 
 /** Make the AGI Work composer mode operational at the server trust boundary. */
@@ -765,6 +782,36 @@ export function resolveInitialManagedCodeToolChoice(input: {
     input.toolsCapable &&
     input.provider.toLowerCase() !== 'anthropic' &&
     providerRoutesToE2B(input.provider)
+  ) {
+    return 'required';
+  }
+  return undefined;
+}
+
+/**
+ * A live-search request classified as research must search before answering,
+ * otherwise an `auto` provider is free to ignore the attached hosted tool and
+ * answer from stale training data. This is a server-owned one-shot policy: the
+ * tool loop restores `auto` after the first call so the provider can synthesize
+ * a final answer. Anthropic remains on `auto` because some admitted Claude
+ * models support only `auto`/`none`; the capability preamble still explicitly
+ * instructs those models to use the attached search tool.
+ */
+export function resolveInitialWebSearchToolChoice(input: {
+  requestedToolChoice: ChatCompletionRequest['tool_choice'];
+  webSearch: boolean | undefined;
+  researchTask: boolean;
+  stream: boolean | undefined;
+  provider: string;
+  webSearchToolAttached: boolean;
+}): ChatCompletionRequest['tool_choice'] {
+  if (input.requestedToolChoice !== undefined) return input.requestedToolChoice;
+  if (
+    input.webSearch === true &&
+    input.researchTask &&
+    input.stream === true &&
+    input.webSearchToolAttached &&
+    input.provider.toLowerCase() !== 'anthropic'
   ) {
     return 'required';
   }
@@ -2865,6 +2912,14 @@ export async function processRequest(
     }
   }
 
+  const managedCodeToolChoice = resolveInitialManagedCodeToolChoice({
+    requestedToolChoice: chatRequest.tool_choice,
+    codeExecution: chatRequest.code_execution,
+    stream: chatRequest.stream,
+    provider: providerLower,
+    e2bEnabled: e2bCutoverEnabled(),
+    toolsCapable: resolvedModelCaps?.tools ?? true,
+  });
   const llmRequest = {
     model: chatRequest.model,
     messages: internalMessages,
@@ -2872,14 +2927,16 @@ export async function processRequest(
     max_tokens: maxTokens,
     stream: chatRequest.stream,
     tools: resolvedTools as unknown[] | undefined,
-    tool_choice: resolveInitialManagedCodeToolChoice({
-      requestedToolChoice: chatRequest.tool_choice,
-      codeExecution: chatRequest.code_execution,
-      stream: chatRequest.stream,
-      provider: providerLower,
-      e2bEnabled: e2bCutoverEnabled(),
-      toolsCapable: resolvedModelCaps?.tools ?? true,
-    }),
+    tool_choice:
+      managedCodeToolChoice ??
+      resolveInitialWebSearchToolChoice({
+        requestedToolChoice: chatRequest.tool_choice,
+        webSearch: chatRequest.web_search,
+        researchTask: resolvedTaskType === 'research',
+        stream: chatRequest.stream,
+        provider: providerLower,
+        webSearchToolAttached: extractToolNames(resolvedTools).includes('web_search'),
+      }),
     thinking_mode: chatRequest.thinking_mode,
     thinking: thinkingConfig,
     effort: effectiveEffort,

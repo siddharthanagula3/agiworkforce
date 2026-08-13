@@ -9,6 +9,10 @@ import { TooltipProvider } from '@/ui/Tooltip';
 vi.mock('@/api/mcp', () => ({
   McpClient: {
     listConnectedProviders: vi.fn(),
+    listServers: vi.fn(),
+    getConfig: vi.fn(),
+    updateConfig: vi.fn(),
+    connect: vi.fn(),
     listTools: vi.fn(),
     oauthStatus: vi.fn(),
     oauthRefresh: vi.fn(),
@@ -39,12 +43,95 @@ describe('ConnectorGallery', () => {
     vi.clearAllMocks();
     resetConnectorsStore();
     vi.mocked(McpClient.listConnectedProviders).mockResolvedValue([]);
+    vi.mocked(McpClient.listServers).mockResolvedValue([]);
+    vi.mocked(McpClient.getConfig).mockResolvedValue({ mcpServers: {} });
     vi.mocked(McpClient.listTools).mockResolvedValue([]);
     vi.mocked(McpClient.oauthStatus).mockResolvedValue({
       connected: true,
       userInfo: null,
       expiresAt: null,
     });
+  });
+
+  it('shows saved custom servers as disconnected and connects only after an explicit click', async () => {
+    vi.mocked(McpClient.listServers).mockResolvedValue([
+      {
+        name: 'custom-acme-mcp',
+        enabled: true,
+        connected: false,
+        tool_count: 0,
+        command: '',
+      },
+    ]);
+    vi.mocked(McpClient.getConfig).mockResolvedValue({
+      mcpServers: {
+        'custom-acme-mcp': {
+          command: '',
+          args: [],
+          env: {},
+          enabled: true,
+          transport: { type: 'http', url: 'https://mcp.example.com/sse' },
+        },
+      },
+    });
+    vi.mocked(McpClient.connect).mockResolvedValue('Connected');
+
+    render(
+      <TooltipProvider>
+        <ConnectorGallery />
+      </TooltipProvider>,
+    );
+
+    expect(await screen.findByText('Saved MCP servers')).toBeInTheDocument();
+    expect(screen.getByText('Saved · Disconnected')).toBeInTheDocument();
+    expect(screen.getByText('https://mcp.example.com/sse')).toBeInTheDocument();
+    expect(McpClient.connect).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Acme MCP' }));
+    expect(McpClient.connect).toHaveBeenCalledWith('custom-acme-mcp');
+  });
+
+  it('keeps a denied custom connection readable and disconnected', async () => {
+    vi.mocked(McpClient.listServers).mockResolvedValue([
+      {
+        name: 'custom-acme-mcp',
+        enabled: true,
+        connected: false,
+        tool_count: 0,
+        command: '',
+      },
+    ]);
+    vi.mocked(McpClient.getConfig).mockResolvedValue({
+      mcpServers: {
+        'custom-acme-mcp': {
+          command: '',
+          args: [],
+          env: {},
+          enabled: true,
+          transport: { type: 'http', url: 'https://mcp.example.com/sse' },
+        },
+      },
+    });
+    vi.mocked(McpClient.connect).mockRejectedValue(
+      new Error(
+        "Failed to connect to MCP server 'custom-acme-mcp': MCP command 'mcp_connect_server' failed: MCP server connection cancelled",
+      ),
+    );
+
+    render(
+      <TooltipProvider>
+        <ConnectorGallery />
+      </TooltipProvider>,
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Connect Acme MCP' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Connection cancelled. The server remains saved and disconnected.',
+    );
+    expect(screen.getByText('Acme MCP')).toBeInTheDocument();
+    expect(screen.getByText('Saved · Disconnected')).toBeInTheDocument();
+    expect(screen.queryByText(/mcp_connect_server/)).not.toBeInTheDocument();
   });
 
   it('renders connectors inside Settings without Directory or Customize copy', async () => {

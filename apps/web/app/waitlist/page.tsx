@@ -5,9 +5,9 @@ import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitli
 import { Reveal } from '@/features/marketing/components/Reveal';
 
 export const metadata = buildMetadata({
-  title: 'AGI Cloud is open — Team org & SSO early access',
+  title: 'AGI Cloud is open — Enterprise governance early access',
   description:
-    'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Team is already live at /pricing. Join the list for Team & Enterprise org-seat, admin-control, and SSO early access.',
+    'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Pricing shows current Team checkout availability. Join the list for contract-scoped Enterprise SSO, custom retention, and governance requirements.',
   path: '/waitlist',
 });
 
@@ -24,7 +24,7 @@ const WHILE_YOU_WAIT = [
   },
   {
     title: 'Bring Your Own Keys',
-    body: 'Use your provider accounts on Desktop and CLI with visible labels.',
+    body: 'Use your provider accounts on supported Desktop, CLI, and VS Code releases with visible labels.',
     href: '/byok',
   },
 ];
@@ -51,11 +51,11 @@ export default function WaitlistPage() {
             </a>
             , no waitlist.{' '}
             <a href="/pricing" className="agi-fl-surface-link">
-              Team is already live at /pricing
+              See Team pricing and checkout availability
             </a>
             . This list is for <strong>Enterprise early access</strong> — advanced org controls,
-            SSO, custom retention, and centralized governance beyond what Team ships today. Leave
-            your email and we will reach out as those land.
+            SSO, custom retention, and centralized governance beyond the self-serve Team scope.
+            Leave your email and we will reach out as those land.
           </p>
           <div style={{ maxWidth: 560, marginTop: 34, paddingBottom: 'clamp(48px, 7vw, 88px)' }}>
             <PublicWaitlistForm source="website" ctaLabel="Request Org/SSO Early Access" />
@@ -69,7 +69,7 @@ export default function WaitlistPage() {
         <section className="agi-fl-section" aria-labelledby="agi-waitlist-meanwhile">
           <p className="agi-fl-eyebrow">While you wait</p>
           <h2 id="agi-waitlist-meanwhile" className="agi-fl-h2">
-            Three routes are open today.
+            Available routes and release status.
           </h2>
           <div className="agi-fl-cap-grid">
             {WHILE_YOU_WAIT.map((item, i) => (

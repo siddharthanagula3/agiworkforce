@@ -104,6 +104,7 @@ import {
 } from '@agiworkforce/types';
 // Type-only use (`keyof typeof ...shape`); erased at build time.
 import type { MeFeatureFlagsSchema } from '@agiworkforce/cloud-contracts';
+import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
 
 type CustomConnectorInput = Parameters<NonNullable<SettingsDataAdapter['addCustomConnector']>>[0];
 
@@ -275,10 +276,22 @@ const LazyCloudTeam = lazy(() =>
 // ── Cloud-only sections that have no dedicated desktop tab ────────────────────
 
 function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
-  const plan = useAuthStore(selectPlan);
+  const { plan, subscriptionSource, subscriptionStatus, subscriptionFetchStatus } = useAuthStore(
+    useShallow((state) => ({
+      plan: state.plan,
+      subscriptionSource: state.subscriptionSource,
+      subscriptionStatus: state.subscriptionStatus,
+      subscriptionFetchStatus: state.subscriptionFetchStatus,
+    })),
+  );
   const hasCloudAccountSession = useAuthStore(selectHasCloudAccountSession);
   const [portalError, setPortalError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const ownerPolicy = getDesktopSubscriptionOwnerPolicy(
+    subscriptionSource,
+    subscriptionStatus,
+    subscriptionFetchStatus === 'succeeded',
+  );
 
   // Billing belongs to the Cloud account, not to this device. Without a Cloud
   // session there is no plan to show and no Stripe customer to open a portal
@@ -304,7 +317,7 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
             them in this pane sends a capped user looking for a button that does
             not exist. Add them back with the purchase flow (ledger BIZ-022). */}
         <p className="mt-1 text-sm text-muted-foreground">
-          Manage your subscription and payment method.
+          Review your plan, billing owner, and available actions.
         </p>
       </div>
       <div className="rounded-lg border border-border bg-card/40 p-5">
@@ -313,8 +326,13 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
           {plan ? PLAN_DISPLAY_NAMES[plan] : 'Loading…'}
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          Upgrades show the exact prorated amount before charging. Downgrades, cancellation, and
-          payment methods are managed through Stripe’s secure portal.
+          {ownerPolicy.canStartStripePlanChange
+            ? 'Upgrades show the exact amount before charging.'
+            : ownerPolicy.description}
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Billing owner:{' '}
+          <span className="font-medium text-foreground">{ownerPolicy.sourceLabel}</span>
         </p>
         {portalError ? (
           <p role="alert" className="mt-3 text-xs text-destructive">
@@ -327,32 +345,34 @@ function DesktopBillingSection({ onOpenPlans }: { onOpenPlans: () => void }) {
             className={`rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-colors hover:opacity-90 ${SETTINGS_FOCUS_RING}`}
             onClick={onOpenPlans}
           >
-            Compare or upgrade
+            {ownerPolicy.canStartStripePlanChange ? 'Compare or upgrade' : 'View plans'}
           </button>
-          <button
-            type="button"
-            className={`rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted ${SETTINGS_FOCUS_RING}`}
-            disabled={portalLoading}
-            aria-busy={portalLoading || undefined}
-            onClick={() => {
-              setPortalError(null);
-              setPortalLoading(true);
-              void openBillingPortal(async () => {
-                await cloudAccountAuth.refreshUserData();
-              })
-                .then((error) => {
-                  if (error) setPortalError(error);
+          {ownerPolicy.canOpenStripePortal ? (
+            <button
+              type="button"
+              className={`rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted ${SETTINGS_FOCUS_RING}`}
+              disabled={portalLoading}
+              aria-busy={portalLoading || undefined}
+              onClick={() => {
+                setPortalError(null);
+                setPortalLoading(true);
+                void openBillingPortal(async () => {
+                  await cloudAccountAuth.refreshUserData();
                 })
-                .catch((error: unknown) => {
-                  setPortalError(
-                    error instanceof Error ? error.message : 'Could not open billing.',
-                  );
-                })
-                .finally(() => setPortalLoading(false));
-            }}
-          >
-            {portalLoading ? 'Opening billing…' : 'Manage subscription'}
-          </button>
+                  .then((error) => {
+                    if (error) setPortalError(error);
+                  })
+                  .catch((error: unknown) => {
+                    setPortalError(
+                      error instanceof Error ? error.message : 'Could not open billing.',
+                    );
+                  })
+                  .finally(() => setPortalLoading(false));
+              }}
+            >
+              {portalLoading ? 'Opening billing…' : 'Manage subscription'}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

@@ -21,6 +21,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
+import { Config } from '../../platform/config';
 import { parseBridgeInbound, type BridgeOutbound } from '../../protocol/bridgeMessages';
 
 // ─── Bridge auth token (VSCODE-03) ──────────────────────────────────────────
@@ -552,9 +553,8 @@ export function getDesktopBridge(): DesktopBridge | undefined {
  * Returns a Disposable that cleans up the bridge on deactivation.
  */
 export function activateDesktopBridge(context: vscode.ExtensionContext): vscode.Disposable {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  const enabled = config.get<boolean>('desktopBridge.enabled') ?? false;
-  const port = config.get<number>('desktopBridge.port') ?? 8787;
+  const enabled = Config.desktopBridgeEnabled();
+  const port = Config.desktopBridgePort();
 
   if (enabled) {
     _instance = new DesktopBridge(port);
@@ -591,9 +591,8 @@ export function activateDesktopBridge(context: vscode.ExtensionContext): vscode.
       e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
       e.affectsConfiguration('agiWorkforce.desktopBridge.port')
     ) {
-      const cfg = vscode.workspace.getConfiguration('agiWorkforce');
-      const nowEnabled = cfg.get<boolean>('desktopBridge.enabled') ?? false;
-      const nowPort = cfg.get<number>('desktopBridge.port') ?? 8787;
+      const nowEnabled = Config.desktopBridgeEnabled();
+      const nowPort = Config.desktopBridgePort();
 
       if (!nowEnabled && _instance !== undefined) {
         _instance.dispose();

@@ -97,7 +97,7 @@ export default function ItProvidersPage() {
             },
             {
               k: 'BYOK posture',
-              v: 'Every seat can run fully local, or on your own provider keys on Desktop and CLI, so client work need not reach our infrastructure. Requiring that org-wide is not a shipped control — no surface enforces an org policy today — so it is scoped on an enterprise contract.',
+              v: 'Every seat can run fully local, or on your own provider keys on Desktop, CLI, and VS Code, so client work need not reach our infrastructure. Requiring that org-wide is not a shipped control — no surface enforces an org policy today — so it is scoped on an enterprise contract.',
             },
           ]}
         />

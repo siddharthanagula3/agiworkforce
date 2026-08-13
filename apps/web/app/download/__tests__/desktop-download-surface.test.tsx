@@ -37,8 +37,22 @@ function signedLinuxManifest() {
   };
 }
 
+function cloudDesktopManifest() {
+  return {
+    version: '1.2.0',
+    publishedAt: '2026-08-13T00:00:00.000Z',
+    platforms: { mac: true },
+    architectures: { arm64: true, x64: true },
+  };
+}
+
 beforeEach(() => {
-  fetchMock.mockResolvedValue(Response.json(signedLinuxManifest()));
+  fetchMock.mockImplementation((input: RequestInfo | URL) => {
+    const url = typeof input === 'string' ? input : input.toString();
+    return Promise.resolve(
+      Response.json(url.includes('desktop-cloud') ? cloudDesktopManifest() : signedLinuxManifest()),
+    );
+  });
 });
 
 describe('public Desktop download surfaces', () => {
@@ -87,6 +101,27 @@ describe('public Desktop download surfaces', () => {
     expect(screen.queryByText(/July 12, 2026|July 12/i)).not.toBeInTheDocument();
   });
 
+  it('offers architecture-specific signed AGI Cloud installers', async () => {
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('desktop-cloud')) {
+        return Promise.resolve(Response.json(cloudDesktopManifest()));
+      }
+      return Promise.resolve(Response.json(signedLinuxManifest()));
+    });
+
+    render(<DownloadPage />);
+
+    expect(await screen.findByRole('link', { name: 'Download for Apple silicon' })).toHaveAttribute(
+      'href',
+      '/api/download?platform=mac&app=cloud&arch=arm64',
+    );
+    expect(screen.getByRole('link', { name: 'Download for Intel Mac' })).toHaveAttribute(
+      'href',
+      '/api/download?platform=mac&app=cloud&arch=x64',
+    );
+  });
+
   it('shows an accessible empty state when no signed Linux release exists', async () => {
     fetchMock.mockResolvedValueOnce(
       Response.json({ error: { code: 'NOT_FOUND', message: 'No release found' } }, { status: 404 }),
@@ -106,9 +141,17 @@ describe('public Desktop download surfaces', () => {
   });
 
   it('shows an accessible error with a working retry action', async () => {
-    fetchMock
-      .mockRejectedValueOnce(new Error('network unavailable'))
-      .mockResolvedValueOnce(Response.json(signedLinuxManifest()));
+    let linuxRequests = 0;
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url.includes('desktop-cloud')) {
+        return Promise.resolve(Response.json(cloudDesktopManifest()));
+      }
+      linuxRequests += 1;
+      return linuxRequests === 1
+        ? Promise.reject(new Error('network unavailable'))
+        : Promise.resolve(Response.json(signedLinuxManifest()));
+    });
     render(<DownloadPage />);
 
     const alert = await screen.findByRole('alert');

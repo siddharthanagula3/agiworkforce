@@ -575,6 +575,44 @@ pub fn compact_ollama_message_values(messages: &mut [Value], tools_available: bo
 /// message whose content is a parts-array (vision input on the Local path) is
 /// rejected by Ollama's native API with a 400.
 pub fn ollama_nativize_message_values(messages: &mut [Value]) {
+    // Ollama's native tool-result contract names the function with
+    // `tool_name`; `tool_call_id` is the OpenAI-compatible shape. Build the
+    // ID-to-name map before mutating the messages so parallel tool results are
+    // paired with the exact preceding assistant calls.
+    let tool_names_by_id: HashMap<String, String> = messages
+        .iter()
+        .filter_map(|message| message.get("tool_calls").and_then(Value::as_array))
+        .flatten()
+        .filter_map(|tool_call| {
+            let id = tool_call.get("id").and_then(Value::as_str)?;
+            let name = tool_call
+                .get("function")
+                .and_then(|function| function.get("name"))
+                .and_then(Value::as_str)?;
+            Some((id.to_string(), name.to_string()))
+        })
+        .collect();
+
+    for message in messages.iter_mut() {
+        if message.get("role").and_then(Value::as_str) != Some("tool") {
+            continue;
+        }
+        let Some(tool_call_id) = message
+            .get("tool_call_id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+        else {
+            continue;
+        };
+        let Some(tool_name) = tool_names_by_id.get(&tool_call_id) else {
+            continue;
+        };
+        if let Some(object) = message.as_object_mut() {
+            object.insert("tool_name".to_string(), Value::String(tool_name.clone()));
+            object.remove("tool_call_id");
+        }
+    }
+
     // Ollama's native `/api/chat` wants tool-call arguments as a JSON *object*,
     // but upstream serialization emits them as a JSON *string* (OpenAI
     // convention). Re-parse them to an object so the follow-up request after a
@@ -1161,5 +1199,43 @@ mod tests {
             "malformed args must fall back to an object: {args}"
         );
         assert_eq!(args.as_object().map(serde_json::Map::len), Some(0));
+    }
+
+    #[test]
+    fn ollama_nativize_pairs_parallel_tool_results_by_native_tool_name() {
+        let mut msgs = vec![
+            serde_json::json!({
+                "role": "assistant",
+                "tool_calls": [
+                    {
+                        "id": "call_search",
+                        "type": "function",
+                        "function": { "name": "search_web", "arguments": "{\"query\":\"Tauri\"}" }
+                    },
+                    {
+                        "id": "call_status",
+                        "type": "function",
+                        "function": { "name": "get_status", "arguments": "{}" }
+                    }
+                ]
+            }),
+            serde_json::json!({
+                "role": "tool",
+                "tool_call_id": "call_search",
+                "content": "https://tauri.app/"
+            }),
+            serde_json::json!({
+                "role": "tool",
+                "tool_call_id": "call_status",
+                "content": "ready"
+            }),
+        ];
+
+        ollama_nativize_message_values(&mut msgs);
+
+        assert_eq!(msgs[1]["tool_name"], "search_web");
+        assert_eq!(msgs[2]["tool_name"], "get_status");
+        assert!(msgs[1].get("tool_call_id").is_none());
+        assert!(msgs[2].get("tool_call_id").is_none());
     }
 }

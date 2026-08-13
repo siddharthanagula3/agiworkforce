@@ -8,6 +8,7 @@ import {
 } from '../../platform/config';
 import type { CustomInstructionScope, InstructionContextSnapshot } from '../instructions';
 import { MAX_CUSTOM_INSTRUCTION_CHARS } from '../instructions';
+import type { AccountIdentity, TierInfo } from '../../utils/api';
 
 export const SETTINGS_SECTIONS = [
   'general',
@@ -30,6 +31,7 @@ export const SETTINGS_COMMANDS = [
   'signOut',
   'manageUsage',
   'manageBilling',
+  'viewPlans',
   'manageConnectors',
   'manageTeam',
   'openDocs',
@@ -59,7 +61,6 @@ const settingValueSchemas = {
   apiEndpoint: httpUrlSchema,
   model: z.string().trim().min(1).max(200),
   cliPath: z.string().trim().min(1).max(4096),
-  streamingEnabled: z.boolean(),
   'composer.followUpBehavior': z.enum(['queue', 'steer']),
   contextLines: z.number().int().min(0).max(500),
   telemetryEnabled: z.boolean(),
@@ -72,13 +73,9 @@ const settingValueSchemas = {
   'agent.mode': z.enum(['ask', 'auto', 'plan', 'bypass']),
   'agent.effort': z.enum(['low', 'medium', 'high', 'max']),
   'agent.thinking': z.boolean(),
-  'mcp.enabled': z.boolean(),
   'desktopBridge.enabled': z.boolean(),
   'desktopBridge.port': z.number().int().min(1024).max(65535),
   telemetryEndpoint: httpUrlSchema,
-  useProviderStream: z.boolean(),
-  gatewayUrl: httpUrlSchema,
-  tier: z.enum(['local', 'byok', 'free', 'basic', 'pro', 'max', 'max_15x', 'team', 'enterprise']),
 } satisfies {
   [K in MutableConfigKey]: z.ZodType<MutableConfigValues[K]>;
 };
@@ -119,6 +116,9 @@ export type SettingsWebviewMessage =
 
 export interface SettingsPanelState extends ExtensionSettingsSnapshot {
   accountConnected: boolean | null;
+  accountStatus: 'loading' | 'signed-in' | 'signed-out' | 'expired';
+  accountIdentity?: AccountIdentity;
+  tierInfo?: TierInfo;
   agentConfigPath: string;
   instructionContext: InstructionContextSnapshot;
 }

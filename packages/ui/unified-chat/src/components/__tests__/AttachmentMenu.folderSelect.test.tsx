@@ -34,6 +34,26 @@ describe('AttachmentMenu — automatic Web search', () => {
     expect(screen.queryByRole('button', { name: 'Web search' })).toBeNull();
     expect(screen.queryByText('Web search')).toBeNull();
   });
+
+  it('renders only the host-backed explicit Local search control and reports the choice', () => {
+    const onExplicitWebSearchToggle = vi.fn();
+    render(
+      <CapabilityProvider platform="desktop">
+        <AttachmentMenu
+          {...baseProps}
+          explicitWebSearchEnabled
+          onExplicitWebSearchToggle={onExplicitWebSearchToggle}
+        >
+          <button type="button">Plus</button>
+        </AttachmentMenu>
+      </CapabilityProvider>,
+    );
+
+    const control = screen.getByRole('button', { name: 'Search the web' });
+    expect(control.title).toBe('Allows network access for this message');
+    control.click();
+    expect(onExplicitWebSearchToggle).toHaveBeenCalledOnce();
+  });
 });
 
 describe('AttachmentMenu — Select folder', () => {

@@ -423,7 +423,7 @@ impl McpServersConfig {
             }
 
             match serde_json::from_value::<McpServerConfig>(value.clone()) {
-                Ok(server_config) => {
+                Ok(mut server_config) => {
                     if server_config.command.is_empty() && server_config.transport.is_none() {
                         tracing::warn!(
                             "[MCP] Skipping dotfile MCP server '{}': no command or transport configured",
@@ -431,6 +431,10 @@ impl McpServersConfig {
                         );
                         continue;
                     }
+                    // A shared config entry is discovery, not Desktop consent.
+                    // Starting it could open a remote connection or execute an
+                    // imported package-manager command during a Local launch.
+                    server_config.enabled = false;
                     self.mcp_servers.insert(name.clone(), server_config);
                     merged_count += 1;
                 }
@@ -538,7 +542,7 @@ impl McpServersConfig {
                     ".".to_string(),
                 ],
                 env: HashMap::new(),
-                enabled: true,
+                enabled: false,
                 transport: None,
             },
         );
@@ -1724,7 +1728,14 @@ mod tests {
         let config = McpServersConfig::default();
         assert!(config.mcp_servers.contains_key("filesystem"));
         assert!(config.mcp_servers.contains_key("github"));
-        assert!(config.mcp_servers["filesystem"].enabled);
+        assert!(
+            !config.mcp_servers["filesystem"].enabled,
+            "packaged filesystem MCP must be opt-in because starting npx can install code and egress"
+        );
+        assert!(
+            !config.mcp_servers["git"].enabled,
+            "packaged git MCP must be opt-in"
+        );
         assert!(!config.mcp_servers["github"].enabled);
     }
 
@@ -2143,7 +2154,10 @@ mod tests {
                 .expect("dotfile server should be merged in");
             assert_eq!(server.command, "npx");
             assert_eq!(server.args, vec!["-y".to_string(), "some-pkg".to_string()]);
-            assert!(server.enabled, "servers default to enabled");
+            assert!(
+                !server.enabled,
+                "shared dotfile discovery must not grant Desktop startup approval"
+            );
         });
     }
 

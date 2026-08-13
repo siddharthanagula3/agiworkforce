@@ -1,7 +1,7 @@
 use crate::automation::AutomationService;
 use crate::core::agi::{
     AGIConfig, AGICore, AgentOrchestrator, AgentResult, AgentStatus, Constraint, ConstraintValue,
-    ExecutionContext, Goal, Priority, ScoredResult,
+    ExecutionContext, Goal, Priority,
 };
 // use crate::core::agi::reflection::ReflectionEngine;
 use crate::core::llm::{Provider, TaskType};
@@ -69,6 +69,11 @@ pub struct SubmitGoalRequest {
     /// `max_steps` constraint `goal_iteration_limit()` reads. Absent leaves the
     /// engine default in place.
     pub max_steps: Option<u64>,
+    /// Exact model/provider selected in the visible Task launcher. Both are
+    /// required at the privileged boundary, which also verifies that the
+    /// canonical catalog marks the model as agentic and tool-capable.
+    pub model_id: Option<String>,
+    pub provider: Option<String>,
     /// TRUST BOUNDARY (desktop-trust-boundary-01): the active session's
     /// execution boundary, threaded into the submitted `Goal` and from there
     /// into every LLM call made while planning/executing it. Absent (or
@@ -99,6 +104,8 @@ pub struct SubmitParallelGoalRequest {
     pub deadline: Option<u64>,
     pub success_criteria: Option<Vec<String>>,
     pub num_agents: Option<usize>,
+    pub model_id: Option<String>,
+    pub provider: Option<String>,
     /// TRUST BOUNDARY (desktop-trust-boundary-01): see `SubmitGoalRequest`.
     #[serde(default, deserialize_with = "deserialize_trust_mode")]
     pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
@@ -108,7 +115,37 @@ pub struct SubmitParallelGoalRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SubmitParallelGoalResponse {
     pub goal_id: String,
-    pub best_result: ScoredResult,
+    /// Canonical engine-authored state after the synchronous parallel run.
+    /// Returning it closes the event-loss gap: the renderer must not recreate
+    /// a completed native task as `queued` after this command resolves.
+    pub state: AgentTaskState,
+    /// Bounded, reviewable output from the winning execution. Comparator
+    /// scores are deliberately not exposed as goal-satisfaction claims.
+    pub output: Option<String>,
+    pub error: Option<String>,
+}
+
+const MAX_PARALLEL_RESULT_CHARS: usize = 16_000;
+
+fn parallel_result_output(value: &serde_json::Value) -> Option<String> {
+    let rendered = match value {
+        serde_json::Value::Null => return None,
+        serde_json::Value::String(value) => value.trim().to_string(),
+        serde_json::Value::Object(value) if value.is_empty() => return None,
+        serde_json::Value::Array(value) if value.is_empty() => return None,
+        value => serde_json::to_string_pretty(value).ok()?,
+    };
+    if rendered.is_empty() {
+        return None;
+    }
+
+    let mut chars = rendered.chars();
+    let bounded: String = chars.by_ref().take(MAX_PARALLEL_RESULT_CHARS).collect();
+    if chars.next().is_some() {
+        Some(format!("{bounded}\n\n… [output truncated]"))
+    } else {
+        Some(bounded)
+    }
 }
 
 /// Every parallel agent costs one planning round-trip plus its own sandbox, and
@@ -138,7 +175,128 @@ fn max_steps_constraints(max_steps: Option<u64>) -> Vec<Constraint> {
         .unwrap_or_default()
 }
 
+fn provider_allowed_for_trust_mode(
+    provider: Provider,
+    trust_mode: agiworkforce_model_registry::TrustMode,
+) -> bool {
+    let local = matches!(
+        provider,
+        Provider::Ollama | Provider::LmStudio | Provider::LlamaCpp | Provider::Vllm
+    );
+    match trust_mode {
+        agiworkforce_model_registry::TrustMode::Local
+        | agiworkforce_model_registry::TrustMode::OnDevice => local,
+        agiworkforce_model_registry::TrustMode::Byok => {
+            !local && provider != Provider::ManagedCloud
+        }
+        agiworkforce_model_registry::TrustMode::ManagedCloud => provider == Provider::ManagedCloud,
+    }
+}
+
+fn goal_constraints(
+    max_steps: Option<u64>,
+    model_id: Option<String>,
+    provider: Option<String>,
+    trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+) -> Result<Vec<Constraint>, String> {
+    let mut constraints = max_steps_constraints(max_steps);
+    let (model_id, provider_name) = match (model_id, provider) {
+        (None, None) => {
+            return Err(
+                "Choose a model verified for agentic planning and tool execution before launching a Task."
+                    .to_string(),
+            )
+        }
+        (Some(model_id), Some(provider)) => {
+            (model_id.trim().to_string(), provider.trim().to_string())
+        }
+        _ => return Err("A Task model target requires both modelId and provider.".to_string()),
+    };
+
+    if model_id.is_empty()
+        || model_id.chars().count() > 256
+        || model_id.chars().any(char::is_control)
+    {
+        return Err("The selected Task model ID is invalid.".to_string());
+    }
+    let provider = Provider::from_string(&provider_name)
+        .ok_or_else(|| format!("Unsupported Task provider: {provider_name}"))?;
+    let boundary = trust_mode.unwrap_or(agiworkforce_model_registry::TrustMode::Local);
+    if !provider_allowed_for_trust_mode(provider, boundary) {
+        return Err(format!(
+            "The selected {} model is not available inside the {:?} boundary.",
+            provider.as_string(),
+            boundary
+        ));
+    }
+    if !crate::core::llm::models_config::model_is_verified_for_agi_tasks(&model_id) {
+        return Err(format!(
+            "The selected model ({model_id}) is available for chat but is not verified for Tasks. Tasks require catalog-verified agentic planning and tool execution."
+        ));
+    }
+    if provider != Provider::ManagedCloud
+        && crate::core::llm::models_config::get_provider_for_model(&model_id) != Some(provider)
+    {
+        return Err(format!(
+            "The selected Task model does not belong to the submitted {} provider.",
+            provider.as_string()
+        ));
+    }
+
+    constraints.push(Constraint {
+        name: "execution_model".to_string(),
+        value: ConstraintValue::Custom {
+            key: "execution_model".to_string(),
+            value: model_id,
+        },
+    });
+    constraints.push(Constraint {
+        name: "execution_provider".to_string(),
+        value: ConstraintValue::Custom {
+            key: "execution_provider".to_string(),
+            value: provider.as_string().to_string(),
+        },
+    });
+    Ok(constraints)
+}
+
 static AGI_CORE: Mutex<Option<Arc<TokioMutex<AGICore>>>> = Mutex::new(None);
+
+fn ensure_task_automation_available(
+    automation: &Option<Arc<AutomationService>>,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    if !super::system_permissions::check_accessibility() {
+        return Err(
+            "macOS Accessibility permission is required before launching a Task.".to_string(),
+        );
+    }
+
+    if automation.is_none() {
+        return Err(
+            "The automation service is not ready. Restart AGI after granting Accessibility."
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+async fn ensure_goal_provider(goal: &Goal, llm_state: &LLMState) -> Result<(), String> {
+    let Some((_, provider_name)) = goal.execution_target() else {
+        return Ok(());
+    };
+    let provider = Provider::from_string(provider_name)
+        .ok_or_else(|| format!("Unsupported Task provider: {provider_name}"))?;
+    crate::sys::commands::chat::provider_access::ensure_task_provider(&llm_state.router, provider)
+        .await;
+    if !llm_state.router.read().await.has_provider(provider) {
+        return Err(format!(
+            "The selected {} provider is not configured for Tasks.",
+            provider.as_string()
+        ));
+    }
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn agi_init(
@@ -147,11 +305,15 @@ pub async fn agi_init(
     llm_state: State<'_, LLMState>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
-    if automation.is_none() {
-        return Err(
-            "Automation service not available. Please grant accessibility permissions.".to_string(),
-        );
+    // Renderer reloads do not restart the native process. Replacing an
+    // existing core here would orphan every in-flight task merely because the
+    // WebView reloaded, so native initialization must be idempotent too (the
+    // TypeScript module-level guard cannot provide that process-wide promise).
+    if AGI_CORE.lock().is_some() {
+        return Ok(());
     }
+
+    ensure_task_automation_available(automation.inner())?;
 
     let router_for_agi = llm_state.router.clone();
 
@@ -233,7 +395,12 @@ pub async fn agi_resume_goal(goal_id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalResponse, String> {
+pub async fn agi_submit_goal(
+    request: SubmitGoalRequest,
+    automation: State<'_, Option<Arc<AutomationService>>>,
+    llm_state: State<'_, LLMState>,
+) -> Result<SubmitGoalResponse, String> {
+    ensure_task_automation_available(automation.inner())?;
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         agi_guard
@@ -250,17 +417,24 @@ pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalRes
         _ => Priority::Medium,
     };
 
+    let constraints = goal_constraints(
+        request.max_steps,
+        request.model_id,
+        request.provider,
+        request.trust_mode,
+    )?;
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
         priority,
         deadline: request.deadline,
-        constraints: max_steps_constraints(request.max_steps),
+        constraints,
         success_criteria: request.success_criteria.unwrap_or_default(),
         trust_mode: request.trust_mode,
     };
 
     let goal_id = goal.id.clone();
+    ensure_goal_provider(&goal, &llm_state).await?;
 
     let agi = agi_arc.lock().await;
     agi.submit_goal(goal)
@@ -274,7 +448,10 @@ pub async fn agi_submit_goal(request: SubmitGoalRequest) -> Result<SubmitGoalRes
 pub async fn agi_submit_goal_parallel(
     request: SubmitParallelGoalRequest,
     app: tauri::AppHandle,
+    automation: State<'_, Option<Arc<AutomationService>>>,
+    llm_state: State<'_, LLMState>,
 ) -> Result<SubmitParallelGoalResponse, String> {
+    ensure_task_automation_available(automation.inner())?;
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         agi_guard
@@ -291,17 +468,20 @@ pub async fn agi_submit_goal_parallel(
         _ => Priority::Medium,
     };
 
+    let constraints =
+        goal_constraints(None, request.model_id, request.provider, request.trust_mode)?;
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
         priority,
         deadline: request.deadline,
-        constraints: vec![],
+        constraints,
         success_criteria: request.success_criteria.unwrap_or_default(),
         trust_mode: request.trust_mode,
     };
 
     let goal_id = goal.id.clone();
+    ensure_goal_provider(&goal, &llm_state).await?;
     let num_agents = clamp_num_agents(request.num_agents);
 
     let agi = agi_arc.lock().await;
@@ -322,9 +502,17 @@ pub async fn agi_submit_goal_parallel(
         }
     };
 
+    let state = agi
+        .get_task_state(&goal_id)
+        .ok_or_else(|| format!("Parallel goal {goal_id} completed without a canonical state"))?;
+    let output = parallel_result_output(&best_result.result.output);
+    let error = best_result.result.error;
+
     Ok(SubmitParallelGoalResponse {
         goal_id,
-        best_result,
+        state,
+        output,
+        error,
     })
 }
 
@@ -359,14 +547,30 @@ pub async fn agi_get_goal_status(goal_id: String) -> Result<GoalStatusResponse, 
     })
 }
 
+/// Returns the native engine-authored lifecycle even for execution modes
+/// (notably swarm) that do not retain an `ExecutionContext`. `None` is an
+/// honest recovery signal: this process has no native ownership of the task.
+#[tauri::command]
+pub async fn agi_get_task_state(goal_id: String) -> Result<Option<AgentTaskState>, String> {
+    let Some(agi_arc) = AGI_CORE.lock().clone() else {
+        return Ok(None);
+    };
+
+    let state = agi_arc.lock().await.get_task_state(&goal_id);
+    Ok(state)
+}
+
 #[tauri::command]
 pub async fn agi_list_goals() -> Result<Vec<Goal>, String> {
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
-        agi_guard
-            .as_ref()
-            .ok_or_else(|| "AGI not initialized".to_string())?
-            .clone()
+        let Some(agi_arc) = agi_guard.as_ref() else {
+            // A fresh native process owns no live goals. Returning an empty
+            // authoritative list lets the renderer terminate stale persisted
+            // rows instead of leaving them queued/running forever.
+            return Ok(Vec::new());
+        };
+        agi_arc.clone()
     };
 
     let agi = agi_arc.lock().await;
@@ -1530,7 +1734,10 @@ pub struct SwarmGoalResponse {
 #[tauri::command]
 pub async fn agi_submit_goal_swarm(
     request: SubmitGoalRequest,
+    automation: State<'_, Option<Arc<AutomationService>>>,
+    llm_state: State<'_, LLMState>,
 ) -> Result<SwarmGoalResponse, String> {
+    ensure_task_automation_available(automation.inner())?;
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         agi_guard
@@ -1547,17 +1754,24 @@ pub async fn agi_submit_goal_swarm(
         _ => Priority::Medium,
     };
 
+    let constraints = goal_constraints(
+        request.max_steps,
+        request.model_id,
+        request.provider,
+        request.trust_mode,
+    )?;
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
         priority,
         deadline: request.deadline,
-        constraints: vec![],
+        constraints,
         success_criteria: request.success_criteria.unwrap_or_default(),
         trust_mode: request.trust_mode,
     };
 
     let goal_id = goal.id.clone();
+    ensure_goal_provider(&goal, &llm_state).await?;
 
     let agi = agi_arc.lock().await;
     let result = agi
@@ -1589,7 +1803,10 @@ pub async fn agi_submit_goal_swarm(
 #[tauri::command]
 pub async fn agi_submit_goal_auto(
     request: SubmitGoalRequest,
+    automation: State<'_, Option<Arc<AutomationService>>>,
+    llm_state: State<'_, LLMState>,
 ) -> Result<SubmitGoalResponse, String> {
+    ensure_task_automation_available(automation.inner())?;
     let agi_arc = {
         let agi_guard = AGI_CORE.lock();
         agi_guard
@@ -1606,6 +1823,12 @@ pub async fn agi_submit_goal_auto(
         _ => Priority::Medium,
     };
 
+    let constraints = goal_constraints(
+        request.max_steps,
+        request.model_id,
+        request.provider,
+        request.trust_mode,
+    )?;
     let goal = Goal {
         id: format!("goal_{}", &uuid::Uuid::new_v4().to_string()[..8]),
         description: request.description,
@@ -1615,12 +1838,13 @@ pub async fn agi_submit_goal_auto(
         // too: auto's non-swarm branch runs the same execute/reflect loop as
         // `agi_submit_goal`, so accepting the field here and dropping it would
         // silently ignore a caller-chosen bound.
-        constraints: max_steps_constraints(request.max_steps),
+        constraints,
         success_criteria: request.success_criteria.unwrap_or_default(),
         trust_mode: request.trust_mode,
     };
 
     let goal_id = goal.id.clone();
+    ensure_goal_provider(&goal, &llm_state).await?;
 
     let agi = agi_arc.lock().await;
     agi.submit_goal_auto(goal)
@@ -1746,5 +1970,73 @@ mod tests {
         }
 
         assert!(max_steps_constraints(None).is_empty());
+    }
+
+    #[test]
+    fn parallel_result_output_is_reviewable_and_bounded() {
+        assert_eq!(parallel_result_output(&serde_json::json!({})), None);
+        assert_eq!(
+            parallel_result_output(&serde_json::json!({"answer": 42})),
+            Some("{\n  \"answer\": 42\n}".to_string())
+        );
+
+        let oversized = "x".repeat(MAX_PARALLEL_RESULT_CHARS + 1);
+        let rendered = parallel_result_output(&serde_json::json!(oversized))
+            .expect("non-empty output is retained");
+        assert!(rendered.ends_with("… [output truncated]"));
+        assert!(rendered.chars().count() < MAX_PARALLEL_RESULT_CHARS + 32);
+    }
+
+    #[test]
+    fn task_model_target_is_complete_and_trust_scoped() {
+        let eligible_model = crate::core::llm::models_config::config()
+            .models
+            .values()
+            .find(|model| {
+                model.capabilities.agentic
+                    && model.capabilities.tools
+                    && Provider::from_string(&model.provider).is_some_and(|provider| {
+                        provider_allowed_for_trust_mode(provider, TrustMode::Byok)
+                    })
+            })
+            .expect("the catalog carries a BYOK model verified for Tasks");
+        let constraints = goal_constraints(
+            Some(1),
+            Some(eligible_model.id.clone()),
+            Some(eligible_model.provider.clone()),
+            Some(TrustMode::Byok),
+        )
+        .expect("an exact catalog model with matching provider is admitted");
+        assert!(constraints.iter().any(|constraint| {
+            matches!(
+                &constraint.value,
+                ConstraintValue::Custom { key, value }
+                    if key == "execution_model" && value == &eligible_model.id
+            )
+        }));
+
+        let unverified_error = goal_constraints(
+            None,
+            Some("fixture-local-model".to_string()),
+            Some("ollama".to_string()),
+            Some(TrustMode::Local),
+        )
+        .expect_err("runtime function-call support is not proof of Task capability");
+        assert!(unverified_error.contains("not verified for Tasks"));
+        assert!(goal_constraints(
+            None,
+            Some("fixture-cloud-model".to_string()),
+            Some("managed_cloud".to_string()),
+            Some(TrustMode::Local),
+        )
+        .is_err());
+        assert!(goal_constraints(
+            None,
+            Some("fixture-local-model".to_string()),
+            None,
+            Some(TrustMode::Local),
+        )
+        .is_err());
+        assert!(goal_constraints(None, None, None, Some(TrustMode::Local)).is_err());
     }
 }

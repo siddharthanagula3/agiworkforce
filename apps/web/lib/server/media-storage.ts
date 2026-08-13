@@ -7,7 +7,6 @@ import { Readable } from 'node:stream';
 import path from 'node:path';
 import { logger } from '@/lib/logger';
 import {
-  putObject,
   putPrivateObject,
   getObject,
   getPrivateObject,
@@ -22,8 +21,8 @@ import {
 /**
  * Object storage for AI-generated media.
  *
- * Production is backed by Cloudflare R2. Local development gets an
- * owner-scoped filesystem fallback under `.agi-local-media`, allowing
+ * Production is backed by the private Cloudflare R2 bucket. Local development
+ * gets an owner-scoped filesystem fallback under `.agi-local-media`, allowing
  * generated images/files to survive browser reloads and Next build-cache
  * cleanup without weakening the production storage contract or requiring
  * cloud credentials for a demo.
@@ -37,7 +36,11 @@ export interface StoredMedia {
 }
 
 const LOCAL_MEDIA_PREFIX = 'local-dev-media/';
+const PRIVATE_MEDIA_PREFIX = 'private-media/';
+const PRIVATE_IMAGE_PREFIX = `${PRIVATE_MEDIA_PREFIX}image/`;
 const PRIVATE_VIDEO_PREFIX = 'private-media/video/';
+const PRIVATE_FILE_PREFIX = `${PRIVATE_MEDIA_PREFIX}file/`;
+const PRIVATE_CHAT_ATTACHMENT_PREFIX = 'chat-attachments/';
 
 function isLocalDevelopmentMediaStorageEnabled(): boolean {
   return process.env['NODE_ENV'] === 'development';
@@ -79,9 +82,14 @@ export function isMediaStorageConfigured(): boolean {
   );
 }
 
-/** Images/files still use the existing public bucket contract in production. */
+/** True when new generated media can be written without creating a public locator. */
+export function isGeneratedMediaStorageConfigured(): boolean {
+  return isPrivateObjectStorageConfigured() || isLocalDevelopmentMediaStorageEnabled();
+}
+
+/** Generated images require the private object backend in production. */
 export function isImageStorageConfigured(): boolean {
-  return isObjectStorageConfigured() || isLocalDevelopmentMediaStorageEnabled();
+  return isGeneratedMediaStorageConfigured();
 }
 
 /**
@@ -90,7 +98,7 @@ export function isImageStorageConfigured(): boolean {
  * make the bytes owner-only.
  */
 export function isVideoStorageConfigured(): boolean {
-  return isPrivateObjectStorageConfigured() || isLocalDevelopmentMediaStorageEnabled();
+  return isGeneratedMediaStorageConfigured();
 }
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -114,6 +122,15 @@ function ownerStorageHash(userId: string): string {
 
 function privateVideoPathname(userId: string, objectId: string, extension: string): string {
   return `${PRIVATE_VIDEO_PREFIX}${ownerStorageHash(userId)}/${objectId}.${extension}`;
+}
+
+function privateGeneratedMediaPathname(
+  userId: string,
+  kind: 'image' | 'video' | 'file',
+  objectId: string,
+  extension: string,
+): string {
+  return `${PRIVATE_MEDIA_PREFIX}${kind}/${ownerStorageHash(userId)}/${objectId}.${extension}`;
 }
 
 /**
@@ -145,6 +162,14 @@ export function videoStoragePathname(input: {
 
 function isPrivateVideoPathname(pathname: string): boolean {
   return /^private-media\/video\/[a-f0-9]{32}\/[0-9a-f-]{36}\.(?:mp4|webm|mov)$/i.test(pathname);
+}
+
+function isPrivateGeneratedMediaPathname(pathname: string): boolean {
+  return /^private-media\/(?:image|file)\/[a-f0-9]{32}\/[0-9a-f-]{36}\.[a-z0-9]+$/i.test(pathname);
+}
+
+function isPrivateChatAttachmentPathname(pathname: string): boolean {
+  return /^chat-attachments\/[A-Za-z0-9_-]+\/[0-9]+_[A-Za-z0-9_-]+\.[a-z0-9]+$/i.test(pathname);
 }
 
 /** Decode a base64 (optionally a data: URI) payload into raw bytes. */
@@ -184,8 +209,8 @@ export async function storeMedia(params: {
     throw new Error('Stable media storage identity must be a UUID.');
   }
 
-  if (kind === 'video' && isPrivateObjectStorageConfigured()) {
-    const pathname = privateVideoPathname(userId, objectId, extension);
+  if (isPrivateObjectStorageConfigured()) {
+    const pathname = privateGeneratedMediaPathname(userId, kind, objectId, extension);
     await putPrivateObject({ key: pathname, data, contentType });
     return {
       // Internal locator only: no public bucket URL exists for this object.
@@ -196,14 +221,8 @@ export async function storeMedia(params: {
     };
   }
 
-  if (kind !== 'video' && isObjectStorageConfigured()) {
-    const pathname = `media/${kind}/${userId}/${objectId}.${extension}`;
-    const { url } = await putObject({ key: pathname, data, contentType });
-    return { url, pathname, byteSize: data.byteLength, contentType };
-  }
-
   if (!isLocalDevelopmentMediaStorageEnabled()) {
-    throw new Error('Media storage is not configured.');
+    throw new Error('Private media storage is not configured.');
   }
 
   const ownerHash = ownerStorageHash(userId);
@@ -247,8 +266,8 @@ export async function storeMediaFile(params: {
   }
   const extension = extForMime(contentType);
 
-  if (kind === 'video' && isPrivateObjectStorageConfigured()) {
-    const pathname = videoStoragePathname({ userId, storageId, contentType });
+  if (isPrivateObjectStorageConfigured()) {
+    const pathname = privateGeneratedMediaPathname(userId, kind, storageId, extension);
     await putPrivateObject({
       key: pathname,
       data: createReadStream(filePath),
@@ -258,19 +277,8 @@ export async function storeMediaFile(params: {
     return { url: pathname, pathname, byteSize, contentType };
   }
 
-  if (kind !== 'video' && isObjectStorageConfigured()) {
-    const pathname = `media/${kind}/${userId}/${storageId}.${extension}`;
-    const { url } = await putObject({
-      key: pathname,
-      data: createReadStream(filePath),
-      contentType,
-      contentLength: byteSize,
-    });
-    return { url, pathname, byteSize, contentType };
-  }
-
   if (!isLocalDevelopmentMediaStorageEnabled()) {
-    throw new Error('Media storage is not configured.');
+    throw new Error('Private media storage is not configured.');
   }
   const ownerHash = ownerStorageHash(userId);
   const pathname = `${LOCAL_MEDIA_PREFIX}${kind}/${ownerHash}/${storageId}.${extension}`;
@@ -317,6 +325,23 @@ export async function readStoredMedia(
   if (pathname.startsWith(PRIVATE_VIDEO_PREFIX)) {
     if (!isPrivateVideoPathname(pathname) || !isPrivateObjectStorageConfigured()) return null;
     return getPrivateObject(pathname);
+  }
+
+  if (pathname.startsWith(PRIVATE_IMAGE_PREFIX) || pathname.startsWith(PRIVATE_FILE_PREFIX)) {
+    if (!isPrivateGeneratedMediaPathname(pathname) || !isPrivateObjectStorageConfigured()) {
+      return null;
+    }
+    return getPrivateObject(pathname);
+  }
+
+  if (pathname.startsWith(PRIVATE_CHAT_ATTACHMENT_PREFIX)) {
+    if (!isPrivateChatAttachmentPathname(pathname) || !isPrivateObjectStorageConfigured()) {
+      return null;
+    }
+    const privateObject = await getPrivateObject(pathname);
+    if (privateObject) return privateObject;
+    // Compatibility for rows registered before chat uploads moved private.
+    return isObjectStorageConfigured() ? getObject(pathname) : null;
   }
 
   if (!isObjectStorageConfigured()) return null;
@@ -368,6 +393,53 @@ export async function streamStoredMedia(
     };
   }
 
+  if (pathname.startsWith(PRIVATE_IMAGE_PREFIX) || pathname.startsWith(PRIVATE_FILE_PREFIX)) {
+    if (!isPrivateGeneratedMediaPathname(pathname) || !isPrivateObjectStorageConfigured()) {
+      return null;
+    }
+    const object = await getPrivateObjectStream(
+      pathname,
+      range ? `bytes=${range.start}-${range.end}` : undefined,
+    );
+    if (!object || object.contentLength == null) return null;
+    return {
+      body: object.body,
+      contentType: object.contentType,
+      contentLength: object.contentLength,
+      contentRange: object.contentRange,
+    };
+  }
+
+  if (pathname.startsWith(PRIVATE_CHAT_ATTACHMENT_PREFIX)) {
+    if (!isPrivateChatAttachmentPathname(pathname) || !isPrivateObjectStorageConfigured()) {
+      return null;
+    }
+    const object = await getPrivateObjectStream(
+      pathname,
+      range ? `bytes=${range.start}-${range.end}` : undefined,
+    );
+    if (object?.contentLength != null) {
+      return {
+        body: object.body,
+        contentType: object.contentType,
+        contentLength: object.contentLength,
+        contentRange: object.contentRange,
+      };
+    }
+    if (!isObjectStorageConfigured()) return null;
+    const legacyObject = await getObjectStream(
+      pathname,
+      range ? `bytes=${range.start}-${range.end}` : undefined,
+    );
+    if (!legacyObject || legacyObject.contentLength == null) return null;
+    return {
+      body: legacyObject.body,
+      contentType: legacyObject.contentType,
+      contentLength: legacyObject.contentLength,
+      contentRange: legacyObject.contentRange,
+    };
+  }
+
   if (!isObjectStorageConfigured()) return null;
   const object = await getObjectStream(
     pathname,
@@ -400,6 +472,24 @@ export async function deleteStoredMedia(pathname: string): Promise<void> {
       throw new Error('Invalid private video storage path.');
     }
     await deletePrivateObject(pathname);
+    return;
+  }
+  if (pathname.startsWith(PRIVATE_IMAGE_PREFIX) || pathname.startsWith(PRIVATE_FILE_PREFIX)) {
+    if (!isPrivateGeneratedMediaPathname(pathname)) {
+      throw new Error('Invalid private generated-media storage path.');
+    }
+    await deletePrivateObject(pathname);
+    return;
+  }
+  if (pathname.startsWith(PRIVATE_CHAT_ATTACHMENT_PREFIX)) {
+    if (!isPrivateChatAttachmentPathname(pathname)) {
+      throw new Error('Invalid private chat-attachment storage path.');
+    }
+    await deletePrivateObject(pathname);
+    // Old rows used the same key in the public bucket. R2 DELETE is
+    // idempotent, so remove a possible legacy twin while both buckets remain
+    // configured during rollout.
+    if (isObjectStorageConfigured()) await deleteObject(pathname);
     return;
   }
 

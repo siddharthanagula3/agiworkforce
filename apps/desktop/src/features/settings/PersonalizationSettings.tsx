@@ -4,7 +4,8 @@
  * AGI personalization controls: user identity, response style sliders
  * (formality, warmth, detail), emoji usage, and custom instructions passthrough.
  *
- * Changes auto-save on every field update (debounced 400 ms).
+ * Changes update the Settings draft immediately and are persisted only by the
+ * parent Settings panel's explicit Save action.
  */
 import { MessageSquare, Sliders, User } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -137,9 +138,10 @@ export function PersonalizationSettings() {
   const stored = useSettingsStore(selectPersonalization);
   const setPersonalization = useSettingsStore((s) => s.setPersonalization);
 
-  // Local draft — committed to store on a debounced schedule
+  // Keep an input-local draft for responsive controls, while updating the
+  // Settings draft synchronously. A delayed commit used to be cancelled when
+  // the user changed tabs within 400 ms, losing the visible edit entirely.
   const [draft, setDraft] = useState<PersonalizationPreferences>(stored);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync draft when store updates externally (e.g., settings load from disk)
   const hasUserEdited = useRef(false);
@@ -149,24 +151,12 @@ export function PersonalizationSettings() {
     }
   }, [stored]);
 
-  // Cleanup debounce timer on unmount
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
   const commit = useCallback(
     (updates: Partial<PersonalizationPreferences>) => {
       hasUserEdited.current = true;
       const next = { ...draft, ...updates };
       setDraft(next);
-
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-      debounceRef.current = setTimeout(() => {
-        setPersonalization(updates);
-        debounceRef.current = null;
-      }, 400);
+      setPersonalization(updates);
     },
     [draft, setPersonalization],
   );

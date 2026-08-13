@@ -210,6 +210,7 @@ impl DesktopMcpServerExecutor {
             strategy: None,
             stream: Some(false),
             enable_tools: Some(false),
+            tool_scope: None,
             conversation_mode: None,
             workflow_hash: None,
             task_metadata: None,
@@ -334,7 +335,11 @@ impl DesktopMcpServerExecutor {
             model_override: None,
             strategy: None,
             stream: Some(false),
-            enable_tools: Some(!invocation.allowed_tools.is_empty()),
+            // The external MCP bridge has no typed, enforced mapping from its
+            // free-form allowed-tool names to Desktop's native tool registry.
+            // Keep it fail-closed until that exact allowlist contract exists.
+            enable_tools: Some(false),
+            tool_scope: None,
             conversation_mode: None,
             workflow_hash: None,
             task_metadata: None,

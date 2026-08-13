@@ -2,8 +2,8 @@
  * chatEditorPanel.test.ts — C13: chat in main editor (WebviewPanel)
  *
  * Verifies that `agi-workforce.openChatInEditor` is registered, creates an
- * independent WebviewPanel per invocation, and keeps the auxiliary agent-mode
- * command focused on the most recent live tab.
+ * independent WebviewPanel per invocation. The agent-mode keybinding is also
+ * guarded here because it must open the permission chooser, not focus a tab.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -170,31 +170,34 @@ describe('agi-workforce.openChatInEditor', () => {
     expect(panels[1]!.reveal).not.toHaveBeenCalled();
   });
 
-  it('keeps agentMode focused on the most recently active live tab', () => {
+  it('opens the real agent-mode chooser without changing editor focus', async () => {
     const open = handlers.get('agi-workforce.openChatInEditor')!;
-    const focus = handlers.get('agi-workforce.agentMode')!;
+    const chooseMode = handlers.get('agi-workforce.agentMode')!;
     open();
     open();
     panels[0]!.changeViewState?.(true);
+    vi.mocked(vscode.commands.executeCommand).mockClear();
 
-    focus();
+    await chooseMode();
 
-    expect(panels).toHaveLength(2);
-    expect(panels[0]!.reveal).toHaveBeenCalledOnce();
+    expect(vscode.commands.executeCommand).toHaveBeenCalledOnce();
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.setAgentMode');
+    expect(panels[0]!.reveal).not.toHaveBeenCalled();
     expect(panels[1]!.reveal).not.toHaveBeenCalled();
   });
 
-  it('removes only the disposed tab from most-recent routing', () => {
+  it('keeps the agent-mode chooser available after an editor chat is disposed', async () => {
     const open = handlers.get('agi-workforce.openChatInEditor')!;
-    const focus = handlers.get('agi-workforce.agentMode')!;
+    const chooseMode = handlers.get('agi-workforce.agentMode')!;
     open();
     open();
     panels[1]!.dispose?.();
+    vi.mocked(vscode.commands.executeCommand).mockClear();
 
-    focus();
+    await chooseMode();
 
-    expect(panels).toHaveLength(2);
-    expect(panels[0]!.reveal).toHaveBeenCalledOnce();
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.setAgentMode');
+    expect(panels[0]!.reveal).not.toHaveBeenCalled();
     expect(panels[1]!.reveal).not.toHaveBeenCalled();
   });
 

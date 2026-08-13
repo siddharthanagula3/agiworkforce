@@ -53,11 +53,32 @@ describe('computer-use ask gate persists and rehydrates', () => {
 
   it('writes the gate on toggle, not only when Run Autofill escalates', () => {
     expect(panel).toMatch(/askCheckbox\.addEventListener\('change'/);
-    expect(panel).toMatch(/set\(\{\s*agi_cu_ask_before_acting:\s*askCheckbox\.checked\s*\}\)/);
+    expect(panel).toMatch(/set\(\{\s*agi_cu_ask_before_acting:\s*next\s*\}\)/);
+  });
+
+  it('rolls the control back when the authoritative storage write fails', () => {
+    expect(panel).toContain('askCheckbox.checked = !next');
+    expect(panel).toContain('The previous setting is still active.');
   });
 
   it('rehydration still uses the default-deny rule, never a bare false assignment', () => {
     // Guards the same invariant as the block above: an unset pref must gate.
     expect(panel).not.toMatch(/askCheckbox\.checked\s*=\s*false/);
+  });
+});
+
+describe('computer-use approval accessibility', () => {
+  const panel = read('src/features/side-panel/computerUsePanel.ts');
+
+  it('announces each pending approval and moves focus to its primary decision', () => {
+    expect(panel).toContain("card.setAttribute('role', 'alertdialog')");
+    expect(panel).toContain("card.setAttribute('aria-labelledby'");
+    expect(panel).toContain("card.setAttribute('aria-describedby'");
+    expect(panel).toContain('allowBtn.focus()');
+  });
+
+  it('does not strand focus when an approval is decided or expires', () => {
+    expect(panel).toContain('if (shouldRestoreFocus) stopBtn.focus()');
+    expect(panel).toContain("card.setAttribute('role', 'status')");
   });
 });

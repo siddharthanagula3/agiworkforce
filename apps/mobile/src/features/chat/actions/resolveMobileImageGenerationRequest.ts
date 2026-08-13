@@ -1,4 +1,12 @@
-import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  getModelMetadataById,
+  isImageAspectSupported,
+} from '@agiworkforce/types';
+import {
+  MANAGED_MEDIA_IMAGE_ASPECT_RATIOS,
+  type ManagedMediaImageAspectRatio,
+} from '@agiworkforce/cloud-contracts';
 import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
 import { resolveMediaModelId } from './mediaMode';
 
@@ -28,6 +36,13 @@ export type MobileImageGenerationRequestDecision =
       status: 'ready';
       prompt: string;
       model: string;
+      /**
+       * Only present when the chosen model's adapter actually publishes it.
+       * Absent means "no opinion" and the route keeps its own default, which is
+       * the honest outcome for a ratio the adapter cannot map — better than
+       * sending one the route would reject and failing the whole turn.
+       */
+      aspectRatio?: ManagedMediaImageAspectRatio;
       ownerId: string;
     };
 
@@ -45,6 +60,26 @@ export interface ResolveMobileImageGenerationRequestInput {
   ownerId: string | null;
   grantedCapabilities: readonly string[];
   isOnline: boolean;
+  /** Output shape chosen in the [+] sheet. Validated against the model here. */
+  aspectRatio?: string;
+}
+
+/**
+ * Narrow the caller's choice to a ratio the wire accepts AND the chosen model's
+ * adapter publishes. Two gates, not one: the contract enum bounds the wire, and
+ * the catalog bounds the adapter, so a persisted ratio that was valid for the
+ * previous model is dropped rather than sent to one that would reject it.
+ */
+function resolveAspectRatio(
+  modelId: string,
+  aspectRatio: string | undefined,
+): ManagedMediaImageAspectRatio | undefined {
+  if (!aspectRatio) return undefined;
+  if (!MANAGED_MEDIA_IMAGE_ASPECT_RATIOS.includes(aspectRatio as ManagedMediaImageAspectRatio)) {
+    return undefined;
+  }
+  if (!isImageAspectSupported(modelId, aspectRatio)) return undefined;
+  return aspectRatio as ManagedMediaImageAspectRatio;
 }
 
 const BLOCKED_ALERTS: Readonly<Record<MobileImageGenerationBlockCode, MobileImageGenerationAlert>> =
@@ -149,7 +184,14 @@ export function resolveMobileImageGenerationRequest(
     if (!modelId || getModelMetadataById(modelId)?.capabilities.imageGen !== true) {
       return blocked('route_unavailable');
     }
-    return { status: 'ready', prompt, model: modelId, ownerId: input.ownerId };
+    const aspectRatio = resolveAspectRatio(modelId, input.aspectRatio);
+    return {
+      status: 'ready',
+      prompt,
+      model: modelId,
+      ...(aspectRatio ? { aspectRatio } : {}),
+      ownerId: input.ownerId,
+    };
   }
 
   const imageDispatch =
@@ -160,10 +202,12 @@ export function resolveMobileImageGenerationRequest(
       : null;
   if (!imageDispatch) return blocked('route_unavailable');
 
+  const dispatchAspectRatio = resolveAspectRatio(imageDispatch.modelKey, input.aspectRatio);
   return {
     status: 'ready',
     prompt,
     model: imageDispatch.modelKey,
+    ...(dispatchAspectRatio ? { aspectRatio: dispatchAspectRatio } : {}),
     ownerId: input.ownerId,
   };
 }

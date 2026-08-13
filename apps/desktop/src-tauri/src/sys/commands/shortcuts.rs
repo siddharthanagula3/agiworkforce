@@ -260,6 +260,45 @@ fn load_quick_query_hotkey_preferences_from_disk(
     Ok(prefs)
 }
 
+fn transition_quick_query_registration(
+    previous_is_registered: bool,
+    previous_key: &str,
+    desired_enabled: bool,
+    desired_key: &str,
+    mut register: impl FnMut(&str) -> Result<(), String>,
+    mut unregister: impl FnMut(&str) -> Result<(), String>,
+) -> Result<(), String> {
+    let desired_is_already_registered =
+        previous_is_registered && previous_key == desired_key;
+    let mut registered_desired_during_transition = false;
+
+    // Register the replacement before unregistering the current shortcut. If
+    // the OS rejects the new accelerator (for example because another app owns
+    // it), the old shortcut and the in-memory state remain fully intact.
+    if desired_enabled && !desired_is_already_registered {
+        register(desired_key)?;
+        registered_desired_during_transition = true;
+    }
+
+    if previous_is_registered && (!desired_enabled || previous_key != desired_key) {
+        if let Err(error) = unregister(previous_key) {
+            let cleanup_error = if registered_desired_during_transition {
+                unregister(desired_key).err()
+            } else {
+                None
+            };
+            return Err(match cleanup_error {
+                Some(cleanup_error) => format!(
+                    "{error}. The replacement shortcut also could not be rolled back: {cleanup_error}"
+                ),
+                None => error,
+            });
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn apply_quick_query_hotkey_preferences(
     app: &AppHandle,
     shortcuts_state: &Arc<Mutex<ShortcutsState>>,
@@ -276,43 +315,54 @@ pub async fn apply_quick_query_hotkey_preferences(
     let mut shortcuts = shortcuts_state.shortcuts.lock().await;
     let mut registered = shortcuts_state.registered_keys.lock().await;
 
-    let shortcut = shortcuts
-        .entry("toggle_window".to_string())
-        .or_insert_with(|| Shortcut {
+    let had_previous_shortcut = shortcuts.contains_key("toggle_window");
+    let previous = shortcuts
+        .get("toggle_window")
+        .cloned()
+        .unwrap_or_else(|| Shortcut {
             id: "toggle_window".to_string(),
             key: resolved_combo.clone(),
             description: "Quick Query — ask anything from any app".to_string(),
             action: "quick_query".to_string(),
-            enabled: preferences.enabled,
+            enabled: false,
             is_global: true,
         });
+    let previous_is_registered =
+        had_previous_shortcut && previous.is_global && previous.enabled;
+    transition_quick_query_registration(
+        previous_is_registered,
+        &previous.key,
+        preferences.enabled,
+        &resolved_combo,
+        |key| register_global_shortcut(app, key, "quick_query".to_string()),
+        |key| unregister_global_shortcut(app, key),
+    )?;
 
-    let previous_key = shortcut.key.clone();
-    let previous_enabled = shortcut.enabled;
+    let updated = Shortcut {
+        id: "toggle_window".to_string(),
+        key: resolved_combo,
+        description: previous.description.clone(),
+        action: "quick_query".to_string(),
+        enabled: preferences.enabled,
+        is_global: true,
+    };
+    shortcuts.insert(updated.id.clone(), updated.clone());
 
-    if shortcut.is_global && previous_enabled {
-        let _ = unregister_global_shortcut(app, &previous_key);
-        registered.retain(|key| key != &previous_key);
+    if previous_is_registered && (!updated.enabled || previous.key != updated.key) {
+        registered.retain(|key| key != &previous.key);
+    }
+    if updated.enabled && !registered.contains(&updated.key) {
+        registered.push(updated.key.clone());
     }
 
-    shortcut.key = resolved_combo;
-    shortcut.enabled = preferences.enabled;
-    shortcut.action = "quick_query".to_string();
-    shortcut.is_global = true;
-
-    if shortcut.enabled {
-        register_global_shortcut(app, &shortcut.key, shortcut.action.clone())?;
-        if !registered.contains(&shortcut.key) {
-            registered.push(shortcut.key.clone());
-        }
-    }
-
-    let updated = shortcut.clone();
     drop(registered);
     drop(shortcuts);
 
-    app.emit("shortcut_updated", &updated)
-        .map_err(|e| format!("Failed to emit event: {}", e))?;
+    // The OS registration is authoritative. A renderer notification failure
+    // must not turn a committed shortcut change into a reported save failure.
+    if let Err(error) = app.emit("shortcut_updated", &updated) {
+        tracing::warn!("Failed to emit shortcut_updated after applying shortcut: {error}");
+    }
 
     Ok(updated)
 }
@@ -750,5 +800,63 @@ mod tests {
     fn quick_query_default_is_platform_specific() {
         let default_combo = default_quick_query_hotkey_preferences().combo;
         assert_eq!(default_combo, platform_default_quick_query_combo());
+    }
+
+    #[test]
+    fn rejected_replacement_keeps_the_previous_registration() {
+        let operations = std::cell::RefCell::new(Vec::new());
+        let result = transition_quick_query_registration(
+            true,
+            "Control+Shift+Space",
+            true,
+            "Control+Alt+Space",
+            |key| {
+                operations.borrow_mut().push(format!("register:{key}"));
+                Err("accelerator unavailable".to_string())
+            },
+            |key| {
+                operations.borrow_mut().push(format!("unregister:{key}"));
+                Ok(())
+            },
+        );
+
+        assert_eq!(result, Err("accelerator unavailable".to_string()));
+        assert_eq!(
+            operations.into_inner(),
+            vec!["register:Control+Alt+Space"]
+        );
+    }
+
+    #[test]
+    fn failed_old_unregistration_removes_the_staged_replacement() {
+        let operations = std::cell::RefCell::new(Vec::new());
+        let result = transition_quick_query_registration(
+            true,
+            "Control+Shift+Space",
+            true,
+            "Control+Alt+Space",
+            |key| {
+                operations.borrow_mut().push(format!("register:{key}"));
+                Ok(())
+            },
+            |key| {
+                operations.borrow_mut().push(format!("unregister:{key}"));
+                if key == "Control+Shift+Space" {
+                    Err("could not remove current shortcut".to_string())
+                } else {
+                    Ok(())
+                }
+            },
+        );
+
+        assert_eq!(result, Err("could not remove current shortcut".to_string()));
+        assert_eq!(
+            operations.into_inner(),
+            vec![
+                "register:Control+Alt+Space",
+                "unregister:Control+Shift+Space",
+                "unregister:Control+Alt+Space",
+            ]
+        );
     }
 }

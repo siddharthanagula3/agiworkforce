@@ -1,7 +1,7 @@
 {
   "name": "@agiworkforce/extension",
   "version": "1.2.0",
-  "description": "Approved-site browser companion extension for AGI Desktop",
+  "description": "Managed Cloud chat, approved-site browser context, and automation for AGI",
   "private": true,
   "type": "module",
   "author": "AGI",

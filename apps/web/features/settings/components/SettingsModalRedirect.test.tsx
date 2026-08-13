@@ -6,12 +6,12 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
-  githubStatus: 'connected',
+  search: 'github=connected',
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
-  useSearchParams: () => new URLSearchParams(`github=${mocks.githubStatus}`),
+  useSearchParams: () => new URLSearchParams(mocks.search),
 }));
 
 vi.mock('sonner', () => ({
@@ -29,7 +29,7 @@ import { SettingsModalRedirect } from './SettingsModalRedirect';
 
 describe('SettingsModalRedirect', () => {
   beforeEach(() => {
-    mocks.githubStatus = 'connected';
+    mocks.search = 'github=connected';
     vi.clearAllMocks();
   });
 
@@ -54,7 +54,7 @@ describe('SettingsModalRedirect', () => {
       'GitHub ownership verification is required. Start the connection again.',
     ],
   ])('surfaces the %s GitHub callback outcome', async (status, message) => {
-    mocks.githubStatus = status;
+    mocks.search = `github=${status}`;
 
     render(<SettingsModalRedirect section="connectors" />);
 
@@ -62,5 +62,30 @@ describe('SettingsModalRedirect', () => {
       expect(mocks.error).toHaveBeenCalledWith(message);
     });
     expect(mocks.replace).toHaveBeenCalledWith('/chat');
+  });
+
+  it('surfaces a confirmed top-up checkout return without claiming ledger settlement', async () => {
+    mocks.search = 'topup=success&session_id=cs_test_123';
+
+    render(<SettingsModalRedirect section="billing" />);
+
+    await waitFor(() => {
+      expect(mocks.success).toHaveBeenCalledWith(
+        'Top-up payment received. Your balance updates after payment confirmation.',
+      );
+    });
+    expect(mocks.openSettings).toHaveBeenCalledWith('billing');
+  });
+
+  it('reports a canceled top-up checkout as a no-charge outcome', async () => {
+    mocks.search = 'topup=cancelled';
+
+    render(<SettingsModalRedirect section="billing" />);
+
+    await waitFor(() => {
+      expect(mocks.error).toHaveBeenCalledWith(
+        'Top-up checkout was canceled. No balance was added.',
+      );
+    });
   });
 });

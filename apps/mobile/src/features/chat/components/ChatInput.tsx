@@ -962,6 +962,7 @@ export function ChatInput({
               where the plus moves to the controls row beneath the text. */}
           {!stacked && !isRecording && !isTranscribing ? (
             <Pressable
+              testID="chat.composer.plus"
               onPress={handlePlusPress}
               style={{
                 width: 32,
@@ -1096,6 +1097,7 @@ export function ChatInput({
             {stacked ? (
               <>
                 <Pressable
+                  testID="chat.composer.plus.stacked"
                   onPress={handlePlusPress}
                   style={{
                     width: 34,

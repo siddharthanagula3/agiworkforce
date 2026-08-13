@@ -58,6 +58,7 @@ import {
   bytesFromBase64,
   storeMedia,
   storeMediaFile,
+  isGeneratedMediaStorageConfigured,
   isImageStorageConfigured,
   isMediaStorageConfigured,
   isVideoStorageConfigured,
@@ -86,15 +87,17 @@ describe('isMediaStorageConfigured', () => {
     vi.unstubAllEnvs();
   });
 
-  it('reflects the underlying object-storage configuration check', () => {
+  it('keeps legacy public media readable but refuses public-only generated writes', () => {
     vi.stubEnv('NODE_ENV', 'production');
     isPrivateObjectStorageConfigured.mockReturnValue(false);
     isObjectStorageConfigured.mockReturnValue(true);
     expect(isMediaStorageConfigured()).toBe(true);
-    expect(isImageStorageConfigured()).toBe(true);
+    expect(isGeneratedMediaStorageConfigured()).toBe(false);
+    expect(isImageStorageConfigured()).toBe(false);
     isObjectStorageConfigured.mockReturnValue(false);
     isPrivateObjectStorageConfigured.mockReturnValue(false);
     expect(isMediaStorageConfigured()).toBe(false);
+    expect(isGeneratedMediaStorageConfigured()).toBe(false);
     expect(isImageStorageConfigured()).toBe(false);
   });
 
@@ -102,9 +105,11 @@ describe('isMediaStorageConfigured', () => {
     isObjectStorageConfigured.mockReturnValue(false);
     vi.stubEnv('NODE_ENV', 'development');
     expect(isMediaStorageConfigured()).toBe(true);
+    expect(isGeneratedMediaStorageConfigured()).toBe(true);
     expect(isImageStorageConfigured()).toBe(true);
     vi.stubEnv('NODE_ENV', 'test');
     expect(isMediaStorageConfigured()).toBe(false);
+    expect(isGeneratedMediaStorageConfigured()).toBe(false);
     expect(isImageStorageConfigured()).toBe(false);
   });
 
@@ -116,16 +121,19 @@ describe('isMediaStorageConfigured', () => {
     expect(isVideoStorageConfigured()).toBe(false);
 
     isPrivateObjectStorageConfigured.mockReturnValue(true);
+    expect(isGeneratedMediaStorageConfigured()).toBe(true);
+    expect(isImageStorageConfigured()).toBe(true);
     expect(isVideoStorageConfigured()).toBe(true);
   });
 
-  it('does not let a private-only deployment admit image generation', () => {
+  it('admits all generated media when only the private backend is configured', () => {
     vi.stubEnv('NODE_ENV', 'production');
     isObjectStorageConfigured.mockReturnValue(false);
     isPrivateObjectStorageConfigured.mockReturnValue(true);
 
     expect(isMediaStorageConfigured()).toBe(true);
-    expect(isImageStorageConfigured()).toBe(false);
+    expect(isGeneratedMediaStorageConfigured()).toBe(true);
+    expect(isImageStorageConfigured()).toBe(true);
     expect(isVideoStorageConfigured()).toBe(true);
   });
 });
@@ -159,7 +167,7 @@ describe('storeMedia', () => {
     vi.unstubAllEnvs();
   });
 
-  it('uploads bytes to a user-scoped public key and returns the durable url', async () => {
+  it('uploads generated images to an owner-scoped private key and returns no public locator', async () => {
     const data = Buffer.from('img');
     const result = await storeMedia({
       userId: 'user_123',
@@ -168,14 +176,16 @@ describe('storeMedia', () => {
       contentType: 'image/png',
     });
 
-    expect(putObject).toHaveBeenCalledTimes(1);
-    const [options] = putObject.mock.calls[0]!;
-    expect(options.key).toMatch(/^media\/image\/user_123\/[0-9a-f-]+\.png$/);
+    expect(putPrivateObject).toHaveBeenCalledTimes(1);
+    const [options] = putPrivateObject.mock.calls[0]!;
+    expect(options.key).toMatch(/^private-media\/image\/[a-f0-9]{32}\/[0-9a-f-]{36}\.png$/);
     expect(options.data).toBe(data);
     expect(options.contentType).toBe('image/png');
-    expect(result.url).toBe('https://media.example/media/image/u1/x.png');
+    expect(result.url).toBe(options.key);
+    expect(result.pathname).toBe(options.key);
     expect(result.byteSize).toBe(data.byteLength);
     expect(result.contentType).toBe('image/png');
+    expect(putObject).not.toHaveBeenCalled();
   });
 
   it('stores buffered video only in the private bucket and exposes no public URL', async () => {
@@ -232,7 +242,7 @@ describe('storeMedia', () => {
         data: Buffer.from('v'),
         contentType: 'video/mp4',
       }),
-    ).rejects.toThrow('Media storage is not configured');
+    ).rejects.toThrow('Private media storage is not configured');
     expect(putObject).not.toHaveBeenCalled();
     expect(putPrivateObject).not.toHaveBeenCalled();
   });
@@ -256,6 +266,7 @@ describe('storeMedia', () => {
   it('stores and reads reload-safe media locally when R2 is absent in development', async () => {
     vi.stubEnv('NODE_ENV', 'development');
     isObjectStorageConfigured.mockReturnValue(false);
+    isPrivateObjectStorageConfigured.mockReturnValue(false);
     readFile.mockResolvedValue(Buffer.from('local-image'));
 
     const result = await storeMedia({
@@ -323,6 +334,68 @@ describe('storeMedia', () => {
     expect(deletePrivateObject).toHaveBeenCalledWith(pathname);
     expect(getObject).not.toHaveBeenCalled();
     expect(getObjectStream).not.toHaveBeenCalled();
+    expect(deleteObject).not.toHaveBeenCalled();
+  });
+
+  it('reads and deletes chat attachments through the private bucket with a legacy public fallback', async () => {
+    const pathname = 'chat-attachments/user-abc/1700000000000_abcdefghijklm.txt';
+    getPrivateObject.mockResolvedValueOnce({
+      data: Buffer.from('private attachment'),
+      contentType: 'text/plain',
+    });
+
+    await expect(readStoredMedia(pathname)).resolves.toEqual({
+      data: Buffer.from('private attachment'),
+      contentType: 'text/plain',
+    });
+    expect(getObject).not.toHaveBeenCalled();
+
+    getPrivateObject.mockResolvedValueOnce(null);
+    getObject.mockResolvedValueOnce({
+      data: Buffer.from('legacy attachment'),
+      contentType: 'text/plain',
+    });
+    await expect(readStoredMedia(pathname)).resolves.toEqual({
+      data: Buffer.from('legacy attachment'),
+      contentType: 'text/plain',
+    });
+
+    await deleteStoredMedia(pathname);
+    expect(deletePrivateObject).toHaveBeenCalledWith(pathname);
+    expect(deleteObject).toHaveBeenCalledWith(pathname);
+  });
+
+  it('reads, ranges, and deletes generated images and files only through the private bucket', async () => {
+    const pathname =
+      'private-media/file/0123456789abcdef0123456789abcdef/11111111-1111-4111-8111-111111111111.pdf';
+    const body = new ReadableStream<Uint8Array>();
+    getPrivateObject.mockResolvedValue({
+      data: Buffer.from('private'),
+      contentType: 'application/pdf',
+    });
+    getPrivateObjectStream.mockResolvedValue({
+      body,
+      contentType: 'application/pdf',
+      contentLength: 4,
+      contentRange: 'bytes 2-5/100',
+    });
+
+    await expect(readStoredMedia(pathname)).resolves.toEqual({
+      data: Buffer.from('private'),
+      contentType: 'application/pdf',
+    });
+    await expect(streamStoredMedia(pathname, { start: 2, end: 5 })).resolves.toEqual({
+      body,
+      contentType: 'application/pdf',
+      contentLength: 4,
+      contentRange: 'bytes 2-5/100',
+    });
+    await deleteStoredMedia(pathname);
+
+    expect(getPrivateObject).toHaveBeenCalledWith(pathname);
+    expect(getPrivateObjectStream).toHaveBeenCalledWith(pathname, 'bytes=2-5');
+    expect(deletePrivateObject).toHaveBeenCalledWith(pathname);
+    expect(getObject).not.toHaveBeenCalled();
     expect(deleteObject).not.toHaveBeenCalled();
   });
 });

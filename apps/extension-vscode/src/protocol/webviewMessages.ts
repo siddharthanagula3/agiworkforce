@@ -60,15 +60,21 @@ const sendMessage = z.object({
 const ready = z.object({ type: z.literal('ready') });
 const getModel = z.object({ type: z.literal('getModel') });
 const openSettings = z.object({ type: z.literal('openSettings') });
+const openWorkspace = z.object({ type: z.literal('openWorkspace') });
+const manageWorkspaceTrust = z.object({ type: z.literal('manageWorkspaceTrust') });
 const cancel = z.object({ type: z.literal('cancel') });
 const shareDiagnostics = z.object({ type: z.literal('shareDiagnostics') });
 const clearConversation = z.object({ type: z.literal('clearConversation') });
-const openActionSheet = z.object({ type: z.literal('openActionSheet') });
+const openActionSheet = z.object({
+  type: z.literal('openActionSheet'),
+  payload: z.object({ scope: z.literal('composer') }).optional(),
+});
 const openModePicker = z.object({ type: z.literal('openModePicker') });
 const openEffortPicker = z.object({ type: z.literal('openEffortPicker') });
 const dismissUsageMeter = z.object({ type: z.literal('dismissUsageMeter') });
 const restoreUsageMeter = z.object({ type: z.literal('restoreUsageMeter') });
 const upgradeClicked = z.object({ type: z.literal('upgradeClicked') });
+const manageBilling = z.object({ type: z.literal('manageBilling') });
 const openModelPopover = z.object({ type: z.literal('openModelPopover') });
 const openFilePicker = z.object({ type: z.literal('openFilePicker') });
 const openHistory = z.object({ type: z.literal('openHistory') });
@@ -162,6 +168,8 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   ready,
   getModel,
   openSettings,
+  openWorkspace,
+  manageWorkspaceTrust,
   cancel,
   fileSearch,
   shareDiagnostics,
@@ -174,6 +182,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   dismissUsageMeter,
   restoreUsageMeter,
   upgradeClicked,
+  manageBilling,
   openModelPopover,
   selectModel,
   proposeDiff,

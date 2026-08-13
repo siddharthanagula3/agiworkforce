@@ -79,7 +79,9 @@ use crate::sys::commands::chat::provider_access::{
     request_uses_managed_cloud,
 };
 use crate::sys::commands::chat::stream_runtime::consume_llm_stream;
-use crate::sys::commands::chat::tool_config::{build_tool_definitions, normalize_tool_calls};
+use crate::sys::commands::chat::tool_config::{
+    build_tool_definitions, filter_advertised_tool_calls, normalize_tool_calls,
+};
 use crate::sys::commands::chat::tool_execution::execute_tool_calls_batch;
 use crate::sys::commands::chat::tool_timeouts::{
     build_fast_metadata_failure_message, did_fast_metadata_batch_fail, is_fast_metadata_batch,

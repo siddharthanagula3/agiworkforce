@@ -14,6 +14,7 @@ import {
   DEFAULT_BLENDED_RATE,
   normalizeConfiguredModelId,
 } from '../features/model-picker/modelConstants';
+import { Config } from '../platform/config';
 
 export class TokenCounter implements vscode.Disposable {
   private _promptTokens = 0;
@@ -95,9 +96,7 @@ export class TokenCounter implements vscode.Disposable {
   }
 
   private _getCurrentModel(): string {
-    return normalizeConfiguredModelId(
-      vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-    );
+    return normalizeConfiguredModelId(Config.model());
   }
 
   private _getContextLimit(): number {

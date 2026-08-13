@@ -34,11 +34,25 @@ const TRUSTED_GITHUB_RELEASES: ReadonlyArray<{ owner: string; repo: string }> = 
 ];
 
 /**
- * Pick the AGI Cloud (Electron) macOS installer: Apple Silicon first, Intel
- * fallback. Cloud releases only ship .dmg + .zip; the .zip belongs to the
- * auto-updater, never the download page.
+ * Pick the AGI Cloud (Electron) macOS installer. An explicit architecture is
+ * exact and fails closed when missing; the legacy architecture-less public
+ * link keeps Apple Silicon first with an Intel fallback. Cloud releases ship
+ * signed/notarized DMGs only until a real in-place updater contract exists.
  */
-function selectCloudMacInstallerAsset(release: StableDesktopRelease) {
+function selectCloudMacInstallerAsset(
+  release: StableDesktopRelease,
+  architecture: 'arm64' | 'x64' | null,
+) {
+  if (architecture === 'arm64') {
+    return (
+      release.assets.find((a) => a.name.endsWith('.dmg') && /arm64|aarch64/i.test(a.name)) ?? null
+    );
+  }
+  if (architecture === 'x64') {
+    return (
+      release.assets.find((a) => a.name.endsWith('.dmg') && /x64|x86_64/i.test(a.name)) ?? null
+    );
+  }
   return (
     release.assets.find((a) => a.name.endsWith('.dmg') && /arm64|aarch64/i.test(a.name)) ??
     release.assets.find((a) => a.name.endsWith('.dmg') && /x64|x86_64/i.test(a.name)) ??
@@ -101,6 +115,7 @@ async function handleDownload(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const platform = searchParams.get('platform');
   const app = searchParams.get('app');
+  const architecture = searchParams.get('arch');
 
   logger.info(
     {
@@ -108,6 +123,7 @@ async function handleDownload(request: NextRequest) {
       userAgent: userAgent.substring(0, 200), // Truncate to prevent log injection
       platform,
       app,
+      architecture,
       timestamp: new Date().toISOString(),
     },
     'Download request received',
@@ -121,6 +137,11 @@ async function handleDownload(request: NextRequest) {
   }
   if (app === 'cloud' && platform !== 'mac') {
     throw createError.validation('The AGI Cloud desktop app is currently macOS only.');
+  }
+  if (architecture !== null && (app !== 'cloud' || !['arm64', 'x64'].includes(architecture))) {
+    throw createError.validation(
+      'Invalid architecture requested. AGI Cloud supports arm64 or x64 installers.',
+    );
   }
 
   const release =
@@ -140,7 +161,7 @@ async function handleDownload(request: NextRequest) {
 
   const asset =
     app === 'cloud'
-      ? selectCloudMacInstallerAsset(release)
+      ? selectCloudMacInstallerAsset(release, architecture as 'arm64' | 'x64' | null)
       : selectDesktopInstallerAsset(release, platform as DesktopDownloadPlatform);
 
   if (asset) {

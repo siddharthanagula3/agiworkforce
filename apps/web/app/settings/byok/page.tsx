@@ -1,9 +1,9 @@
 /**
  * /settings/byok · API keys (BYOK) settings section.
  *
- * Shows which env-based provider keys are configured (presence only, never value).
- * Browser-managed key entry is a hosted upgrade capability; env-based BYOK
- * remains available without exposing secret values client-side.
+ * Shows which deployment-managed provider keys are configured (presence only,
+ * never value). Hosted Web does not accept or store per-account provider keys;
+ * user-managed BYOK stays on Desktop, CLI, and VS Code.
  *
  * Server component: passes static provider list to client EnvKeyStatusList
  * which fetches /api/byok/env-key-status at render time.
@@ -12,7 +12,6 @@
 import Link from 'next/link';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';
 import { EnvKeyStatusList } from './EnvKeyStatusList';
-import { WaitlistForm } from '../../byok/WaitlistForm';
 
 export default function ByokSettingsPage() {
   return (
@@ -31,7 +30,8 @@ export default function ByokSettingsPage() {
           API keys (BYOK)
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Env-based keys are active now. Browser-managed key storage arrives with hosted upgrades.{' '}
+          These are deployment-managed environment keys, not per-account Web BYOK. Hosted AGI Web
+          does not store user provider keys; use Desktop, CLI, or VS Code for user-managed BYOK.{' '}
           <Link href="/docs/byok-env" style={{ color: 'var(--amber, #c8892a)' }}>
             How to set env keys &rarr;
           </Link>
@@ -89,53 +89,6 @@ export default function ByokSettingsPage() {
         {/* EnvKeyStatusList is a client component · receives static provider metadata,
             fetches isSet status from /api/byok/env-key-status at mount */}
         <EnvKeyStatusList providers={BYOK_PROVIDERS} />
-      </section>
-
-      {/* Hosted key vault CTA card */}
-      <section
-        style={{
-          border: '1px solid color-mix(in srgb, var(--amber, #c8892a) 35%, transparent)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'color-mix(in srgb, var(--amber, #c8892a) 6%, var(--bg-elev))',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Card header */}
-        <div
-          style={{
-            padding: '14px 20px',
-            borderBottom: '1px solid color-mix(in srgb, var(--amber, #c8892a) 20%, transparent)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <span
-            style={{
-              padding: '2px 8px',
-              borderRadius: 100,
-              background: 'color-mix(in srgb, var(--amber, #c8892a) 20%, transparent)',
-              fontSize: 11,
-              fontWeight: 700,
-              color: 'var(--amber, #c8892a)',
-            }}
-          >
-            Hosted upgrade
-          </span>
-          Managed key vault
-        </div>
-
-        {/* Card body */}
-        <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <p style={{ fontSize: 14, color: 'var(--text-2)', margin: 0 }}>
-            Keep using env-based BYOK for local and server deployments. Request hosted key vault
-            access when you want per-account provider keys, revoke-all, and managed rotation.
-          </p>
-          <WaitlistForm source="byok" ctaLabel="Request hosted key vault access" />
-        </div>
       </section>
     </div>
   );

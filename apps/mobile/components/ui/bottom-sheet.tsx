@@ -34,6 +34,13 @@ export const BottomSheet = forwardRef<GorhomBottomSheet, BottomSheetProps>(
         index={-1}
         snapPoints={snapPoints}
         enablePanDownToClose
+        // v5 defaults `enableDynamicSizing` to true, which injects a
+        // content-height snap point into the array the caller passed and
+        // renumbers the indices — `snapToIndex(0)` would then target the
+        // measured content rather than the caller's first snap point. Explicit
+        // snapPoints and dynamic sizing are two different contracts; a caller
+        // that wants the dynamic one can still re-enable it via `props` below.
+        enableDynamicSizing={false}
         backdropComponent={renderBackdrop}
         backgroundStyle={{ backgroundColor: colors.surfaceElevated }}
         handleIndicatorStyle={{ backgroundColor: colors.neutralBorder, width: 36 }}

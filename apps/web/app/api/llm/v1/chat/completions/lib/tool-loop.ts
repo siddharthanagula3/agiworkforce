@@ -1264,7 +1264,7 @@ async function runMcpTool(
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
     }
-    const outcome = executeMapSearchTool(toolCall.args, { toolCallId: toolCall.id });
+    const outcome = await executeMapSearchTool(toolCall.args, { toolCallId: toolCall.id });
     return outcome.ok
       ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
       : { content: outcome.content, isError: true };
@@ -2442,15 +2442,16 @@ export async function* runToolLoop(
         messages,
         ...(stepTools && stepTools.length > 0 ? { tools: stepTools } : { tools: undefined }),
         // `required` is derived for the FIRST step of an explicit managed-code
-        // request so a model cannot silently ignore the user's Run code mode.
-        // Once a tool has run, restore auto selection so the model can either
-        // call another sandbox tool (for example write_file) or finish instead
-        // of being forced into an endless tool loop. Explicit API tool_choice
-        // values remain unchanged on every step.
+        // request or a live-search request the canonical classifier identifies
+        // as research. Once a tool has run, restore auto selection so the model
+        // can either call another tool or synthesize the final answer instead of
+        // being forced into an endless loop. Explicit API tool_choice values
+        // remain unchanged on every step.
         ...(step > 1 &&
-        processed.chatRequest?.code_execution === true &&
         processed.chatRequest.tool_choice === undefined &&
-        llmRequest.tool_choice === 'required'
+        llmRequest.tool_choice === 'required' &&
+        (processed.chatRequest.code_execution === true ||
+          (processed.chatRequest.web_search === true && processed.resolvedTaskType === 'research'))
           ? { tool_choice: 'auto' as const }
           : {}),
         // A composer-selected Skill is forced only on the first provider step

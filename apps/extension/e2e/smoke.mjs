@@ -537,6 +537,82 @@ try {
     await page.close();
   }
 
+  // ── First-run onboarding: modal focus + honest progress semantics ────────
+  {
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    await page.setViewportSize({ width: 320, height: 800 });
+    await page.goto(`chrome-extension://${extId}/src/side_panel.html`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 20000,
+    });
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          chrome.storage.local.set({ agi_onboarding_completed: false }, resolve),
+        ),
+    );
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(
+      () =>
+        document.getElementById('sp-onboarding-overlay')?.classList.contains('visible') === true,
+    );
+    const initialOnboarding = await page.evaluate(() => {
+      const overlay = document.getElementById('sp-onboarding-overlay');
+      const progress = overlay?.querySelector('[role="progressbar"]');
+      return {
+        role: overlay?.getAttribute('role'),
+        modal: overlay?.getAttribute('aria-modal'),
+        hidden: overlay?.getAttribute('aria-hidden'),
+        inert: overlay?.hasAttribute('inert'),
+        fakeTabs: overlay?.querySelectorAll('[role="tab"], [role="tablist"]').length ?? -1,
+        progressNow: progress?.getAttribute('aria-valuenow'),
+        progressText: progress?.getAttribute('aria-valuetext'),
+      };
+    });
+    if (
+      initialOnboarding.role !== 'dialog' ||
+      initialOnboarding.modal !== 'true' ||
+      initialOnboarding.hidden !== 'false' ||
+      initialOnboarding.inert ||
+      initialOnboarding.fakeTabs !== 0 ||
+      initialOnboarding.progressNow !== '1' ||
+      initialOnboarding.progressText !== 'Step 1 of 5'
+    ) {
+      fail(`onboarding: invalid initial semantics ${JSON.stringify(initialOnboarding)}`);
+    }
+    await page.click('.sp-ob-btn-next');
+    await page.locator('#sp-onboarding-skip').focus();
+    await page.keyboard.press('Shift+Tab');
+    const wrappedBackward = await page.evaluate(
+      () => document.activeElement?.classList.contains('sp-ob-btn-next') === true,
+    );
+    await page.keyboard.press('Tab');
+    const wrappedForward = await page.evaluate(
+      () => document.activeElement?.id === 'sp-onboarding-skip',
+    );
+    const progressed = await page.getAttribute('.sp-ob-dots', 'aria-valuenow');
+    if (!wrappedBackward || !wrappedForward || progressed !== '2') {
+      fail(
+        `onboarding: focus/progress contract failed ${JSON.stringify({ wrappedBackward, wrappedForward, progressed })}`,
+      );
+    }
+    await page.keyboard.press('Escape');
+    const dismissed = await page.evaluate(() => {
+      const overlay = document.getElementById('sp-onboarding-overlay');
+      return {
+        visible: overlay?.classList.contains('visible'),
+        hidden: overlay?.getAttribute('aria-hidden'),
+        inert: overlay?.hasAttribute('inert'),
+      };
+    });
+    if (dismissed.visible || dismissed.hidden !== 'true' || !dismissed.inert) {
+      fail(`onboarding: dismiss did not restore inert state ${JSON.stringify(dismissed)}`);
+    }
+    console.log('\n[onboarding] progress=real focusTrap=ok escapeDismiss=ok');
+    await page.close();
+  }
+
   // ── Side-panel interactions: composer input, drawer nav, model picker ──
   {
     const page = await context.newPage();
@@ -561,14 +637,7 @@ try {
     await page.waitForTimeout(1000);
 
     const visibleSecondaryChrome = await page.evaluate(() =>
-      [
-        'sp-auth-bar',
-        'sp-toolbar',
-        'sp-prompt-chips',
-        'sp-empty-icon',
-        'sp-empty-headline',
-        'sp-empty-subtext',
-      ].filter((id) => {
+      ['sp-auth-bar', 'sp-toolbar', 'sp-prompt-chips'].filter((id) => {
         const element = document.getElementById(id);
         if (!element) return false;
         const style = getComputedStyle(element);
@@ -580,6 +649,15 @@ try {
         `chat surface: secondary controls should stay behind menus, but these are visible: ${visibleSecondaryChrome.join(', ')}`,
       );
     }
+    const emptyStateVisible = await page.evaluate(() =>
+      ['sp-empty-icon', 'sp-empty-headline', 'sp-empty-subtext'].every((id) => {
+        const element = document.getElementById(id);
+        if (!element) return false;
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      }),
+    );
+    if (!emptyStateVisible) fail('chat surface: branded empty-state orientation is not visible');
 
     const signedOutGate = await page.evaluate(() => {
       const gate = document.getElementById('sp-cloud-gate');
@@ -597,6 +675,93 @@ try {
         `signed-out chat: expected an actionable sign-in gate and disabled composer, got ${JSON.stringify(signedOutGate)}`,
       );
     }
+
+    // Executable visual contract for the Chrome side-panel geometry. The
+    // offline harness cannot prove an authenticated cloud turn, but it can
+    // prevent narrow-width clipping, theme drift, and off-panel menus.
+    for (const colorScheme of ['dark', 'light']) {
+      await page.emulateMedia({ colorScheme });
+      for (const width of [320, 390, 500]) {
+        await page.setViewportSize({ width, height: 800 });
+        await page.waitForTimeout(75);
+        const layout = await page.evaluate(() => {
+          const selectors = [
+            '#sp-header',
+            '#sp-model-selector-btn',
+            '#sp-cloud-gate',
+            '#sp-composer-shell',
+          ];
+          return {
+            viewportWidth: innerWidth,
+            scrollWidth: document.documentElement.scrollWidth,
+            boxes: selectors.map((selector) => {
+              const element = document.querySelector(selector);
+              const rect = element?.getBoundingClientRect();
+              return {
+                selector,
+                visible: Boolean(rect && rect.width > 0 && rect.height > 0),
+                left: rect?.left ?? -1,
+                right: rect?.right ?? -1,
+              };
+            }),
+          };
+        });
+        const escaped = layout.boxes.filter(
+          (box) => !box.visible || box.left < -1 || box.right > layout.viewportWidth + 1,
+        );
+        if (layout.scrollWidth > layout.viewportWidth + 1 || escaped.length > 0) {
+          fail(
+            `responsive ${colorScheme}/${width}: overflow ${JSON.stringify({ layout, escaped })}`,
+          );
+        }
+        await captureScreenshot(
+          page,
+          `agi-chrome-side-panel-${colorScheme}-${width}-signed-out.png`,
+        );
+
+        for (const menu of [
+          {
+            button: '#sp-model-selector-btn',
+            popup: '#sp-model-dropdown',
+            filename: 'model-menu',
+          },
+          {
+            button: '#sp-autonomy-chip',
+            popup: '#sp-autonomy-popover',
+            filename: 'approval-menu',
+          },
+        ]) {
+          await page.click(menu.button);
+          await page.waitForFunction(
+            (selector) => document.querySelector(selector)?.classList.contains('open') === true,
+            menu.popup,
+          );
+          const menuBounds = await page.locator(menu.popup).boundingBox();
+          if (
+            !menuBounds ||
+            menuBounds.x < -1 ||
+            menuBounds.x + menuBounds.width > width + 1 ||
+            menuBounds.y < -1 ||
+            menuBounds.y + menuBounds.height > 801
+          ) {
+            fail(
+              `responsive ${colorScheme}/${width}: ${menu.popup} escaped viewport ${JSON.stringify(menuBounds)}`,
+            );
+          }
+          await captureScreenshot(
+            page,
+            `agi-chrome-side-panel-${colorScheme}-${width}-${menu.filename}.png`,
+          );
+          await page.keyboard.press('Escape');
+          await page.waitForFunction(
+            (selector) => document.querySelector(selector)?.classList.contains('open') !== true,
+            menu.popup,
+          );
+        }
+      }
+    }
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.setViewportSize({ width: 400, height: 800 });
     if (screenshotDirectory) {
       await page.waitForFunction(
         () => {
@@ -729,6 +894,27 @@ try {
     // consumer, and onboarding advertised a slash finder that did not exist.
     await page.click('#sp-menu-btn');
     await page.click('#sp-drawer-wf-btn');
+    await page.locator('#sp-tab-workflows').focus();
+    await page.keyboard.press('ArrowRight');
+    const computerUseTabState = await page.evaluate(() => ({
+      selected: document.getElementById('sp-tab-computer-use')?.getAttribute('aria-selected'),
+      tabIndex: document.getElementById('sp-tab-computer-use')?.getAttribute('tabindex'),
+      panelHidden: document.getElementById('sp-cu-panel')?.getAttribute('aria-hidden'),
+      controls: document.getElementById('sp-tab-computer-use')?.getAttribute('aria-controls'),
+    }));
+    if (
+      computerUseTabState.selected !== 'true' ||
+      computerUseTabState.tabIndex !== '0' ||
+      computerUseTabState.panelHidden !== 'false' ||
+      computerUseTabState.controls !== 'sp-cu-panel'
+    ) {
+      fail(
+        `view tabs: ArrowRight did not activate Computer Use ${JSON.stringify(computerUseTabState)}`,
+      );
+    }
+    await page.keyboard.press('ArrowLeft');
+    const workflowsSelected = await page.getAttribute('#sp-tab-workflows', 'aria-selected');
+    if (workflowsSelected !== 'true') fail('view tabs: ArrowLeft did not return to Workflows');
     await page.click('#sp-wf-create-shortcut-btn');
     const shortcutSurface = await page.evaluate(() => {
       const onboardingStep = document.querySelector('.sp-ob-step[data-step="3"]');

@@ -32,6 +32,11 @@ import {
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
+  checkDesktopCloudUpdate,
+  desktopCloudInstallerDownloadUrl,
+  type DesktopCloudMacArchitecture,
+} from '../src/lib/desktopCloudUpdate';
+import {
   ELECTRON_IPC_CHANNELS,
   isElectronBridgeCommand,
   type ElectronDialogRequest,
@@ -54,10 +59,20 @@ import { captureToChat } from './screenshot';
 import { registerGarnishShortcuts, unregisterGarnishShortcuts } from './shortcuts';
 import { createTray } from './tray';
 import { applyRemoteWindowPolicy } from './windowPolicy';
+import {
+  isTrustedCloudRendererOrigin,
+  shouldGrantCloudPermissionCheck,
+  shouldGrantCloudPermissionRequest,
+} from './permissionPolicy';
 
 let mainWindow: BrowserWindow | null = null;
 /** Deep link that arrived before the window was ready (bundled mode only). */
 let pendingDeepLink: string | null = null;
+
+function installedMacArchitecture(): DesktopCloudMacArchitecture {
+  if (process.arch === 'arm64' || process.arch === 'x64') return process.arch;
+  throw new Error(`Unsupported AGI Cloud macOS architecture: ${process.arch}`);
+}
 
 /** Delay before pre-loading the quick-ask panel, so it never competes with
  * the main window's first paint. */
@@ -303,6 +318,16 @@ function registerIpcHandlers(): void {
     app.relaunch();
     app.exit(0);
   });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.checkUpdate, async (event) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    return checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
+  });
+
+  ipcMain.handle(ELECTRON_IPC_CHANNELS.openUpdateInstaller, async (event) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    await shell.openExternal(desktopCloudInstallerDownloadUrl(installedMacArchitecture()));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -324,27 +349,56 @@ function deliverDeepLink(url: string): void {
 // Window
 // ---------------------------------------------------------------------------
 function configureSession(targetSession: Electron.Session): void {
-  // Mic (voice input) and notifications are the only page permissions the
-  // cloud shell grants; everything else is denied.
-  targetSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(
-      ['media', 'notifications', 'fullscreen', 'clipboard-sanitized-write'].includes(permission),
-    );
+  // The AGI renderer may use microphone-only media, notifications, fullscreen,
+  // sanitized clipboard writes and display capture. Check both the requesting
+  // origin and media subtype: Electron's coarse `media` permission also covers
+  // camera access, and this cloud-only shell has no camera feature or entitlement.
+  targetSession.setPermissionRequestHandler((_webContents, permission, callback, details) => {
+    callback(shouldGrantCloudPermissionRequest(permission, details));
   });
+  targetSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin, details) =>
+    shouldGrantCloudPermissionCheck(permission, requestingOrigin, details),
+  );
 
   // The composer's screen-capture feature calls getDisplayMedia; without this
-  // handler Electron renders NO picker at all. Alpha behavior: share the
-  // primary screen. A native source picker can replace this later.
-  targetSession.setDisplayMediaRequestHandler((_request, callback) => {
-    desktopCapturer
-      .getSources({ types: ['screen'] })
-      .then((sources) => {
-        const primary = sources[0];
-        if (primary) callback({ video: primary });
-        else callback({});
-      })
-      .catch(() => callback({}));
-  });
+  // handler Electron renders no picker. Prefer macOS's system picker; on hosts
+  // where it is unavailable, present an explicit source chooser rather than
+  // silently sharing the first screen.
+  targetSession.setDisplayMediaRequestHandler(
+    (request, callback) => {
+      if (
+        !request.userGesture ||
+        !request.videoRequested ||
+        !isTrustedCloudRendererOrigin(request.securityOrigin)
+      ) {
+        callback({});
+        return;
+      }
+      desktopCapturer
+        .getSources({ types: ['screen'] })
+        .then(async (sources) => {
+          if (sources.length === 0) {
+            callback({});
+            return;
+          }
+          const cancelId = sources.length;
+          const selection = await dialog.showMessageBox({
+            type: 'question',
+            title: 'Share your screen',
+            message: 'Choose a screen to share with AGI Cloud',
+            detail: 'Sharing stops when you end screen capture in the chat.',
+            buttons: [...sources.map((source) => source.name), 'Cancel'],
+            defaultId: 0,
+            cancelId,
+            noLink: true,
+          });
+          const source = sources[selection.response];
+          callback(source ? { video: source } : {});
+        })
+        .catch(() => callback({}));
+    },
+    { useSystemPicker: true },
+  );
 }
 
 /**
@@ -377,8 +431,8 @@ function offlineScreenUrl(targetUrl: string, detail: string): string {
   button:focus-visible{outline:2px solid #ececec;outline-offset:2px}
 </style></head><body><main>
   <h1>Can't reach AGI</h1>
-  <p>You appear to be offline, or agiworkforce.com is unreachable. Your local
-     data is safe — this only affects the cloud connection.</p>
+  <p>You appear to be offline, or agiworkforce.com is unreachable. Your account
+     data is unchanged — reconnect to continue using AGI Cloud.</p>
   <button id="retry" autofocus>Try again</button>
   <p style="margin:1.5rem 0 0"><code>${detail}</code></p>
 </main><script>
@@ -495,6 +549,62 @@ function openNewChat(): void {
   void mainWindow?.loadURL(target);
 }
 
+/**
+ * Check the real published AGI Cloud release and offer the signed DMG.
+ *
+ * This is deliberately a manual installer flow. There is no electron-updater
+ * feed today, so claiming an in-place update would leave users on a dead path.
+ */
+async function checkForCloudUpdate(): Promise<void> {
+  try {
+    const update = await checkDesktopCloudUpdate(app.getVersion(), installedMacArchitecture());
+    if (!update.available) {
+      const options = {
+        type: 'info' as const,
+        title: 'AGI Cloud is up to date',
+        message: 'You have the latest AGI Cloud version.',
+        detail: `Installed: ${update.currentVersion}\nLatest published: ${update.version}`,
+        buttons: ['OK'],
+        defaultId: 0,
+      };
+      if (mainWindow) await dialog.showMessageBox(mainWindow, options);
+      else await dialog.showMessageBox(options);
+      return;
+    }
+
+    const options = {
+      type: 'info' as const,
+      title: 'AGI Cloud update available',
+      message: `AGI Cloud ${update.version} is available.`,
+      detail:
+        `You have ${update.currentVersion}. Download the signed and notarized macOS installer, ` +
+        'then replace AGI Cloud in Applications. This opens your browser and does not install automatically.',
+      buttons: ['Download Installer', 'Later'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    };
+    const result = mainWindow
+      ? await dialog.showMessageBox(mainWindow, options)
+      : await dialog.showMessageBox(options);
+    if (result.response === 0) {
+      await shell.openExternal(update.downloadUrl);
+    }
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    const options = {
+      type: 'error' as const,
+      title: 'Couldn’t check for updates',
+      message: 'AGI Cloud update information is currently unavailable.',
+      detail,
+      buttons: ['OK'],
+      defaultId: 0,
+    };
+    if (mainWindow) await dialog.showMessageBox(mainWindow, options);
+    else await dialog.showMessageBox(options);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // App lifecycle
 // ---------------------------------------------------------------------------
@@ -539,6 +649,7 @@ if (!hasSingleInstanceLock) {
       onNewChat: openNewChat,
       onQuickAsk: () => toggleQuickAsk(mainWindow),
       onScreenshot: () => void captureToChat(mainWindow),
+      onCheckForUpdates: () => void checkForCloudUpdate(),
     };
     createTray(garnishHandlers);
     registerGarnishShortcuts({

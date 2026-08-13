@@ -11,7 +11,10 @@ use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
 
 use crate::sys::error::{Error, Result};
-use crate::sys::security::egress_policy::public_destination_redirect_policy;
+use crate::sys::security::egress_policy::{
+    ensure_public_http_destination, public_destination_redirect_policy,
+    strict_public_destination_redirect_policy,
+};
 
 /// Render an error together with everything it was caused by.
 ///
@@ -157,11 +160,18 @@ impl Default for RetryConfig {
 pub struct ApiClient {
     client: Arc<ClientWithMiddleware>,
     default_timeout: Duration,
+    public_only: bool,
 }
 
 impl ApiClient {
     pub fn new() -> Result<Self> {
         Self::with_retry_config(RetryConfig::default())
+    }
+
+    /// Build the API client used for arbitrary public URLs selected by the
+    /// renderer or an agent tool. Its redirect policy re-validates every hop.
+    pub fn public() -> Result<Self> {
+        Self::with_retry_config_and_policy(RetryConfig::default(), true)
     }
 
     /// Build a client that never replays a request.
@@ -179,10 +189,15 @@ impl ApiClient {
         Ok(Self {
             client: Arc::new(ClientBuilder::new(reqwest_client).build()),
             default_timeout: Duration::from_secs(30),
+            public_only: false,
         })
     }
 
     pub fn with_retry_config(config: RetryConfig) -> Result<Self> {
+        Self::with_retry_config_and_policy(config, false)
+    }
+
+    fn with_retry_config_and_policy(config: RetryConfig, public_only: bool) -> Result<Self> {
         let retry_policy = ExponentialBackoff::builder()
             .retry_bounds(
                 Duration::from_millis(config.initial_backoff_ms),
@@ -190,9 +205,13 @@ impl ApiClient {
             )
             .build_with_max_retries(config.max_retries);
 
-        let reqwest_client = Client::builder()
-            .timeout(Duration::from_secs(30))
-            .redirect(public_destination_redirect_policy())
+        let builder = Client::builder().timeout(Duration::from_secs(30));
+        let builder = if public_only {
+            builder.redirect(strict_public_destination_redirect_policy())
+        } else {
+            builder.redirect(public_destination_redirect_policy())
+        };
+        let reqwest_client = builder
             .build()
             .map_err(|e| Error::Other(format!("Failed to create HTTP client: {}", e)))?;
 
@@ -203,11 +222,18 @@ impl ApiClient {
         Ok(Self {
             client: Arc::new(client),
             default_timeout: Duration::from_secs(30),
+            public_only,
         })
     }
 
     pub async fn execute(&self, request: ApiRequest) -> Result<ApiResponse> {
         let start = std::time::Instant::now();
+
+        if self.public_only {
+            ensure_public_http_destination(&request.url).map_err(|denial| {
+                Error::Other(format!("API request destination blocked: {denial}"))
+            })?;
+        }
 
         tracing::info!(
             "Executing {} request to {}",
@@ -302,6 +328,9 @@ impl ApiClient {
 
         tracing::info!("Uploading file {} to {}", file_path, url);
 
+        ensure_public_http_destination(url)
+            .map_err(|denial| Error::Other(format!("Upload destination blocked: {denial}")))?;
+
         let file_content = tokio::fs::read(file_path)
             .await
             .map_err(|e| Error::Other(format!("Failed to read file: {}", e)))?;
@@ -325,7 +354,7 @@ impl ApiClient {
 
         let raw_client = Client::builder()
             .timeout(Duration::from_secs(300))
-            .redirect(public_destination_redirect_policy())
+            .redirect(strict_public_destination_redirect_policy())
             .build()
             .map_err(|e| Error::Other(format!("Failed to create client: {}", e)))?;
 
@@ -387,10 +416,13 @@ impl ApiClient {
 
         tracing::info!("Downloading file from {} to {}", url, save_path);
 
+        ensure_public_http_destination(url)
+            .map_err(|denial| Error::Other(format!("Download destination blocked: {denial}")))?;
+
         loop {
             let raw_client = Client::builder()
                 .timeout(Duration::from_secs(300))
-                .redirect(public_destination_redirect_policy())
+                .redirect(strict_public_destination_redirect_policy())
                 .build()
                 .map_err(|e| Error::Other(format!("Failed to create client: {}", e)))?;
 
@@ -528,6 +560,7 @@ impl Default for ApiClient {
         Self {
             client: Arc::clone(&DEFAULT_CLIENT),
             default_timeout: Duration::from_secs(30),
+            public_only: false,
         }
     }
 }
@@ -717,6 +750,21 @@ mod tests {
     async fn test_api_client_creation() {
         let client = ApiClient::new().expect("Failed to create ApiClient for test");
         assert_eq!(client.default_timeout, Duration::from_secs(30));
+    }
+
+    #[tokio::test]
+    async fn public_api_client_refuses_internal_initial_destination() {
+        let client = ApiClient::public().expect("create public API client");
+        let error = client
+            .execute(ApiRequest {
+                method: HttpMethod::Get,
+                url: "http://127.0.0.1/latest/meta-data/".to_string(),
+                ..Default::default()
+            })
+            .await
+            .expect_err("public client must reject loopback before transport");
+
+        assert!(error.to_string().contains("egress policy"));
     }
 
     #[tokio::test]

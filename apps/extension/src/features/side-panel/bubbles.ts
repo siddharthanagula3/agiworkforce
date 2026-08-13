@@ -12,6 +12,14 @@ import {
   type AgentActivityState,
   type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
+import { isAllowedMapSearchProviderUrl } from '@agiworkforce/cloud-contracts';
+import {
+  resolveInteractiveCardRenderer,
+  type InteractiveCard,
+  type InteractiveCardRegistry,
+  type InteractiveCardRenderContext,
+  type MapSearchCardBody,
+} from '@agiworkforce/types';
 import {
   renderIcon,
   ChevronRight,
@@ -42,6 +50,119 @@ export interface BubbleInteractionOptions {
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
   /** Re-send the request that produced a failed assistant message. */
   onRetry?: (messageId: string) => void;
+}
+
+/**
+ * Open only the exact map-provider search URLs admitted by the canonical card
+ * contract. The stream parser already enforces this allowlist, but the host
+ * opener repeats it so a future state mutation cannot turn a rendered control
+ * into arbitrary extension-page egress.
+ */
+export function openInteractiveCardUrl(value: string): void {
+  if (!isAllowedMapSearchProviderUrl(value)) return;
+  window.open(new URL(value).toString(), '_blank', 'noopener,noreferrer');
+}
+
+function buildInteractiveCardFallback(card: InteractiveCard): HTMLElement {
+  const section = el('section', {
+    class: 'sp-interactive-card sp-interactive-card--fallback',
+    'aria-label': card.fallback.headline,
+    'data-card-kind': card.kind,
+    'data-card-recognized': String(card.recognized),
+  });
+  section.appendChild(
+    el('div', { class: 'sp-interactive-card__headline' }, card.fallback.headline),
+  );
+  section.appendChild(el('div', { class: 'sp-interactive-card__text' }, card.fallback.text));
+  if (card.interaction?.awaitingResponse) {
+    section.appendChild(
+      el(
+        'div',
+        { class: 'sp-interactive-card__status', role: 'status' },
+        'This card is read-only in Chrome.',
+      ),
+    );
+  }
+  return section;
+}
+
+function buildMapSearchCard(
+  body: MapSearchCardBody,
+  ctx: InteractiveCardRenderContext,
+): HTMLElement {
+  const section = el('section', {
+    class: 'sp-interactive-card sp-interactive-card--map-search',
+    'aria-label': body.title,
+    'data-card-kind': 'map-search.v1',
+  });
+  const heading = el('div', { class: 'sp-interactive-card__heading' });
+  heading.appendChild(renderIcon(Globe, 15));
+  heading.appendChild(el('div', { class: 'sp-interactive-card__headline' }, body.title));
+  section.appendChild(heading);
+  section.appendChild(el('div', { class: 'sp-interactive-card__text' }, body.query));
+
+  if (body.places?.length) {
+    const places = el('ol', {
+      class: 'sp-interactive-card__places',
+      'aria-label': 'Resolved map places',
+    });
+    for (const place of body.places) {
+      const item = el('li', {}, place.label);
+      if (place.kind) item.appendChild(el('span', {}, place.kind));
+      places.appendChild(item);
+    }
+    section.appendChild(places);
+  }
+
+  if (ctx.onOpenUrl) {
+    const actions = el('div', { class: 'sp-interactive-card__actions' });
+    for (const action of body.actions) {
+      // The parser admits only these URLs. Keep the renderer fail-closed too so
+      // no dead or unsafe control appears if state is later mutated in memory.
+      if (!isAllowedMapSearchProviderUrl(action.url, action.provider)) continue;
+      const button = el(
+        'button',
+        {
+          class: 'sp-interactive-card__action',
+          type: 'button',
+          'aria-label': action.label,
+        },
+        action.label,
+      ) as HTMLButtonElement;
+      button.appendChild(renderIcon(ChevronRight, 12));
+      button.addEventListener('click', () => ctx.onOpenUrl?.(action.url));
+      actions.appendChild(button);
+    }
+    if (actions.childElementCount > 0) section.appendChild(actions);
+  }
+  return section;
+}
+
+/**
+ * Chrome intentionally registers only the display-only map link renderer.
+ * Clarification has no Chrome continuation endpoint and itinerary has no
+ * resolver-backed producer, so both take the continuously exercised fallback
+ * path and never expose a dead control.
+ */
+const CHROME_INTERACTIVE_CARD_REGISTRY: InteractiveCardRegistry<HTMLElement> = {
+  'map-search.v1': ({ body, ctx }) => buildMapSearchCard(body, ctx),
+};
+
+export function buildInteractiveCardEl(card: InteractiveCard): HTMLElement {
+  const renderer = resolveInteractiveCardRenderer(CHROME_INTERACTIVE_CARD_REGISTRY, card);
+  if (!renderer || !card.recognized) return buildInteractiveCardFallback(card);
+  return renderer({
+    card,
+    body: card.body,
+    ctx: { canRespond: false, onOpenUrl: openInteractiveCardUrl },
+  });
+}
+
+function appendInteractiveCards(parent: HTMLElement, message: ChatMessage): void {
+  if (message.role !== 'assistant' || !message.interactiveCards?.length) return;
+  const cards = el('div', { class: 'sp-interactive-card-stack' });
+  for (const card of message.interactiveCards) cards.appendChild(buildInteractiveCardEl(card));
+  parent.appendChild(cards);
 }
 
 /**
@@ -114,6 +235,8 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
 
   const errorFooter = buildErrorFooter(msg, options.onRetry);
   if (errorFooter) bubble.appendChild(errorFooter);
+
+  appendInteractiveCards(wrapper, msg);
 
   // Action row: timestamp + copy button (assistant only)
   const actionRow = el('div', { class: 'sp-bubble-actions' });
@@ -567,6 +690,8 @@ export function buildBubbleWithTools(
       wrapper.appendChild(stack);
     }
   }
+
+  appendInteractiveCards(wrapper, msg);
 
   // A failed run that produced tool activity gets the same failure footer as a
   // plain one; the error must not be reachable only on the no-tools path.

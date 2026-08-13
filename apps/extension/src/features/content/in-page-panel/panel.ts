@@ -17,7 +17,9 @@
  * @module inPagePanel/panel
  */
 
-import { getPageActions, truncatePageText, redactSensitiveText } from './pageActions';
+import { sanitizePageText } from '../../../background/policy';
+import type { InPagePromptOutcome, InPagePromptResponse } from '../../../types';
+import { getPageActions, truncatePageText } from './pageActions';
 import type { PageAction } from './pageActions';
 import { buildPanelStyles } from './panelStyles';
 import {
@@ -40,8 +42,8 @@ interface PanelElements {
   textarea: HTMLTextAreaElement;
   submitBtn: HTMLButtonElement;
   responseArea: HTMLElement;
+  disclosure: HTMLElement;
   openSidePanelBtn: HTMLButtonElement;
-  providerLabel: HTMLElement;
 }
 
 function buildPanelDOM(shadow: ShadowRoot): PanelElements {
@@ -51,6 +53,8 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
 
   const panel = document.createElement('div');
   panel.className = 'agi-panel';
+  panel.setAttribute('role', 'region');
+  panel.setAttribute('aria-label', 'AGI page assistant');
 
   // ── Header ────────────────────────────────────────────────────────────────
   const header = document.createElement('div');
@@ -66,7 +70,8 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   // routes to Managed Cloud with modelSelection: 'auto'. There is no per-panel
   // provider/model selection reachable from the page world, so the pill reflects
   // that fixed routing rather than reading storage keys nothing writes.
-  providerLabel.textContent = 'Auto';
+  providerLabel.textContent = 'Managed Cloud · Auto';
+  providerLabel.setAttribute('aria-label', 'Provider: Managed Cloud, automatic model selection');
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'agi-close-btn';
@@ -81,13 +86,20 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   // ── Actions row ───────────────────────────────────────────────────────────
   const actionsRow = document.createElement('div');
   actionsRow.className = 'agi-actions-row';
+  actionsRow.setAttribute('aria-describedby', 'agi-page-context-disclosure');
 
   // ── Response area ─────────────────────────────────────────────────────────
   const responseArea = document.createElement('div');
   responseArea.className = 'agi-response-area';
-  responseArea.setAttribute('role', 'log');
+  responseArea.setAttribute('role', 'status');
   responseArea.setAttribute('aria-live', 'polite');
-  responseArea.setAttribute('aria-label', 'AI response');
+  responseArea.setAttribute('aria-label', 'Latest page assistant response');
+
+  const disclosure = document.createElement('div');
+  disclosure.id = 'agi-page-context-disclosure';
+  disclosure.className = 'agi-disclosure';
+  disclosure.setAttribute('role', 'note');
+  disclosure.setAttribute('aria-label', 'Page context privacy notice');
 
   // ── Composer ──────────────────────────────────────────────────────────────
   const composer = document.createElement('div');
@@ -96,13 +108,15 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   const textarea = document.createElement('textarea');
   textarea.className = 'agi-textarea';
   textarea.rows = 1;
-  textarea.setAttribute('placeholder', 'Ask anything about this page…');
-  textarea.setAttribute('aria-label', 'Chat input');
+  textarea.setAttribute('placeholder', 'Ask one question about this page…');
+  textarea.setAttribute('aria-label', 'Page assistant prompt');
+  textarea.setAttribute('aria-describedby', disclosure.id);
 
   const submitBtn = document.createElement('button');
   submitBtn.className = 'agi-submit-btn';
   submitBtn.setAttribute('type', 'button');
   submitBtn.setAttribute('aria-label', 'Send message');
+  submitBtn.disabled = true;
   submitBtn.appendChild(renderIcon(ArrowUp, 16));
 
   composer.appendChild(textarea);
@@ -122,6 +136,7 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   panel.appendChild(header);
   panel.appendChild(actionsRow);
   panel.appendChild(responseArea);
+  panel.appendChild(disclosure);
   panel.appendChild(composer);
   panel.appendChild(footer);
   shadow.appendChild(panel);
@@ -133,8 +148,8 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
     textarea,
     submitBtn,
     responseArea,
+    disclosure,
     openSidePanelBtn,
-    providerLabel,
   };
 }
 
@@ -146,10 +161,13 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
  */
 async function streamPrompt(
   prompt: string,
+  pageContext: string,
   responseArea: HTMLElement,
-  submitBtn: HTMLButtonElement,
+  setBusy: (busy: boolean) => void,
+  retry: () => void,
+  openSidePanel: () => void,
 ): Promise<void> {
-  submitBtn.disabled = true;
+  setBusy(true);
   responseArea.textContent = '';
 
   const cursor = document.createElement('span');
@@ -157,24 +175,23 @@ async function streamPrompt(
   responseArea.appendChild(cursor);
 
   try {
-    type PromptResult = { success: boolean; text?: string; error?: string };
-    const response = await new Promise<PromptResult>((resolve, reject) => {
+    const response = await new Promise<InPagePromptResponse>((resolve, reject) => {
       chrome.runtime.sendMessage(
-        { type: 'IN_PAGE_PROMPT', prompt },
-        (result: PromptResult | undefined) => {
+        { type: 'IN_PAGE_PROMPT', prompt, pageContext },
+        (result: unknown) => {
           if (chrome.runtime.lastError) {
             reject(new Error(chrome.runtime.lastError.message));
             return;
           }
-          resolve(result ?? { success: false, error: 'No response from background' });
+          resolve(normalizeInPagePromptResponse(result));
         },
       );
     });
 
     cursor.remove();
 
-    if (!response.success || response.error) {
-      showError(responseArea, response.error ?? 'Request failed');
+    if (!response.success) {
+      showPromptOutcome(responseArea, response, retry, openSidePanel);
       return;
     }
 
@@ -182,17 +199,110 @@ async function streamPrompt(
     responseArea.textContent = response.text ?? '';
   } catch (err) {
     cursor.remove();
-    showError(responseArea, err instanceof Error ? err.message : 'Unknown error');
+    showPromptOutcome(
+      responseArea,
+      {
+        success: false,
+        outcome: 'retryable_error',
+        message: err instanceof Error ? err.message : 'Unknown extension error.',
+        retryable: true,
+      },
+      retry,
+      openSidePanel,
+    );
   } finally {
-    submitBtn.disabled = false;
+    setBusy(false);
   }
 }
 
-function showError(responseArea: HTMLElement, message: string): void {
+function normalizeInPagePromptResponse(result: unknown): InPagePromptResponse {
+  if (!result || typeof result !== 'object') {
+    return {
+      success: false,
+      outcome: 'retryable_error',
+      message: 'No response from the extension background service.',
+      retryable: true,
+    };
+  }
+  const value = result as Record<string, unknown>;
+  if (
+    value['success'] === true &&
+    typeof value['text'] === 'string' &&
+    value['provider'] === 'managed_cloud' &&
+    value['modelSelection'] === 'auto'
+  ) {
+    return value as InPagePromptResponse;
+  }
+  const outcome = value['outcome'];
+  if (
+    value['success'] === false &&
+    typeof outcome === 'string' &&
+    outcome in IN_PAGE_OUTCOME_TITLES &&
+    typeof value['message'] === 'string' &&
+    typeof value['retryable'] === 'boolean'
+  ) {
+    return value as InPagePromptResponse;
+  }
+  return {
+    success: false,
+    outcome: 'retryable_error',
+    message:
+      typeof value['error'] === 'string'
+        ? value['error']
+        : 'The extension returned an invalid response.',
+    retryable: true,
+  };
+}
+
+const IN_PAGE_OUTCOME_TITLES: Record<InPagePromptOutcome, string> = {
+  signed_out: 'Sign in to continue',
+  plan_required: 'Managed Cloud is unavailable',
+  quota_exceeded: 'Usage limit reached',
+  account_unavailable: 'Account status unavailable',
+  rate_limited: 'Too many requests',
+  cancelled: 'Request cancelled',
+  request_rejected: 'Request not sent',
+  retryable_error: 'Managed Cloud request failed',
+};
+
+function showPromptOutcome(
+  responseArea: HTMLElement,
+  response: Extract<InPagePromptResponse, { success: false }>,
+  retry: () => void,
+  openSidePanel: () => void,
+): void {
   responseArea.textContent = '';
   const errEl = document.createElement('div');
-  errEl.className = 'agi-error';
-  errEl.textContent = `Error: ${message}`;
+  errEl.className = `agi-access-state agi-access-state--${response.outcome}`;
+  const titleEl = document.createElement('div');
+  titleEl.className = 'agi-access-state-title';
+  titleEl.textContent = IN_PAGE_OUTCOME_TITLES[response.outcome];
+  const messageEl = document.createElement('div');
+  messageEl.className = 'agi-access-state-message';
+  messageEl.textContent = response.message;
+  errEl.appendChild(titleEl);
+  errEl.appendChild(messageEl);
+
+  if (response.retryable) {
+    const retryBtn = document.createElement('button');
+    retryBtn.type = 'button';
+    retryBtn.className = 'agi-state-action';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', retry);
+    errEl.appendChild(retryBtn);
+  } else if (
+    response.outcome === 'signed_out' ||
+    response.outcome === 'plan_required' ||
+    response.outcome === 'quota_exceeded'
+  ) {
+    const accountBtn = document.createElement('button');
+    accountBtn.type = 'button';
+    accountBtn.className = 'agi-state-action';
+    accountBtn.textContent =
+      response.outcome === 'signed_out' ? 'Open side panel to sign in' : 'Open side panel';
+    accountBtn.addEventListener('click', openSidePanel);
+    errEl.appendChild(accountBtn);
+  }
   responseArea.appendChild(errEl);
 }
 
@@ -209,6 +319,7 @@ function buildActionChips(
     chip.className = 'agi-action-chip';
     chip.setAttribute('type', 'button');
     chip.setAttribute('aria-label', action.label);
+    chip.setAttribute('aria-describedby', 'agi-page-context-disclosure');
     chip.appendChild(renderIcon(getActionIcon(action.id), 14));
     chip.appendChild(document.createTextNode(action.label));
     chip.dataset['actionId'] = action.id;
@@ -231,27 +342,6 @@ function autoResizeTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
 }
 
-// ─── Disclosure banner ─────────────────────────────────────────────────────────
-
-const DISCLOSURE_SHOWN_KEY = 'agi_panel_disclosure_shown';
-
-function showDisclosureBannerOnce(responseArea: HTMLElement): void {
-  chrome.storage.local
-    .get(DISCLOSURE_SHOWN_KEY)
-    .then((result) => {
-      if (result[DISCLOSURE_SHOWN_KEY]) return;
-      void chrome.storage.local.set({ [DISCLOSURE_SHOWN_KEY]: true });
-
-      const banner = document.createElement('div');
-      banner.className = 'agi-disclosure';
-      banner.textContent =
-        'Page text is included in messages to help answer your question. ' +
-        'Sensitive fields (passwords, card numbers) are redacted automatically.';
-      responseArea.prepend(banner);
-    })
-    .catch(() => {});
-}
-
 // ─── Page context capture ──────────────────────────────────────────────────────
 
 function capturePageContext(): {
@@ -261,10 +351,28 @@ function capturePageContext(): {
   actions: PageAction[];
 } {
   const url = window.location.href;
-  const title = document.title || 'Untitled';
-  const pageText = redactSensitiveText(truncatePageText(document.body?.innerText ?? ''));
+  const title = truncatePageText(sanitizePageText(document.title || 'Untitled'), 300);
+  const pageText = truncatePageText(sanitizePageText(document.body?.innerText ?? ''));
   const actions = getPageActions(url);
   return { url, title, pageText, actions };
+}
+
+function updateDisclosure(
+  disclosure: HTMLElement,
+  context: ReturnType<typeof capturePageContext>,
+): void {
+  let source = 'this approved page';
+  try {
+    source = new URL(context.url).hostname || source;
+  } catch {
+    // The page URL is only a label; an unparsable URL must not hide the notice.
+  }
+  disclosure.textContent =
+    `This panel can send visible text from ${source} ` +
+    `(${context.pageText.length.toLocaleString()} characters; 30,000 maximum) to ` +
+    'AGI Managed Cloud with your requests. The extension redacts patterns that resemble ' +
+    'secrets; review page content before sending. Each response replaces the previous one here; ' +
+    'open the side panel for a saved conversation.';
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────────
@@ -278,6 +386,7 @@ export function createPanel(): {
   open: () => void;
   close: () => void;
   toggle: () => void;
+  setReturnFocus: (element: HTMLElement | null) => void;
 } {
   const host = document.createElement('div');
   host.setAttribute('data-agi-panel', 'true');
@@ -288,17 +397,45 @@ export function createPanel(): {
 
   // Capture page context at creation time; refreshed on SPA navigations.
   let ctx = capturePageContext();
+  let requestInFlight = false;
+  let returnFocus: HTMLElement | null = null;
+
+  function syncComposerState(): void {
+    els.submitBtn.disabled = requestInFlight || els.textarea.value.trim().length === 0;
+  }
+
+  function setBusy(busy: boolean): void {
+    requestInFlight = busy;
+    for (const chip of els.actionsRow.querySelectorAll<HTMLButtonElement>('.agi-action-chip')) {
+      chip.disabled = busy;
+    }
+    els.textarea.disabled = busy;
+    syncComposerState();
+  }
+
+  function runPrompt(prompt: string, pageContext: string): void {
+    if (requestInFlight) return;
+    void streamPrompt(
+      prompt,
+      pageContext,
+      els.responseArea,
+      setBusy,
+      () => runPrompt(prompt, pageContext),
+      openSidePanel,
+    );
+  }
 
   function rebuildChips(): void {
     ctx = capturePageContext();
+    updateDisclosure(els.disclosure, ctx);
     buildActionChips(ctx.actions, els.actionsRow, (action) => {
       // Re-capture on each chip click so SPA navigation changes are reflected.
       const fresh = capturePageContext();
-      showDisclosureBannerOnce(els.responseArea);
-      void streamPrompt(
-        action.buildPrompt(fresh.title, fresh.pageText),
-        els.responseArea,
-        els.submitBtn,
+      ctx = fresh;
+      updateDisclosure(els.disclosure, fresh);
+      runPrompt(
+        action.buildPrompt(fresh.title, ''),
+        `Page title: ${fresh.title}\n\nVisible page text:\n${fresh.pageText}`,
       );
     });
   }
@@ -315,13 +452,14 @@ export function createPanel(): {
 
   function submitComposer(): void {
     const text = els.textarea.value.trim();
-    if (!text) return;
+    if (!text || requestInFlight) return;
+    const fresh = capturePageContext();
+    ctx = fresh;
+    updateDisclosure(els.disclosure, fresh);
     els.textarea.value = '';
     autoResizeTextarea(els.textarea);
-    const fresh = capturePageContext();
-    showDisclosureBannerOnce(els.responseArea);
-    const fullPrompt = `Context from page "${fresh.title}":\n${fresh.pageText}\n\nUser question: ${text}`;
-    void streamPrompt(fullPrompt, els.responseArea, els.submitBtn);
+    syncComposerState();
+    runPrompt(text, `Page title: ${fresh.title}\n\nVisible page text:\n${fresh.pageText}`);
   }
 
   els.submitBtn.addEventListener('click', submitComposer);
@@ -331,7 +469,10 @@ export function createPanel(): {
       submitComposer();
     }
   });
-  els.textarea.addEventListener('input', () => autoResizeTextarea(els.textarea));
+  els.textarea.addEventListener('input', () => {
+    autoResizeTextarea(els.textarea);
+    syncComposerState();
+  });
 
   // Keep ctx reference alive (used by close handler if needed in future).
   void ctx;
@@ -345,10 +486,15 @@ export function createPanel(): {
     els.textarea.focus();
   }
 
-  function close(): void {
+  function closePanel(restoreFocus = true): void {
     if (!isOpen) return;
     isOpen = false;
     els.panel.classList.remove('open');
+    if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
+  }
+
+  function close(): void {
+    closePanel(true);
   }
 
   function toggle(): void {
@@ -358,14 +504,24 @@ export function createPanel(): {
 
   els.closeBtn.addEventListener('click', close);
 
-  els.openSidePanelBtn.addEventListener('click', () => {
+  function openSidePanel(): void {
     chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }).catch(() => {});
-    close();
-  });
+    closePanel(false);
+  }
+
+  els.openSidePanelBtn.addEventListener('click', openSidePanel);
 
   host.addEventListener('keydown', (e: Event) => {
     if ((e as KeyboardEvent).key === 'Escape') close();
   });
 
-  return { host, open, close, toggle };
+  return {
+    host,
+    open,
+    close,
+    toggle,
+    setReturnFocus: (element: HTMLElement | null) => {
+      returnFocus = element;
+    },
+  };
 }

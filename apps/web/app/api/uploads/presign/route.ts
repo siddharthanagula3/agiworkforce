@@ -8,7 +8,12 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { getPresignedUploadUrl, isObjectStorageConfigured } from '@/lib/server/object-storage';
+import {
+  getPresignedPrivateUploadUrl,
+  getPresignedUploadUrl,
+  isObjectStorageConfigured,
+  isPrivateObjectStorageConfigured,
+} from '@/lib/server/object-storage';
 import {
   createLocalProjectKnowledgeUploadUrl,
   deleteProjectKnowledgeObject,
@@ -25,8 +30,9 @@ import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-ser
  * Presigned-upload API · client code never imports the R2/S3 SDK or holds
  * credentials. It asks this route for a short-lived PUT URL, uploads bytes
  * directly to R2 via `fetch`, then registers the resulting object locator with
- * the owning resource. Private project knowledge receives only an opaque key;
- * public URLs remain limited to resource types that intentionally use them.
+ * the owning resource. Chat attachments and project knowledge receive only an
+ * opaque key and land in private storage; public URLs remain limited to
+ * resource types that intentionally use them.
  *
  * A server proxy route can't be used here: Vercel serverless functions cap
  * request bodies at ~4.5MB, well under the knowledge-file size cap, so the
@@ -86,10 +92,13 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   }
   const { kind, fileName, mimeType, byteCount, projectId } = parsed.data;
 
-  if (
-    !isObjectStorageConfigured() &&
-    !(kind === 'knowledge-file' && isProjectKnowledgeObjectStorageConfigured())
-  ) {
+  const storageConfigured =
+    kind === 'chat-attachment'
+      ? isPrivateObjectStorageConfigured()
+      : kind === 'knowledge-file'
+        ? isProjectKnowledgeObjectStorageConfigured()
+        : isObjectStorageConfigured();
+  if (!storageConfigured) {
     throw createError.internal('Object storage is not configured');
   }
 
@@ -99,8 +108,8 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   }
   // Per-kind narrowing on top of the shared contract. Every kind gets a cap and
   // a type roster here: the presigned PUT stamps the object with the caller's
-  // declared Content-Type and the bucket is public, so whatever this route
-  // signs for is world-readable under that type the instant the PUT lands.
+  // declared Content-Type. Avatars still use public storage; private chat and
+  // project-knowledge uploads are inspected again before registration.
   if (kind === 'chat-attachment') {
     if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
       throw createError.validation('Chat attachments are limited to 12 MiB.');
@@ -153,8 +162,8 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     key = `chat-attachments/${userId}/${suffix}`;
   }
 
-  const localKnowledgeUpload = kind === 'knowledge-file' && !isObjectStorageConfigured();
-  const { uploadUrl, publicUrl } = localKnowledgeUpload
+  const localKnowledgeUpload = kind === 'knowledge-file' && !isPrivateObjectStorageConfigured();
+  const upload = localKnowledgeUpload
     ? {
         uploadUrl: new URL(
           await createLocalProjectKnowledgeUploadUrl({
@@ -165,17 +174,22 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
           }),
           request.nextUrl.origin,
         ).toString(),
-        publicUrl: '',
       }
-    : await getPresignedUploadUrl({ key, contentType: mimeType, expiresInSeconds: 300 });
+    : kind === 'chat-attachment' || kind === 'knowledge-file'
+      ? await getPresignedPrivateUploadUrl({
+          key,
+          contentType: mimeType,
+          expiresInSeconds: 300,
+        })
+      : await getPresignedUploadUrl({ key, contentType: mimeType, expiresInSeconds: 300 });
 
   return NextResponse.json({
     attachmentId: randomUUID(),
     storageKey: key,
-    uploadUrl,
+    uploadUrl: upload.uploadUrl,
     uploadMethod: 'PUT' as const,
     uploadHeaders: { 'Content-Type': mimeType },
-    ...(kind === 'knowledge-file' ? {} : { publicUrl }),
+    ...('publicUrl' in upload ? { publicUrl: upload.publicUrl } : {}),
     expiresAt: new Date(Date.now() + 300 * 1000).toISOString(),
   });
 }

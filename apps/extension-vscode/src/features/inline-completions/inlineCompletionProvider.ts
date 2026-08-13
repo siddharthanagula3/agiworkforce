@@ -8,6 +8,7 @@ import {
 } from '../../utils/api';
 import { Config } from '../../platform/config';
 import { isSensitiveFile } from '../../utils/pathSafety';
+import { showCloudUtilityErrorActions } from '../../core/cloudUtilityErrorActions';
 
 // PR-2D (F-09): in addition to the canonical sensitive-file denylist,
 // refuse inline completion in any file whose name suggests it holds
@@ -238,23 +239,10 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
         // avoid a toast+request loop on every keystroke.
         if (!this.paywallSuppressed) {
           this.paywallSuppressed = true;
-          // Show a single one-time notification — never repeated.
-          vscode.window
-            .showInformationMessage(
-              `AGI Workforce: Inline completions paused — upgrade to ${paywallError.requiredTier} to continue.`,
-              'Upgrade',
-            )
-            .then((choice) => {
-              if (choice === 'Upgrade') {
-                vscode.env.openExternal(
-                  vscode.Uri.parse(
-                    `https://agiworkforce.com/pricing?from=paywall` +
-                      `&tier=${encodeURIComponent(paywallError.requiredTier)}` +
-                      `&feature=${encodeURIComponent(paywallError.feature)}`,
-                  ),
-                );
-              }
-            });
+          // Show one shared, actionable paywall notification — never repeated.
+          void showCloudUtilityErrorActions(paywallError, {
+            title: 'AGI Workforce: Inline completions paused',
+          });
         }
         return [];
       }

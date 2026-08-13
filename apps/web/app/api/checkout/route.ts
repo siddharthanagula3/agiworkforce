@@ -17,9 +17,12 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { buildCheckoutTaxParams } from '@/lib/billing/tax-policy';
 import { getCheckoutPriceSelection } from '@/lib/server/localized-pricing-service';
-import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
-import { normalizeUIPlanTier, tierAtLeast } from '@agiworkforce/types';
+import { isStripeCustomerId } from '@/lib/server/stripe-resource-ids';
 import { recordAuditEvent } from '@/lib/security-audit';
+import {
+  getSubscriptionBillingOwnerPolicy,
+  stripeBillingOwnershipMessage,
+} from '@/lib/server/subscription-billing-owner';
 
 // Lazy-initialize Stripe client to avoid build-time errors when env vars aren't set
 let stripeClient: Stripe | null = null;
@@ -42,12 +45,6 @@ const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== '0' &&
   CHECKOUT_ENABLED_RAW !== 'false' &&
   CHECKOUT_ENABLED_RAW !== 'off';
-
-// Subscription statuses Stripe is still billing for, and which therefore mean
-// "this account already bought something". `incomplete` is deliberately absent:
-// that is a checkout whose payment never succeeded, and treating it as live
-// would trap a buyer whose card was declined into never being able to retry.
-const BILLING_ACTIVE_STATUSES: ReadonlySet<string> = new Set(['active', 'trialing', 'past_due']);
 
 /**
  * Ask Stripe whether this customer is already being billed for a subscription.
@@ -175,12 +172,13 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     | 'stripe_subscription_id'
     | 'apple_original_transaction_id'
     | 'google_purchase_token'
+    | 'current_period_end'
   >;
   let subRows: SubRow[];
   try {
     subRows = await db.query<SubRow>(
       'select status, plan_tier, stripe_customer_id, stripe_subscription_id, ' +
-        'apple_original_transaction_id, google_purchase_token ' +
+        'apple_original_transaction_id, google_purchase_token, current_period_end ' +
         'from subscriptions where user_id = $1 limit 1',
       [user.id],
     );
@@ -191,61 +189,14 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     );
   }
   const existingSubscription = subRows[0] ?? null;
+  const ownerPolicy = getSubscriptionBillingOwnerPolicy(existingSubscription);
 
-  const hasActiveSubscription =
-    !!existingSubscription &&
-    existingSubscription.plan_tier !== 'free' &&
-    BILLING_ACTIVE_STATUSES.has(existingSubscription.status) &&
-    isStripeSubscriptionId(existingSubscription.stripe_subscription_id);
-  const replacesUnlinkedEntitlement =
-    !!existingSubscription &&
-    existingSubscription.plan_tier !== 'free' &&
-    BILLING_ACTIVE_STATUSES.has(existingSubscription.status) &&
-    !isStripeSubscriptionId(existingSubscription.stripe_subscription_id);
-
-  // An unlinked paid row is normally a manually provisioned entitlement that
-  // checkout may replace. A row carrying a store identifier is NOT that: it is
-  // a live Apple/Google subscription that only the store can cancel. Replacing
-  // it here would leave the customer paying the store AND Stripe, and the
-  // downgrade guard below would not catch it because an equal-or-higher tier
-  // is permitted.
-  if (
-    replacesUnlinkedEntitlement &&
-    (existingSubscription.apple_original_transaction_id ||
-      existingSubscription.google_purchase_token)
-  ) {
-    throw createError.conflict(
-      'This subscription is billed by the App Store or Play Store. Manage or cancel it there before subscribing on the web.',
-    );
-  }
-
-  // The stored tier is compared after normalization rather than only when it is
-  // one of the SELF-SERVE tiers. A negotiated Enterprise entitlement is
-  // provisioned by hand and therefore has no Stripe subscription id, so it lands
-  // in `replacesUnlinkedEntitlement` as well — and `isSelfServePaidPlanTier`
-  // excludes 'enterprise', so the guard used to skip exactly the rows worth the
-  // most. The webhook upsert writes `plan_tier = excluded.plan_tier` on
-  // conflict (user_id) (app/api/stripe-webhook/lib/db.ts), so a contract
-  // customer who clicked "Get Basic" silently replaced their Enterprise
-  // entitlement — losing `enterprise_controls`, SSO/SCIM admin and negotiated
-  // limits — with Basic. `/api/upgrade` already refuses this for every tier via
-  // `isUpgrade` (lib/server/stripe-plan-change.ts); checkout now agrees.
-  //
-  // Unknown/legacy tiers normalize to 'free', which preserves today's behaviour
-  // of letting them buy any plan instead of trapping them behind a 409.
-  if (
-    replacesUnlinkedEntitlement &&
-    !tierAtLeast(plan, normalizeUIPlanTier(existingSubscription.plan_tier, 'free'))
-  ) {
-    throw createError.conflict(
-      'Use billing management to downgrade. Checkout cannot replace an existing entitlement with a lower plan.',
-    );
-  }
-
-  if (hasActiveSubscription) {
-    throw createError.conflict(
-      'Use the in-app upgrade flow so payment proration and existing usage are carried safely.',
-    );
+  // Checkout creates a second recurring charge. Only an account with no
+  // subscription, or a terminal subscription whose owner is unambiguous, may
+  // enter it. Active Stripe plans use prorated upgrade; active store/manual
+  // plans stay with their current owner until canceled there.
+  if (!ownerPolicy.canStartStripeCheckout) {
+    throw createError.conflict(stripeBillingOwnershipMessage(ownerPolicy, 'checkout'));
   }
 
   // First, check if we have a customer ID stored in profiles
@@ -369,12 +320,6 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
     // support engineer can see what the customer asked for versus what Stripe
     // recorded.
     requested_seats: String(quantity),
-    ...(replacesUnlinkedEntitlement
-      ? {
-          upgrade_from: existingSubscription.plan_tier,
-          replace_unlinked_entitlement: 'true',
-        }
-      : {}),
   };
 
   // Create Stripe Checkout Session
@@ -401,8 +346,8 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
       // webhook time (e.g. first-time checkout before the customer object is linked).
       metadata: checkoutMetadata,
       // Stripe may deliver customer.subscription.created before
-      // checkout.session.completed. Copy ownership and replacement context onto
-      // the Subscription so that earlier event cannot reset carried usage.
+      // checkout.session.completed. Copy authenticated ownership context onto
+      // the Subscription so the earlier event can still bind it to the AGI account.
       subscription_data: {
         metadata: checkoutMetadata,
       },

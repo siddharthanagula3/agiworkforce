@@ -35,7 +35,9 @@ import * as voiceOutput from '@/src/features/voice/services/voiceOutput';
 import { useArtifactStore } from '@/src/features/artifacts/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { ArtifactFullScreen } from './ArtifactFullScreen';
-import { ToolCallTimeline } from './ToolCallTimeline';
+import { ToolCallDetailsSheet, ToolCallTimeline } from './ToolCallTimeline';
+import { InteractiveCardBlock } from './InteractiveCardBlock';
+import { API_URL } from '@/lib/constants';
 import { AgentActivityTimeline } from './AgentActivityTimeline';
 import { getToolDisplayLabel, summarizeToolTimeline } from '@agiworkforce/types';
 import { ApprovalCard } from './ApprovalCard';
@@ -50,6 +52,7 @@ import { CitationChip } from './CitationChip';
 import { CollapsibleSources } from './CollapsibleSources';
 import { MessageEditModal } from './MessageEditModal';
 import { renderMarkdownContent } from './MessageContentRenderer';
+import { parseAssistantThinking } from '@/stores/chat/chatExecutionStore';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import { PerformanceChip } from './PerformanceChip';
 import { ReportFlagButton } from './ReportFlagButton';
@@ -63,8 +66,10 @@ import {
   getMessageStreamErrorMessage,
 } from '@/src/features/chat/utils/messageStreamError';
 import { isApprovalTurnLive } from '@/stores/chat/chatExecutionStore';
-import type { ChatMessage, Artifact } from '@/types/chat';
+import type { ChatMessage, Artifact, ToolCall } from '@/types/chat';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
+import { readPersistedInteractiveCards } from '@agiworkforce/cloud-contracts';
+import { generatedFileArtifactsFromMetadata } from '@/src/features/chat/utils/generatedFileArtifacts';
 
 /** Reaction state: cycles thumbsUp -> thumbsDown -> null */
 type ReactionType = 'thumbsUp' | 'thumbsDown' | null;
@@ -179,8 +184,29 @@ export const MessageBubble = memo(function MessageBubble({
   // client-runtime/src/agentActivity.ts drops 'reasoning-delta' outright), so
   // suppressing the chip here hid it on every tool/research/agiwork turn with
   // nothing taking its place.
+  // Parse on READ, not just on stream. A message pulled by cloud sync or
+  // produced by an agent run never went through this device's streaming
+  // parser, so its `content` still carries the server's literal
+  // `<thinking>…</thinking>` markers and rendered as tag soup. Re-parsing here
+  // is cheap, idempotent (a message with no tags comes back unchanged), and
+  // covers every source. The stream path still parses so the ThinkingChip can
+  // tick live.
+  const parsedThinking = useMemo(
+    () => (isAssistant ? parseAssistantThinking(message.content) : null),
+    [isAssistant, message.content],
+  );
+  const displayContent = parsedThinking?.hasReasoning ? parsedThinking.content : message.content;
+  const reasoningText =
+    message.reasoning ?? (parsedThinking?.hasReasoning ? parsedThinking.reasoning : undefined);
+  // When WE parsed reasoning out of the content, the chip is not optional: the
+  // text has already been removed from the visible answer, so suppressing the
+  // chip on the model-capability gate would delete it from the UI entirely.
+  // The gate only decides whether to show a chip for a `reasoning` field that
+  // arrived separately — there, hiding it loses nothing.
   const hasReasoning =
-    isAssistant && message.reasoning !== undefined && modelSupportsThinking(message.model);
+    isAssistant &&
+    reasoningText !== undefined &&
+    (parsedThinking?.hasReasoning === true || modelSupportsThinking(message.model));
   // FlashList v2 recycles component instances across list items for
   // performance -- bare useState here would bleed a PRIOR message's UI state
   // (an expanded artifact, an open export sheet, a half-typed edit draft)
@@ -196,6 +222,9 @@ export const MessageBubble = memo(function MessageBubble({
     message.id,
   ]);
   const [showExportSheet, setShowExportSheet] = useRecyclingState(false, [message.id]);
+  const [accessibilityTool, setAccessibilityTool] = useRecyclingState<ToolCall | null>(null, [
+    message.id,
+  ]);
   const [editModalVisible, setEditModalVisible] = useRecyclingState(false, [message.id]);
   const [editText, setEditText] = useRecyclingState('', [message.id]);
   // Seed from persisted metadata.reaction so a rating survives FlashList row
@@ -210,19 +239,14 @@ export const MessageBubble = memo(function MessageBubble({
   const reducedMotion = useReducedMotion();
   const themeColors = useThemeColors();
 
-  // Artifacts are derived into the artifact store as a turn completes
-  // (captureArtifactsFromMessage). `message.artifacts` is declared on the type
-  // but no writer ever populates it, so reading it here rendered nothing —
-  // inline artifact cards were unreachable. Source them from the store, which
-  // also means historical turns light up rather than only newly-streamed ones.
+  // Text-derived artifacts live in the gallery store. Generated Cloud files
+  // are richer message-owned descriptors and are also projected through
+  // metadata so they survive sync/reopen. Merge all three sources by id with
+  // the direct message descriptor winning, preserving its GeneratedFile data.
   const appMode = useChatAppModeStore((s) => s.appMode);
   const storedArtifacts = useArtifactStore((s) => s.artifacts);
   const inlineArtifacts = useMemo<Artifact[]>(() => {
-    // Only the locally-derived store is consulted, not the merged gallery: this
-    // runs for every bubble in the list, and a cloud artifact pulled from
-    // another device has no message in this transcript to attach to anyway.
-    // Scope is still checked so a Local turn can never surface a Cloud artifact.
-    return storedArtifacts
+    const scopedStoreArtifacts: Artifact[] = storedArtifacts
       .filter(
         (artifact) =>
           artifact.messageId === message.id && (artifact.provenance?.scope ?? 'local') === appMode,
@@ -236,7 +260,38 @@ export const MessageBubble = memo(function MessageBubble({
         content: artifact.content,
         ...(artifact.language ? { language: artifact.language } : {}),
       }));
-  }, [appMode, storedArtifacts, message.id]);
+
+    // Generated-file metadata is a Managed Cloud projection. Never interpret
+    // it from a Local repository, even if malformed legacy data contains it.
+    const persistedFiles =
+      appMode === 'cloud'
+        ? generatedFileArtifactsFromMetadata(message.metadata?.generatedFiles, message.createdAt)
+        : [];
+    const byId = new Map<string, Artifact>();
+    for (const artifact of [
+      ...scopedStoreArtifacts,
+      ...persistedFiles,
+      ...(message.artifacts ?? []),
+    ]) {
+      byId.set(artifact.id, artifact);
+    }
+    return [...byId.values()];
+  }, [
+    appMode,
+    storedArtifacts,
+    message.id,
+    message.createdAt,
+    message.metadata,
+    message.artifacts,
+  ]);
+
+  const interactiveCards = useMemo(
+    () =>
+      appMode === 'cloud'
+        ? (message.interactiveCards ?? readPersistedInteractiveCards(message.metadata))
+        : [],
+    [appMode, message.interactiveCards, message.metadata],
+  );
 
   const handleExpandArtifact = useCallback(
     (artifact: Artifact) => {
@@ -497,11 +552,7 @@ export const MessageBubble = memo(function MessageBubble({
         const toolId = actionName.slice('tool-'.length);
         const tool = message.toolCalls?.find((t) => t.id === toolId);
         if (tool) {
-          const label = getToolDisplayLabel(tool.name);
-          Alert.alert(
-            label.displayName,
-            tool.output || tool.input || tool.command || 'No details available.',
-          );
+          setAccessibilityTool(tool);
         }
         return;
       }
@@ -529,6 +580,7 @@ export const MessageBubble = memo(function MessageBubble({
       message.id,
       message.content,
       message.toolCalls,
+      setAccessibilityTool,
       onRetryMessage,
       onDeleteMessage,
       handleOpenEditModal,
@@ -537,8 +589,8 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   const contentElements = useMemo(
-    () => renderMarkdownContent(message.content, themeColors),
-    [message.content, themeColors],
+    () => renderMarkdownContent(displayContent, themeColors),
+    [displayContent, themeColors],
   );
 
   // Compute image display width: full bubble width minus avatar + gap + padding
@@ -673,7 +725,7 @@ export const MessageBubble = memo(function MessageBubble({
 
             {hasReasoning ? (
               <ThinkingChip
-                thinkingText={message.reasoning ?? ''}
+                thinkingText={reasoningText ?? ''}
                 isStreaming={message.isStreaming}
                 duration={message.metadata?.thinkingDuration as number | undefined}
                 startedAtMs={message.metadata?.thinkingStartedAt as number | undefined}
@@ -815,6 +867,17 @@ export const MessageBubble = memo(function MessageBubble({
                   </>
                 ) : null}
               </Pressable>
+            ) : null}
+
+            {/* Interactive cards (map search). Placed AFTER the prose that
+                motivated them and before citations, matching where the model
+                emitted them and mirroring the web transcript's ordering. */}
+            {isAssistant && interactiveCards.length > 0 ? (
+              <InteractiveCardBlock
+                cards={interactiveCards}
+                tileBaseUrl={API_URL}
+                canLoadManagedCloudTiles={appMode === 'cloud'}
+              />
             ) : null}
 
             {/* Citations: chips for 1-3, collapsible card for 4+ */}
@@ -1016,6 +1079,12 @@ export const MessageBubble = memo(function MessageBubble({
         allowEphemeral={message.imageGenPersisted === false}
         onClose={handleCloseFullScreenImage}
       />
+
+      {/* VoiceOver rotor actions cannot reach the nested timeline controls while
+          the message wrapper owns the accessibility focus. Open the same
+          structured sheet used by the visible timeline instead of exposing a
+          raw provider/tool JSON alert. */}
+      <ToolCallDetailsSheet tool={accessibilityTool} onClose={() => setAccessibilityTool(null)} />
 
       {/* File export bottom sheet (assistant messages only) */}
       {isAssistant && (

@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/Dialog';
 export type OAuthFlowState =
   | { status: 'idle' }
   | { status: 'connecting'; connectorName: string }
+  | { status: 'saved'; connectorName: string }
   | { status: 'success'; connectorName: string }
   | { status: 'error'; connectorName: string; message: string };
 
@@ -22,6 +23,7 @@ export function ConnectorOAuthFlow({ state, onClose, onRetry }: ConnectorOAuthFl
         <DialogHeader>
           <DialogTitle>
             {state.status === 'connecting' && `Connecting to ${state.connectorName}...`}
+            {state.status === 'saved' && 'Connector saved'}
             {state.status === 'success' && 'Connected'}
             {state.status === 'error' && 'Connection Failed'}
           </DialogTitle>
@@ -51,6 +53,25 @@ export function ConnectorOAuthFlow({ state, onClose, onRetry }: ConnectorOAuthFl
                 className="mt-2 px-4 py-2 text-sm font-medium rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors"
               >
                 Done
+              </button>
+            </>
+          )}
+
+          {state.status === 'saved' && (
+            <>
+              <div className="h-10 w-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Check className="h-6 w-6 text-green-500" />
+              </div>
+              <p className="text-sm text-muted-foreground text-center">
+                {state.connectorName} is saved but disconnected. Review it below, then choose
+                Connect to start it. Connection requires your approval.
+              </p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-2 px-4 py-2 text-sm font-medium rounded-lg bg-teal-600 hover:bg-teal-500 text-white transition-colors"
+              >
+                Review connector
               </button>
             </>
           )}

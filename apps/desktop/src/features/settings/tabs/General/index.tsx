@@ -4,16 +4,10 @@ import { Cloud, Loader2, Shield } from 'lucide-react';
 import { formatChatExecutionModeLabel } from '@agiworkforce/types';
 import { window as desktopWindow } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
-import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
+import { isTauri, isCloudWeb, isElectronHost } from '@/lib/tauri-mock';
 import { Button } from '@/ui/Button';
 import { Label } from '@/ui/Label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
 import { useAppModeStore, selectMode, selectIsCloud } from '../../../../stores/appModeStore';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../../stores/auth';
@@ -399,7 +393,7 @@ export function GeneralTab({
         </div>
       )}
 
-      {isTauri && (
+      {(isTauri || isElectronHost) && (
         <div className="pt-6 border-t border-border">
           <Suspense fallback={<Fallback label="Loading update settings..." />}>
             <LazyUpdateSettings />

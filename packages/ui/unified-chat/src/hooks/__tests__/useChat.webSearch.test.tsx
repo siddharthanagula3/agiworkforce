@@ -193,7 +193,7 @@ describe('useChat — automatic Web search request clamp', () => {
     );
   });
 
-  it('keeps Local search on the native runtime without changing the provider boundary', async () => {
+  it('keeps automatic search off in Local mode so ordinary prompts cannot cause network egress', async () => {
     seedDesktopConversation('local_only', localModel);
     const sendMessage = vi.fn(async () => {});
     const { result } = renderHook(() =>
@@ -211,7 +211,7 @@ describe('useChat — automatic Web search request clamp', () => {
       expect.objectContaining({
         model: localModel.id,
         provider: localModel.provider,
-        webSearch: true,
+        webSearch: false,
       }),
     );
   });

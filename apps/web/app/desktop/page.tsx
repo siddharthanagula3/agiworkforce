@@ -11,11 +11,11 @@ import { LedgerSection } from '@/features/marketing/components/LandingSections';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { DesktopDownloadAvailability } from '../download/DesktopDownloadAvailability';
+import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'AGI Desktop | Runs on Your Machine',
-  description:
-    'The native AGI app, built in Rust. Check verified Linux x64 installer availability; macOS and Windows installers are not yet published. Run local models with Ollama and LM Studio.',
+  description: `The native AGI app, built in Rust. Check verified Linux x64 installer availability; macOS and Windows installers are not yet published. Run local models with ${DESKTOP_LOCAL_RUNTIMES.label}.`,
   path: '/desktop',
 });
 
@@ -37,8 +37,9 @@ export default function DesktopPage() {
                 </span>
               </h1>
               <p className="agi-fl-lede">
-                The native app, built in Rust. Point it at Ollama or LM Studio and work offline.
-                Chats live in SQLite on your disk. Keys never leave the machine.
+                The native app, built in Rust. Point it at {DESKTOP_LOCAL_RUNTIMES.label} and work
+                offline after the runtime and model are installed. Chats live in SQLite on your
+                disk. Keys never leave the machine.
               </p>
               <div className="agi-fl-cta-row">
                 <Link href="#desktop-downloads" className="agi-fl-cta agi-fl-cta--primary">
@@ -48,7 +49,7 @@ export default function DesktopPage() {
                   Run AGI Locally
                 </Link>
                 <WaitlistTrigger
-                  label="Team & Enterprise access"
+                  label="Enterprise early access"
                   source="website"
                   className="agi-fl-cta agi-fl-cta--ghost"
                 />
@@ -72,7 +73,7 @@ export default function DesktopPage() {
             {
               meta: 'Local',
               title: 'Local Models',
-              body: 'Ollama and LM Studio on your own hardware. Offline. No account.',
+              body: `${DESKTOP_LOCAL_RUNTIMES.label} on your own hardware. Offline-capable after setup. No account.`,
               href: '/local',
             },
             {
@@ -129,7 +130,7 @@ export default function DesktopPage() {
               mode: 'BYOK',
               glyph: '◇',
               title: 'Your keys, your bill.',
-              body: 'Bring provider keys on Desktop and CLI.',
+              body: 'Bring provider keys on Desktop, CLI, and VS Code.',
               points: [
                 'Keys encrypted on your machine',
                 'Traffic goes straight to your provider',
@@ -160,7 +161,7 @@ export default function DesktopPage() {
           rows={[
             { k: 'Engine', v: 'Tauri 2 · Rust backend · React frontend' },
             { k: 'Modes', v: 'Local · BYOK · Cloud (public alpha)' },
-            { k: 'Local runtimes', v: 'Ollama · LM Studio' },
+            { k: 'Local runtimes', v: DESKTOP_LOCAL_RUNTIMES.compact },
             { k: 'BYOK keys', v: 'Encrypted at rest, on your machine' },
             { k: 'Storage', v: 'SQLite, local to your machine' },
             { k: 'Computer use', v: 'Browser · files · terminal · screen, with explicit consent' },
@@ -178,7 +179,7 @@ export default function DesktopPage() {
           ctas={[
             { href: '#desktop-downloads', label: 'Check installer availability' },
             { href: '/byok', label: 'Set Up BYOK' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { label: 'Enterprise early access', waitlist: true },
           ]}
           stamp="Linux x64 · verification required before download"
         />

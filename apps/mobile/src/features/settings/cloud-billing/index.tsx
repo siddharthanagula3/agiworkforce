@@ -9,7 +9,8 @@
  * FEATURES.billing. Upgrading/adjusting a subscription NEVER opens an
  * external checkout URL (Apple Guideline 3.1.1) — it opens the same
  * in-app PaywallBottomSheet used by the chat paywall, which presents an honest
- * "not available yet" message while no native store products exist.
+ * native App Store / Play purchase path when a signed catalog is available,
+ * and otherwise fails closed with an unavailable-state explanation.
  * No stub / fake data is shown — the screen is always honest about state.
  *
  * Cloud-only surface.
@@ -104,6 +105,8 @@ export default function CloudBillingScreen() {
   const billingTier = useTierStore((s) => s.billingTier);
   const billingStatus = useTierStore((s) => s.billingStatus);
   const billingSource = useTierStore((s) => s.billingSource);
+  const billingPeriodEnd = useTierStore((s) => s.billingPeriodEnd);
+  const billingCancelsAtPeriodEnd = useTierStore((s) => s.billingCancelsAtPeriodEnd);
   const refreshTier = useTierStore((s) => s.refreshTier);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
@@ -131,6 +134,14 @@ export default function CloudBillingScreen() {
   const isFreeTier = billingTier === 'free';
   const isEntitled = isEntitledSubscriptionStatus(billingStatus);
   const statusLabel = billingStatus.replaceAll('_', ' ');
+  const periodEndLabel =
+    billingPeriodEnd === null
+      ? null
+      : new Date(billingPeriodEnd * 1000).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        });
   const isWorkspacePlan = canUseBillingPlanCapability(tier, 'team_admin');
   const nextUpgradeTier = getNextUpgradeTier(tier);
   const subscriptionGuard = getSubscriptionOwnerGuard(billingSource, billingStatus);
@@ -313,6 +324,11 @@ export default function CloudBillingScreen() {
                 {statusLabel}
               </Text>
             )}
+            {!isFreeTier && isEntitled && periodEndLabel ? (
+              <Text style={{ color: colors.textMuted, fontSize: 13, marginTop: 2 }}>
+                {billingCancelsAtPeriodEnd ? 'Cancels' : 'Renews'} {periodEndLabel}
+              </Text>
+            ) : null}
           </View>
         </View>
 

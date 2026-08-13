@@ -29,7 +29,7 @@ describe('WaitlistModal', () => {
       act(() => {
         vi.advanceTimersByTime(120_000);
       });
-      expect(screen.queryByText(/request team & enterprise access/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/discuss enterprise access/i)).not.toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -52,10 +52,10 @@ describe('WaitlistModal', () => {
     );
 
     // Modal closed initially
-    expect(screen.queryByText(/request team & enterprise access/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/discuss enterprise access/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /join cloud waitlist/i }));
-    expect(screen.getByText(/request team & enterprise access/i)).toBeInTheDocument();
+    expect(screen.getByText(/discuss enterprise access/i)).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/email address/i), {
       target: { value: '  Visitor@Example.COM ' },
@@ -124,7 +124,7 @@ describe('WaitlistModal', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/failed to join/i);
     // Modal still open with the form visible for retry
-    expect(screen.getByText(/request team & enterprise access/i)).toBeInTheDocument();
+    expect(screen.getByText(/discuss enterprise access/i)).toBeInTheDocument();
   });
 
   it('passes a non-default source through to the service', async () => {

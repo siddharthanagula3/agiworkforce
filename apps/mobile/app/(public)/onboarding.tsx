@@ -36,13 +36,14 @@ import {
   type DisclosureCopy,
 } from '@agiworkforce/compliance';
 import { mmkvDisclosureLedger } from '@/services/complianceLedger';
-import { isSelectableLocalCatalogModel } from '@/src/features/model-picker/catalogSelectability';
 import {
   detectCapabilities,
   getDefaultModel,
   getModelById,
   getShippableModels,
+  getSystemModelForTier1Runtime,
   tier2LoadModel,
+  type DeviceCapabilities,
   type LocalRuntimeTier,
 } from '@agiworkforce/local-llm';
 import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types';
@@ -73,6 +74,7 @@ const AGI_MARK_SPOKES = Array.from({ length: AGI_MARK_SPOKE_COUNT }, (_, i) => {
 // ---------------------------------------------------------------------------
 type DeviceTierInfo = {
   tier: LocalRuntimeTier;
+  tier1Runtime: DeviceCapabilities['tier1Runtime'];
   deviceName: string;
   ramGB: number;
   osVersion: string;
@@ -95,22 +97,15 @@ function tierFromCapabilities(
 // ---------------------------------------------------------------------------
 type RecommendedModel = OnDeviceModel & { needsDownload: boolean };
 
-function pickRecommendedModel(tier: LocalRuntimeTier): RecommendedModel {
-  if (tier === 1) {
-    // Tier 1 is an OS-resident runtime, so recommending it means "no download".
-    // Only do that when the row is ALSO selectable for chat: the Mobile picker
-    // filters system-runtime-only rows out of LOCAL_MODEL_LIST
-    // (catalogSelectability.ts SYSTEM_RUNTIME_ONLY), and
-    // `resolveLocalModelRef` refuses an id it cannot find there. Recommending
-    // the unselectable row told a fresh Apple-Intelligence install "a built-in
-    // local model is ready to use", skipped the download screen entirely, and
-    // dropped the user into chat with no usable model — the first send then
-    // failed (SIX-21). Falling through to the downloadable default keeps the
-    // first run honest; the moment system-runtime rows become selectable this
-    // branch starts recommending the zero-download model again on its own.
-    const sysModel = getShippableModels().find(
-      (m) => m.role === 'system-multimodal' && isSelectableLocalCatalogModel(m),
-    );
+function pickRecommendedModel(
+  tier: LocalRuntimeTier,
+  tier1Runtime: DeviceCapabilities['tier1Runtime'] = null,
+): RecommendedModel {
+  if (tier === 1 && tier1Runtime) {
+    // The OS owns the Tier-1 model. Resolve the exact catalog row for the
+    // detected runtime so Android never receives Apple's row (or vice versa),
+    // then let the normal picker/install readiness gate verify it again.
+    const sysModel = getSystemModelForTier1Runtime(tier1Runtime);
     if (sysModel) return { ...sysModel, needsDownload: false };
   }
   const model = getDefaultModel();
@@ -120,9 +115,10 @@ function pickRecommendedModel(tier: LocalRuntimeTier): RecommendedModel {
 function pickModelForPickerSelection(
   modelId: string,
   fallbackTier: LocalRuntimeTier,
+  tier1Runtime: DeviceCapabilities['tier1Runtime'],
 ): RecommendedModel | null {
   const autoProfile = getAutoRoutingProfiles().find((profile) => profile.id === modelId)?.profile;
-  if (autoProfile === 'balanced') return pickRecommendedModel(fallbackTier);
+  if (autoProfile === 'balanced') return pickRecommendedModel(fallbackTier, tier1Runtime);
 
   const localModels = getShippableModels();
   if (autoProfile === 'economy') {
@@ -167,6 +163,7 @@ export default function OnboardingScreen() {
   const [disclosureCopy, setDisclosureCopy] = useState<DisclosureCopy | null>(null);
   const [deviceInfo, setDeviceInfo] = useState<DeviceTierInfo>({
     tier: 2,
+    tier1Runtime: null,
     deviceName: 'Your device',
     ramGB: 4,
     osVersion: 'Unknown',
@@ -189,7 +186,11 @@ export default function OnboardingScreen() {
 
   const handleSelectModel = useCallback(
     (modelId: string) => {
-      const nextModel = pickModelForPickerSelection(modelId, deviceInfo.tier);
+      const nextModel = pickModelForPickerSelection(
+        modelId,
+        deviceInfo.tier,
+        deviceInfo.tier1Runtime,
+      );
       if (!nextModel) return;
       setDownloadError(null);
       setRecommendedModel(nextModel);
@@ -218,8 +219,8 @@ export default function OnboardingScreen() {
           'Your device';
         const osVersion = caps.osVersion || (Constants.platform?.ios?.systemVersion ?? 'Unknown');
 
-        setDeviceInfo({ tier, deviceName, ramGB, osVersion });
-        setRecommendedModel(pickRecommendedModel(tier));
+        setDeviceInfo({ tier, tier1Runtime: caps.tier1Runtime, deviceName, ramGB, osVersion });
+        setRecommendedModel(pickRecommendedModel(tier, caps.tier1Runtime));
       })
       .catch(() => {
         // Keep defaults on capability detection failure

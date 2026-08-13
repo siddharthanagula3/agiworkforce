@@ -52,7 +52,7 @@ async function handleSendMessage(request: NextRequest, context: RouteContext) {
   const { id: clientMessageId, content, metadata, model, role, skipLlm } = validationResult.data;
 
   const db = getNeonChatDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conversation] = await db.query<{ id: string; model: string | null }>(
     `
       select id, model

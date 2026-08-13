@@ -55,6 +55,24 @@ interface AgentState {
   rejectRequest: (id: string, reason?: string) => void;
 }
 
+const approvalResponsesInFlight = new Set<string>();
+
+function sendApprovalDecision(id: string, approved: boolean, reason?: string): void {
+  if (approvalResponsesInFlight.has(id)) return;
+  approvalResponsesInFlight.add(id);
+  void import('@/services/companion')
+    .then(async ({ sendApprovalResponse }) => {
+      const acceptedByTransport = await sendApprovalResponse(id, approved, reason);
+      if (!acceptedByTransport) {
+        console.warn('[agentStore] Approval response was not accepted by a transport.');
+      }
+    })
+    .catch((error) => {
+      console.warn('[agentStore] Failed to send approval response:', error);
+    })
+    .finally(() => approvalResponsesInFlight.delete(id));
+}
+
 export const useAgentStore = create<AgentState>()(
   persist(
     (set, get) => ({
@@ -99,9 +117,11 @@ export const useAgentStore = create<AgentState>()(
       reconcileApprovals: (pendingIds) => {
         const pendingIdSet = new Set(pendingIds);
         set((state) => ({
-          pendingApprovals: state.pendingApprovals.filter((request) =>
-            pendingIdSet.has(request.id),
-          ),
+          pendingApprovals: state.pendingApprovals
+            .filter((request) => pendingIdSet.has(request.id))
+            .map((request) =>
+              request.status === 'pending' ? request : { ...request, status: 'pending' as const },
+            ),
         }));
       },
 
@@ -113,71 +133,16 @@ export const useAgentStore = create<AgentState>()(
       approveRequest: (id) => {
         const approval = get().pendingApprovals.find((request) => request.id === id);
         if (!approval || approval.status !== 'pending') return;
-
-        // Update local state
-        set((state) => ({
-          pendingApprovals: state.pendingApprovals.map((r) =>
-            r.id === id ? { ...r, status: 'approved' as const } : r,
-          ),
-        }));
-        // Send decision to desktop via WebRTC
-        void import('@/services/companion')
-          .then(({ sendApprovalResponse }) => {
-            if (!sendApprovalResponse(id, true)) {
-              set((state) => ({
-                pendingApprovals: state.pendingApprovals.map((request) =>
-                  request.id === id && request.status === 'approved'
-                    ? { ...request, status: 'pending' as const }
-                    : request,
-                ),
-              }));
-            }
-          })
-          .catch((error) => {
-            set((state) => ({
-              pendingApprovals: state.pendingApprovals.map((request) =>
-                request.id === id && request.status === 'approved'
-                  ? { ...request, status: 'pending' as const }
-                  : request,
-              ),
-            }));
-            console.warn('[agentStore] Failed to send approval response:', error);
-          });
+        // Keep the request visibly pending until Desktop closes it with the
+        // protocol-level `approval_closed` event. Local transport acceptance
+        // alone is not proof that the privileged action was resolved.
+        sendApprovalDecision(id, true);
       },
 
       rejectRequest: (id, reason) => {
         const approval = get().pendingApprovals.find((request) => request.id === id);
         if (!approval || approval.status !== 'pending') return;
-
-        // Update local state
-        set((state) => ({
-          pendingApprovals: state.pendingApprovals.map((r) =>
-            r.id === id ? { ...r, status: 'rejected' as const } : r,
-          ),
-        }));
-        // Send decision to desktop via WebRTC
-        void import('@/services/companion')
-          .then(({ sendApprovalResponse }) => {
-            if (!sendApprovalResponse(id, false, reason)) {
-              set((state) => ({
-                pendingApprovals: state.pendingApprovals.map((request) =>
-                  request.id === id && request.status === 'rejected'
-                    ? { ...request, status: 'pending' as const }
-                    : request,
-                ),
-              }));
-            }
-          })
-          .catch((error) => {
-            set((state) => ({
-              pendingApprovals: state.pendingApprovals.map((request) =>
-                request.id === id && request.status === 'rejected'
-                  ? { ...request, status: 'pending' as const }
-                  : request,
-              ),
-            }));
-            console.warn('[agentStore] Failed to send rejection response:', error);
-          });
+        sendApprovalDecision(id, false, reason);
       },
     }),
     {

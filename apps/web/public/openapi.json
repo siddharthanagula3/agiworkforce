@@ -3,10 +3,10 @@
   "info": {
     "title": "AGI Workforce API",
     "version": "1.0.0",
-    "description": "OpenAI-compatible inference gateway plus the billing and device-authorization endpoints the first-party apps use.\n\nBase URL is `https://agiworkforce.com/api`. `api.agiworkforce.com` is not yet a working base URL — requests to it are redirected to the apex and do not reach a route.\n\nTwo credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_…`/`sk_test_…`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`; every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/api/rate-limits.md`.",
+    "description": "OpenAI-compatible inference gateway plus the billing and device-authorization endpoints the first-party apps use.\n\nThe complete API base URL is `https://agiworkforce.com/api`. The API host also exposes the OpenAI-compatible aliases `/v1/chat/completions`, `/v1/models`, `/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance` at `https://api.agiworkforce.com`, plus `/health`. Other operations use the complete API base URL above.\n\nTwo credential types authenticate here and they are NOT interchangeable. An AGI API key (`sk_live_…`/`sk_test_…`, issued under Settings > API Keys) works only on the operations that declare `ApiKeyAuth`; every other operation needs a session bearer token. Each operation states which one it takes. Rate limits are published in `docs/api/rate-limits.md`.",
     "contact": {
       "name": "AGI Workforce Support",
-      "email": "support@agiworkforce.com",
+      "email": "contact@agiworkforce.com",
       "url": "https://agiworkforce.com"
     },
     "license": {

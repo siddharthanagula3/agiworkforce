@@ -36,6 +36,17 @@ function post(data: unknown): void {
   window.dispatchEvent(new MessageEvent('message', { data }));
 }
 
+function activity(index = 0): HTMLElement {
+  const groups = document.querySelectorAll<HTMLElement>('.activity-group');
+  const group = groups.item(index);
+  expect(group).not.toBeNull();
+  return group;
+}
+
+function activityMeta(group: HTMLElement): string {
+  return group.querySelector('.activity-group__meta')?.textContent ?? '';
+}
+
 describe('sidebar action status', () => {
   beforeEach(() => {
     document.head.innerHTML = '';
@@ -45,6 +56,45 @@ describe('sidebar action status', () => {
   afterEach(() => {
     Reflect.deleteProperty(globalThis, 'acquireVsCodeApi');
     vi.restoreAllMocks();
+  });
+
+  it('shows live action counts while an activity group is working', () => {
+    boot();
+    post({
+      type: 'toolCallStart',
+      payload: {
+        toolUseId: 'tool-1',
+        name: 'run_command',
+        category: 'shell',
+        summary: 'Run focused tests',
+        input: { command: 'pnpm test' },
+      },
+    });
+
+    const group = activity();
+    expect(group.dataset.status).toBe('working');
+    expect(group.classList.contains('activity-group--collapsed')).toBe(false);
+    expect(group.querySelector('.activity-group__summary')?.getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+    expect(activityMeta(group)).toContain('1 action');
+    expect(activityMeta(group)).toContain('1 running');
+    expect(activityMeta(group)).toContain('Run focused tests');
+
+    post({
+      type: 'toolCallEnd',
+      payload: {
+        toolUseId: 'tool-1',
+        output: 'Tests failed',
+        isError: true,
+        elapsedMs: 1200,
+      },
+    });
+
+    expect(group.dataset.status).toBe('working');
+    expect(activityMeta(group)).toContain('1 action');
+    expect(activityMeta(group)).toContain('1 error');
+    expect(group.querySelector('.tool-call--error')).not.toBeNull();
   });
 
   it('does not label a turn Done after one of its tool actions failed', () => {
@@ -70,17 +120,18 @@ describe('sidebar action status', () => {
     });
     post({ type: 'done', payload: {} });
 
-    expect(document.querySelector('.tool-call--error')).not.toBeNull();
-    expect(document.querySelector('.tool-call-done')?.textContent).toContain(
-      'Completed with errors',
-    );
-    expect(document.querySelector('.tool-call-done')?.textContent).not.toMatch(/\bDone\b/u);
-    expect(document.head.textContent).toContain(
-      '.tool-call-done--error {\n      color: var(--agi-vscode-danger);',
+    const group = activity();
+    expect(group.querySelector('.tool-call--error')).not.toBeNull();
+    expect(group.dataset.status).toBe('error');
+    expect(activityMeta(group)).toContain('1 error');
+    expect(activityMeta(group)).not.toMatch(/\bDone\b/u);
+    expect(group.classList.contains('activity-group--collapsed')).toBe(true);
+    expect(group.querySelector('.activity-group__summary')?.getAttribute('aria-expanded')).toBe(
+      'false',
     );
   });
 
-  it('keeps the concise Done footer when every action succeeds', () => {
+  it('auto-collapses successful activity and lets the user reopen it', () => {
     boot();
     post({
       type: 'toolCallStart',
@@ -98,8 +149,19 @@ describe('sidebar action status', () => {
     });
     post({ type: 'done', payload: {} });
 
-    expect(document.querySelector('.tool-call-done')?.textContent).toContain('Done');
-    expect(document.querySelector('.tool-call-done--error')).toBeNull();
+    const group = activity();
+    const summary = group.querySelector<HTMLButtonElement>('.activity-group__summary');
+    expect(group.querySelector('.tool-call--done')).not.toBeNull();
+    expect(group.dataset.status).toBe('done');
+    expect(activityMeta(group)).toBe('1 action · Done');
+    expect(group.classList.contains('activity-group--collapsed')).toBe(true);
+    expect(summary?.getAttribute('aria-expanded')).toBe('false');
+
+    summary?.click();
+
+    expect(group.classList.contains('activity-group--collapsed')).toBe(false);
+    expect(summary?.getAttribute('aria-expanded')).toBe('true');
+    expect(activityMeta(group)).toBe('1 action · Done');
   });
 
   it('separates a terminally failed action stack from the next successful turn', () => {
@@ -137,13 +199,15 @@ describe('sidebar action status', () => {
     });
     post({ type: 'done', payload: {} });
 
-    const stacks = Array.from(document.querySelectorAll('.tool-call-stack'));
+    const stacks = Array.from(document.querySelectorAll<HTMLElement>('.activity-group'));
     expect(stacks).toHaveLength(2);
-    expect(stacks[0]?.querySelector('.tool-call-done')?.textContent).toContain(
-      'Completed with errors',
-    );
-    expect(stacks[1]?.querySelector('.tool-call-done')?.textContent).toContain('Done');
-    expect(stacks[1]?.querySelector('.tool-call-done--error')).toBeNull();
+    expect(stacks[0]?.dataset.status).toBe('error');
+    expect(activityMeta(stacks[0]!)).toBe('1 action · Completed with errors');
+    expect(stacks[0]?.classList.contains('activity-group--collapsed')).toBe(true);
+    expect(stacks[1]?.dataset.status).toBe('done');
+    expect(activityMeta(stacks[1]!)).toBe('1 action · Done');
+    expect(stacks[1]?.querySelector('.tool-call--done')).not.toBeNull();
+    expect(stacks[1]?.querySelector('.tool-call--error')).toBeNull();
   });
 
   it('summarizes a failed progress action as completed with errors', () => {
@@ -159,9 +223,10 @@ describe('sidebar action status', () => {
     });
     post({ type: 'done', payload: {} });
 
-    expect(document.querySelector('.progress-event.tool-call--error')).not.toBeNull();
-    expect(document.querySelector('.tool-call-done--error')?.textContent).toContain(
-      'Completed with errors',
-    );
+    const group = activity();
+    expect(group.querySelector('.progress-event.tool-call--error')).not.toBeNull();
+    expect(group.dataset.status).toBe('error');
+    expect(activityMeta(group)).toBe('1 action · 1 error');
+    expect(group.classList.contains('activity-group--collapsed')).toBe(true);
   });
 });

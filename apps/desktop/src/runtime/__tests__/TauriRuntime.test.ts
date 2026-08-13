@@ -187,6 +187,8 @@ describe('TauriRuntime', () => {
         userId: 'user-123',
         conversationId: 42,
         modelOverride: FIXTURE_MODEL_ID,
+        enableTools: false,
+        toolScope: undefined,
         stream: true,
         frontendMessageId: expect.any(String),
       }),
@@ -194,6 +196,25 @@ describe('TauriRuntime', () => {
 
     expect(invokeMock.mock.calls.map(([command]) => command)).not.toContain('llm_send_message');
     expect(linkConversationIdMock).toHaveBeenCalledWith('frontend-conversation-id', 42);
+  });
+
+  it('forwards an explicit Local Web-search turn as the narrow native search scope', async () => {
+    const { TauriRuntime } = await import('../TauriRuntime');
+    const runtime = new TauriRuntime();
+
+    await runtime.sendMessage('frontend-conversation-id', 'Find current release notes', {
+      model: FIXTURE_MODEL_ID,
+      webSearch: true,
+      localToolScope: 'web_search',
+    });
+
+    const sendCall = invokeMock.mock.calls.find(([command]) => command === 'chat_send_message');
+    expect(sendCall?.[1]).toEqual({
+      request: expect.objectContaining({
+        enableTools: true,
+        toolScope: 'web_search',
+      }),
+    });
   });
 
   it('injects the personalization "Response Style" settings into customInstructions', async () => {

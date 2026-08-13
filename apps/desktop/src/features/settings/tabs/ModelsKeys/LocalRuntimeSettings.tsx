@@ -2,16 +2,16 @@
  * Local Runtime Settings — LM Studio, llama.cpp, and vLLM
  *
  * Mirrors the Ollama card in `./index.tsx` (URL config + installed/running state,
- * no fake availability) for the other local OpenAI-compatible runtimes added
- * alongside Ollama. Self-contained: manages its own status-check state so it can
- * be dropped into the Local Models section without threading new props through
- * `SettingsPanel.tsx`'s existing Ollama-specific state machine.
+ * no fake availability) for the other local OpenAI-compatible runtimes. URL
+ * edits participate in the parent Settings transaction; status checks remain
+ * local to each card.
  */
 import React from 'react';
 import { Check, Loader2, RefreshCw, Server } from 'lucide-react';
 import { toast } from 'sonner';
 import { validateUrl } from '@/utils/security';
 import { invoke } from '@/lib/tauri-mock';
+import { notifyLocalModelCatalogChanged } from '@/lib/localModelCatalog';
 import { useSettingsStore } from '@/stores/settingsStore';
 
 interface RemoteModel {
@@ -105,31 +105,35 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
     setUrlInput(persistedUrl || runtime.defaultUrl);
   }, [persistedUrl, runtime.defaultUrl]);
 
-  const refresh = React.useCallback(async () => {
-    setChecking(true);
-    try {
-      const status = await invoke<ProviderStatusResponse>('llm_check_provider_status', {
-        provider: runtime.key,
-      });
-      setAvailable(Boolean(status.available));
-      setError(status.available ? null : (status.error ?? null));
-      if (status.available) {
-        const rawModels = await invoke<unknown>(runtime.listCommand).catch(() => []);
-        setModels(Array.isArray(rawModels) ? (rawModels as RemoteModel[]) : []);
-      } else {
+  const refresh = React.useCallback(
+    async (notifyCatalog = false) => {
+      setChecking(true);
+      try {
+        const status = await invoke<ProviderStatusResponse>('llm_check_provider_status', {
+          provider: runtime.key,
+        });
+        setAvailable(Boolean(status.available));
+        setError(status.available ? null : (status.error ?? null));
+        if (status.available) {
+          const rawModels = await invoke<unknown>(runtime.listCommand).catch(() => []);
+          setModels(Array.isArray(rawModels) ? (rawModels as RemoteModel[]) : []);
+        } else {
+          setModels([]);
+        }
+      } catch (err) {
+        setAvailable(false);
         setModels([]);
+        setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setChecking(false);
+        if (notifyCatalog) notifyLocalModelCatalogChanged('runtime-refresh');
       }
-    } catch (err) {
-      setAvailable(false);
-      setModels([]);
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setChecking(false);
-    }
-  }, [runtime.key, runtime.listCommand]);
+    },
+    [runtime.key, runtime.listCommand],
+  );
 
   React.useEffect(() => {
-    void refresh();
+    void refresh(false);
   }, [refresh]);
 
   const commitUrl = (raw: string) => {
@@ -146,15 +150,6 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
       }
       const sanitized = result.sanitized ?? raw;
       setPersistedUrl(sanitized);
-      invoke('llm_configure_provider', {
-        provider: runtime.key,
-        apiKey: null,
-        baseUrl: sanitized,
-      })
-        .then(() => void refresh())
-        .catch((err: unknown) => {
-          console.error(`Failed to configure ${runtime.label} provider:`, err);
-        });
     } catch {
       toast.error(`Invalid ${runtime.label} URL`);
     }
@@ -186,7 +181,9 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
                 placeholder={runtime.defaultUrl}
                 className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
-              <p className="text-xs text-muted-foreground">Default: {runtime.defaultUrl}</p>
+              <p className="text-xs text-muted-foreground">
+                Default: {runtime.defaultUrl}. Changes apply when you save Settings.
+              </p>
             </div>
 
             {checking ? (
@@ -227,8 +224,9 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
         </div>
         <button
           type="button"
-          onClick={() => void refresh()}
+          onClick={() => void refresh(true)}
           disabled={checking}
+          aria-label={`Re-check ${runtime.label} status`}
           title={`Re-check ${runtime.label} status`}
           className="shrink-0 rounded-md border border-border p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >

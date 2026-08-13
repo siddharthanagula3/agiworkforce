@@ -23,6 +23,8 @@ interface DispatchTaskState {
     sentAt: string;
   }) => void;
   applyStatus: (event: DispatchTaskStatusEvent) => void;
+  markTransportFailure: (requestId: string, message: string, terminal?: boolean) => void;
+  markAcknowledgementTimeout: (requestId: string) => void;
   clearFinished: () => void;
   reset: () => void;
 }
@@ -64,6 +66,32 @@ export const useDispatchTaskStore = create<DispatchTaskState>((set) => ({
               result: event.result,
               error: event.error,
               updatedAt: event.updatedAt,
+            }
+          : task,
+      ),
+    })),
+  markTransportFailure: (requestId, message, terminal = false) =>
+    set((state) => ({
+      tasks: state.tasks.map((task) =>
+        task.requestId === requestId
+          ? {
+              ...task,
+              ...(terminal ? { status: 'failed' as const } : {}),
+              error: message,
+              updatedAt: new Date().toISOString(),
+            }
+          : task,
+      ),
+    })),
+  markAcknowledgementTimeout: (requestId) =>
+    set((state) => ({
+      tasks: state.tasks.map((task) =>
+        task.requestId === requestId && task.status === 'sending'
+          ? {
+              ...task,
+              status: 'failed' as const,
+              error: 'Desktop did not acknowledge this task. Check Desktop before trying again.',
+              updatedAt: new Date().toISOString(),
             }
           : task,
       ),

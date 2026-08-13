@@ -38,7 +38,7 @@ import {
   isSameWorkspacePath,
 } from '../../integrations/developerSessionValidation';
 import { type LocalRuntimePool } from '../../integrations/localRuntimePool';
-import { resolveTier } from '../../integrations/tierResolver';
+import { clearAccountTierCache, resolveTier } from '../../integrations/tierResolver';
 import { getActiveWorkspaceFolder } from '../../platform/workspaceFolders';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 import { classifyDeveloperTurn, isAutoRoutingModel } from '../../integrations/routingTask';
@@ -65,6 +65,7 @@ import {
   formatManagedUsageLabel,
   formatUsageMeterFallbackLabel,
   resolveUsageMeter,
+  type ExtensionUsageMeter,
 } from '../../data/usageMeter';
 
 type DeveloperSessionTrustMode = ThreadSummary['trustMode'];
@@ -96,11 +97,13 @@ export type WebviewToExtMessage =
   | { type: 'ready' }
   | { type: 'getModel' }
   | { type: 'openSettings' }
+  | { type: 'openWorkspace' }
+  | { type: 'manageWorkspaceTrust' }
   | { type: 'cancel' }
   | { type: 'fileSearch'; payload: { query: string } }
   | { type: 'shareDiagnostics' }
   | { type: 'clearConversation' }
-  | { type: 'openActionSheet' }
+  | { type: 'openActionSheet'; payload?: { scope: 'composer' } }
   | { type: 'openModePicker' }
   | { type: 'openEffortPicker' }
   | { type: 'setMode'; payload: { mode: AgentMode } }
@@ -108,6 +111,7 @@ export type WebviewToExtMessage =
   | { type: 'dismissUsageMeter' }
   | { type: 'restoreUsageMeter' }
   | { type: 'upgradeClicked' }
+  | { type: 'manageBilling' }
   | { type: 'openModelPopover' }
   | { type: 'selectModel'; payload: { modelId: string } }
   | { type: 'proposeDiff'; payload: { code: string; language: string } }
@@ -145,7 +149,10 @@ export type ExtToWebviewMessage =
   | { type: 'providerBadge'; payload: { providerLabel: string; brandColor: string } }
   | {
       type: 'runtimeStatus';
-      payload: { status: 'ready' | 'unavailable'; message?: string };
+      payload: {
+        status: 'ready' | 'unavailable' | 'workspace-required' | 'workspace-untrusted';
+        message?: string;
+      };
     }
   | {
       type: 'fileSearchResults';
@@ -225,7 +232,6 @@ export type ExtToWebviewMessage =
         input: unknown;
       };
     }
-  | { type: 'toolCallDelta'; payload: { toolUseId: string; deltaJson: string } }
   | {
       type: 'toolCallEnd';
       payload: {
@@ -240,6 +246,8 @@ export type ExtToWebviewMessage =
       payload: {
         groups: Array<{
           label: string;
+          description: string;
+          boundary: 'local' | 'byok' | 'cloud' | 'unavailable';
           models: Array<{ id: string; label: string; description: string; disabled?: boolean }>;
         }>;
         currentModel: string;
@@ -264,7 +272,8 @@ export type ExtToWebviewMessage =
         identity?: AccountIdentity;
       };
     }
-  | { type: 'showOnboarding' };
+  | { type: 'showOnboarding' }
+  | { type: 'hideOnboarding' };
 
 type ConversationLoadedPayload = Extract<
   ExtToWebviewMessage,
@@ -305,6 +314,11 @@ export interface UsageMeterWebviewPayload {
   showUpgrade: boolean;
   /** Whether the banner is collapsed (user dismissed it) */
   collapsed: boolean;
+  /** Signed-in AGI account plan, distinct from the active runtime boundary. */
+  accountPlanTier?: string;
+  /** Whether that plan includes Managed Cloud developer surfaces. */
+  managedDeveloperEligible?: boolean;
+  subscriptionStatus?: string;
 }
 
 interface PendingAttachment {
@@ -341,7 +355,7 @@ function formatResetsIn(resetsAt: string | null): string | null {
  * and the header pill cannot disagree about the boundary.
  */
 export function buildUsageMeterPayload(
-  meter: UsageMeter,
+  meter: ExtensionUsageMeter,
   collapsed: boolean,
 ): UsageMeterWebviewPayload {
   let usageLabel: string;
@@ -365,6 +379,13 @@ export function buildUsageMeterPayload(
       meter.remaining !== null &&
       meter.remaining < USAGE_METER_UPGRADE_THRESHOLD,
     collapsed,
+    ...(meter.accountPlanTier === undefined ? {} : { accountPlanTier: meter.accountPlanTier }),
+    ...(meter.managedDeveloperEligible === undefined
+      ? {}
+      : { managedDeveloperEligible: meter.managedDeveloperEligible }),
+    ...(meter.subscriptionStatus === undefined
+      ? {}
+      : { subscriptionStatus: meter.subscriptionStatus }),
   };
 }
 
@@ -412,6 +433,8 @@ export class ChatStateManager {
   private _meterCollapsed = false;
   /** Last model dispatched — used as the "previous" model for paywall guard comparisons */
   private _activeModel: string;
+  /** Invalidates account/plan refreshes when sign-in state changes mid-request. */
+  private _accountPresentationSeq = 0;
   /** Provider boundary the last pushed usage meter described (see pushUsageMeter). */
   private _lastMeterBoundary: string | undefined;
   /** Data-URL/text attachments waiting for the next successfully-started turn. */
@@ -462,12 +485,15 @@ export class ChatStateManager {
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.type) {
       case 'ready': {
+        // Reconcile the durable host state after the webview is ready. VS Code
+        // can resolve a contributed view before its global memento snapshot has
+        // settled during window reload, which otherwise makes a completed
+        // first-run overlay flash and remain open again.
+        if (this._context.globalState.get<boolean>(ONBOARDING_SEEN_KEY) === true) {
+          this._post({ type: 'hideOnboarding' });
+        }
         await this._discoverLocalModels(this._thread?.runtime);
-        const model =
-          this._thread?.model ??
-          this._normalizeModelSelection(
-            vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-          );
+        const model = this._thread?.model ?? this._normalizeModelSelection(Config.model());
         // Local discovery has just run, so this is the first point at which the
         // configured id can be classified against the trusted local model list.
         this._activeModel = model;
@@ -487,8 +513,7 @@ export class ChatStateManager {
           },
         });
 
-        await this.pushUsageMeter();
-        await this.pushAccountStatus();
+        await this.refreshAccountPresentation();
         if (this._loadedConversation !== undefined && this._thread !== undefined) {
           this._postLoadedConversation();
           this._postProviderBadgeForSession(
@@ -505,10 +530,20 @@ export class ChatStateManager {
         break;
       }
 
+      case 'openWorkspace': {
+        // Official built-in command. With no URI, VS Code presents its native
+        // folder chooser and restarts the extension host on the chosen folder.
+        await vscode.commands.executeCommand('vscode.openFolder');
+        break;
+      }
+
+      case 'manageWorkspaceTrust': {
+        await vscode.commands.executeCommand('workbench.trust.manage');
+        break;
+      }
+
       case 'getModel': {
-        const model = normalizeConfiguredModelId(
-          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-        );
+        const model = normalizeConfiguredModelId(Config.model());
         this._post({ type: 'model', payload: { model } });
         this._postProviderBadge(model);
         this._post({
@@ -634,7 +669,10 @@ export class ChatStateManager {
       }
 
       case 'openActionSheet': {
-        await vscode.commands.executeCommand('agi-workforce.openActionSheet');
+        await vscode.commands.executeCommand(
+          'agi-workforce.openActionSheet',
+          msg.payload?.scope === 'composer' ? 'composer' : undefined,
+        );
         break;
       }
 
@@ -716,9 +754,7 @@ export class ChatStateManager {
         if (await setAgentEffortWithConsent(this._context, effort)) {
           this._effort = effort;
         }
-        const model = normalizeConfiguredModelId(
-          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-        );
+        const model = normalizeConfiguredModelId(Config.model());
         this._post({
           type: 'effortChanged',
           payload: {
@@ -751,55 +787,116 @@ export class ChatStateManager {
         break;
       }
 
+      case 'manageBilling': {
+        await vscode.env.openExternal(
+          vscode.Uri.parse('https://agiworkforce.com/settings/billing?from=vscode-extension'),
+        );
+        break;
+      }
+
       // ── v3: inline model popover ──────────────────────────────────────────────
       case 'openModelPopover': {
         const localModels = await this._discoverLocalModels();
-        const currentModel = this._normalizeModelSelection(
-          vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-        );
+        const currentModel = this._normalizeModelSelection(Config.model());
         // VSCODE-PICKER-TIER-01: same tier gate as the QuickPick command, so the
         // inline popover cannot present unreachable managed-cloud models.
-        const allItems = buildGroupedQuickPickItems(await resolveTier(this._context));
+        const tier = await resolveTier(this._context);
+        const allItems = buildGroupedQuickPickItems(tier);
         const groups: Array<{
           label: string;
+          description: string;
+          boundary: 'local' | 'byok' | 'cloud' | 'unavailable';
           models: Array<{ id: string; label: string; description: string; disabled?: boolean }>;
-        }> = [
-          {
-            label: 'Local',
-            models:
-              localModels.length > 0
-                ? localModels.map((model) => ({
-                    id: model.id,
-                    label: model.id,
-                    description:
-                      model.provider === 'ollama' ? 'Ollama · On device' : 'LM Studio · On device',
-                  }))
-                : [
-                    {
-                      id: '__local_setup__',
-                      label: 'No local models found',
-                      description: 'Start Ollama or LM Studio and load a model',
-                      disabled: true,
-                    },
-                  ],
-          },
-        ];
+        }> = [];
+        const autoItem = allItems.find((item) => item.modelId === 'auto');
+        if (autoItem?.modelId !== undefined) {
+          const autoBoundary =
+            tier === 'byok' ? 'byok' : autoItem.disabled === true ? 'unavailable' : 'cloud';
+          groups.push({
+            label: 'Recommended',
+            description:
+              autoBoundary === 'byok'
+                ? 'Auto uses your configured providers; requests go directly to them'
+                : autoBoundary === 'cloud'
+                  ? 'Auto routes within your Managed Cloud plan'
+                  : 'Sign in or add a provider key to use Auto',
+            boundary: autoBoundary,
+            models: [
+              {
+                id: autoItem.modelId,
+                label: autoItem.label.replace(/^\$\([^)]+\)\s*/, ''),
+                description: autoItem.description ?? '',
+                ...(autoItem.disabled === undefined ? {} : { disabled: autoItem.disabled }),
+              },
+            ],
+          });
+        }
+        groups.push({
+          label: 'On this device',
+          description: 'Ollama and LM Studio stay inside the local runtime',
+          boundary: 'local',
+          models:
+            localModels.length > 0
+              ? localModels.map((model) => ({
+                  id: model.id,
+                  label: model.id,
+                  description:
+                    model.provider === 'ollama' ? 'Ollama · On device' : 'LM Studio · On device',
+                }))
+              : [
+                  {
+                    id: '__local_setup__',
+                    label: 'No local models found',
+                    description: 'Start Ollama or LM Studio and load a model',
+                    disabled: true,
+                  },
+                ],
+        });
         let currentGroup:
           | {
               label: string;
+              description: string;
+              boundary: 'local' | 'byok' | 'cloud' | 'unavailable';
               models: Array<{ id: string; label: string; description: string; disabled?: boolean }>;
             }
           | undefined;
 
         for (const item of allItems) {
+          if (item.modelId === 'auto') continue;
           if (item.kind === vscode.QuickPickItemKind.Separator) {
             if (item.label !== '') {
-              currentGroup = { label: item.label, models: [] };
+              const reachableOnBoundary =
+                tier === 'byok'
+                  ? 'byok'
+                  : tier === 'local' || tier === 'free' || tier === 'basic'
+                    ? 'unavailable'
+                    : 'cloud';
+              currentGroup = {
+                label:
+                  reachableOnBoundary === 'byok'
+                    ? `Your providers · ${item.label}`
+                    : reachableOnBoundary === 'cloud'
+                      ? `Managed Cloud · ${item.label}`
+                      : `Unavailable · ${item.label}`,
+                description:
+                  reachableOnBoundary === 'byok'
+                    ? 'Requests go directly to this provider using your key'
+                    : reachableOnBoundary === 'cloud'
+                      ? 'Prompts are sent to AGI infrastructure under your plan'
+                      : 'Sign in or add a provider key to unlock these models',
+                boundary: reachableOnBoundary,
+                models: [],
+              };
               groups.push(currentGroup);
             }
           } else if (item.modelId !== undefined) {
             if (currentGroup === undefined) {
-              currentGroup = { label: 'Models', models: [] };
+              currentGroup = {
+                label: 'Availability resolving',
+                description: 'The selected model is revalidated before every turn',
+                boundary: 'unavailable',
+                models: [],
+              };
               groups.push(currentGroup);
             }
             currentGroup.models.push({
@@ -1010,18 +1107,38 @@ export class ChatStateManager {
     }
   }
 
-  public async pushAccountStatus(): Promise<void> {
+  public async pushAccountStatus(shouldPost: () => boolean = () => true): Promise<void> {
     const state = await getAccountAuthState(this._secrets);
     if (state.status !== 'signed-in') {
-      this._post({ type: 'accountStatus', payload: { status: state.status } });
+      if (shouldPost()) this._post({ type: 'accountStatus', payload: { status: state.status } });
       return;
     }
 
     const identity = await fetchAccountIdentity(this._secrets);
+    const refreshedState = await getAccountAuthState(this._secrets);
+    if (refreshedState.status !== 'signed-in') {
+      await clearAccountTierCache(this._context);
+      if (shouldPost()) {
+        this._post({ type: 'accountStatus', payload: { status: refreshedState.status } });
+      }
+      return;
+    }
+    if (!shouldPost()) return;
     this._post({
       type: 'accountStatus',
-      payload: identity ? { status: state.status, identity } : { status: state.status },
+      payload: identity
+        ? { status: refreshedState.status, identity }
+        : { status: refreshedState.status },
     });
+  }
+
+  /** Refresh account identity, entitlement-derived meter, and boundary as one epoch. */
+  public async refreshAccountPresentation(): Promise<void> {
+    const attempt = ++this._accountPresentationSeq;
+    const isCurrent = () => attempt === this._accountPresentationSeq;
+    await this.pushAccountStatus(isCurrent);
+    if (!isCurrent()) return;
+    await this.pushUsageMeter(isCurrent);
   }
 
   public showOnboarding(): void {
@@ -1258,7 +1375,7 @@ export class ChatStateManager {
     const isLocalRuntimeModel =
       persistedTrustMode === 'local' ||
       (persistedTrustMode === undefined && boundary.startsWith('local:'));
-    let meter: UsageMeter;
+    let meter: ExtensionUsageMeter;
     if (persistedTrustMode === 'local') {
       meter = { remaining: null, resetsAt: null, source: 'unbounded' };
     } else if (persistedTrustMode === 'byok') {
@@ -1314,9 +1431,7 @@ export class ChatStateManager {
     const mode = Config.agentMode();
     const effort = Config.agentEffort();
     this._post({ type: 'modeChanged', payload: { mode } });
-    const model = normalizeConfiguredModelId(
-      vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-    );
+    const model = normalizeConfiguredModelId(Config.model());
     this._post({
       type: 'effortChanged',
       payload: { effort, supportsEffort: this.modelSupportsEffort(model) },
@@ -1386,12 +1501,59 @@ export class ChatStateManager {
     return normalizeConfiguredModelId(modelId);
   }
 
+  private _describeLocalRuntimeSetupError(error: unknown): string {
+    const message = error instanceof Error ? error.message.trim() : '';
+    if (message.length === 0) {
+      return 'The AGI CLI could not start. Check its path in Runtime settings.';
+    }
+    if (/\bENOENT\b|command not found|executable.*not found/i.test(message)) {
+      return 'The AGI CLI executable was not found. Choose its installed path in Runtime settings.';
+    }
+    // Initialization failures already use bounded, user-facing protocol and
+    // version copy in LocalRuntimeClient. Preserve that exact cause here so
+    // the persistent sidebar agrees with the notification instead of
+    // collapsing every failure into a generic installation prompt.
+    return message.length <= 320 ? message : `${message.slice(0, 317)}…`;
+  }
+
   private async _discoverLocalModels(runtime?: LocalRuntimeClient): Promise<LocalModelSummary[]> {
     try {
       let activeRuntime = runtime;
       if (activeRuntime === undefined) {
         const workspace = await getActiveWorkspaceFolder();
-        if (workspace === undefined || this._localRuntimes === undefined) return [];
+        if (workspace === undefined) {
+          this._localModelProviders.clear();
+          this._post({
+            type: 'runtimeStatus',
+            payload: {
+              status: 'workspace-required',
+              message: 'Open a folder or workspace to start a workspace-scoped developer session.',
+            },
+          });
+          return [];
+        }
+        if (!vscode.workspace.isTrusted) {
+          this._localModelProviders.clear();
+          this._post({
+            type: 'runtimeStatus',
+            payload: {
+              status: 'workspace-untrusted',
+              message:
+                'Review and trust this workspace before AGI reads files, runs commands, or starts a local runtime.',
+            },
+          });
+          return [];
+        }
+        if (this._localRuntimes === undefined) {
+          this._post({
+            type: 'runtimeStatus',
+            payload: {
+              status: 'unavailable',
+              message: 'Install or update the AGI CLI, then configure its path in Settings.',
+            },
+          });
+          return [];
+        }
         activeRuntime = this._localRuntimes.forWorkspace(workspace.uri.fsPath);
       }
       const response = await activeRuntime.listLocalModels();
@@ -1401,12 +1563,12 @@ export class ChatStateManager {
       }
       this._post({ type: 'runtimeStatus', payload: { status: 'ready' } });
       return response.models;
-    } catch {
+    } catch (error) {
       this._post({
         type: 'runtimeStatus',
         payload: {
           status: 'unavailable',
-          message: 'Install or update the AGI CLI, then configure its path in Settings.',
+          message: this._describeLocalRuntimeSetupError(error),
         },
       });
       return [];
@@ -1733,7 +1895,7 @@ export class ChatStateManager {
     if (!vscode.workspace.isTrusted) {
       this._post({
         type: 'error',
-        payload: { message: 'Trust this workspace before starting a local developer session.' },
+        payload: { message: 'Trust this workspace before starting a developer session.' },
       });
       return false;
     }
@@ -1954,7 +2116,7 @@ export class ChatStateManager {
         const attachmentEntries = [...request.attachments];
         const attachmentInputs = attachmentEntries.map((entry) => entry.input);
         const customInstructionInput = buildCustomInstructionInput(this._context);
-        const memoryInput = buildMemoryContextInput(this._context.globalState);
+        const memoryInput = buildMemoryContextInput(this._context.workspaceState);
         const contextFiles = contextFilesForWorkspace(cwd);
         const startTurn = runtime.startTurn({
           threadId: thread.id,

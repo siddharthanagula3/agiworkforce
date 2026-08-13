@@ -14,12 +14,23 @@ import type { RoutingDecision } from '@agiworkforce/types';
 interface ModelState {
   models: ModelInfo[];
   selectedModelId: string;
+  /**
+   * Host-owned reachability lifecycle. `models: []` alone cannot distinguish
+   * an in-progress local-runtime probe from a verified empty catalog.
+   * This state is deliberately not persisted: every app launch must verify
+   * the active execution boundary again.
+   */
+  modelCatalogStatus: 'idle' | 'loading' | 'ready' | 'error';
+  modelCatalogError: string | null;
   thinkingEnabled: boolean;
   recentModelIds: string[];
   /** Last auto-routing decision — shown as a badge in the model selector. */
   lastRoutingDecision: RoutingDecision | null;
 
   setModels: (models: ModelInfo[]) => void;
+  beginModelCatalogLoad: (clearExisting: boolean) => void;
+  completeModelCatalogLoad: (models: ModelInfo[], selectedModelId: string) => void;
+  failModelCatalogLoad: (message: string, clearExisting: boolean) => void;
   selectModel: (id: string) => void;
   toggleThinking: () => void;
   setThinking: (enabled: boolean) => void;
@@ -117,11 +128,51 @@ export const useModelStore = create<ModelState>()(
     (set, get) => ({
       models: [],
       selectedModelId: DEFAULT_MODEL_ID,
+      modelCatalogStatus: 'ready',
+      modelCatalogError: null,
       thinkingEnabled: false,
       recentModelIds: [],
       lastRoutingDecision: null,
 
-      setModels: (models) => set({ models }),
+      // Existing hosts that publish a complete catalog through `setModels`
+      // retain their historical ready-state behavior.
+      setModels: (models) => set({ models, modelCatalogStatus: 'ready', modelCatalogError: null }),
+
+      beginModelCatalogLoad: (clearExisting) =>
+        set({
+          ...(clearExisting
+            ? {
+                models: [],
+                selectedModelId: '',
+                lastRoutingDecision: null,
+              }
+            : {}),
+          modelCatalogStatus: 'loading',
+          modelCatalogError: null,
+          // Retain the last verified same-boundary catalog during refresh.
+          // A Local/Cloud boundary change always passes clearExisting=true.
+        }),
+
+      completeModelCatalogLoad: (models, selectedModelId) =>
+        set({
+          models,
+          selectedModelId,
+          modelCatalogStatus: 'ready',
+          modelCatalogError: null,
+        }),
+
+      failModelCatalogLoad: (message, clearExisting) =>
+        set({
+          ...(clearExisting
+            ? {
+                models: [],
+                selectedModelId: '',
+                lastRoutingDecision: null,
+              }
+            : {}),
+          modelCatalogStatus: 'error',
+          modelCatalogError: message,
+        }),
 
       selectModel: (id) =>
         set((state) => {

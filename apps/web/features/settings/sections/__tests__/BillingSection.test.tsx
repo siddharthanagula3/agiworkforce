@@ -14,6 +14,7 @@ interface MockSubscription {
   status: string;
   current_period_end: number | null;
   subscription_source?: string;
+  cancel_at_period_end?: boolean;
 }
 
 let mockSubscription: MockSubscription = {
@@ -22,11 +23,19 @@ let mockSubscription: MockSubscription = {
   status: 'active',
   current_period_end: 1_800_000_000,
 };
+let mockBillingInitialized = true;
+let mockBillingLoading = false;
+let mockBillingError: string | null = null;
+const mockRefreshUser = vi.fn();
 
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (state: unknown) => unknown) =>
     selector({
       subscription: mockSubscription,
+      initialized: mockBillingInitialized,
+      isLoading: mockBillingLoading,
+      error: mockBillingError,
+      refreshUser: mockRefreshUser,
       creditBalance_cents: 1_200,
       dailyUsage_cents: 300,
       dailyLimit_cents: 500,
@@ -46,6 +55,9 @@ beforeEach(() => {
     current_period_end: 1_800_000_000,
     subscription_source: 'stripe',
   };
+  mockBillingInitialized = true;
+  mockBillingLoading = false;
+  mockBillingError = null;
 });
 
 afterEach(() => {
@@ -54,6 +66,17 @@ afterEach(() => {
 });
 
 describe('BillingSection', () => {
+  it('does not present an unhydrated account as Free', () => {
+    mockBillingInitialized = false;
+    mockBillingLoading = true;
+    global.fetch = vi.fn();
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('Loading your billing account…')).toBeTruthy();
+    expect(screen.queryByText('Free plan')).toBeNull();
+  });
+
   it('shows public relative usage copy without private ledger values', async () => {
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
 
@@ -96,6 +119,12 @@ describe('BillingSection', () => {
     expect(screen.queryByText('Manage billing')).toBeNull();
     expect(screen.queryByText('No card on file')).toBeNull();
     expect(screen.queryByText('Add payment method')).toBeNull();
+    expect(screen.queryByText('Adjust plan')).toBeNull();
+    expect(
+      screen.getByText(
+        'Change or cancel this subscription with Apple before starting web billing.',
+      ),
+    ).toBeTruthy();
 
     // No Stripe round-trips for an account with no Stripe customer.
     expect(fetchMock).not.toHaveBeenCalled();
@@ -159,16 +188,32 @@ describe('BillingSection', () => {
     expect(screen.getByText('$25/mo per seat')).toBeTruthy();
   });
 
-  it('labels an operator-provisioned plan without removing the portal', () => {
+  it('labels an operator-provisioned plan without inventing Stripe controls', () => {
     mockSubscription.subscription_source = 'manual';
     global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
 
     render(<BillingSection />);
 
     expect(screen.getByText('your organization')).toBeTruthy();
-    // A manual row may still have a Stripe customer carrying past invoices, so
-    // the portal stays reachable.
-    expect(screen.getByText('Manage billing')).toBeTruthy();
+    expect(screen.queryByText('Manage billing')).toBeNull();
+    expect(screen.queryByText('Payment')).toBeNull();
+    expect(screen.queryByText('Adjust plan')).toBeNull();
+    expect(
+      screen.getByText(
+        'This plan is managed by your organization. Contact an administrator to change it.',
+      ),
+    ).toBeTruthy();
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('offers web plans again after a store-owned subscription is terminal', () => {
+    mockSubscription.subscription_source = 'apple';
+    mockSubscription.status = 'expired';
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('Adjust plan')).toBeTruthy();
   });
 
   it('shows the $10 minimum and sends the canonical 500-unit top-up to checkout', async () => {
@@ -192,5 +237,51 @@ describe('BillingSection', () => {
       target: { value: '9' },
     });
     expect(screen.getByRole('button', { name: 'Minimum $10' })).toBeDisabled();
+  });
+
+  it('keeps failed billing detail requests distinct from honest empty states', async () => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      return {
+        ok: false,
+        status: url.includes('payment-methods') ? 503 : 401,
+        json: async () => ({}),
+      } as Response;
+    });
+
+    render(<BillingSection />);
+
+    expect(await screen.findByText('Payment methods could not be loaded (503).')).toBeTruthy();
+    expect(await screen.findByText('Invoices could not be loaded (401).')).toBeTruthy();
+    expect(screen.queryByText('No card on file')).toBeNull();
+    expect(
+      screen.queryByText(
+        'No invoices yet. Invoices appear here once your first billing cycle closes.',
+      ),
+    ).toBeNull();
+  });
+
+  it('keeps recovery billing controls available when a Stripe plan is past due', async () => {
+    mockSubscription.status = 'past_due';
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    render(<BillingSection />);
+
+    expect(screen.getByText('Manage billing')).toBeTruthy();
+    expect(screen.getByText('Payment')).toBeTruthy();
+    expect(await screen.findByText('No card on file')).toBeTruthy();
+  });
+
+  it('distinguishes renewal from a scheduled cancellation', () => {
+    global.fetch = vi.fn(async () => ({ ok: true, json: async () => ({}) }) as Response);
+
+    const { unmount } = render(<BillingSection />);
+    expect(screen.getByText('Renews on')).toBeTruthy();
+    unmount();
+
+    mockSubscription.cancel_at_period_end = true;
+    render(<BillingSection />);
+    expect(screen.getByText('Cancels on')).toBeTruthy();
+    expect(screen.queryByText('Renews on')).toBeNull();
   });
 });

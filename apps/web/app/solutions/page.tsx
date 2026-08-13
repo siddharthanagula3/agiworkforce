@@ -74,7 +74,7 @@ export default function SolutionsPage() {
             {
               meta: 'Provider choice',
               title: 'BYOK mode',
-              body: 'Bring provider keys on Desktop and CLI and route work explicitly.',
+              body: 'Bring provider keys on Desktop, CLI, and VS Code and route work explicitly.',
               href: '/byok',
             },
           ]}
@@ -105,7 +105,7 @@ export default function SolutionsPage() {
             {
               meta: 'Procurement',
               title: 'Enterprise rollout',
-              body: 'Per-seat BYOK on Desktop and CLI today; org-wide policy, identity, audit, and retention scoped by contract.',
+              body: 'Per-seat BYOK on Desktop, CLI, and VS Code; org-wide policy, identity, audit, and retention remain contract-scoped.',
               href: '/enterprise',
             },
             {

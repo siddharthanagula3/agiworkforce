@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
+import { getConfiguredStripePriceIds } from '@/lib/price-tier-mapping';
 
 /**
  * Shared hosted-platform health checks.
@@ -74,8 +75,27 @@ export async function runHealthChecks(): Promise<HealthCheckResult> {
         apiVersion: STRIPE_API_VERSION,
       });
 
-      // Simple API call to check connectivity
+      // Prove general account connectivity first, then prove that every Price
+      // this deployment actively sells is reachable under this exact key and
+      // remains active + recurring. A test/live or Stripe-account mismatch can
+      // still list products successfully; it fails only when Checkout looks up
+      // a live Price with a test key. Checking the configured objects here
+      // exposes that drift in deploy/cron/status health before a buyer clicks.
       await stripe.products.list({ limit: 1 });
+
+      const configuredPriceIds = getConfiguredStripePriceIds();
+      const configuredPrices = await Promise.all(
+        configuredPriceIds.map((priceId) => stripe.prices.retrieve(priceId)),
+      );
+      const unusablePriceCount = configuredPrices.filter(
+        (price) => !price.active || price.type !== 'recurring' || !price.recurring,
+      ).length;
+      if (unusablePriceCount > 0) {
+        throw new Error(
+          `${unusablePriceCount} configured Stripe Price(s) are not active recurring Prices`,
+        );
+      }
+
       checks.stripe.status = 'healthy';
     } else {
       checks.stripe.message = 'unavailable';

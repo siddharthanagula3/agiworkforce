@@ -94,7 +94,9 @@ describe('public marketing copy regressions', () => {
     expect(waitlist).not.toContain('Cloud Managed is invite-only across Web, Mobile, Desktop, CLI');
     // Managed cloud is public-alpha-open (not invite-only); the page reflects that.
     expect(normalizedWaitlist).toContain('public alpha');
-    expect(normalizedWaitlist).toContain('Use your provider accounts on Desktop and CLI');
+    expect(normalizedWaitlist).toContain(
+      'Use your provider accounts on supported Desktop, CLI, and VS Code releases',
+    );
     expect(waitlistForm).not.toContain('var(--teal, #2eb88a)');
     expect(waitlistForm).toContain('var(--agi-success)');
   });
@@ -106,10 +108,52 @@ describe('public marketing copy regressions', () => {
     const normalized = byok.replace(/\s+/g, ' ');
 
     expect(byok).not.toContain('Web and mobile use explicit consent before sending a prompt');
-    expect(normalized).toContain('BYOK lives on Desktop and the CLI');
-    expect(normalized).toContain('Web and Mobile don&rsquo;t take provider keys');
+    expect(normalized).toContain('Bring your own API keys to AGI {BYOK_SURFACES.label}');
+    expect(normalized).toContain('{BYOK_SURFACES.exclusion}');
     expect(pricingEn).not.toContain('Available on every surface');
     expect(pricingEs).not.toContain('Disponible en todas las superficies');
+  });
+
+  it('keeps developer sessions out of cloud conversation continuity claims', () => {
+    const upgradeWelcome = readWebFile('app/billing/UpgradeWelcome.tsx');
+    const faq = readWebFile('app/faq/page.tsx');
+    const normalizedUpgradeWelcome = upgradeWelcome.replace(/\s+/g, ' ');
+
+    expect(upgradeWelcome).not.toContain('Same account, same conversations');
+    expect(normalizedUpgradeWelcome).toContain(
+      'CLI and VS Code developer sessions remain workspace-scoped',
+    );
+    expect(faq).toContain(
+      'Moving between Local, BYOK, and managed Cloud is not an ordinary model switch',
+    );
+  });
+
+  it('does not advertise shipped BYOK or Team billing as private-beta access', () => {
+    const byokSetup = readWebFile('app/docs/byok-env/page.tsx');
+    const apiDocs = readWebFile('app/api-docs/page.tsx');
+    const waitlist = readWebFile('app/waitlist/page.tsx');
+    const waitlistModal = readWebFile('features/marketing/components/WaitlistModal.tsx');
+    const publicWaitlistForm = readWebFile('features/marketing/components/PublicWaitlistForm.tsx');
+    const webByokSettings = readWebFile('app/settings/byok/page.tsx');
+
+    expect(byokSetup).not.toContain('Private-beta key entry');
+    expect(byokSetup).not.toContain(
+      'UI key entry, OS-keychain write, and revoke-all are private-beta',
+    );
+    expect(byokSetup).not.toContain('Desktop reads from OS keychain');
+    expect(byokSetup).toContain('Settings → Models &amp; Keys');
+    expect(byokSetup).toContain(
+      'Tauri Desktop encrypts provider keys in local application storage',
+    );
+    expect(apiDocs).not.toContain('SSO &amp; org-seat early access');
+    expect(apiDocs).toContain('Enterprise SSO early access');
+    expect(waitlist).not.toContain('Team is already live at /pricing');
+    expect(waitlistModal).not.toContain('Team has self-serve per-seat checkout');
+    expect(publicWaitlistForm).not.toContain('when AGI Cloud access opens');
+    expect(publicWaitlistForm).toContain('when the Enterprise program opens');
+    expect(webByokSettings).not.toContain('Managed key vault');
+    expect(webByokSettings).not.toContain('Request hosted key vault access');
+    expect(webByokSettings).toContain('not per-account Web BYOK');
   });
 
   it('does not promise unverified contact or enterprise sales guarantees', () => {

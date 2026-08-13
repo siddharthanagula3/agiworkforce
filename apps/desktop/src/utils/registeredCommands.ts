@@ -41,6 +41,7 @@ export const REGISTERED_COMMANDS: ReadonlySet<string> = new Set([
   'agi_get_reflection_insights',
   'agi_get_sub_goals',
   'agi_get_suggested_corrections',
+  'agi_get_task_state',
   'agi_get_timeout_status',
   'agi_init',
   'agi_list_goals',

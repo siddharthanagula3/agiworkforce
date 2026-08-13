@@ -19,6 +19,8 @@ import { useAccountStore, useAuthStore } from '../../stores/auth';
 import type { CreditBalance, SubscriptionStatus } from '../../stores/auth';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 import { openBillingPortal } from '../../lib/stripeCheckout';
+import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
+import { isElectronHost } from '../../lib/runtimeEnvironment';
 
 const SUBSCRIPTION_STATUS_LABELS: Record<SubscriptionStatus, string> = {
   active: 'Active',
@@ -73,12 +75,23 @@ function Row({
 
 export function AccountSettings() {
   const accountData = useAccountStore((state) => state.account);
+  const cancellationScheduled = accountData.subscriptionCancelAtPeriodEnd;
   const [portalError, setPortalError] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
 
+  const ownerPolicy = getDesktopSubscriptionOwnerPolicy(
+    accountData.subscriptionSource,
+    accountData.subscriptionStatus,
+    accountData.subscriptionFetchStatus === 'succeeded',
+  );
+
   const displayName =
     accountData.displayName || accountData.email?.split('@')[0] || 'AGI Workforce user';
-  const planStatus = SUBSCRIPTION_STATUS_LABELS[accountData.subscriptionStatus] ?? 'Unknown';
+  const subscriptionStatusLabel =
+    SUBSCRIPTION_STATUS_LABELS[accountData.subscriptionStatus] ?? 'Unknown';
+  const planStatus = cancellationScheduled
+    ? `${subscriptionStatusLabel} · cancellation scheduled`
+    : subscriptionStatusLabel;
   const periodEnd = accountData.currentPeriodEnd
     ? new Date(accountData.currentPeriodEnd).toLocaleDateString(undefined, {
         year: 'numeric',
@@ -86,8 +99,45 @@ export function AccountSettings() {
         day: 'numeric',
       })
     : null;
-  // `canceled` means the plan lapses at period end rather than renewing.
-  const periodLabel = accountData.subscriptionStatus === 'canceled' ? 'Access ends' : 'Renews';
+  const periodLabel = cancellationScheduled
+    ? 'Access ends'
+    : accountData.subscriptionStatus === 'canceled'
+      ? 'Ended'
+      : 'Renews';
+
+  const manageStripeSubscription = () => {
+    if (!ownerPolicy.canOpenStripePortal) return;
+    setPortalError(null);
+    setPortalLoading(true);
+    void openBillingPortal(async () => {
+      await cloudAccountAuth.refreshUserData();
+    })
+      .then((error) => {
+        if (error) setPortalError(error);
+      })
+      .catch((error: unknown) => {
+        setPortalError(error instanceof Error ? error.message : 'Could not open billing.');
+      })
+      .finally(() => setPortalLoading(false));
+  };
+
+  const planControl = ownerPolicy.canOpenStripePortal ? (
+    <Button variant="outline" size="sm" disabled={portalLoading} onClick={manageStripeSubscription}>
+      {portalLoading ? 'Opening billing…' : 'Manage subscription'}
+    </Button>
+  ) : ownerPolicy.canStartStripePlanChange ? (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => {
+        window.dispatchEvent(
+          new CustomEvent('chat:action', { detail: { type: 'open-plans-modal' } }),
+        );
+      }}
+    >
+      View plans
+    </Button>
+  ) : undefined;
 
   const rows: Array<{
     label: React.ReactNode;
@@ -126,30 +176,8 @@ export function AccountSettings() {
     },
     {
       label: 'Plan',
-      description: `${accountData.planDisplayName || 'Free'} · ${planStatus}`,
-      control: (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={portalLoading}
-          onClick={() => {
-            setPortalError(null);
-            setPortalLoading(true);
-            void openBillingPortal(async () => {
-              await cloudAccountAuth.refreshUserData();
-            })
-              .then((error) => {
-                if (error) setPortalError(error);
-              })
-              .catch((error: unknown) => {
-                setPortalError(error instanceof Error ? error.message : 'Could not open billing.');
-              })
-              .finally(() => setPortalLoading(false));
-          }}
-        >
-          {portalLoading ? 'Opening billing…' : 'Manage subscription'}
-        </Button>
-      ),
+      description: `${accountData.planDisplayName || 'Free'} · ${planStatus}. ${ownerPolicy.description}`,
+      control: planControl,
     },
   ];
 
@@ -164,7 +192,9 @@ export function AccountSettings() {
   }
   rows.push({
     label: 'Sign out',
-    description: 'Disconnects this Mac from AGI Cloud. Local data stays on this device.',
+    description: isElectronHost
+      ? 'Signs this Mac out of AGI Cloud. Sign in again to access your account.'
+      : 'Disconnects this Mac from AGI Cloud. Local data stays on this device.',
     control: (
       <Button
         variant="outline"

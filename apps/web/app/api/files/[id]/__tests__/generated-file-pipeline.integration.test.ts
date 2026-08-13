@@ -66,19 +66,23 @@ vi.mock('@/lib/server/media-storage', async () => {
   const { randomUUID: uuid } = await import('crypto');
   return {
     isMediaStorageConfigured: () => true,
+    isGeneratedMediaStorageConfigured: () => true,
     readStoredMedia: async (key: string) => {
       const entry = objectStore.get(key);
       return entry ? { data: entry.data, contentType: entry.contentType } : null;
     },
     storeMedia: async (p: { userId: string; kind: string; data: Buffer; contentType: string }) => {
-      const pathname = `media/${p.kind}/${p.userId}/${uuid()}`;
+      const pathname = `private-media/${p.kind}/${p.userId}/${uuid()}`;
       objectStore.set(pathname, { data: Buffer.from(p.data), contentType: p.contentType });
       return {
-        url: `https://r2.example.com/${pathname}`,
+        url: pathname,
         pathname,
         byteSize: p.data.byteLength,
         contentType: p.contentType,
       };
+    },
+    deleteStoredMedia: async (pathname: string) => {
+      objectStore.delete(pathname);
     },
   };
 });

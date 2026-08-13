@@ -4,7 +4,12 @@
  * `features/content/in-page-panel/` and are imported from there directly.
  */
 
-import { createLauncher, loadPosition, applyPosition, attachScrollBehaviour } from '../features/content/in-page-panel/launcher';
+import {
+  createLauncher,
+  loadPosition,
+  applyPosition,
+  attachScrollBehaviour,
+} from '../features/content/in-page-panel/launcher';
 import { createPanel } from '../features/content/in-page-panel/panel';
 
 /** Storage key that enables / disables the in-page panel. */
@@ -77,11 +82,16 @@ export async function setupInPagePanel(logger?: {
 
   try {
     // ── Panel ────────────────────────────────────────────────────────────────
-    const { host: panelHost, toggle } = createPanel();
+    const panel = createPanel();
+    const { host: panelHost } = panel;
     document.body.appendChild(panelHost);
 
     // ── Launcher ─────────────────────────────────────────────────────────────
-    const { host: launcherHost } = createLauncher(toggle);
+    const launcher = createLauncher(() => {
+      panel.setReturnFocus(launcher.button);
+      panel.toggle();
+    });
+    const { host: launcherHost } = launcher;
 
     // Load persisted position and apply it
     const pos = await loadPosition();

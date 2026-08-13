@@ -8,7 +8,7 @@ import { command } from '@agiworkforce/client-runtime';
 
 export interface DefaultModels {
   ollama: string;
-  managedCloud: string;
+  managed_cloud: string;
 }
 
 export interface LLMConfig {
@@ -20,6 +20,9 @@ export interface LLMConfig {
   taskRouting?: unknown;
   providerMode: string;
   ollamaUrl: string;
+  lmstudioUrl?: string;
+  llamacppUrl?: string;
+  vllmUrl?: string;
 }
 
 export interface WindowPreferences {
@@ -27,6 +30,11 @@ export interface WindowPreferences {
   language: string;
   startupPosition: string;
   dockOnStartup?: string;
+  selectedTheme?: string;
+  dyslexicFont?: boolean;
+  chatFont?: 'default' | 'sans' | 'mono' | 'dyslexic';
+  uiScale?: 90 | 100 | 110;
+  reduceMotion?: boolean;
 }
 
 export interface ChatPreferences {
@@ -36,7 +44,12 @@ export interface ChatPreferences {
   compactMode: boolean;
   autoApproveTools: boolean;
   autoInjectSkills: boolean;
+  memoryEnabled: boolean;
+  allowToolAssistedMemoryGeneration: boolean;
+  autoSaveMemories: boolean;
   chatStorageMode: string;
+  sendShortcut?: 'enter' | 'mod-enter';
+  temporaryChat?: boolean;
 }
 
 export interface ExecutionPreferences {
@@ -45,6 +58,26 @@ export interface ExecutionPreferences {
   checkpointInterval: number;
   autoResumeOnRestart: boolean;
   enableTimeoutWarnings: boolean;
+  approvalTimeoutSeconds?: number;
+  approvalTimeoutPolicy?: 'auto-deny' | 'auto-approve' | 'pause';
+  streamInactivityTimeoutSeconds?: number;
+  terminalSandbox?: {
+    enabled: boolean;
+    backend: string;
+    policy: string;
+    executable: string;
+    allowedDomains: string[];
+  };
+}
+
+export interface PersonalizationPreferences {
+  name: string;
+  occupation: string;
+  bio: string;
+  formality: number;
+  warmth: number;
+  detail: number;
+  emojiUsage: 'never' | 'sometimes' | 'often';
 }
 
 export interface GlobalHotkeyPreferences {
@@ -61,6 +94,8 @@ export interface Settings {
   allowedDirectories: string[];
   customModels: unknown[];
   featureFlags: Record<string, boolean>;
+  personalization?: PersonalizationPreferences;
+  customKeybindings?: Record<string, string>;
 }
 
 export interface SettingsResponse {

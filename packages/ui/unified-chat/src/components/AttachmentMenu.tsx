@@ -11,6 +11,7 @@ import {
   Sparkles,
   Plug,
   BookOpen,
+  Globe,
   Terminal,
   Paintbrush,
   ChevronRight,
@@ -55,6 +56,9 @@ export interface AttachmentMenuProps {
   onResearchToggle: () => void;
   /** Whether the active runtime can transport and execute Research requests. */
   supportsResearch?: boolean;
+  /** One-shot, explicit native/Local Web-search control. */
+  explicitWebSearchEnabled?: boolean;
+  onExplicitWebSearchToggle?: () => void;
   /**
    * Whether the "Run code" toggle is currently toggled on (the persisted
    * user preference — may be true even when `codeExecutionAvailable` is
@@ -106,6 +110,7 @@ function MenuItem({
       onClick={onClick}
       disabled={disabled}
       title={title}
+      aria-pressed={checked === undefined ? undefined : checked}
       className={cn(
         'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm',
         'text-[var(--chat-text-primary)] transition-colors duration-100',
@@ -175,6 +180,8 @@ export function AttachmentMenu({
   researchEnabled,
   onResearchToggle,
   supportsResearch = false,
+  explicitWebSearchEnabled = false,
+  onExplicitWebSearchToggle,
   codeExecutionEnabled = false,
   onCodeExecutionToggle,
   codeExecutionAvailable = false,
@@ -373,6 +380,15 @@ export function AttachmentMenu({
           <Divider />
 
           {/* Group 4: Toggleable modes */}
+          {onExplicitWebSearchToggle && (
+            <MenuItem
+              icon={<Globe size={15} />}
+              label="Search the web"
+              checked={explicitWebSearchEnabled}
+              title="Allows network access for this message"
+              onClick={onExplicitWebSearchToggle}
+            />
+          )}
           {supportsResearch && (
             <MenuItem
               icon={<BookOpen size={15} />}

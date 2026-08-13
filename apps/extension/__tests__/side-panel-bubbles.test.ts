@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
+import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
+import type { InteractiveCard } from '@agiworkforce/types';
 import {
+  buildInteractiveCardEl,
   buildBubbleWithTools,
   buildToolCallEl,
+  openInteractiveCardUrl,
   resolveManagedArtifactUrl,
 } from '../src/features/side-panel/bubbles';
 import {
@@ -33,6 +37,42 @@ function activity(
 
 const LOADER_2_PATH = 'M21 12a9 9 0 1 1-6.219-8.56';
 
+const MAP_CARD_ENVELOPE = {
+  schemaVersion: 1,
+  cardId: 'map-call-1',
+  kind: 'map-search.v1',
+  createdAt: '2026-08-13T10:00:00.000Z',
+  fallback: {
+    headline: 'Coffee near Austin',
+    text: 'Map search: coffee shops near Austin, Texas',
+  },
+  producedBy: { toolCallId: 'map-call-1', toolName: 'search_maps' },
+  body: {
+    title: 'Coffee near Austin',
+    query: 'coffee shops near Austin, Texas',
+    actions: [
+      {
+        provider: 'google_maps',
+        label: 'Open in Google Maps',
+        url: 'https://www.google.com/maps/search/?api=1&query=coffee',
+      },
+      {
+        provider: 'openstreetmap',
+        label: 'Open in OpenStreetMap',
+        url: 'https://www.openstreetmap.org/search?query=coffee',
+      },
+    ],
+    view: { latitude: 30.2672, longitude: -97.7431, zoom: 12, attribution: 'OpenStreetMap' },
+    places: [{ label: 'Austin', latitude: 30.2672, longitude: -97.7431, kind: 'city' }],
+  },
+};
+
+function decodeCard(value: unknown): InteractiveCard {
+  const card = parseInteractiveCardDelta({ card: value });
+  if (!card) throw new Error('interactive-card fixture did not parse');
+  return card;
+}
+
 function statusIcon(summary: Element | null): Element | null {
   return summary?.querySelector(':scope > .agi-icon:first-child') ?? null;
 }
@@ -49,6 +89,52 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     const node = buildBubbleWithTools(msg({ role: 'assistant', content: 'the answer is 42' }));
     expect(node.className).toContain('sp-msg-assistant');
     expect(node.textContent).toContain('the answer is 42');
+  });
+
+  it('renders a validated map card as bounded provider actions beside assistant prose', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const node = buildBubbleWithTools(
+      msg({
+        role: 'assistant',
+        content: 'Here are the map results.',
+        interactiveCards: [decodeCard(MAP_CARD_ENVELOPE)],
+      }),
+    );
+
+    expect(node.querySelector('[data-card-kind="map-search.v1"]')).not.toBeNull();
+    expect(node.textContent).toContain('coffee shops near Austin, Texas');
+    expect(node.textContent).toContain('Austin');
+    node.querySelector<HTMLButtonElement>('[aria-label="Open in Google Maps"]')?.click();
+    expect(open).toHaveBeenCalledWith(
+      'https://www.google.com/maps/search/?api=1&query=coffee',
+      '_blank',
+      'noopener,noreferrer',
+    );
+    open.mockRestore();
+  });
+
+  it('keeps an answerable unknown card visible and read-only without a dead action', () => {
+    const unknown = structuredClone(MAP_CARD_ENVELOPE) as Record<string, unknown>;
+    unknown['kind'] = 'weather.v2';
+    unknown['interaction'] = {
+      runId: '00000000-0000-4000-8000-000000000001',
+      awaitingResponse: true,
+      expiresAt: '2026-08-13T11:00:00.000Z',
+      executionMode: 'cloud_managed',
+    };
+    const node = buildInteractiveCardEl(decodeCard(unknown));
+
+    expect(node.dataset['cardRecognized']).toBe('false');
+    expect(node.textContent).toContain('Map search: coffee shops near Austin, Texas');
+    expect(node.textContent).toContain('read-only in Chrome');
+    expect(node.querySelector('button')).toBeNull();
+  });
+
+  it('revalidates provider URLs in the host opener', () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    openInteractiveCardUrl('https://example.test/collect');
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
   });
 
   it.each([

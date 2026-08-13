@@ -128,12 +128,14 @@ describe('web proxy', () => {
     expect(response?.headers.get('Content-Security-Policy')).toContain("default-src 'self'");
   });
 
-  it('allows direct uploads only to the configured exact R2 account origin', async () => {
+  it('allows direct uploads only to the configured exact public and private R2 origins', async () => {
     const original = process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
     const originalBucket = process.env['CLOUDFLARE_R2_BUCKET_NAME'];
+    const originalPrivateBucket = process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'];
     try {
       process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = '0123456789abcdef0123456789abcdef';
       process.env['CLOUDFLARE_R2_BUCKET_NAME'] = 'agiworkforce-media';
+      process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'] = 'agiworkforce-media-private';
       const { proxy } = await import('../proxy');
 
       const response = await proxy(
@@ -146,11 +148,17 @@ describe('web proxy', () => {
       expect(response?.headers.get('Content-Security-Policy')).toContain(
         "connect-src 'self' https://agiworkforce-media.0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com ",
       );
+      expect(response?.headers.get('Content-Security-Policy')).toContain(
+        'https://agiworkforce-media-private.0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com',
+      );
     } finally {
       if (original === undefined) delete process.env['CLOUDFLARE_R2_ACCOUNT_ID'];
       else process.env['CLOUDFLARE_R2_ACCOUNT_ID'] = original;
       if (originalBucket === undefined) delete process.env['CLOUDFLARE_R2_BUCKET_NAME'];
       else process.env['CLOUDFLARE_R2_BUCKET_NAME'] = originalBucket;
+      if (originalPrivateBucket === undefined)
+        delete process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'];
+      else process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME'] = originalPrivateBucket;
     }
   });
 

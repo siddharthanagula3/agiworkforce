@@ -27,7 +27,10 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
-import { AgentActivityTimeline } from '@/src/features/chat/components/AgentActivityTimeline';
+import {
+  AgentActivityTimeline,
+  buildAgentActivitySummary,
+} from '@/src/features/chat/components/AgentActivityTimeline';
 
 function activity(overrides: Partial<AgentActivityState> = {}): AgentActivityState {
   return {
@@ -64,17 +67,24 @@ function activity(overrides: Partial<AgentActivityState> = {}): AgentActivitySta
 }
 
 describe('AgentActivityTimeline', () => {
-  it('keeps safe activity inline and collapsed until the user expands it', () => {
+  it('opens active work, lets the user collapse it, and keeps details deliberate', () => {
     const view = render(
       <AgentActivityTimeline messageId="message-1" activity={activity()} nowMs={2_500} />,
     );
 
-    const trigger = view.getByLabelText(/show agent activity/i);
-    expect(trigger.props.accessibilityState).toEqual({ expanded: false });
-    expect(view.getByText(/Searching official sources/)).toBeTruthy();
+    const trigger = view.getByLabelText(/hide agent activity/i);
+    expect(trigger.props.accessibilityState).toEqual({ expanded: true });
+    expect(view.getAllByText(/Searching official sources/)).toHaveLength(2);
     expect(view.queryByText('Official agent documentation')).toBeNull();
 
     fireEvent.press(trigger);
+
+    expect(view.getByLabelText(/show agent activity/i).props.accessibilityState).toEqual({
+      expanded: false,
+    });
+    expect(view.queryByLabelText('Show details for Searching official sources')).toBeNull();
+
+    fireEvent.press(view.getByLabelText(/show agent activity/i));
 
     expect(view.getByLabelText(/hide agent activity/i).props.accessibilityState).toEqual({
       expanded: true,
@@ -82,6 +92,44 @@ describe('AgentActivityTimeline', () => {
     fireEvent.press(view.getByLabelText('Show details for Searching official sources'));
     expect(view.getByText('Official agent documentation')).toBeTruthy();
     expect(view.getByText('example.com')).toBeTruthy();
+  });
+
+  it('keeps active summaries semantic and shows a fixed duration after completion', () => {
+    expect(buildAgentActivitySummary(activity(), 60_000)).toBe('Searching official sources');
+    expect(
+      buildAgentActivitySummary(activity({ status: 'completed', completedAtMs: 50_000 }), 60_000),
+    ).toBe('Worked for 49s · 1 tool');
+    expect(buildAgentActivitySummary(activity({ status: 'failed' }), 60_000)).toBe(
+      'Failed after 1s',
+    );
+  });
+
+  it('caps expanded source previews and exposes the remaining count', () => {
+    const sources = Array.from({ length: 8 }, (_, index) => ({
+      url: `https://source-${index}.example.com`,
+      title: `Source ${index}`,
+    }));
+    const view = render(
+      <AgentActivityTimeline
+        messageId="message-sources"
+        defaultExpanded
+        activity={activity({
+          status: 'completed',
+          completedAtMs: 3_000,
+          entries: [
+            {
+              kind: 'sources',
+              id: 'sources:1',
+              sources,
+              emittedAtMs: 2_000,
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(view.getByText('+3 more sources')).toBeTruthy();
+    expect(view.queryByText('Source 5')).toBeNull();
   });
 
   it('reveals long runs in bounded pages and wires approval to the tool call id', () => {

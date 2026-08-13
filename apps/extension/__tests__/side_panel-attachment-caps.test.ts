@@ -26,6 +26,7 @@ const chromeMock = vi.hoisted(() => {
   };
   const mock = {
     screenshotDataUrl: '' as string,
+    screenshotError: '' as string,
     runtime: {
       id: 'test-extension',
       onMessage: event(),
@@ -38,8 +39,13 @@ const chromeMock = vi.hoisted(() => {
       })),
       sendMessage: vi.fn((message: { type?: string }, callback?: (response: unknown) => void) => {
         if (message?.type === 'CAPTURE_SCREENSHOT') {
-          callback?.({ success: true, data: mock.screenshotDataUrl });
+          const response = mock.screenshotError
+            ? { success: false, error: mock.screenshotError }
+            : { success: true, data: mock.screenshotDataUrl };
+          callback?.(response);
+          return Promise.resolve(response);
         }
+        return Promise.resolve({ success: true });
       }),
       getURL: vi.fn((path: string) => `chrome-extension://test/${path}`),
       getManifest: vi.fn(() => ({ version: '1.2.0' })),
@@ -147,7 +153,10 @@ function captureScreenshot(dataUrl: string): void {
   const screenshotItem =
     item ?? document.querySelector<HTMLElement>('#sp-attach-menu .sp-attach-menu-item');
   if (!screenshotItem) throw new Error('screenshot menu item was never built');
-  screenshotItem.click();
+  // This suite isolates attachment intake from Managed Cloud admission. The
+  // signed-out harness correctly disables public composer controls, so invoke
+  // the real listener directly with a synthetic event.
+  screenshotItem.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
 async function expectPendingCount(count: number): Promise<void> {
@@ -164,28 +173,49 @@ async function clearPending(): Promise<void> {
   });
   // A FileReader started by the previous test can still be in flight and will
   // append a chip after the first drain pass, so drain until the bar stays
-  // empty across a whole macrotask. Without this the next test starts on
-  // someone else's attachments.
+  // empty across TWO consecutive macrotasks. One was not enough: a reader that
+  // resolved during the single settle window appended its chip after the
+  // assertion had already passed, and the next test then started on someone
+  // else's attachments (observed as "expected 2 to have length 1").
   await vi.waitFor(async () => {
     let removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
     while (removeBtn) {
       removeBtn.click();
       removeBtn = attachmentBar().querySelector<HTMLElement>('.sp-attachment-remove');
     }
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    expect(attachmentBar().querySelector('.sp-attachment-thumb')).toBeNull();
+    for (let settle = 0; settle < 2; settle += 1) {
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      expect(attachmentBar().querySelector('.sp-attachment-thumb')).toBeNull();
+    }
   });
 }
 
 beforeEach(async () => {
+  chromeMock.screenshotError = '';
   await clearPending();
   expect(pendingDataUrls()).toHaveLength(0);
   expect(noticeText()).toBe('');
 });
 
 describe('side panel composer attachment caps', () => {
+  it('shows file-read progress while send is gated', async () => {
+    pickFiles([imageFile(16, 'image/png', 'reading.png')]);
+
+    expect(attachmentBar().textContent).toContain('spAttachmentAdding');
+    await expectPendingCount(1);
+    expect(noticeText()).toBe('');
+  });
+
+  it('shows an actionable screenshot capture failure', async () => {
+    chromeMock.screenshotError = 'Capture unavailable';
+    captureScreenshot('');
+
+    await vi.waitFor(() => expect(noticeText()).toContain('Capture unavailable'));
+    expect(pendingDataUrls()).toHaveLength(0);
+  });
+
   it('stops dropped files at the transport count cap and says why', async () => {
     dropFiles(
       Array.from({ length: MANAGED_CHAT_MAX_ATTACHMENTS + 3 }, (_, i) =>
@@ -283,5 +313,20 @@ describe('side panel composer attachment caps', () => {
 
     expect(pendingDataUrls()).toHaveLength(1);
     expect(noticeText()).toContain('MB');
+  });
+
+  it('adds a Drawer capture to the composer instead of reporting a false success', async () => {
+    chromeMock.screenshotDataUrl = dataUrlOfBytes(24);
+    const drawerCapture = document.getElementById('sp-drawer-capture-btn');
+    expect(drawerCapture).not.toBeNull();
+
+    drawerCapture!.click();
+
+    await expectPendingCount(1);
+    expect(pendingDataUrls()[0]).toBe(chromeMock.screenshotDataUrl);
+    expect(document.getElementById('sp-chat-panel')?.classList.contains('sp-tab-hidden')).toBe(
+      false,
+    );
+    expect(document.getElementById('sp-input-area')?.style.display).toBe('');
   });
 });

@@ -147,6 +147,30 @@ const generatedCodeArtifact: Artifact = {
   } as never,
 };
 
+const generatedPdfArtifact: Artifact = {
+  id: 'artifact-report',
+  type: 'document',
+  title: 'report.pdf',
+  content: '',
+  generatedFile: {
+    id: 'file-report',
+    computeSessionId: '',
+    ownerUserId: '',
+    sourceSurface: 'mobile',
+    privacyMode: 'managed',
+    providerMode: 'ManagedGateway',
+    kind: 'pdf',
+    fileName: 'report.pdf',
+    mimeType: 'application/pdf',
+    uri: 'https://app.agi.example/api/files/file-report',
+    byteCount: 2048,
+    checksumSha256: 'abcdef1234567890',
+    previewDerivatives: [],
+    createdAt: '2026-08-13T00:00:00.000Z',
+  },
+  metadata: { status: 'completed' },
+};
+
 describe('mobile artifacts and code screens', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -176,6 +200,14 @@ describe('mobile artifacts and code screens', () => {
     expect(getByText('Code')).toBeTruthy();
     expect(getByText('2 KB')).toBeTruthy();
     expect(getByText('Source: Mobile')).toBeTruthy();
+  });
+
+  it('uses generated-file status as the inline preview when no source text exists', () => {
+    const { getByText } = render(
+      <InlineArtifactCard artifact={generatedPdfArtifact} onExpand={jest.fn()} />,
+    );
+
+    expect(getByText('Ready · Code · 2 KB')).toBeTruthy();
   });
 
   it('renders a full-screen code artifact with copy and close actions', async () => {
@@ -214,5 +246,16 @@ describe('mobile artifacts and code screens', () => {
     });
 
     expect(mockShareFile).toHaveBeenCalledWith('file:///tmp/main.py');
+  });
+
+  it('does not offer empty Copy or fake Preview controls for a remote generated file', () => {
+    const { getByLabelText, queryByLabelText } = render(
+      <ArtifactFullScreen artifact={generatedPdfArtifact} visible onClose={jest.fn()} />,
+    );
+
+    expect(getByLabelText('Download artifact')).toBeTruthy();
+    expect(getByLabelText('Share generated file')).toBeTruthy();
+    expect(queryByLabelText('Copy content')).toBeNull();
+    expect(queryByLabelText('Preview')).toBeNull();
   });
 });

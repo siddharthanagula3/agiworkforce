@@ -54,6 +54,8 @@ export interface SubscriptionPlan {
   status: string;
   /** Unix timestamp of period end, or null for free tier */
   current_period_end: number | null;
+  /** Whether the current paid period is scheduled to end without renewal. */
+  cancel_at_period_end?: boolean;
   /**
    * Alias used by chat components that read `plan_name`.
    * Mirrors `display_name`.
@@ -152,6 +154,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
           display_name: data.plan.display_name,
           status: data.plan.status,
           current_period_end: data.plan.current_period_end,
+          cancel_at_period_end: data.plan.cancel_at_period_end ?? false,
           plan_name: data.plan.display_name,
           ...(data.plan.subscription_source
             ? { subscription_source: data.plan.subscription_source }

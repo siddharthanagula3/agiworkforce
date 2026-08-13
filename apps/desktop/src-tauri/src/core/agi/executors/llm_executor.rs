@@ -109,6 +109,7 @@ impl LlmExecutor {
         parameters: &HashMap<String, Value>,
         context: &ExecutorContext,
         trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+        execution_target: Option<(&str, &str)>,
     ) -> Result<Value> {
         let prompt = parameters
             .get("prompt")
@@ -116,15 +117,27 @@ impl LlmExecutor {
             .ok_or_else(|| anyhow!("Missing required 'prompt' parameter"))?;
 
         // Extract optional parameters
-        let provider_override = parameters
-            .get("provider")
-            .and_then(|v| v.as_str())
-            .and_then(Self::parse_provider);
-
-        let model_override = parameters
-            .get("model")
-            .and_then(|v| v.as_str())
-            .map(String::from);
+        // A Task's selected model is privileged submission state. Plan output
+        // and tool arguments are untrusted and cannot silently switch it.
+        let (provider_override, model_override) =
+            match execution_target {
+                Some((model, provider)) => (
+                    Some(Self::parse_provider(provider).ok_or_else(|| {
+                        anyhow!("Unsupported Task execution provider: {provider}")
+                    })?),
+                    Some(model.to_string()),
+                ),
+                None => (
+                    parameters
+                        .get("provider")
+                        .and_then(|v| v.as_str())
+                        .and_then(Self::parse_provider),
+                    parameters
+                        .get("model")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                ),
+            };
 
         let temperature = parameters
             .get("temperature")
@@ -446,8 +459,13 @@ impl ToolExecutor for LlmExecutor {
     ) -> Result<Value> {
         match tool_name {
             "llm_reason" => {
-                self.execute_reason(parameters, context, execution_context.goal.trust_mode)
-                    .await
+                self.execute_reason(
+                    parameters,
+                    context,
+                    execution_context.goal.trust_mode,
+                    execution_context.goal.execution_target(),
+                )
+                .await
             }
             _ => Err(anyhow!("Unknown LLM tool: {}", tool_name)),
         }

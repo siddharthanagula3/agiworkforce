@@ -7,23 +7,25 @@
  */
 
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest';
-import * as vscode from 'vscode';
 import {
   AgiWorkforceApiError,
   AgiWorkforcePaywallError,
+  buildCloudUtilityChatCompletionRequest,
   getAccountAuthState,
   getAccountToken,
   getApiKey,
   getCloudGatewayOrigin,
+  parseCloudCompletionError,
   parseAccountIdentityResponse,
   parseTierInfoResponse,
   setAccountToken,
   setApiKey,
+  clearAccountToken,
   clearApiKey,
-  validateGatewayUrl,
 } from '../utils/api';
 import { ExtensionContext } from './__mocks__/vscode';
 import { readFileSync } from 'fs';
+import { Config } from '../platform/config';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -104,7 +106,7 @@ describe('AGI Cloud account session expiry', () => {
     await expect(getAccountToken(secrets)).resolves.toBe('device-token');
   });
 
-  it('clears an expired device credential and reports reconnect required', async () => {
+  it('keeps an expired session actionable across refreshes until sign-in or sign-out', async () => {
     const ctx = new ExtensionContext();
     const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
     const now = 1_750_000_000_000;
@@ -114,6 +116,85 @@ describe('AGI Cloud account session expiry', () => {
 
     await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
     await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+
+    await clearAccountToken(secrets);
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'signed-out' });
+  });
+
+  it('clears the expired marker when a replacement device credential is stored', async () => {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    const now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+
+    await setAccountToken(secrets, 'expired-device-token', now - 1);
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({ status: 'expired' });
+    await setAccountToken(secrets, 'replacement-device-token', now + 60_000);
+
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({
+      status: 'signed-in',
+      expiresAt: now + 60_000,
+    });
+  });
+});
+
+describe('cloud completion error envelopes', () => {
+  it('maps a structured quota refusal to an upgrade paywall', () => {
+    const error = parseCloudCompletionError(
+      429,
+      JSON.stringify({
+        kind: 'paywall',
+        feature: 'chat',
+        requiredTier: 'pro',
+        reason: 'Monthly allowance used.',
+      }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforcePaywallError);
+    expect(error).toMatchObject({ recoveryAction: 'upgrade', requiredTier: 'pro' });
+  });
+
+  it('maps an inactive subscription to billing recovery', () => {
+    const error = parseCloudCompletionError(
+      403,
+      JSON.stringify({
+        error: {
+          code: 'subscription_inactive',
+          message: 'Update your payment method.',
+        },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforcePaywallError);
+    expect(error).toMatchObject({
+      code: 'subscription_inactive',
+      recoveryAction: 'manage_billing',
+      reason: 'Update your payment method.',
+    });
+  });
+
+  it('maps a developer plan gate to an upgrade paywall', () => {
+    const error = parseCloudCompletionError(
+      403,
+      JSON.stringify({
+        error: {
+          code: 'developer_surface_plan_required',
+          message: 'IDE access requires Pro.',
+          requiredTier: 'pro',
+        },
+      }),
+    );
+
+    expect(error).toBeInstanceOf(AgiWorkforcePaywallError);
+    expect(error).toMatchObject({ recoveryAction: 'upgrade', requiredTier: 'pro' });
+  });
+
+  it('keeps an ordinary rate limit retryable and hides raw proxy output', () => {
+    const error = parseCloudCompletionError(429, '<html>proxy overload</html>');
+    expect(error).toBeInstanceOf(AgiWorkforceApiError);
+    expect(error).toMatchObject({ statusCode: 429, code: 'RATE_LIMITED' });
+    expect(error.message).toBe('Too many requests right now. Please wait a moment and try again.');
   });
 });
 
@@ -168,7 +249,9 @@ describe('AGI Cloud account identity projection', () => {
       tier: 'pro',
       display_name: 'Pro',
       status: 'active',
-      current_period_end: null,
+      current_period_end: 1_786_579_200,
+      cancel_at_period_end: true,
+      subscription_source: 'stripe' as const,
     },
     feature_flags: {
       advanced_model_access: true,
@@ -183,6 +266,10 @@ describe('AGI Cloud account identity projection', () => {
       accountType: 'Personal account',
       planName: 'Pro',
       tier: 'pro',
+      subscriptionStatus: 'active',
+      currentPeriodEnd: '2026-08-13T00:00:00.000Z',
+      cancelAtPeriodEnd: true,
+      subscriptionSource: 'stripe',
     });
   });
 
@@ -304,28 +391,28 @@ describe('ChatMessage type contract', () => {
   });
 });
 
-describe('ChatCompletionRequest structure', () => {
-  it('builds a valid request body', () => {
-    const request = {
-      model: 'auto-balanced',
-      messages: [
-        { role: 'system' as const, content: 'You are helpful.' },
-        { role: 'user' as const, content: 'Hi' },
-      ],
-      stream: true,
-      temperature: 0.2,
-      max_tokens: 4096,
-      metadata: {
-        mcp_enabled: false,
-        desktop_bridge_enabled: false,
-        desktop_bridge_port: 8787,
-      },
-    };
+describe('cloud utility completion contract', () => {
+  it('sends only the canonical Web effort and thinking fields', () => {
+    vi.spyOn(Config, 'agentThinking').mockReturnValue(true);
+    vi.spyOn(Config, 'agentEffort').mockReturnValue('high');
+    const messages = [
+      { role: 'system' as const, content: 'You are helpful.' },
+      { role: 'user' as const, content: 'Hi' },
+    ];
 
-    expect(request.model).toBe('auto-balanced');
-    expect(request.stream).toBe(true);
-    expect(request.messages).toHaveLength(2);
-    expect(request.metadata.mcp_enabled).toBe(false);
+    const request = buildCloudUtilityChatCompletionRequest(messages, 'fixture-cloud-model');
+
+    expect(request).toEqual({
+      model: 'fixture-cloud-model',
+      messages,
+      stream: true,
+      thinking_mode: true,
+      effort: 'high',
+    });
+    expect(request).not.toHaveProperty('thinking');
+    expect(request).not.toHaveProperty('metadata');
+    expect(request).not.toHaveProperty('temperature');
+    expect(request).not.toHaveProperty('max_tokens');
   });
 });
 
@@ -504,76 +591,8 @@ describe('managed chat Idempotency-Key wiring', () => {
   });
 });
 
-/**
- * The gateway origin carries the AGI Cloud account token as a Bearer on every
- * provider stream and on token revocation, so it must never resolve to a
- * plaintext or off-allowlist host. It used to share `validateEndpointUrl` with
- * the LLM endpoint, whose deliberate localhost escape (for a local `agi`
- * app-server) let `http://localhost:3000` become the token-bearing origin.
- */
-describe('validateGatewayUrl', () => {
-  it('rejects plaintext localhost — the token would go out unencrypted', () => {
-    expect(validateGatewayUrl('http://localhost:3000')).toBeUndefined();
-    expect(validateGatewayUrl('http://127.0.0.1:8787')).toBeUndefined();
-    expect(validateGatewayUrl('http://[::1]:8787')).toBeUndefined();
-  });
-
-  it('rejects plaintext even for an allowlisted host', () => {
-    expect(validateGatewayUrl('http://api.agiworkforce.com')).toBeUndefined();
-  });
-
-  it('accepts the allowlisted gateway origins and strips any path', () => {
-    expect(validateGatewayUrl('https://api.agiworkforce.com')).toBe('https://api.agiworkforce.com');
-    expect(validateGatewayUrl('https://gateway.agiworkforce.com/')).toBe(
-      'https://gateway.agiworkforce.com',
-    );
-    expect(validateGatewayUrl('https://staging-api.agiworkforce.com/v1/providers')).toBe(
-      'https://staging-api.agiworkforce.com',
-    );
-    expect(validateGatewayUrl('https://agiworkforce.com')).toBe('https://agiworkforce.com');
-  });
-
-  it('rejects off-allowlist hosts, lookalike subdomains and non-http schemes', () => {
-    expect(validateGatewayUrl('https://evil.attacker.com')).toBeUndefined();
-    expect(validateGatewayUrl('https://api.agiworkforce.com.evil.com')).toBeUndefined();
-    expect(validateGatewayUrl('https://evil.agiworkforce.com')).toBeUndefined();
-    expect(validateGatewayUrl('javascript:alert(1)')).toBeUndefined();
-    expect(validateGatewayUrl('not-a-url')).toBeUndefined();
-    expect(validateGatewayUrl('')).toBeUndefined();
-  });
-
-  it('keeps the same host list as the Chrome surface', () => {
-    // Both surfaces send the same account token to the same gateway; a host
-    // trusted by one and not the other is a bug in whichever drifted.
-    const policySource = readFileSync(
-      new URL('../../../extension/src/background/policy.ts', import.meta.url),
-      'utf8',
-    );
-    const block = policySource.match(
-      /GATEWAY_URL_ALLOWLIST_EXACT = new Set<string>\(\[([\s\S]*?)\]\)/,
-    )?.[1];
-    expect(block).toBeDefined();
-    const chromeHosts = [...block!.matchAll(/'(https?:\/\/[^']+)'/g)].map((m) => m[1]).sort();
-
-    const apiSource = readFileSync(new URL('../utils/api.ts', import.meta.url), 'utf8');
-    const vscodeBlock = apiSource.match(/GATEWAY_ALLOWED_ORIGINS = new Set\(\[([\s\S]*?)\]\)/)?.[1];
-    expect(vscodeBlock).toBeDefined();
-    const vscodeHosts = [...vscodeBlock!.matchAll(/'(https?:\/\/[^']+)'/g)].map((m) => m[1]).sort();
-
-    expect(vscodeHosts).toEqual(chromeHosts);
-    expect(vscodeHosts).toContain('https://staging-api.agiworkforce.com');
-  });
-});
-
 describe('getCloudGatewayOrigin', () => {
-  it('falls back to the default when the user config names a plaintext origin', () => {
-    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
-      get: vi.fn(),
-      update: vi.fn().mockResolvedValue(undefined),
-      has: vi.fn().mockReturnValue(false),
-      inspect: vi.fn().mockReturnValue({ globalValue: 'http://localhost:3000' }),
-    } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
-
+  it('uses the fixed trusted origin for account-token revocation', () => {
     expect(getCloudGatewayOrigin()).toBe('https://api.agiworkforce.com');
   });
 });

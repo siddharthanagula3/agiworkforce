@@ -5,7 +5,11 @@
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@agiworkforce/utils';
-import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
+import type {
+  ManagedMediaImageAspectRatio,
+  ManagedMediaVideoAspectRatio,
+  ManagedMediaVideoResolution,
+} from '@agiworkforce/cloud-contracts';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,7 +44,14 @@ export interface ImageGenerationResponse {
 export interface VideoGenerationRequest {
   prompt: string;
   duration_secs?: number;
-  resolution?: '720p' | '1080p' | '4k';
+  resolution?: ManagedMediaVideoResolution;
+  /**
+   * Landscape/portrait. The route has always read `aspect_ratio` and
+   * validated it against the model's published output sizes, but this
+   * contract never carried the field, so the composer had no way to send
+   * anything but the route's 16:9 default.
+   */
+  aspect_ratio?: ManagedMediaVideoAspectRatio;
   provider?: 'runway' | 'google' | 'openrouter';
   /**
    * Catalog model id for the composer's video picker. The route validates it

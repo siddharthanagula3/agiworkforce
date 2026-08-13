@@ -635,15 +635,35 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   // same rule the authoritative gate in background.ts applies. Without this the
   // panel rendered "ask before acting" checked while background.ts ran the agent
   // with no approval gate — a control misreporting the trust boundary it names.
+  let askPreferenceMutation = 0;
   chrome.storage?.local?.get('agi_cu_ask_before_acting', (items) => {
     if (chrome.runtime?.lastError) return;
+    if (askPreferenceMutation !== 0) return;
     askCheckbox.checked = items?.['agi_cu_ask_before_acting'] !== false;
   });
 
   // Persist on toggle rather than only when Run Autofill escalates, so closing
   // the panel without running anything cannot drop the user's choice.
   askCheckbox.addEventListener('change', () => {
-    void chrome.storage?.local?.set({ agi_cu_ask_before_acting: askCheckbox.checked });
+    const next = askCheckbox.checked;
+    const mutation = ++askPreferenceMutation;
+    askCheckbox.disabled = true;
+    void (async () => {
+      try {
+        await chrome.storage.local.set({ agi_cu_ask_before_acting: next });
+      } catch {
+        // The background reads the stored preference as the authoritative gate.
+        // Roll the visual control back so it cannot claim an opt-in/opt-out that
+        // never reached that boundary.
+        if (askPreferenceMutation === mutation) askCheckbox.checked = !next;
+        showHandoffBanner(
+          'The Ask before acting setting could not be saved. The previous setting is still active.',
+          'error',
+        );
+      } finally {
+        if (askPreferenceMutation === mutation) askCheckbox.disabled = false;
+      }
+    })();
   });
 
   const askText = document.createTextNode('Ask before acting');
@@ -1026,20 +1046,28 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     return askCheckbox.checked;
   }
 
+  let approvalCardSequence = 0;
+
   function showApprovalCard(
     toolName: string,
     description: string,
     resolve: (allowed: boolean) => void,
   ): void {
+    const approvalId = ++approvalCardSequence;
     const card = document.createElement('div');
     card.className = 'sp-cu-approval';
+    card.setAttribute('role', 'alertdialog');
+    card.setAttribute('aria-labelledby', `sp-cu-approval-title-${approvalId}`);
+    card.setAttribute('aria-describedby', `sp-cu-approval-desc-${approvalId}`);
 
     const cardTitle = document.createElement('div');
     cardTitle.className = 'sp-cu-approval-title';
+    cardTitle.id = `sp-cu-approval-title-${approvalId}`;
     cardTitle.textContent = `Approve action: ${toolName}`;
 
     const cardDesc = document.createElement('div');
     cardDesc.className = 'sp-cu-approval-desc';
+    cardDesc.id = `sp-cu-approval-desc-${approvalId}`;
     cardDesc.textContent = description;
 
     const btns = document.createElement('div');
@@ -1063,22 +1091,30 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     let settled = false;
     const expiry = setTimeout(() => {
       if (settled) return;
+      const shouldRestoreFocus = card.contains(document.activeElement);
       settled = true;
       clearTimeout(expiry);
       card.classList.add('expired');
+      card.setAttribute('role', 'status');
       allowBtn.disabled = true;
       denyBtn.disabled = true;
       cardTitle.textContent = `Skipped (no response): ${toolName}`;
       cardDesc.textContent =
         'This action timed out after 30 seconds and was skipped automatically.';
+      if (shouldRestoreFocus) {
+        card.tabIndex = -1;
+        card.focus();
+      }
       // The loop already resolved DENY on its own timer; this is presentation only.
     }, APPROVAL_TIMEOUT_MS);
 
     function cleanup(allowed: boolean): void {
       if (settled) return;
+      const shouldRestoreFocus = card.contains(document.activeElement);
       settled = true;
       clearTimeout(expiry);
       card.remove();
+      if (shouldRestoreFocus) stopBtn.focus();
       resolve(allowed);
     }
 
@@ -1094,6 +1130,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     // Insert approval card at top of log (above existing steps)
     logEl.insertBefore(card, logEl.firstChild);
     logEl.scrollTop = 0;
+    allowBtn.focus();
   }
 
   function onRunAutofill(handler: () => void): void {

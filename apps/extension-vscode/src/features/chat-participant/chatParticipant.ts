@@ -7,7 +7,7 @@
  *
  * The participant:
  * 1. Collects editor context as untrusted user data
- * 2. Starts or resumes a workspace-scoped local developer session
+ * 2. Starts or resumes a workspace-scoped developer session through the local host
  * 3. Streams app-server events back to the VS Code ChatResponseStream
  *
  * ── SYNC-RULE COMPLIANCE (locked 2026-05-22) ─────────────────────────────────
@@ -347,7 +347,7 @@ export function createChatHandler(
       return { errorDetails: { message } };
     }
     if (!vscode.workspace.isTrusted) {
-      const message = 'Trust this workspace before starting a local developer session.';
+      const message = 'Trust this workspace before starting a developer session.';
       stream.markdown(`> **AGI Workforce**: ${message}`);
       return { errorDetails: { message } };
     }
@@ -378,7 +378,7 @@ export function createChatHandler(
         ? undefined
         : buildCustomInstructionInput({ globalState, workspaceState });
     const memoryInput =
-      globalState === undefined ? undefined : buildMemoryContextInput(globalState);
+      workspaceState === undefined ? undefined : buildMemoryContextInput(workspaceState);
     const historicalAuthority = localThreadAuthorityFromHistory(context);
     let threadId = historicalAuthority?.id;
     let threadAuthority: LocalThreadAuthorityMetadata | undefined;

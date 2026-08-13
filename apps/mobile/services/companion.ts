@@ -29,6 +29,9 @@ const MISSED_HEARTBEAT_STALE_THRESHOLD = 2;
 /** Seconds to count down before auto-reconnecting */
 const RECONNECT_COUNTDOWN_SECONDS = 15;
 
+/** A new Dispatch task should receive an accepted/rejected status promptly. */
+const DISPATCH_ACK_TIMEOUT_MS = 15_000;
+
 // ---------------------------------------------------------------------------
 // QR Code Helpers
 // ---------------------------------------------------------------------------
@@ -83,16 +86,15 @@ export function buildApprovalResponsePayload(
  * Send an approval response back to the desktop.
  * This approves or rejects a pending tool execution.
  */
-export function sendApprovalResponse(
+export async function sendApprovalResponse(
   requestId: string,
   approved: boolean,
   reason?: string,
-): boolean {
+): Promise<boolean> {
   const { queueControl, sendControl, status } = useConnectionStore.getState();
   const payload = buildApprovalResponsePayload(requestId, approved, reason);
   if (status === 'connected') {
-    sendControl('approval_response', payload);
-    return true;
+    return sendControl('approval_response', payload);
   }
   if (status === 'reconnecting' || status === 'stale') {
     queueControl('approval_response', payload);
@@ -109,7 +111,7 @@ export function requestAgentRefresh(): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
-  sendControl('sync_request', {
+  void sendControl('sync_request', {
     reason: 'agent_refresh',
     requestedAt: new Date().toISOString(),
   });
@@ -122,7 +124,7 @@ export function sendAgentCommand(agentId: string, command: 'pause' | 'resume' | 
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
-  sendControl(command === 'cancel' ? 'cancel' : 'dispatch_request', {
+  void sendControl(command === 'cancel' ? 'cancel' : 'dispatch_request', {
     kind: 'agent_command',
     agentId,
     command,
@@ -144,7 +146,7 @@ function createDispatchRequestId(): string | null {
   return expoUuid || null;
 }
 
-export function sendDispatchTask(input: NewDispatchTaskInput): string | null {
+export async function sendDispatchTask(input: NewDispatchTaskInput): Promise<string | null> {
   const { sendControl, status } = useConnectionStore.getState();
   const prompt = input.prompt.trim();
   const title = input.title?.trim() || prompt.slice(0, 80);
@@ -163,26 +165,52 @@ export function sendDispatchTask(input: NewDispatchTaskInput): string | null {
   if (!requestId) return null;
   const sentAt = new Date().toISOString();
   useDispatchTaskStore.getState().addOutgoingTask({ requestId, prompt, title, sentAt });
-  sendControl('dispatch.task.create', {
+  const acceptedByTransport = await sendControl('dispatch.task.create', {
     version: 1,
     requestId,
     prompt,
     title,
     sentAt,
   });
+  if (!acceptedByTransport) {
+    useDispatchTaskStore
+      .getState()
+      .markTransportFailure(
+        requestId,
+        'Could not send this task to Desktop. Check the connection and try again.',
+        true,
+      );
+    return null;
+  }
+  const acknowledgementTimer = setTimeout(() => {
+    useDispatchTaskStore.getState().markAcknowledgementTimeout(requestId);
+  }, DISPATCH_ACK_TIMEOUT_MS);
+  const timerWithUnref = acknowledgementTimer as ReturnType<typeof setTimeout> & {
+    unref?: () => void;
+  };
+  timerWithUnref.unref?.();
   return requestId;
 }
 
-export function cancelDispatchTask(requestId: string, taskId?: string): void {
+export async function cancelDispatchTask(requestId: string, taskId?: string): Promise<boolean> {
   const { sendControl, status } = useConnectionStore.getState();
-  if (status !== 'connected' || !FEATURES.companion || !FEATURES.dispatch) return;
+  if (status !== 'connected' || !FEATURES.companion || !FEATURES.dispatch) return false;
 
-  sendControl('dispatch.task.cancel', {
+  const acceptedByTransport = await sendControl('dispatch.task.cancel', {
     version: 1,
     requestId,
     ...(taskId ? { taskId } : {}),
     sentAt: new Date().toISOString(),
   });
+  if (!acceptedByTransport) {
+    useDispatchTaskStore
+      .getState()
+      .markTransportFailure(
+        requestId,
+        'The cancel request could not be sent. The Desktop task may still be running.',
+      );
+  }
+  return acceptedByTransport;
 }
 
 /**
@@ -193,7 +221,7 @@ export function sendHeartbeatPing(): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected') return;
 
-  sendControl('heartbeat', {
+  void sendControl('heartbeat', {
     timestamp: Date.now(),
   });
 }
@@ -376,7 +404,7 @@ export function sendEmergencyStop(): void {
   const { sendControl, status } = useConnectionStore.getState();
   if (status !== 'connected' && status !== 'stale') return;
 
-  sendControl('cancel', {
+  void sendControl('cancel', {
     scope: 'all',
     sentAt: new Date().toISOString(),
   });

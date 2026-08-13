@@ -1,9 +1,13 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+} from '@agiworkforce/cloud-contracts';
 import { createError } from '@/lib/errors';
 
-export const PERSONAL_WORKSPACE_KEY = 'personal';
+export const PERSONAL_WORKSPACE_KEY = MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -15,15 +19,38 @@ export interface WorkspaceMembershipSummary {
   joinedAt: string;
 }
 
+interface WorkspaceScopedRequest {
+  headers: { get(name: string): string | null };
+}
+
 /**
- * Read the account's durable workspace selection and prove membership in the
- * same query. A stale/deleted selection therefore degrades to Personal rather
+ * Resolve the request workspace. An explicit Managed Cloud selector is strict:
+ * it is re-proven against membership and never falls back into another scope.
+ * Without one, read the account's durable selection and prove membership in
+ * the same query; a stale/deleted saved preference degrades to Personal rather
  * than ever becoming an authorization grant.
  */
 export async function resolveActiveOrganizationId(
   db: DatabaseAdapter,
   userId: string,
+  request?: WorkspaceScopedRequest,
 ): Promise<string | null> {
+  const requested = request?.headers.get(MANAGED_CLOUD_ORGANIZATION_HEADER)?.trim();
+  if (requested) {
+    if (requested === MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE) return null;
+    if (!UUID_RE.test(requested)) {
+      throw createError.validation('Invalid Managed Cloud workspace selector');
+    }
+    const membershipId = await resolveOrganizationMembershipId(db, userId, requested);
+    if (!membershipId) {
+      // An explicit selector is a stable resource binding, not a preference.
+      // Falling back to Personal after membership revocation could write a
+      // background sync into the wrong trust scope.
+      throw createError.forbidden('You are not a member of that workspace');
+    }
+    return membershipId;
+  }
+
   const [row] = await db.query<{ organization_id: string }>(
     `select m.organization_id
        from public.user_settings s

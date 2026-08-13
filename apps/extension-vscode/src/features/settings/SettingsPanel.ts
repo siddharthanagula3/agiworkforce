@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Config, type MutableConfigKey } from '../../platform/config';
-import { getAccountToken } from '../../utils/api';
+import { fetchAccountIdentity, fetchTierInfo, getAccountAuthState } from '../../utils/api';
+import { clearAccountTierCache, refreshAccountTierCache } from '../../integrations/tierResolver';
 import { getNonce } from '../sidebar-webview/webviewContent';
 import {
   isSettingsSection,
@@ -24,6 +25,7 @@ import { getContextPanelProvider } from '../trees/contextPanelProvider';
 const EXTERNAL_DESTINATIONS: Partial<Record<SettingsCommand, string>> = {
   manageUsage: 'https://agiworkforce.com/settings/usage?from=vscode-extension',
   manageBilling: 'https://agiworkforce.com/settings/billing?from=vscode-extension',
+  viewPlans: 'https://agiworkforce.com/pricing?from=vscode-extension',
   manageConnectors: 'https://agiworkforce.com/connectors?from=vscode-extension',
   manageTeam: 'https://agiworkforce.com/teams?from=vscode-extension',
   openDocs: 'https://agiworkforce.com/docs?from=vscode-extension',
@@ -36,6 +38,7 @@ export class SettingsPanel {
   public static readonly viewType = 'agi-workforce.settingsPanel';
   private static instance: SettingsPanel | undefined;
   private readonly disposables: vscode.Disposable[] = [];
+  private refreshSequence = 0;
 
   static __resetForTests(): void {
     SettingsPanel.instance = undefined;
@@ -73,6 +76,7 @@ export class SettingsPanel {
     const initialState: SettingsPanelState = {
       ...Config.settingsSnapshot(),
       accountConnected: null,
+      accountStatus: 'loading',
       agentConfigPath: agentConfigPath(),
       instructionContext: {
         ...storedInstructions,
@@ -85,6 +89,7 @@ export class SettingsPanel {
       getNonce(),
       initialState,
       initialSection,
+      this.context.extensionMode !== vscode.ExtensionMode.Production,
     );
 
     this.disposables.push(
@@ -121,20 +126,55 @@ export class SettingsPanel {
   }
 
   private async buildState(): Promise<SettingsPanelState> {
-    const accountToken = await getAccountToken(this.context.secrets);
+    const accountAuth = await getAccountAuthState(this.context.secrets);
+    const accountConnected = accountAuth.status === 'signed-in';
+    const [accountIdentity, tierInfo] = !accountConnected
+      ? [undefined, undefined]
+      : await Promise.all([
+          fetchAccountIdentity(this.context.secrets),
+          fetchTierInfo(this.context.secrets),
+        ]);
+    // Either concurrent account request may discover a revoked credential and
+    // clear it from SecretStorage. Re-read the authoritative local session
+    // state before publishing the snapshot so the settings UI never renders a
+    // stale signed-in state for a token that a 401 has already invalidated.
+    const currentAccountAuth = accountConnected
+      ? await getAccountAuthState(this.context.secrets)
+      : accountAuth;
+    const currentlyConnected = currentAccountAuth.status === 'signed-in';
     return {
       ...Config.settingsSnapshot(),
-      accountConnected: accountToken !== undefined,
+      accountConnected: currentlyConnected,
+      accountStatus: currentAccountAuth.status,
+      ...(currentlyConnected && accountIdentity !== undefined ? { accountIdentity } : {}),
+      ...(currentlyConnected && tierInfo !== undefined ? { tierInfo } : {}),
       agentConfigPath: agentConfigPath(),
       instructionContext: await buildInstructionContextSnapshot(this.context),
     };
   }
 
   private async refresh(): Promise<void> {
+    const sequence = ++this.refreshSequence;
     try {
-      const state = await this.buildState();
-      await this.post({ type: 'settings.snapshot', state });
+      const fetchedState = await this.buildState();
+      if (sequence !== this.refreshSequence) return;
+
+      if (fetchedState.accountConnected) {
+        await refreshAccountTierCache(this.context, async () => fetchedState.tierInfo);
+      } else {
+        await clearAccountTierCache(this.context);
+      }
+      // Updating the read-only currentTier setting can synchronously schedule a
+      // newer refresh through onDidChangeConfiguration. Only the newest epoch
+      // may publish, and it must snapshot after the cache write so the visible
+      // diagnostic tier agrees with model admission.
+      if (sequence !== this.refreshSequence) return;
+      await this.post({
+        type: 'settings.snapshot',
+        state: { ...fetchedState, ...Config.settingsSnapshot() },
+      });
     } catch (error) {
+      if (sequence !== this.refreshSequence) return;
       await this.post({
         type: 'settings.error',
         message:

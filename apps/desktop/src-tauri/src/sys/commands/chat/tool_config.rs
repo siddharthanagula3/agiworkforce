@@ -1,7 +1,7 @@
 use crate::core::llm::sse_parser::StreamingToolCall;
 use crate::core::llm::{ToolCall, ToolChoice, ToolDefinition};
 use crate::sys::commands::chat::tools;
-use crate::sys::commands::chat::types::ModelCapabilitiesDto;
+use crate::sys::commands::chat::types::{ChatToolScope, ModelCapabilitiesDto};
 use crate::sys::commands::mcp::McpState;
 use std::sync::Arc;
 use tracing::{debug, info, warn};
@@ -24,6 +24,7 @@ use tracing::{debug, info, warn};
 /// capabilities now close that gate; see `capabilities_assumed_when_unknown`.
 pub(super) fn build_tool_definitions(
     enable_tools: Option<bool>,
+    tool_scope: Option<ChatToolScope>,
     mcp_state: &McpState,
     model_capabilities: Option<&ModelCapabilitiesDto>,
     is_web_focus: bool,
@@ -34,8 +35,8 @@ pub(super) fn build_tool_definitions(
     Option<ToolChoice>,
     Option<Arc<crate::core::agi::tools::ToolRegistry>>,
 ) {
-    if !enable_tools.unwrap_or(true) {
-        debug!("[Chat] Tools explicitly disabled by request");
+    if enable_tools != Some(true) || tool_scope.is_none() {
+        debug!("[Chat] Tools disabled: no explicit user-selected tool scope");
         return (None, None, None);
     }
 
@@ -68,6 +69,22 @@ pub(super) fn build_tool_definitions(
             before_count,
             tool_defs.len()
         );
+    }
+
+    match tool_scope.expect("checked above") {
+        ChatToolScope::WebSearch => {
+            // Local Web search is a narrow network permission. It never grants
+            // file, shell, MCP, browser-control, memory, or connector tools.
+            tool_defs.retain(|tool| tool.name == "search_web");
+        }
+        ChatToolScope::AgiWork => {
+            if !capabilities.agentic {
+                warn!(
+                    "[Chat] AGI Work tools withheld: selected model lacks verified agentic capability"
+                );
+                return (None, None, None);
+            }
+        }
     }
 
     if is_web_focus {
@@ -113,21 +130,19 @@ pub(super) fn build_tool_definitions(
 /// a local Ollama build is the common case, since only catalog models carry
 /// capability metadata in the renderer.
 ///
-/// Every gate an unknown model could plausibly satisfy on-device stays open:
-/// withholding a tool the model can actually run is a worse failure than offering
-/// one it cannot, and that fake-unavailability regression is why `search_web` is
-/// deliberately ungated in `tools::required_model_capability`. `image_gen` is the
-/// exception because it is the one capability whose tools cross the managed-cloud
-/// trust boundary, where guessing wrong leaks the prompt instead of wasting a turn.
+/// Capability discovery is provider-owned. An absent or malformed payload is
+/// not evidence that a dynamic Local model supports function calls, vision,
+/// browser control, search, code execution, or agentic workflows.
 fn capabilities_assumed_when_unknown() -> ModelCapabilitiesDto {
     ModelCapabilitiesDto {
-        tools: true,
-        vision: true,
-        computer_use: true,
-        search: true,
-        code_execution: true,
+        tools: false,
+        vision: false,
+        computer_use: false,
+        search: false,
+        code_execution: false,
         image_gen: false,
-        agentic: true,
+        agentic: false,
+        thinking: false,
     }
 }
 
@@ -160,17 +175,48 @@ pub(super) fn normalize_tool_calls(
         .collect()
 }
 
+/// Keep only tool calls that were present in the exact request sent to the
+/// provider. Some local function-calling models can emit a remembered or
+/// prompt-shaped tool call even when `tools` was omitted. Treating that output
+/// as authorization would let model text cross the privileged execution
+/// boundary, so unadvertised names are rejected before any event or executor is
+/// reached.
+pub(super) fn filter_advertised_tool_calls(
+    tool_calls: Vec<StreamingToolCall>,
+    advertised_tools: Option<&[ToolDefinition]>,
+) -> (Vec<StreamingToolCall>, Vec<String>) {
+    let advertised: std::collections::HashSet<&str> = advertised_tools
+        .unwrap_or_default()
+        .iter()
+        .map(|tool| tool.name.as_str())
+        .collect();
+
+    let mut accepted = Vec::with_capacity(tool_calls.len());
+    let mut rejected = Vec::new();
+    for tool_call in tool_calls {
+        if advertised.contains(tool_call.name.as_str()) {
+            accepted.push(tool_call);
+        } else {
+            rejected.push(tool_call.name);
+        }
+    }
+    (accepted, rejected)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{build_tool_definitions, normalize_tool_calls};
-    use crate::core::llm::ToolCall;
+    use super::{build_tool_definitions, filter_advertised_tool_calls, normalize_tool_calls};
+    use crate::core::llm::sse_parser::StreamingToolCall;
+    use crate::core::llm::{ToolCall, ToolDefinition};
+    use crate::sys::commands::chat::types::{ChatToolScope, ModelCapabilitiesDto};
     use crate::sys::commands::mcp::McpState;
 
     #[test]
-    fn unknown_model_capabilities_withhold_the_managed_cloud_media_tools() {
+    fn unknown_model_capabilities_withhold_all_tools_until_provider_discovery() {
         let mcp_state = McpState::new();
         let (tool_defs, _, _) = build_tool_definitions(
             Some(true),
+            Some(ChatToolScope::AgiWork),
             &mcp_state,
             // The desktop renderer sends no capabilities for an off-catalog local model.
             None,
@@ -179,26 +225,78 @@ mod tests {
             true,
         );
 
-        let names: Vec<String> = tool_defs
-            .expect("a tool-capable turn must still be offered tools")
-            .into_iter()
-            .map(|tool| tool.name)
-            .collect();
-
-        for managed_cloud_tool in ["image_generate", "video_generate"] {
-            assert!(
-                !names.iter().any(|name| name == managed_cloud_tool),
-                "'{managed_cloud_tool}' posts the prompt to managed cloud and must not be \
-                 offered to a model of unknown capability; offered: {names:?}"
-            );
-        }
-
-        // The on-device tools survive, so this is a boundary gate and not a
-        // blanket withholding that would strip the local agent of its tools.
         assert!(
-            names.iter().any(|name| name == "terminal_execute"),
-            "locally executed tools must stay available; offered: {names:?}"
+            tool_defs.is_none(),
+            "unknown capability metadata must not be promoted into tool support"
         );
+    }
+
+    #[test]
+    fn absent_scope_withholds_tools_even_for_a_tool_capable_model() {
+        let mcp_state = McpState::new();
+        let capabilities = ModelCapabilitiesDto {
+            tools: true,
+            agentic: true,
+            ..Default::default()
+        };
+        let (tool_defs, _, _) = build_tool_definitions(
+            Some(true),
+            None,
+            &mcp_state,
+            Some(&capabilities),
+            false,
+            "fixture-tool-model",
+            true,
+        );
+
+        assert!(tool_defs.is_none());
+    }
+
+    #[test]
+    fn web_search_scope_exposes_only_the_generic_search_tool() {
+        let mcp_state = McpState::new();
+        let capabilities = ModelCapabilitiesDto {
+            tools: true,
+            ..Default::default()
+        };
+        let (tool_defs, _, _) = build_tool_definitions(
+            Some(true),
+            Some(ChatToolScope::WebSearch),
+            &mcp_state,
+            Some(&capabilities),
+            false,
+            "fixture-tool-model",
+            false,
+        );
+
+        let names: Vec<&str> = tool_defs
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|tool| tool.name.as_str())
+            .collect();
+        assert_eq!(names, vec!["search_web"]);
+    }
+
+    #[test]
+    fn agi_work_scope_requires_verified_agentic_capability() {
+        let mcp_state = McpState::new();
+        let capabilities = ModelCapabilitiesDto {
+            tools: true,
+            agentic: false,
+            ..Default::default()
+        };
+        let (tool_defs, _, _) = build_tool_definitions(
+            Some(true),
+            Some(ChatToolScope::AgiWork),
+            &mcp_state,
+            Some(&capabilities),
+            false,
+            "fixture-tool-model",
+            true,
+        );
+
+        assert!(tool_defs.is_none());
     }
 
     #[test]
@@ -215,5 +313,48 @@ mod tests {
         assert_eq!(normalized.len(), 1);
         assert_eq!(normalized[0].id, "tool_call_0");
         assert_eq!(normalized[0].name, "unknown_tool");
+    }
+
+    #[test]
+    fn unadvertised_provider_tool_calls_are_rejected() {
+        let calls = vec![
+            StreamingToolCall {
+                index: 0,
+                id: "allowed".to_string(),
+                name: "fixture_read".to_string(),
+                arguments: "{}".to_string(),
+            },
+            StreamingToolCall {
+                index: 1,
+                id: "blocked".to_string(),
+                name: "terminal_execute".to_string(),
+                arguments: "{}".to_string(),
+            },
+        ];
+        let advertised = vec![ToolDefinition {
+            name: "fixture_read".to_string(),
+            description: "Synthetic test tool".to_string(),
+            parameters: serde_json::json!({"type": "object"}),
+            strict: None,
+        }];
+
+        let (accepted, rejected) = filter_advertised_tool_calls(calls, Some(advertised.as_slice()));
+        assert_eq!(accepted.len(), 1);
+        assert_eq!(accepted[0].name, "fixture_read");
+        assert_eq!(rejected, vec!["terminal_execute"]);
+    }
+
+    #[test]
+    fn no_advertised_tools_rejects_every_provider_call() {
+        let calls = vec![StreamingToolCall {
+            index: 0,
+            id: "blocked".to_string(),
+            name: "terminal_execute".to_string(),
+            arguments: "{}".to_string(),
+        }];
+
+        let (accepted, rejected) = filter_advertised_tool_calls(calls, None);
+        assert!(accepted.is_empty());
+        assert_eq!(rejected, vec!["terminal_execute"]);
     }
 }

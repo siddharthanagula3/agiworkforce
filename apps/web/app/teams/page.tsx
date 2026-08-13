@@ -27,7 +27,7 @@ export default function TeamsPage() {
           eyebrow="AGI for teams"
           titleLines={['Shared work.', 'Visible routes.']}
           em="Visible routes."
-          lede="Bring chats, files, projects, artifacts, and code into one shared workspace. Explicit policy covers what runs locally, what goes through your own provider keys on Desktop and CLI, and what runs in AGI managed cloud."
+          lede="Bring chats, files, projects, artifacts, and code into one shared workspace. Explicit policy covers what runs locally, what goes through your own provider keys on Desktop, CLI, and VS Code, and what runs in AGI managed cloud."
           ctas={[
             { href: '/pricing#pricing-team-title', label: 'Choose Team seats' },
             { href: '/contact-sales', label: 'Enterprise sales' },

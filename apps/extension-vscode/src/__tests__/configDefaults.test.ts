@@ -55,20 +55,15 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   inlineCompletionsEnabled: 'agiWorkforce.inlineCompletions.enabled',
   inlineCompletionsDebounceMs: 'agiWorkforce.inlineCompletions.debounceMs',
   inlineCompletionsMaxLength: 'agiWorkforce.inlineCompletions.maxLength',
-  mcpEnabled: 'agiWorkforce.mcp.enabled',
   model: 'agiWorkforce.model',
-  streamingEnabled: 'agiWorkforce.streamingEnabled',
   composerFollowUpBehavior: 'agiWorkforce.composer.followUpBehavior',
   contextLines: 'agiWorkforce.contextLines',
   telemetryEnabled: 'agiWorkforce.telemetryEnabled',
   telemetryEndpoint: 'agiWorkforce.telemetryEndpoint',
-  useProviderStream: 'agiWorkforce.useProviderStream',
   desktopBridgeEnabled: 'agiWorkforce.desktopBridge.enabled',
   desktopBridgePort: 'agiWorkforce.desktopBridge.port',
-  tier: 'agiWorkforce.tier',
   currentTier: 'agiWorkforce.currentTier',
   cliPath: 'agiWorkforce.cliPath',
-  gatewayUrl: 'agiWorkforce.gatewayUrl',
 };
 
 describe('Config DEFAULTS ↔ package.json parity', () => {
@@ -150,33 +145,11 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     expect(commandSetup).not.toContain("case 'thinking':");
   });
 
-  it('distinguishes the extension MCP toggle from app-server MCP configuration', () => {
-    const description = pkgSettings['agiWorkforce.mcp.enabled']?.description ?? '';
-
-    expect(description).toContain('cloud-backed editor utilities');
-    expect(description).toContain('does not control the local app-server');
-  });
-
-  it('exposes only canonical shipped tier names', () => {
-    const tier = pkgSettings['agiWorkforce.tier'] as PkgConfigContrib & { enum?: string[] };
-    expect(tier.enum).toEqual([
-      'local',
-      'byok',
-      'free',
-      'basic',
-      'pro',
-      'max',
-      'max_15x',
-      'team',
-      'enterprise',
-    ]);
-  });
-
-  it('labels the opt-in provider stream as a cloud utility transport', () => {
-    expect(pkgSettings['agiWorkforce.useProviderStream']?.description).toContain(
-      'cloud-backed editor utilities',
-    );
-    expect(pkgSettings['agiWorkforce.providerStreamProvider']).toBeUndefined();
+  it('does not publish retired transport or unsupported extension MCP controls', () => {
+    expect(pkgSettings['agiWorkforce.streamingEnabled']).toBeUndefined();
+    expect(pkgSettings['agiWorkforce.useProviderStream']).toBeUndefined();
+    expect(pkgSettings['agiWorkforce.gatewayUrl']).toBeUndefined();
+    expect(pkgSettings['agiWorkforce.mcp.enabled']).toBeUndefined();
   });
 
   it('restricts only settings that the extension actually contributes', () => {
@@ -185,6 +158,19 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
 
     expect(restricted.length).toBeGreaterThan(0);
     expect(restricted.filter((key) => pkgSettings[key] === undefined)).toEqual([]);
+  });
+
+  it('restricts workspace settings that can change the model or Desktop bridge boundary', () => {
+    const restricted =
+      readPackageJson().capabilities?.untrustedWorkspaces?.restrictedConfigurations ?? [];
+
+    expect(restricted).toEqual(
+      expect.arrayContaining([
+        'agiWorkforce.model',
+        'agiWorkforce.desktopBridge.enabled',
+        'agiWorkforce.desktopBridge.port',
+      ]),
+    );
   });
 
   it('presents the legacy invite command id as sign-in, not a private-beta gate', () => {

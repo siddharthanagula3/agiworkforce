@@ -431,31 +431,3 @@ export async function upgradePlanMidCycle(data: {
   }
   return { activation: 'webhook_pending' };
 }
-
-/**
- * Build the Enterprise plan inquiry destination (Contact sales).
- *
- * Navigation belongs to the calling Client Component so internal routes use
- * the Next.js router instead of forcing a full document reload from a service.
- */
-export function contactEnterpriseSales(data: {
-  userId: string;
-  userEmail: string;
-  userName?: string;
-  companyName?: string;
-  message?: string;
-}): string {
-  // In a real implementation, this would send an email or create a lead in CRM
-  // For now, we'll just open the contact page or show a success message
-
-  // You can implement this to send to your CRM or email service
-  // For now, redirect to contact page with pre-filled info
-  const params = new URLSearchParams({
-    email: data.userEmail,
-    plan: 'enterprise',
-    ...(data.userName && { name: data.userName }),
-    ...(data.companyName && { company: data.companyName }),
-  });
-
-  return `/contact-sales?${params.toString()}`;
-}

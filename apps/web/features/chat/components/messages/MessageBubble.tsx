@@ -38,7 +38,6 @@ import {
   Volume2,
   Square,
   Download,
-  Video,
   Flag,
 } from 'lucide-react';
 import {
@@ -99,6 +98,9 @@ import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
 import type { ImageAspectRatio } from '../Composer/ChatComposerNew';
 import { CodeExecutionBlock } from './CodeExecutionBlock';
+import { detectCardType } from '../cards';
+import { MessageFormatCard } from '../cards/MessageFormatCard';
+import { VideoGenerationPlaceholder } from './VideoGenerationPlaceholder';
 
 /**
  * Framer-motion variants for message bubble entrance animations.
@@ -850,6 +852,24 @@ const MessageBubbleComponent = function MessageBubble({
     return closeUnterminatedFence(stripped);
   }, [message.content, artifacts, streamingBlock]);
 
+  /**
+   * Rich format cards (recipe / comparison / steps / calculation) for assistant
+   * prose that has a clear structure.
+   *
+   * Deliberately NOT computed while streaming. The detector reads structural
+   * signals — an "## Ingredients" heading, three "Step N:" markers — and a
+   * partial answer crosses those thresholds at arbitrary moments, so running
+   * it per token would flip the layout between prose and card mid-render. It
+   * settles once, when the text is final.
+   *
+   * `MessageFormatCard` keeps the original markdown one click away, so a
+   * mis-detection or a lossy parser costs a toggle rather than the answer.
+   */
+  const formatCardType = useMemo(() => {
+    if (isUser || message.isStreaming) return null;
+    return detectCardType(cleanedContent);
+  }, [isUser, message.isStreaming, cleanedContent]);
+
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
@@ -1178,7 +1198,18 @@ const MessageBubbleComponent = function MessageBubble({
                 <span className="text-sm">Thinking...</span>
               </div>
             ) : (
-              <MarkdownContent content={cleanedContent} isStreaming={message.isStreaming} />
+              (() => {
+                const markdown = (
+                  <MarkdownContent content={cleanedContent} isStreaming={message.isStreaming} />
+                );
+                return formatCardType ? (
+                  <MessageFormatCard content={cleanedContent} cardType={formatCardType}>
+                    {markdown}
+                  </MessageFormatCard>
+                ) : (
+                  markdown
+                );
+              })()
             )}
           </div>
           {!isUser && inlineCitations.length > 0 && (
@@ -1367,30 +1398,7 @@ const MessageBubbleComponent = function MessageBubble({
             message.isStreaming === true &&
             !message.metadata?.videoUrl &&
             !videoError && (
-              <div
-                className="mt-4 relative w-full max-w-lg aspect-video overflow-hidden rounded-xl bg-muted"
-                role="status"
-                aria-live="polite"
-                aria-label="Generating your video"
-              >
-                {/* Drives @keyframes shimmer in globals.css, which animates
-                    background-position — so the highlight must be an oversized
-                    background gradient. A translate-based sweep would not move. */}
-                <div
-                  className={cn(
-                    'absolute inset-0',
-                    'bg-[linear-gradient(90deg,transparent,var(--color-accent),transparent)]',
-                    'bg-[length:200%_100%]',
-                    'motion-safe:animate-[shimmer_1.8s_ease-in-out_infinite]',
-                  )}
-                />
-                {/* Visible only when animation is suppressed, so reduced-motion
-                    users still get a "working" cue instead of a blank box. */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 motion-safe:opacity-0">
-                  <Video className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
-                  <span className="text-[13px] text-muted-foreground">Generating your video…</span>
-                </div>
-              </div>
+              <VideoGenerationPlaceholder startedAt={message.timestamp.toISOString()} />
             )}
 
           {!isUser &&

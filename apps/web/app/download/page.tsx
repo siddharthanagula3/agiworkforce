@@ -6,7 +6,11 @@ import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { DevBand, FinalCta, SurfaceIndex } from '@/features/marketing/components/FlagshipSections';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
-import { COMING_SOON_LABEL, SURFACE_STATUS } from '../../lib/marketing-constants';
+import {
+  COMING_SOON_LABEL,
+  DESKTOP_LOCAL_RUNTIMES,
+  SURFACE_STATUS,
+} from '../../lib/marketing-constants';
 import { DesktopDownloadAvailability } from './DesktopDownloadAvailability';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
@@ -44,7 +48,7 @@ export default function DownloadPage() {
               View Desktop downloads
             </Link>
             <WaitlistTrigger
-              label="Team & Enterprise access"
+              label="Enterprise early access"
               source="website"
               className="agi-fl-cta agi-fl-cta--ghost"
             />
@@ -106,7 +110,7 @@ export default function DownloadPage() {
               tagline: 'The local-private compute host.',
               body: 'A native app built in Rust. Runs local models, holds BYOK keys encrypted, powers files and connectors. Platform installers open from the Desktop page as release assets become available.',
               capabilities: [
-                'Local models via Ollama & LM Studio',
+                `Local models via ${DESKTOP_LOCAL_RUNTIMES.label}`,
                 'BYOK keys, encrypted at rest',
                 'MCP connectors & tool approvals',
                 'Scheduled work with AGI Work',
@@ -225,7 +229,7 @@ export default function DownloadPage() {
           ctas={[
             { href: WEB_CHAT_ENTRY_HREF, label: 'Use AGI Web' },
             { href: '#desktop-downloads', label: 'Desktop availability' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { label: 'Enterprise early access', waitlist: true },
           ]}
           stamp="Linux x64 · verification required before download"
         />

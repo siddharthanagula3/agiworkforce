@@ -297,6 +297,15 @@ export const rateLimitConfigs = {
     window: '1 m', // 60 share views per minute (public read endpoint)
     failClosed: false,
   },
+  // Map tiles: one card paints a grid of them, and a user can scroll a
+  // conversation full of cards, so the ceiling is high. Fail-open because a
+  // missing tile is a cosmetic gap in an already-rendered answer, and the
+  // route's real abuse ceiling is the authenticated session, not this bucket.
+  'map-tile': {
+    limit: 600,
+    window: '1 m',
+    failClosed: false,
+  },
   // Model catalog endpoint - public, cached, generous limits
   'model-catalog': {
     limit: 120,

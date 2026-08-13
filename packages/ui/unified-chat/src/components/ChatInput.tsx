@@ -40,7 +40,7 @@ import { useVoiceInput } from '../hooks/useVoiceInput';
 import { useAgentControlStore } from '../stores/agentControlStore';
 import { isCodeExecutionAvailable } from '../lib/codeExecutionAvailability';
 import type { WritingStyle } from '../lib/writingStyle';
-import type { ChatAttachmentPolicy } from '../lib/runtime';
+import type { ChatAttachmentPolicy, LocalToolScope } from '../lib/runtime';
 import {
   getSlashCommand,
   registerBuiltinSlashCommands,
@@ -131,6 +131,8 @@ export interface ChatInputProps {
     workScope?: ChatWorkScope,
     /** Exact managed catalog name selected through the Skill mention picker. */
     skillName?: string,
+    /** One-turn Local/native tool scope selected explicitly in the composer. */
+    localToolScope?: LocalToolScope,
   ) => void;
   onStop: () => void;
   /**
@@ -183,6 +185,12 @@ export interface ChatInputProps {
    * reject. Defaults true for Local/BYOK hosts that already own their runtime.
    */
   canUseAgiWork?: boolean;
+  /**
+   * Host-owned explanation for withholding AGI Work. This keeps capability
+   * discovery at the runtime boundary while still giving the shared composer
+   * an honest, readable unavailable state.
+   */
+  agiWorkUnavailableReason?: string;
   /** Active-conversation generation state supplied by a concurrent-capable host. */
   isStreamingOverride?: boolean;
   hasMessages: boolean;
@@ -212,6 +220,8 @@ export interface ChatInputProps {
   supportsCodeExecution?: boolean;
   /** Whether the active runtime can transport managed Research requests. */
   supportsResearch?: boolean;
+  /** Show an explicit, one-shot native Web-search control in the plus menu. */
+  supportsExplicitLocalWebSearch?: boolean;
   /** Runtime-specific limits layered over the suite-wide local attachment policy. */
   attachmentPolicy?: ChatAttachmentPolicy;
   /**
@@ -255,6 +265,7 @@ export function ChatInput({
   onClearFolder,
   projectPicker,
   canUseAgiWork = true,
+  agiWorkUnavailableReason,
   isStreamingOverride,
   hasMessages,
   className,
@@ -264,6 +275,7 @@ export function ChatInput({
   projectId,
   supportsCodeExecution = false,
   supportsResearch = false,
+  supportsExplicitLocalWebSearch = false,
   attachmentPolicy,
   pendingAttachments = null,
   attachmentContextKey,
@@ -294,6 +306,7 @@ export function ChatInput({
   const [attachmentMenuOpen, setAttachmentMenuOpen] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [researchEnabled, setResearchEnabled] = useState(false);
+  const [explicitWebSearchEnabled, setExplicitWebSearchEnabled] = useState(false);
   const [activeStyle, setActiveStyle] = useState<WritingStyle | null>(null);
   const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   const [selectedSkill, setSelectedSkill] = useState<MentionSkill | null>(null);
@@ -410,6 +423,7 @@ export function ChatInput({
   // Read the currently selected model's provider to determine effort visibility
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const models = useModelStore((s) => s.models);
+  const modelCatalogStatus = useModelStore((s) => s.modelCatalogStatus);
   const selectedModel = models.find((m) => m.id === selectedModelId);
   const modelProviderId = (selectedModel?.provider as string) ?? '';
   // No usable model is selected — e.g. Local mode with no Ollama/BYOK model, where
@@ -417,6 +431,7 @@ export function ChatInput({
   // concrete IDs are non-empty, so cloud auto-routing stays enabled; only '' means
   // there is nothing to send to. Block send so a message can't silently no-op.
   const noModelSelected = selectedModelId.trim() === '';
+  const modelCatalogLoadingWithoutModels = modelCatalogStatus === 'loading' && models.length === 0;
 
   // A mode/runtime switch must not leave a hidden Research selection armed.
   // The send path also gates on `supportsResearch`, but clearing here prevents
@@ -425,6 +440,13 @@ export function ChatInput({
   useEffect(() => {
     if (!supportsResearch) setResearchEnabled(false);
   }, [supportsResearch]);
+
+  // Local Web search is a one-turn network permission, not a sticky global
+  // preference. Clear it whenever the destination conversation or runtime
+  // capability changes.
+  useEffect(() => {
+    setExplicitWebSearchEnabled(false);
+  }, [conversationId, supportsExplicitLocalWebSearch]);
 
   // "Run code" toggle: persisted preference lives in settingsStore (not
   // chatStore, unlike webSearch) — see settingsStore's field doc comment.
@@ -798,7 +820,19 @@ export function ChatInput({
           projectId: activeProjectId,
         }
       : undefined;
-    if (selectedSkill) {
+    if (supportsExplicitLocalWebSearch && explicitWebSearchEnabled) {
+      onSend(
+        content,
+        agentMode,
+        effort,
+        attachments,
+        research,
+        activeStyle ?? undefined,
+        workScope,
+        selectedSkill?.name,
+        'web_search',
+      );
+    } else if (selectedSkill) {
       onSend(
         content,
         agentMode,
@@ -831,6 +865,7 @@ export function ChatInput({
     attachedFilesDestinationRef.current = null;
     setAttachmentError(null);
     setSelectedSkill(null);
+    setExplicitWebSearchEnabled(false);
   }, [
     disabled,
     noModelSelected,
@@ -846,6 +881,8 @@ export function ChatInput({
     clearDraftContent,
     researchEnabled,
     supportsResearch,
+    supportsExplicitLocalWebSearch,
+    explicitWebSearchEnabled,
     activeStyle,
     projectPicker,
     canUseAgiWork,
@@ -909,11 +946,13 @@ export function ChatInput({
 
   const placeholder = disabled
     ? (disabledMessage ?? t('composer.connectToChat', 'Connect to start chatting'))
-    : noModelSelected
-      ? t('composer.selectModelToStart', 'Select a model to start')
-      : hasMessages
-        ? t('composer.reply', 'Reply…')
-        : t('placeholderEmpty', 'How can I help you today?');
+    : modelCatalogLoadingWithoutModels
+      ? t('composer.findingModels', 'Finding available models…')
+      : noModelSelected
+        ? t('composer.selectModelToStart', 'Select a model to start')
+        : hasMessages
+          ? t('composer.reply', 'Reply…')
+          : t('placeholderEmpty', 'How can I help you today?');
 
   return (
     <div className={cn('relative mx-auto w-full max-w-3xl px-4 pb-2', className)}>
@@ -1072,6 +1111,12 @@ export function ChatInput({
                   researchEnabled={researchEnabled}
                   onResearchToggle={() => setResearchEnabled((v) => !v)}
                   supportsResearch={supportsResearch}
+                  explicitWebSearchEnabled={explicitWebSearchEnabled}
+                  onExplicitWebSearchToggle={
+                    supportsExplicitLocalWebSearch
+                      ? () => setExplicitWebSearchEnabled((enabled) => !enabled)
+                      : undefined
+                  }
                   codeExecutionEnabled={codeExecutionEnabled}
                   codeExecutionAvailable={codeExecutionAvailable}
                   onCodeExecutionToggle={supportsCodeExecution ? toggleCodeExecution : undefined}
@@ -1232,7 +1277,7 @@ export function ChatInput({
           local-folder action appears only when the host feeds the folder seam
           (desktop, privacy-gated by the host). */}
       {projectPicker && (workMode === 'agiwork' || !canUseAgiWork) && (
-        <div className="relative mt-2 flex items-center gap-2" ref={scopePickerRef}>
+        <div className="relative mt-2 flex flex-wrap items-center gap-2" ref={scopePickerRef}>
           <div
             className={cn(
               'flex h-8 min-w-0 items-center rounded-full border transition-all',
@@ -1258,6 +1303,7 @@ export function ChatInput({
                   ? t('composer.projectOrFolder', 'Project or folder')
                   : t('composer.project', 'Project')
               }
+              aria-description={!canUseAgiWork ? agiWorkUnavailableReason : undefined}
               aria-expanded={scopePickerOpen}
               title={scopeHasSelection ? scopeLabel : undefined}
             >
@@ -1287,6 +1333,18 @@ export function ChatInput({
 
           {scopePickerOpen && (
             <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-1.5 shadow-xl">
+              {!canUseAgiWork && (
+                <p
+                  role="status"
+                  className="mb-1.5 rounded-lg bg-[var(--chat-surface-hover)]/50 px-3 py-2 text-xs leading-5 text-[var(--chat-text-secondary)]"
+                >
+                  {agiWorkUnavailableReason ??
+                    t(
+                      'composer.agiWorkUnavailable',
+                      'AGI Work is unavailable. Project chat still works.',
+                    )}
+                </p>
+              )}
               <input
                 type="text"
                 value={projectQuery}

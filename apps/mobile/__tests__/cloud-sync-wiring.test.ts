@@ -221,6 +221,13 @@ describe('cloud send → sync write-through', () => {
     const assistantId = useChatStore
       .getState()
       .beginImageGeneration(CONV_ID, 'Create an image', 'a blue observatory', IMAGE_MODEL);
+    const inFlightMessages = useChatCloudMessageStore.getState().messages[CONV_ID] ?? [];
+    expect(
+      useCloudSyncStateStore
+        .getState()
+        .dirtyMessages.map((ref) => ref.messageId)
+        .sort(),
+    ).toEqual(inFlightMessages.map((message) => message.id).sort());
     useChatStore.getState().completeImageGeneration(CONV_ID, assistantId, {
       imageUrl: 'https://example.com/observatory.png',
       model: IMAGE_MODEL,

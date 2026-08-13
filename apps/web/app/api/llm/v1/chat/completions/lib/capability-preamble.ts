@@ -51,12 +51,13 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
 /**
  * Pull tool names out of a resolved tool array.
  *
- * Two shapes coexist on this route: OpenAI-style function tools
+ * Several shapes coexist on this route: OpenAI-style function tools
  * (`{ type: 'function', function: { name } }`) used by every platform-executed
  * tool, and provider-native server tools (`{ type: 'web_search_20250305',
- * name: 'web_search' }`) used by Anthropic. Unknown shapes are skipped rather
- * than guessed at — an omission understates our capabilities, which is the safe
- * direction to fail.
+ * name: 'web_search' }`) used by Anthropic, OpenAI Responses
+ * (`{ type: 'web_search' }`), and Google grounding (`{ google_search: {} }`).
+ * Unknown shapes are skipped rather than guessed at — an omission understates
+ * our capabilities, which is the safe direction to fail.
  */
 export function extractToolNames(tools: unknown[] | undefined): string[] {
   if (!Array.isArray(tools)) return [];
@@ -75,7 +76,23 @@ export function extractToolNames(tools: unknown[] | undefined): string[] {
     }
 
     const name = record['name'];
-    if (typeof name === 'string' && name) names.push(name);
+    if (typeof name === 'string' && name) {
+      names.push(name);
+      continue;
+    }
+
+    // Provider-native hosted tools do not all carry a `name`. Missing these
+    // two exact, server-owned shapes made the preamble say "No tools are
+    // available" while the request actually contained web search. Models then
+    // followed that contradictory system instruction and replied that they
+    // could not browse instead of calling the attached tool.
+    if (record['type'] === 'web_search' || record['type'] === 'web_search_2025_08_26') {
+      names.push('web_search');
+      continue;
+    }
+    if (record['google_search'] && typeof record['google_search'] === 'object') {
+      names.push('web_search');
+    }
   }
   return [...new Set(names)];
 }

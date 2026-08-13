@@ -9,7 +9,10 @@ import {
   type ManagedMediaImageProvider,
 } from '@agiworkforce/cloud-contracts';
 import { getOptionalEnv, requireEnv } from '@shared/utils/env';
-import { getMediaAssetById, isMediaAssetStoreReady } from '@/lib/server/media-assets';
+import {
+  getActiveWorkspaceMediaAssetById,
+  isMediaAssetStoreReady,
+} from '@/lib/server/media-assets';
 import { providerApiUrl } from '@/lib/server/provider-endpoints';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
@@ -38,6 +41,7 @@ import {
   authenticatedMediaUrl,
   deleteStoredMedia,
   isImageStorageConfigured,
+  readStoredMedia,
   storeMedia,
   bytesFromBase64,
   bytesFromUrl,
@@ -418,10 +422,11 @@ function isProviderAvailable(provider: ImageProvider): boolean {
 /**
  * Resolve a `source_image` / `mask_image` reference to raw bytes.
  *
- * OWNER-SCOPED on purpose: an `asset_id` is re-read under the caller's identity
- * and rejected on mismatch, so a caller cannot pass someone else's asset id and
- * have the server fetch that image on their behalf. Inline `b64_json` bytes are
- * the caller's own upload and need no lookup.
+ * OWNER + ACTIVE-WORKSPACE scoped on purpose: an `asset_id` is re-read under
+ * the caller's current tenant boundary, so a caller cannot pass somebody
+ * else's or another workspace's asset id and have the server read that image
+ * on their behalf. Inline `b64_json` bytes are the caller's own upload and need
+ * no lookup.
  *
  * There is deliberately no URL branch — accepting one would turn this endpoint
  * into a server-side fetcher for attacker-supplied hosts.
@@ -435,21 +440,22 @@ async function resolveImageRefBytes(
     return Uint8Array.from(Buffer.from(base64, 'base64'));
   }
 
-  const asset = await getMediaAssetById(ref.asset_id);
-  if (!asset || asset.deletedAt) {
-    throw new Error('Source image not found');
-  }
-  if (asset.userId !== userId) {
-    // Same message as not-found: never confirm the existence of another
-    // account's asset.
+  const asset = await getActiveWorkspaceMediaAssetById(userId, ref.asset_id);
+  if (
+    !asset ||
+    asset.deletedAt ||
+    asset.kind !== 'image' ||
+    !asset.mimeType.toLowerCase().startsWith('image/')
+  ) {
     throw new Error('Source image not found');
   }
 
-  const response = await fetch(asset.storageUrl, { signal: AbortSignal.timeout(20_000) });
-  if (!response.ok) {
+  if (!asset.storagePathname) {
     throw new Error('Source image could not be read');
   }
-  return new Uint8Array(await response.arrayBuffer());
+  const object = await readStoredMedia(asset.storagePathname);
+  if (!object) throw new Error('Source image could not be read');
+  return new Uint8Array(object.data);
 }
 
 async function generateWithOpenAIImage(

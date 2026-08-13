@@ -4,7 +4,7 @@ title: Getting started with AGI
 path: /help
 category: getting-started
 tags: getting started, first steps, setup, sign in, new account, onboarding, install
-updated: 2026-08-05
+updated: 2026-08-13
 scope: public
 ---
 
@@ -18,11 +18,14 @@ alpha and open by default, so there is no waitlist and no invite code to redeem.
 
 AGI runs in three separate trust modes and never silently moves work between them.
 
-- **Local** runs models on your own hardware through Ollama or LM Studio. No API
-  keys, no quotas, and no internet connection required. Local is free.
-- **BYOK** means you bring your own provider API key on Desktop and CLI. Keys are
-  encrypted at rest on your machine and traffic goes directly to your provider.
-  Usage is billed by the provider, not by AGI, with no markup. BYOK is free.
+- **Local** runs models on your own hardware. Desktop supports Ollama, LM Studio,
+  llama.cpp, and vLLM; the CLI supports its documented local integrations,
+  currently Ollama and LM Studio. Local is free and can run offline after the
+  runtime and model are installed.
+- **BYOK** means you bring your own provider API key on supported Desktop, CLI,
+  and VS Code releases. Keys stay in the local runtime and traffic goes directly
+  to your provider. Usage is billed by the provider, not by AGI, with no markup.
+  BYOK is free.
 - **Managed cloud** runs on AGI-operated provider access. It is metered, and
   current plan details live on the pricing page.
 

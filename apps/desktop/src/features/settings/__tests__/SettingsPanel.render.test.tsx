@@ -14,6 +14,7 @@ import { useAuthStore } from '../../../stores/auth';
 import { useAppModeStore } from '../../../stores/appModeStore';
 import { useSettingsStore } from '../../../stores/settingsStore';
 import { SettingsPanel } from '../SettingsPanel';
+import { subscribeToLocalModelCatalogChanges } from '../../../lib/localModelCatalog';
 
 vi.mock('@agiworkforce/desktop-command-client', () => ({
   chat: {
@@ -193,23 +194,29 @@ describe('SettingsPanel render stability', () => {
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="models-keys" />);
 
     expect(await screen.findByText('API Keys (BYOK)')).toBeInTheDocument();
-    expect(screen.getByText('Request routing')).toBeInTheDocument();
-    expect(screen.getByText('Local models')).toBeInTheDocument();
-    expect(screen.getByText('BYOK providers')).toBeInTheDocument();
+    expect(screen.getByText('Local Models')).toBeInTheDocument();
+    expect(screen.getByLabelText('Ollama URL')).toBeInTheDocument();
+    expect(screen.queryByText('Request routing')).not.toBeInTheDocument();
+    expect(screen.queryByText('Model Behavior')).not.toBeInTheDocument();
     expect(screen.queryByText('Favorite models')).not.toBeInTheDocument();
     expect(screen.queryByText('Task Routing')).not.toBeInTheDocument();
     expect(screen.queryByText('Task routing')).not.toBeInTheDocument();
     expect(screen.queryByText('Settings Panel Error')).not.toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('fixture-local-model:primary')).toBeInTheDocument();
+      expect(screen.getByText('Ollama is running and available')).toBeInTheDocument();
     });
+    expect(screen.getByText('Select model')).toBeInTheDocument();
   });
 
   it('installs a local model through the configured Ollama runtime', async () => {
+    const onModelCatalogChanged = vi.fn();
+    const unsubscribe = subscribeToLocalModelCatalogChanges(onModelCatalogChanged);
     render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="models-keys" />);
 
     const modelInput = await screen.findByRole('textbox', { name: 'Model to install' });
+    await waitFor(() => expect(onModelCatalogChanged).toHaveBeenCalled());
+    onModelCatalogChanged.mockClear();
     fireEvent.change(modelInput, { target: { value: 'fixture-local-model:install' } });
     fireEvent.click(screen.getByRole('button', { name: 'Install model' }));
 
@@ -218,7 +225,24 @@ describe('SettingsPanel render stability', () => {
         modelName: 'fixture-local-model:install',
         baseUrl: 'http://localhost:11434',
       });
+      expect(onModelCatalogChanged).toHaveBeenCalled();
     });
+    unsubscribe();
+  });
+
+  it('refreshes the shared model catalog after re-checking another local runtime', async () => {
+    const onModelCatalogChanged = vi.fn();
+    const unsubscribe = subscribeToLocalModelCatalogChanges(onModelCatalogChanged);
+    render(<SettingsPanel open onOpenChange={vi.fn()} initialTab="models-keys" />);
+
+    const recheckLmStudio = await screen.findByRole('button', {
+      name: 'Re-check LM Studio status',
+    });
+    onModelCatalogChanged.mockClear();
+    fireEvent.click(recheckLmStudio);
+
+    await waitFor(() => expect(onModelCatalogChanged).toHaveBeenCalledOnce());
+    unsubscribe();
   });
 
   it('lets users recover from a malformed saved Ollama URL without reopening Settings', async () => {
@@ -257,6 +281,8 @@ describe('SettingsPanel render stability', () => {
     fireEvent.change(screen.getByDisplayValue('h'), {
       target: { value: 'http://localhost:11434' },
     });
+    expect(useSettingsStore.getState().llmConfig.ollamaUrl).toBe('h');
+    fireEvent.blur(screen.getByDisplayValue('http://localhost:11434'));
     await waitFor(() => {
       expect(useSettingsStore.getState().llmConfig.ollamaUrl).toBe('http://localhost:11434/');
       expect(retryButton).toBeEnabled();

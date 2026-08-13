@@ -26,6 +26,7 @@ import { getSubscriptionPeriod, getSubscriptionCouponId } from '@/lib/stripe-typ
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { getPlanUsageBudgetCents, isPlanUsageUncapped } from '@/lib/server/managed-usage-policy';
 import { resolveManagedUsagePeriod } from '@/lib/server/managed-usage-period';
+import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
 
 export interface SubscriptionInfo {
   id: string;
@@ -34,6 +35,7 @@ export interface SubscriptionInfo {
   status: string;
   current_period_start: Date;
   current_period_end: Date;
+  cancel_at_period_end?: boolean;
   stripe_subscription_id: string | null;
   stripe_price_id: string | null;
   /**
@@ -46,17 +48,6 @@ export interface SubscriptionInfo {
   /** Present when the subscription is billed by Google (migration 0046). */
   google_purchase_token?: string | null;
 }
-
-/**
- * Grace period applied to a lapsed store subscription before entitlement is
- * withdrawn. Apple and Google can both report a renewal after the previous
- * period has technically ended, so expiring on the exact boundary would revoke
- * access from paying customers during normal renewal lag.
- *
- * ponytail: fixed 3 days. Make it env-tunable only if observed store renewal
- * lag proves longer than this.
- */
-const STORE_RENEWAL_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 
 interface CreditAllocationOptions {
   /** Compatibility-only audit context; allocation always comes from planTier. */
@@ -95,6 +86,7 @@ export class SubscriptionService {
     try {
       const rows = await db.query<SubscriptionRow>(
         `SELECT id, user_id, plan_tier, status, current_period_start, current_period_end,
+                cancel_at_period_end,
                 stripe_subscription_id, stripe_price_id,
                 apple_original_transaction_id, google_purchase_token
          FROM subscriptions
@@ -109,10 +101,10 @@ export class SubscriptionService {
 
       const data = rows[0]!;
 
-      // Historical store-billed subscriptions have no active lifecycle
-      // integration: there is no Apple ASSN V2 or Play RTDN endpoint and no
-      // re-verification job. Without this boundary, a row left as `active`
-      // would keep handing out a paid tier after its recorded period ended.
+      // Native store purchases now have notification endpoints, but historical
+      // store rows may predate that lifecycle feed. Without this boundary, a
+      // legacy row left as `active` would keep handing out a paid tier after
+      // its recorded period ended.
       //
       // This is the one reader every server-side entitlement check shares, so
       // deriving expiry here covers the chat auth-gate, /api/me, model listing
@@ -125,23 +117,14 @@ export class SubscriptionService {
       // `current_period_end` NEVER expires: historical store rows and manually
       // provisioned Team/Enterprise rows may carry null. Expiring on a null
       // would downgrade paying customers.
-      const storeOwned =
-        Boolean(data.apple_original_transaction_id || data.google_purchase_token) &&
-        !data.stripe_subscription_id;
-      const periodEnd = data.current_period_end ? new Date(data.current_period_end) : null;
-      const lapsed =
-        storeOwned &&
-        periodEnd !== null &&
-        Number.isFinite(periodEnd.getTime()) &&
-        periodEnd.getTime() + STORE_RENEWAL_GRACE_MS < Date.now();
-
       return {
         id: data.id,
         user_id: data.user_id,
         plan_tier: data.plan_tier || 'free',
-        status: lapsed ? 'expired' : data.status || 'none',
+        status: resolveEffectiveSubscriptionBillingStatus(data),
         current_period_start: new Date(data.current_period_start),
         current_period_end: new Date(data.current_period_end),
+        cancel_at_period_end: data.cancel_at_period_end ?? false,
         stripe_subscription_id: data.stripe_subscription_id,
         stripe_price_id: data.stripe_price_id,
         apple_original_transaction_id: data.apple_original_transaction_id,

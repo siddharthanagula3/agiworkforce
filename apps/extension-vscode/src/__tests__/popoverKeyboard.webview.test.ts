@@ -110,11 +110,74 @@ describe('composer popover keyboard support', () => {
     expect(tabbable).toHaveLength(1);
   });
 
+  it('closes a menu when Tab moves on and keeps expanded state truthful', () => {
+    boot();
+    const plusBtn = document.getElementById('plusBtn')!;
+    const menu = document.getElementById('plusMenu')!;
+    plusBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    press(menu, 'Tab');
+    expect(menu.classList.contains('open')).toBe(false);
+    expect(plusBtn.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('closes the model loading state from its opener with Escape', () => {
+    boot();
+    const modelPill = document.getElementById('modelPill')!;
+    const popover = document.getElementById('modelPopover')!;
+    modelPill.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(popover.classList.contains('open')).toBe(true);
+    expect(modelPill.getAttribute('aria-expanded')).toBe('true');
+
+    press(modelPill, 'Escape');
+    expect(popover.classList.contains('open')).toBe(false);
+    expect(modelPill.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('uses the canonical close helper for file and plan actions', () => {
+    boot();
+    const plusBtn = document.getElementById('plusBtn')!;
+    const menu = document.getElementById('plusMenu')!;
+
+    plusBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    document
+      .getElementById('plusMenuUpload')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(menu.classList.contains('open')).toBe(false);
+    expect(plusBtn.getAttribute('aria-expanded')).toBe('false');
+
+    plusBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    document
+      .getElementById('plusMenuPlanMode')
+      ?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(menu.classList.contains('open')).toBe(false);
+    expect(plusBtn.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('inherits the editor font family and size', () => {
     // VSCX-15: a hardcoded stack ignored the user's font size, which is an
     // accessibility setting rather than a preference.
     const html = renderWebview();
     expect(html).toContain('font-family: var(--vscode-font-family');
     expect(html).toContain('font-size: var(--vscode-font-size');
+  });
+
+  it('keeps Tab focus inside the first-run modal dialog', () => {
+    boot();
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'showOnboarding' } }));
+
+    const modal = document.getElementById('onboarding')!;
+    const first = document.getElementById('onboardingSkip')!;
+    const last = document.getElementById('onboardingNext')!;
+
+    last.focus();
+    press(modal, 'Tab');
+    expect(document.activeElement).toBe(first);
+
+    first.focus();
+    modal.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }),
+    );
+    expect(document.activeElement).toBe(last);
   });
 });

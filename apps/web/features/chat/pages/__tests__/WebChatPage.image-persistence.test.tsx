@@ -107,7 +107,15 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
     onGenerateVideo,
   }: {
     onGenerateImage?: (prompt: string, options: { aspectRatio: 'auto'; modelId: string }) => void;
-    onGenerateVideo?: (prompt: string) => void;
+    onGenerateVideo?: (
+      prompt: string,
+      options: {
+        modelId: string;
+        aspectRatio: string;
+        resolution: string;
+        durationSecs: number;
+      },
+    ) => void;
   }) => (
     <>
       <button
@@ -121,7 +129,17 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
       >
         Trigger image generation
       </button>
-      <button type="button" onClick={() => onGenerateVideo?.('synthetic page video prompt')}>
+      <button
+        type="button"
+        onClick={() =>
+          onGenerateVideo?.('synthetic page video prompt', {
+            modelId: mocks.modelId,
+            aspectRatio: '9:16',
+            resolution: '1080p',
+            durationSecs: 8,
+          })
+        }
+      >
         Trigger video generation
       </button>
     </>
@@ -390,6 +408,15 @@ describe('WebChatPage paid image transcript recovery', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Trigger video generation' }));
 
     await waitFor(() => expect(events).toContain('failure-cas'));
+    expect(mocks.startVideoGeneration).toHaveBeenCalledWith(
+      'synthetic page video prompt',
+      expect.objectContaining({
+        modelId: mocks.modelId,
+        aspectRatio: '9:16',
+        resolution: '1080p',
+        durationSecs: 8,
+      }),
+    );
     expect(events).toEqual([
       'prompt-persisted',
       'placeholder-persisted',

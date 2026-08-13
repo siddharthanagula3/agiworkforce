@@ -74,6 +74,40 @@ describe('chatStore — ambient managed search', () => {
   });
 });
 
+describe('chatStore — new-conversation composer toggles', () => {
+  beforeEach(() => {
+    useChatStore.getState().reset();
+  });
+
+  it('moves pending media mode onto the conversation created by the first send', () => {
+    const { setComposerToggles, adoptPendingComposerToggles } = useChatStore.getState();
+
+    setComposerToggles({ videoMode: true, imageMode: false }, null);
+    adoptPendingComposerToggles('conv-created');
+
+    expect(useChatStore.getState().getComposerToggles('conv-created')).toMatchObject({
+      videoMode: true,
+      imageMode: false,
+    });
+    // Adoption consumes the pending bucket. A later new chat must start from
+    // the canonical defaults rather than inherit the previous conversation.
+    expect(useChatStore.getState().getComposerToggles(null).videoMode).toBe(false);
+  });
+
+  it('does not overwrite a target conversation that already owns toggle state', () => {
+    const { setComposerToggles, adoptPendingComposerToggles } = useChatStore.getState();
+
+    setComposerToggles({ videoMode: true }, null);
+    setComposerToggles({ imageMode: true, videoMode: false }, 'conv-existing');
+    adoptPendingComposerToggles('conv-existing');
+
+    expect(useChatStore.getState().getComposerToggles('conv-existing')).toMatchObject({
+      imageMode: true,
+      videoMode: false,
+    });
+  });
+});
+
 describe('chatStore — per-conversation transcript scope', () => {
   beforeEach(() => {
     useChatStore.getState().reset();

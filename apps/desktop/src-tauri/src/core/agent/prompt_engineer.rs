@@ -453,6 +453,24 @@ Generate unit tests, integration tests, and edge case tests."#
         let prompt = sections.join("\n\n");
         prompt_policy::append_no_xml_rule(&prompt)
     }
+
+    /// Build the system prompt for a turn that has no advertised tools.
+    ///
+    /// The normal desktop prompt is intentionally action-oriented and names
+    /// concrete tools. Sending that prompt alongside `tools: None` teaches
+    /// function-calling local models to emit privileged calls that the request
+    /// did not offer. Keep the no-tool contract explicit and capability-honest.
+    pub fn no_tools_system_prompt() -> String {
+        let sections = [
+            "You are AGI Workforce, an AI assistant running in a desktop chat. No tools are available for this turn. Answer only from the conversation and context supplied in this request. Never claim that you read files, ran commands, browsed the web, searched, or changed anything.",
+            "## How to Respond\n\nAnswer the user's request directly when it can be completed without tools. If the request genuinely requires an unavailable action, say which capability is unavailable and what the user can enable or provide. Do not emit function calls, tool syntax, XML actions, or JSON action payloads.",
+            "## Personality\n\nBe direct, warm, concise, and honest. Match response length to the request. Never invent facts, dates, numbers, quotes, URLs, sources, or actions you did not perform.",
+            "## Formatting\n\nUse clear Markdown when it materially improves readability. Prefer short paragraphs. Do not add filler or offer follow-up work unless the request is genuinely ambiguous.",
+        ];
+
+        let prompt = sections.join("\n\n");
+        prompt_policy::append_no_xml_rule(&prompt)
+    }
 }
 
 impl Default for PromptEngineer {
@@ -509,5 +527,12 @@ mod tests {
             missing.is_empty(),
             "system prompt names tools missing from the registry: {missing:?}"
         );
+    }
+
+    #[test]
+    fn no_tools_prompt_does_not_name_callable_tools() {
+        let prompt = PromptEngineer::no_tools_system_prompt();
+        assert!(backticked_tool_names(&prompt).is_empty());
+        assert!(prompt.contains("No tools are available for this turn"));
     }
 }

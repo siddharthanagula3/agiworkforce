@@ -9,7 +9,7 @@ import { LAUNCH } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Local: Run AI on Your Device, Free Forever',
-  description: `Run AGI fully local with Ollama and LM Studio on Desktop and CLI, plus on-device Local Mode on Mobile. No account required, works offline. ${LAUNCH.publicLabel}.`,
+  description: `Run AGI locally with Ollama, LM Studio, llama.cpp, or vLLM on Desktop, supported local models in the CLI, and on-device Local Mode in Mobile source. No account is required for Local mode. ${LAUNCH.publicLabel}.`,
   path: '/local',
 });
 
@@ -30,9 +30,10 @@ export default function LocalPage() {
             </span>
           </h1>
           <p className="agi-fl-lede">
-            Run AGI entirely on your own machine with Ollama and LM Studio, or on-device on your
-            phone. Local chats, files, and sessions never silently leave your device. No account
-            required. Works offline.
+            Run AGI on your own machine with Ollama, LM Studio, llama.cpp, or vLLM, or use the
+            on-device Mobile implementation when a supported build and model are installed. Local
+            chats, files, and sessions never silently leave your device. No AGI account is required;
+            after the runtime and model are installed, inference can work offline.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
@@ -79,7 +80,7 @@ export default function LocalPage() {
             {
               meta: 'Desktop',
               title: 'AGI Desktop',
-              body: 'Ollama and LM Studio models in the native app. Chat, files, and tools without a cloud call.',
+              body: 'Ollama, LM Studio, llama.cpp, and vLLM in the native app. Availability depends on a running local runtime and compatible model.',
               href: '/desktop',
             },
             {
@@ -103,8 +104,8 @@ export default function LocalPage() {
             From local server to first prompt.
           </h2>
           <p className="agi-fl-section-lede">
-            Point AGI at a running Ollama or LM Studio server, scan for models, and start working.
-            The CLI infers the provider where it can, or you pass it explicitly.
+            Point AGI at a supported running local server, scan for models, and start working. The
+            CLI infers the provider where it can, or you pass it explicitly.
           </p>
           <div className="agi-terminal">
             <div className="agi-terminal-bar">agi · local mode</div>
@@ -166,9 +167,9 @@ export default function LocalPage() {
               Reach past your hardware, deliberately.
             </h2>
             <p className="agi-callout-p">
-              Bring your own provider keys on Desktop and CLI, or use AGI managed cloud — public
-              alpha, open by default — for hosted compute. Either way, the move out of Local is an
-              explicit choice with the provider label visible before anything is sent.
+              Bring your own provider keys on Desktop, CLI, and VS Code, or use AGI managed cloud —
+              public alpha, open by default — for hosted compute. Either way, the move out of Local
+              is an explicit choice with the provider label visible before anything is sent.
             </p>
           </div>
           <div className="agi-fl-cta-row">
@@ -176,7 +177,7 @@ export default function LocalPage() {
               Set Up BYOK
             </Link>
             <WaitlistTrigger
-              label="Team & Enterprise access"
+              label="Enterprise early access"
               source="website"
               className="agi-fl-cta agi-fl-cta--ghost"
             />
@@ -186,7 +187,7 @@ export default function LocalPage() {
         <FinalCta
           eyebrow="Local Mode"
           title="Own the whole stack."
-          body="Follow the Desktop and CLI pages for current install routes, point AGI at Ollama or LM Studio, and keep your work on your machine."
+          body="Follow the Desktop and CLI pages for current install routes, connect a supported local runtime, and keep your work on your machine."
           ctas={[
             { href: '/download', label: 'Get notified' },
             { href: '/desktop', label: 'See AGI Desktop' },

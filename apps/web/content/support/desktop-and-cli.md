@@ -4,7 +4,7 @@ title: Desktop app and CLI
 path: /cli
 category: surfaces
 tags: desktop, cli, terminal, install, download, macos, windows, linux, agi install, command line
-updated: 2026-08-05
+updated: 2026-08-13
 scope: public
 ---
 
@@ -22,7 +22,8 @@ Local mode and BYOK.
 
 ## What the desktop app adds
 
-- Local mode through Ollama or LM Studio.
+- Desktop Local mode through Ollama, LM Studio, llama.cpp, or vLLM. The CLI
+  supports its documented local integrations, currently Ollama and LM Studio.
 - BYOK provider keys, encrypted at rest on your machine behind the master password.
 - Offline operation with no managed-cloud dependency.
 

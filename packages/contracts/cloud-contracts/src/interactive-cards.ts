@@ -23,6 +23,9 @@ import {
   INTERACTIVE_CARD_SCHEMA_VERSION,
   ITINERARY_MAX_STOPS,
   ITINERARY_NOTE_MAX_LENGTH,
+  MAP_SEARCH_MAX_PLACES,
+  MAP_SEARCH_MAX_ZOOM,
+  MAP_SEARCH_MIN_ZOOM,
   MAP_SEARCH_QUERY_MAX_LENGTH,
   isKnownInteractiveCardKind,
   type InteractiveCard,
@@ -401,14 +404,49 @@ export function isAllowedMapSearchProviderUrl(
   }
 }
 
+/**
+ * Latitude/longitude are validated as FINITE numbers in range, not merely as
+ * numbers: `NaN`/`Infinity` survive `z.number()` in zod 4 and would reach the
+ * renderer's tile arithmetic, where they silently become `NaN` tile indices and
+ * a grid of broken images.
+ */
+const LatitudeSchema = z.number().finite().min(-85.05112878).max(85.05112878);
+const LongitudeSchema = z.number().finite().min(-180).max(180);
+
+const MapSearchPlaceSchema = z
+  .object({
+    label: z.string().min(1).max(160),
+    latitude: LatitudeSchema,
+    longitude: LongitudeSchema,
+    kind: z.string().min(1).max(40).optional(),
+  })
+  .strict();
+
+const MapSearchViewSchema = z
+  .object({
+    latitude: LatitudeSchema,
+    longitude: LongitudeSchema,
+    zoom: z.number().int().min(MAP_SEARCH_MIN_ZOOM).max(MAP_SEARCH_MAX_ZOOM),
+    attribution: z.string().min(1).max(160),
+  })
+  .strict();
+
 export const MapSearchCardBodySchema = z
   .object({
     title: z.string().min(1).max(200),
     query: z.string().min(1).max(MAP_SEARCH_QUERY_MAX_LENGTH),
     actions: z.array(MapSearchActionSchema).min(1).max(2),
+    view: MapSearchViewSchema.optional(),
+    places: z.array(MapSearchPlaceSchema).max(MAP_SEARCH_MAX_PLACES).optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
+    // Pins without a viewport have nothing to paint on, and painting them over
+    // a viewport the server did not compute is how a card would assert a
+    // location it never resolved. Reject rather than silently drop.
+    if (!body.view && body.places && body.places.length > 0) {
+      ctx.addIssue({ code: 'custom', path: ['places'], message: 'places require a view' });
+    }
     if (new Set(body.actions.map((action) => action.provider)).size !== body.actions.length) {
       ctx.addIssue({ code: 'custom', path: ['actions'], message: 'duplicate map provider' });
     }

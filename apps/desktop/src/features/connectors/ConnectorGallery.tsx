@@ -45,18 +45,13 @@ import {
 } from './connectorDefinitions';
 import { isTauri, listen } from '../../lib/tauri-mock';
 import { McpClient } from '@/api/mcp';
+import type { McpServerInfo } from '@/types/mcp';
 import { ConnectorOAuthFlow, type OAuthFlowState } from './ConnectorOAuthFlow';
 import { ConnectorApiKeyDialog } from './ConnectorApiKeyDialog';
 import { CustomRemoteMcpConnectorDialog } from './CustomRemoteMcpConnectorDialog';
 import { ConnectorDetailView, type ConnectorTool } from './ConnectorDetailView';
 import { OAuthCredentialsPanel } from '../settings/OAuthCredentialsPanel';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/Tooltip';
 
 interface BrandIconData {
@@ -310,6 +305,103 @@ function ConnectedConnectorRow({
   );
 }
 
+interface SavedConnectorRowProps {
+  connector: ConnectorDef;
+  target: string;
+  loading: boolean;
+  error: string | null;
+  onConnect: () => void;
+  onConfigure: () => void;
+  onRemove: () => void;
+}
+
+function SavedConnectorRow({
+  connector,
+  target,
+  loading,
+  error,
+  onConnect,
+  onConfigure,
+  onRemove,
+}: SavedConnectorRowProps) {
+  const wasCancelled = error?.startsWith('Connection cancelled.') ?? false;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-b border-border/75 px-0 py-3 last:border-b-0">
+      <ConnectorMark connector={connector} />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-2">
+          <p className="truncate text-sm font-medium text-foreground">{connector.name}</p>
+          <span className="rounded-full bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+            Saved · Disconnected
+          </span>
+        </div>
+        <p className="mt-0.5 truncate font-mono text-xs text-muted-foreground" title={target}>
+          {target}
+        </p>
+        {error ? (
+          <p
+            role={wasCancelled ? 'status' : 'alert'}
+            className={cn(
+              'mt-1 text-xs',
+              wasCancelled ? 'text-muted-foreground' : 'text-destructive',
+            )}
+          >
+            {error}
+          </p>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <SettingsRowButton disabled={loading} onClick={onConfigure}>
+          <Settings className="h-3.5 w-3.5" />
+          Configure
+        </SettingsRowButton>
+        <SettingsRowButton
+          disabled={loading}
+          onClick={onRemove}
+          ariaLabel={`Remove ${connector.name}`}
+        >
+          Remove
+        </SettingsRowButton>
+        <SettingsRowButton
+          disabled={loading}
+          onClick={onConnect}
+          ariaLabel={`Connect ${connector.name}`}
+          className="border-teal-500/40 bg-teal-500/10 text-teal-200 hover:bg-teal-500/20"
+        >
+          {loading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Plug className="h-3.5 w-3.5" />
+          )}
+          Connect
+        </SettingsRowButton>
+      </div>
+    </div>
+  );
+}
+
+function customConnectorConnectionError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  const normalized = raw.toLowerCase();
+
+  if (
+    normalized.includes('cancelled') ||
+    normalized.includes('canceled') ||
+    normalized.includes('denied')
+  ) {
+    return 'Connection cancelled. The server remains saved and disconnected.';
+  }
+  if (normalized.includes('timed out') || normalized.includes('timeout')) {
+    return 'Approval timed out. The server remains saved and disconnected.';
+  }
+  if (normalized.includes('refused') || normalized.includes('econnrefused')) {
+    return 'The server did not accept the connection. Check its target and try again.';
+  }
+
+  return 'Connection failed. Check the server target and try again.';
+}
+
 interface AvailableCardProps {
   connector: ConnectorDef;
   loading: boolean;
@@ -385,6 +477,9 @@ export function ConnectorGallery() {
   const [oauthState, setOauthState] = useState<OAuthFlowState>({ status: 'idle' });
   const [apiKeyDialogConnector, setApiKeyDialogConnector] = useState<ConnectorDef | null>(null);
   const [customConnectorOpen, setCustomConnectorOpen] = useState(false);
+  const [configuredCustomServers, setConfiguredCustomServers] = useState<
+    Array<{ info: McpServerInfo; target: string }>
+  >([]);
   const [detailConnectorId, setDetailConnectorId] = useState<string | null>(null);
   const [oauthCredsOpen, setOauthCredsOpen] = useState(false);
   // Custom remote MCP connectors aren't managed by useConnectorsStore (they
@@ -433,6 +528,30 @@ export function ConnectorGallery() {
     void fetchConnected();
     void fetchSupportedConnectorIds();
   }, [fetchConnected, fetchSupportedConnectorIds]);
+
+  const refreshConfiguredCustomServers = useCallback(async () => {
+    try {
+      const [servers, config] = await Promise.all([McpClient.listServers(), McpClient.getConfig()]);
+      setConfiguredCustomServers(
+        servers
+          .filter((server) => isCustomMcpConnectorId(server.name))
+          .map((info) => {
+            const configured = config.mcpServers[info.name];
+            const target =
+              configured?.transport?.type === 'http'
+                ? configured.transport.url
+                : info.command?.trim() || 'Local MCP command';
+            return { info, target };
+          }),
+      );
+    } catch {
+      setConfiguredCustomServers([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshConfiguredCustomServers();
+  }, [refreshConfiguredCustomServers]);
 
   useEffect(() => {
     if (!detailConnectorId) {
@@ -628,6 +747,17 @@ export function ConnectorGallery() {
     [connectedIds],
   );
 
+  const savedCustomConnectors = useMemo(
+    () =>
+      configuredCustomServers
+        .filter(({ info }) => !info.connected && !connectedIds.includes(info.name))
+        .map(({ info, target }) => ({
+          connector: buildCustomMcpConnectorDef(info.name),
+          target,
+        })),
+    [configuredCustomServers, connectedIds],
+  );
+
   const availableConnectors = useMemo(() => {
     const query = search.trim().toLowerCase();
     return supportedConnectors.filter((connector) => {
@@ -703,10 +833,30 @@ export function ConnectorGallery() {
 
   const handleCustomConnectorSaved = useCallback(
     (serverName: string) => {
-      setOauthState({ status: 'success', connectorName: serverName });
+      setOauthState({ status: 'saved', connectorName: serverName });
       void fetchConnected();
+      void refreshConfiguredCustomServers();
     },
-    [fetchConnected],
+    [fetchConnected, refreshConfiguredCustomServers],
+  );
+
+  const handleConnectCustomConnector = useCallback(
+    async (serverName: string) => {
+      setCustomConnectorBusy((prev) => ({ ...prev, [serverName]: true }));
+      setCustomConnectorError((prev) => ({ ...prev, [serverName]: null }));
+      try {
+        await McpClient.connect(serverName);
+        await Promise.all([fetchConnected(), refreshConfiguredCustomServers()]);
+      } catch (err) {
+        setCustomConnectorError((prev) => ({
+          ...prev,
+          [serverName]: customConnectorConnectionError(err),
+        }));
+      } finally {
+        setCustomConnectorBusy((prev) => ({ ...prev, [serverName]: false }));
+      }
+    },
+    [fetchConnected, refreshConfiguredCustomServers],
   );
 
   // Disconnecting a custom remote MCP connector removes it from the MCP
@@ -723,7 +873,7 @@ export function ConnectorGallery() {
         const currentConfig = await McpClient.getConfig();
         const { [serverName]: _removed, ...remainingServers } = currentConfig.mcpServers;
         await McpClient.updateConfig({ mcpServers: remainingServers });
-        await fetchConnected();
+        await Promise.all([fetchConnected(), refreshConfiguredCustomServers()]);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Disconnection failed';
         setCustomConnectorError((prev) => ({ ...prev, [serverName]: message }));
@@ -731,7 +881,7 @@ export function ConnectorGallery() {
         setCustomConnectorBusy((prev) => ({ ...prev, [serverName]: false }));
       }
     },
-    [fetchConnected],
+    [fetchConnected, refreshConfiguredCustomServers],
   );
 
   const dialogs = (
@@ -840,6 +990,33 @@ export function ConnectorGallery() {
           </div>
         )}
       </section>
+
+      {savedCustomConnectors.length > 0 ? (
+        <section className="space-y-3" aria-labelledby="saved-mcp-connectors-heading">
+          <div>
+            <h4 id="saved-mcp-connectors-heading" className="text-sm font-semibold text-foreground">
+              Saved MCP servers
+            </h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Saving does not start a server. Connect only after reviewing its target and approval.
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card/35 px-4">
+            {savedCustomConnectors.map(({ connector, target }) => (
+              <SavedConnectorRow
+                key={connector.id}
+                connector={connector}
+                target={target}
+                loading={Boolean(customConnectorBusy[connector.id])}
+                error={customConnectorError[connector.id] ?? null}
+                onConfigure={() => setDetailConnectorId(connector.id)}
+                onRemove={() => void handleDisconnectCustomConnector(connector.id)}
+                onConnect={() => void handleConnectCustomConnector(connector.id)}
+              />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* OAuth app credentials — collapsible; must be configured before connecting */}
       <section className="space-y-2">

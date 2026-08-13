@@ -12,8 +12,10 @@
 #
 # Version source of truth is the TAG: the workflow stamps the app via
 # electron-builder --config.extraMetadata.version, and the verify step asserts
-# the bundle and latest-mac.yml agree. apps/desktop/package.json keeps the
-# Tauri shell's version stream untouched.
+# the signed bundle agrees. apps/desktop/package.json keeps the Tauri shell's
+# version stream untouched. AGI Cloud currently updates through the signed DMG
+# exposed by /api/releases/desktop-cloud/latest and /api/download?app=cloud;
+# there is no in-place electron-updater feed.
 #
 # Ops prerequisite (one-time): the `macos-release` GitHub environment must
 # allow deployments from v-cloud-desktop-* tags, alongside v-desktop-*.
@@ -77,6 +79,10 @@ jobs:
             echo "ERROR: cloud desktop release tag must be v-cloud-desktop-${VERSION}; got $TAG" >&2
             exit 1
           fi
+          if ! git rev-parse --verify --quiet "refs/tags/${TAG}^{commit}" >/dev/null; then
+            echo "ERROR: release tag ${TAG} does not exist in the checked-out repository" >&2
+            exit 1
+          fi
 
           VERSION_WITHOUT_BUILD="${VERSION%%+*}"
           if [[ "$VERSION_WITHOUT_BUILD" == *-* ]]; then
@@ -134,6 +140,9 @@ jobs:
     needs: prepare-release
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag }}
+          fetch-depth: 0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
       - uses: actions/setup-node@v6
         with:
@@ -158,6 +167,9 @@ jobs:
       EXPECTED_VERSION: ${{ needs.prepare-release.outputs.version }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag }}
+          fetch-depth: 0
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5
       - uses: actions/setup-node@v6
         with:
@@ -220,7 +232,7 @@ jobs:
             --config.extraMetadata.version="${EXPECTED_VERSION}" \
             --publish never
 
-      - name: Verify signed, notarized artifacts and updater manifest
+      - name: Verify signed and notarized installer artifacts
         shell: bash
         run: |
           set -euo pipefail
@@ -228,10 +240,8 @@ jobs:
           out="apps/desktop/release"
 
           dmgs=("$out"/*.dmg)
-          zips=("$out"/*.zip)
-          manifests=("$out"/latest-mac.yml)
-          if [ "${#dmgs[@]}" -ne 2 ] || [ "${#zips[@]}" -ne 2 ] || [ "${#manifests[@]}" -ne 1 ]; then
-            echo "ERROR: expected two .dmg, two .zip, and one latest-mac.yml; got ${#dmgs[@]}/${#zips[@]}/${#manifests[@]}" >&2
+          if [ "${#dmgs[@]}" -ne 2 ]; then
+            echo "ERROR: expected two architecture-specific .dmg installers; got ${#dmgs[@]}" >&2
             exit 1
           fi
 
@@ -242,6 +252,12 @@ jobs:
             bundle_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist")
             if [ "$bundle_version" != "$EXPECTED_VERSION" ]; then
               echo "ERROR: bundle version ${bundle_version} does not match ${EXPECTED_VERSION}" >&2
+              exit 1
+            fi
+            local protocol_info
+            protocol_info=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes' "$plist")
+            if ! printf '%s\n' "$protocol_info" | grep -F 'agiworkforce-cloud'; then
+              echo "ERROR: packaged app is missing the agiworkforce-cloud URL protocol" >&2
               exit 1
             fi
             local executable
@@ -276,41 +292,6 @@ jobs:
             }
           done
 
-          # The updater installs from the zip: its embedded app must be signed.
-          for zip in "${zips[@]}"; do
-            tmp=$(mktemp -d)
-            ditto -x -k "$zip" "$tmp"
-            codesign --verify --deep --strict "$tmp/AGI Cloud.app"
-            rm -rf "$tmp"
-          done
-
-          # latest-mac.yml must agree with the tag and the real bytes on disk.
-          node - "$out/latest-mac.yml" "$EXPECTED_VERSION" "$out" <<'NODE'
-          const fs = require('node:fs');
-          const path = require('node:path');
-          const crypto = require('node:crypto');
-          const [manifestPath, expectedVersion, outDir] = process.argv.slice(2);
-          const manifest = fs.readFileSync(manifestPath, 'utf8');
-          const versionLine = manifest.match(/^version:\s*(.+)$/m);
-          if (!versionLine || versionLine[1].trim() !== expectedVersion) {
-            throw new Error(`latest-mac.yml version ${versionLine?.[1]} != ${expectedVersion}`);
-          }
-          const entries = [...manifest.matchAll(/- url:\s*(.+)\n\s+sha512:\s*(.+)\n\s+size:\s*(\d+)/g)];
-          if (entries.length === 0) throw new Error('latest-mac.yml lists no files');
-          for (const [, url, sha512, size] of entries) {
-            const file = path.join(outDir, decodeURIComponent(url.trim()));
-            const bytes = fs.readFileSync(file);
-            if (bytes.length !== Number(size)) {
-              throw new Error(`${file}: size ${bytes.length} != manifest ${size}`);
-            }
-            const digest = crypto.createHash('sha512').update(bytes).digest('base64');
-            if (digest !== sha512.trim()) {
-              throw new Error(`${file}: sha512 mismatch against latest-mac.yml`);
-            }
-          }
-          console.log(`latest-mac.yml verified for ${entries.length} artifacts`);
-          NODE
-
       - name: Upload artifacts to the draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -319,20 +300,19 @@ jobs:
           shopt -s nullglob
           out="apps/desktop/release"
           gh release upload "$TAG" \
-            "$out"/*.dmg \
-            "$out"/*.zip \
-            "$out"/*.blockmap \
-            "$out"/latest-mac.yml
+            "$out"/*.dmg
 
   publish-release:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     needs: [prepare-release, build-macos]
     steps:
-      - uses: actions/checkout@v6
       - name: Publish the verified draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # This job intentionally has no checkout. GitHub CLI otherwise has
+          # no local repository from which to resolve the release owner/name.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.prepare-release.outputs.tag }}
         run: gh release edit "$TAG" --draft=false
 
@@ -340,12 +320,17 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     needs: [prepare-release, validate, build-macos, publish-release]
-    if: failure()
+    # A cancelled/skipped downstream job can still leave the draft created by
+    # prepare-release behind. Run for every non-successful publication after a
+    # successful prepare, not only for ancestors classified strictly failed.
+    if: ${{ always() && needs.prepare-release.result == 'success' && needs.publish-release.result != 'success' }}
     steps:
-      - uses: actions/checkout@v6
       - name: Delete the orphaned draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Like publish-release, this job has no checkout and must select the
+          # target repository explicitly.
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ needs.prepare-release.outputs.tag }}
         run: |
           set -euo pipefail

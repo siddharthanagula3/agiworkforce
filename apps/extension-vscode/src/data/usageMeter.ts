@@ -8,8 +8,14 @@
  */
 
 import * as vscode from 'vscode';
-import { formatPrivacyModeLabel, type UsageMeter, type UIPlanTier } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  formatPrivacyModeLabel,
+  type UsageMeter,
+  type UIPlanTier,
+} from '@agiworkforce/types';
 import { fetchTierInfo, type TierInfo } from '../utils/api';
+import { Config } from '../platform/config';
 
 // ─── Local-provider detection ─────────────────────────────────────────────────
 
@@ -47,9 +53,33 @@ function coercePlanTier(raw: string | undefined): UIPlanTier | undefined {
   return VALID_TIERS.has(remapped) ? (remapped as UIPlanTier) : undefined;
 }
 
-function buildManagedMeter(tierInfo: TierInfo): UsageMeter | null {
+export type ExtensionUsageMeter = UsageMeter & {
+  accountPlanTier?: UIPlanTier;
+  managedDeveloperEligible?: boolean;
+  subscriptionStatus?: string;
+};
+
+function buildManagedMeter(tierInfo: TierInfo): ExtensionUsageMeter | null {
   const tier = coercePlanTier(tierInfo.tier);
   if (tier === undefined || tier === 'local' || tier === 'byok') return null;
+  // `/api/usage` reports both the effective entitlement tier and, when billing
+  // paused that entitlement, the recorded account plan. Keep those facts
+  // separate: a past-due Pro account is not a Free account and should be sent
+  // to billing rather than an upgrade funnel.
+  const accountPlanTier = coercePlanTier(tierInfo.accountPlanTier) ?? tier;
+
+  if (!canUseBillingPlanCapability(tier, 'developer_surfaces')) {
+    return {
+      remaining: null,
+      resetsAt: tierInfo.resetsAt ?? null,
+      source: 'user-api-key',
+      accountPlanTier,
+      managedDeveloperEligible: false,
+      ...(tierInfo.subscriptionStatus === undefined
+        ? {}
+        : { subscriptionStatus: tierInfo.subscriptionStatus }),
+    };
+  }
 
   // Percentage-only contract: the server never returns exact token/cent counts,
   // so the meter carries a 0-1 remaining fraction derived from usage_percentage
@@ -60,6 +90,11 @@ function buildManagedMeter(tierInfo: TierInfo): UsageMeter | null {
       remaining,
       resetsAt: tierInfo.resetsAt ?? null,
       source: 'managed-plan',
+      accountPlanTier,
+      managedDeveloperEligible: true,
+      ...(tierInfo.subscriptionStatus === undefined
+        ? {}
+        : { subscriptionStatus: tierInfo.subscriptionStatus }),
     };
   }
 
@@ -67,6 +102,11 @@ function buildManagedMeter(tierInfo: TierInfo): UsageMeter | null {
     remaining: null,
     resetsAt: tierInfo.resetsAt ?? null,
     source: 'managed-plan',
+    accountPlanTier,
+    managedDeveloperEligible: true,
+    ...(tierInfo.subscriptionStatus === undefined
+      ? {}
+      : { subscriptionStatus: tierInfo.subscriptionStatus }),
   };
 }
 
@@ -99,8 +139,7 @@ function resolveActiveModel(context: ActiveModelContext): {
   modelId: string;
   isLocal: boolean;
 } {
-  const modelId =
-    context.modelId ?? vscode.workspace.getConfiguration('agiWorkforce').get<string>('model') ?? '';
+  const modelId = context.modelId ?? Config.model();
   // Either signal is proof of a local runtime; neither is required to be present.
   return { modelId, isLocal: context.isLocalRuntimeModel === true || isLocalModel(modelId) };
 }
@@ -138,7 +177,7 @@ export async function resolveUsageMeter(
   secrets: vscode.SecretStorage,
   _sessionTokens: number,
   context: ActiveModelContext = {},
-): Promise<UsageMeter> {
+): Promise<ExtensionUsageMeter> {
   if (resolveActiveModel(context).isLocal) {
     return {
       remaining: null,

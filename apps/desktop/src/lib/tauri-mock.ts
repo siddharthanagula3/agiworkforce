@@ -8,11 +8,19 @@ import {
 } from '../api/cloudApi';
 import { getTaskModelForProvider } from '../constants/llm';
 import { assertRegisteredCommand } from '../utils/ipc';
-import { isCloudWeb, isDesktopUiDevLocal, isTauri, isTestEnvironment } from './runtimeEnvironment';
+import {
+  isCloudWeb,
+  isDesktopUiDevLocal,
+  isElectronHost,
+  isTauri,
+  isTestEnvironment,
+} from './runtimeEnvironment';
+import { getElectronHostBridge, isElectronBridgeCommand } from './tauri-electron/bridgeContract';
 
 export {
   isCloudWeb,
   isDesktopUiDevLocal,
+  isElectronHost,
   isTauri,
   supportsLocalAppMode,
 } from './runtimeEnvironment';
@@ -271,6 +279,19 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     return tauriInvoke<T>(command, args);
   }
 
+  // The bundled Electron cloud renderer is browser-class for every Local/BYOK
+  // command, but it owns a deliberately tiny native bridge for Cloud account
+  // sign-in and encrypted credential storage. Route only that audited allowlist
+  // through the Electron core shim; letting every command through here would
+  // accidentally give the Managed-Cloud-only shell a local execution plane.
+  if (isElectronHost && isElectronBridgeCommand(command)) {
+    const electronHost = getElectronHostBridge();
+    if (!electronHost?.handles(command)) {
+      throw new Error(`The Electron Cloud account bridge is unavailable for ${command}.`);
+    }
+    return tauriInvoke<T>(command, args);
+  }
+
   // Cloud web mode: route chat commands to cloud API, mock desktop-only commands
   if (isCloudWeb) {
     const cloudResult = await handleCloudWebCommand<T>(command, args);
@@ -303,7 +324,12 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return { completed: false } as T;
 
     case 'check_automation_permissions':
-      return { accessibility: false, screen_recording: false, input_monitoring: false } as T;
+      return {
+        accessibility: false,
+        screen_recording: false,
+        input_monitoring: false,
+        automation_service_ready: false,
+      } as T;
 
     case 'request_automation_permission':
     case 'set_auto_approve_all':
@@ -485,10 +511,9 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
     case 'agi_submit_goal_parallel':
       return {
         goalId: `goal_mock_${Date.now()}`,
-        bestResult: {
-          score: 0.85,
-          result: { success: true, error: null },
-        },
+        state: 'ready_for_review',
+        output: 'Parallel agent work is ready for review.',
+        error: null,
       } as T;
     case 'agi_list_goals':
       return [] as T;
@@ -496,8 +521,10 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return {
         state: 'queued',
         currentIteration: 0,
-        context: { toolResults: [] },
+        context: { tool_results: [] },
       } as T;
+    case 'agi_get_task_state':
+      return null as T;
     case 'agi_cancel_goal':
     case 'agi_pause_goal':
     case 'agi_resume_goal':
@@ -1486,8 +1513,19 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
       return false as T;
 
     case 'agi_submit_goal_auto':
-    case 'agi_submit_goal_swarm':
       return { goalId: `goal_mock_${Date.now()}` } as T;
+    case 'agi_submit_goal_swarm':
+      return {
+        success: true,
+        goalId: `goal_mock_${Date.now()}`,
+        succeeded: 1,
+        failed: 0,
+        wallTimeMs: 0,
+        speedupRatio: 1,
+        criticalPathLength: 1,
+        maxParallelism: 1,
+        summary: 'Swarm work is ready for review.',
+      } as T;
 
     // ── Orchestration commands ──────────────────────────────────────
     case 'orchestrator_spawn_parallel':
@@ -2429,7 +2467,7 @@ interface UpdateCheckResult {
 
 // Updater plugin - check for updates
 export async function checkForUpdates(): Promise<UpdateCheckResult | null> {
-  if (isTauri) {
+  if (isTauri || isElectronHost) {
     const { check } = await import('@tauri-apps/plugin-updater');
     return check();
   }

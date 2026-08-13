@@ -15,6 +15,7 @@ export interface TrayHandlers {
   onNewChat: () => void;
   onQuickAsk: () => void;
   onScreenshot: () => void;
+  onCheckForUpdates: () => void;
 }
 
 /** Module-level so the Tray is never garbage collected (it would disappear). */
@@ -71,6 +72,8 @@ function buildMenu(handlers: TrayHandlers): Electron.Menu {
       registerAccelerator: false,
       click: handlers.onScreenshot,
     },
+    { type: 'separator' },
+    { label: 'Check for Updates…', click: handlers.onCheckForUpdates },
     { type: 'separator' },
     { label: 'Quit AGI Cloud', click: () => app.quit() },
   ]);

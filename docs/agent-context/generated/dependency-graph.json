@@ -712,10 +712,6 @@
       },
       {
         "from": "agi-workforce",
-        "to": "@agiworkforce/provider-runtime"
-      },
-      {
-        "from": "agi-workforce",
         "to": "@agiworkforce/routing"
       },
       {

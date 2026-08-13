@@ -13,7 +13,7 @@
  *   - `openInAppBrowser`               — first-party URLs, host allowlist enforced
  *   - `openUntrustedUrlInAppBrowser`   — assistant links / citations, scheme allowlist only
  */
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 const mockOpenBrowserAsync = jest.fn();
@@ -36,12 +36,19 @@ import {
   openUntrustedUrlInAppBrowser,
 } from '../lib/safeOpenURL';
 import { CollapsibleSources } from '../src/features/chat/components/CollapsibleSources';
+import { CitationChip } from '../src/features/chat/components/CitationChip';
 import { renderMarkdownContent } from '../src/features/chat/components/MessageContentRenderer';
+import { WebSearchResultCard } from '../src/features/chat/components/WebSearchResultCard';
 import { lightColors } from '../src/ui/theme';
 
 beforeEach(() => {
   mockOpenBrowserAsync.mockReset().mockResolvedValue({ type: 'dismiss' });
   mockLinkingOpenURL.mockReset().mockResolvedValue(undefined);
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe('openInAppBrowser — first-party URLs', () => {
@@ -173,5 +180,57 @@ describe('CollapsibleSources citations route through the in-app browser', () => 
 
     expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
     expect(mockLinkingOpenURL).not.toHaveBeenCalled();
+  });
+});
+
+describe('inline search and citation links route through the in-app browser', () => {
+  it('keeps an inline web-search result inside the app', () => {
+    const screen = render(
+      <WebSearchResultCard
+        result={{
+          url: 'https://example.com/search-result',
+          title: 'Search result',
+          snippet: 'A useful source',
+        }}
+      />,
+    );
+
+    fireEvent.press(screen.getByLabelText('Search result, example.com'));
+
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+      'https://example.com/search-result',
+      expect.objectContaining({ presentationStyle: 'pageSheet' }),
+    );
+    expect(mockLinkingOpenURL).not.toHaveBeenCalled();
+  });
+
+  it('keeps an inline citation inside the app', () => {
+    const screen = render(
+      <CitationChip index={2} title="Citation title" url="https://docs.example.com/citation" />,
+    );
+
+    fireEvent.press(screen.getByLabelText('Citation 2: Citation title'));
+
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+      'https://docs.example.com/citation',
+      expect.objectContaining({ presentationStyle: 'pageSheet' }),
+    );
+    expect(mockLinkingOpenURL).not.toHaveBeenCalled();
+  });
+
+  it('reports when an inline citation cannot be opened', async () => {
+    mockOpenBrowserAsync.mockRejectedValueOnce(new Error('No browser'));
+    mockLinkingOpenURL.mockRejectedValueOnce(new Error('No handler'));
+    const screen = render(
+      <CitationChip index={1} title="Offline source" url="https://example.com/offline" />,
+    );
+
+    fireEvent.press(screen.getByLabelText('Citation 1: Offline source'));
+
+    await screen.findByText('[1]');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Could not open citation',
+      'Check your connection and try again.',
+    );
   });
 });

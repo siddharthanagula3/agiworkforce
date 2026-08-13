@@ -19,11 +19,12 @@ import {
 } from '@agiworkforce/unified-chat';
 import { registerChatStoreStateReader } from './stores/chat/chatStoreRef';
 import { useUnifiedAuthStore } from './stores/auth';
-import { isTauri, invoke, listen } from './lib/tauri-mock';
+import { isElectronHost, isTauri, invoke, listen } from './lib/tauri-mock';
 import { toast } from 'sonner';
 import { useVoiceHotkey } from './hooks/useVoiceHotkey';
 import { useDesktopCloudResearchCapability } from './hooks/useDesktopCloudResearchCapability';
 import { guardedFetch } from './lib/egressGuard';
+import { subscribeToLocalModelCatalogChanges } from './lib/localModelCatalog';
 import { isLocalProvider } from './types/provider';
 import { getCloudModels, CLOUD_API_BASE_URL } from './api/cloudApi';
 import { clearSessionToolApprovals } from './api/toolConfirmation';
@@ -115,6 +116,7 @@ import {
 } from './stores/settingsStore';
 import { useProjectStore } from './stores/projectStore';
 import { applyTheme, getThemeById } from './themes/index';
+import { getDesktopSubscriptionOwnerPolicy } from './lib/subscriptionOwnership';
 
 // Managed Cloud turns stream through the SHARED unified-chat store, not the
 // desktop execution store, so the Local/Cloud mode-switch guard in
@@ -339,6 +341,8 @@ const DesktopShell = () => {
   const authenticatedUserId = useAuthStore((state) => state.user?.id ?? null);
   const cloudSessionEpoch = useAuthStore((state) => state.cloudSessionEpoch);
   const accountPlan = useAuthStore((state) => state.plan);
+  const subscriptionSource = useAuthStore((state) => state.subscriptionSource);
+  const subscriptionStatus = useAuthStore((state) => state.subscriptionStatus);
   const appMode = useAppModeStore((s) => s.mode);
   const isCloudMode = useAppModeStore((s) => s.mode === 'cloud');
   const hasCloudSession = useAuthStore(selectHasCloudAccountSession);
@@ -348,11 +352,22 @@ const DesktopShell = () => {
   const [conversationBoundaryRetry, setConversationBoundaryRetry] = useState(0);
   const [modelCatalogError, setModelCatalogError] = useState<string | null>(null);
   const [modelCatalogRetry, setModelCatalogRetry] = useState(0);
+  const modelCatalogBoundaryRef = useRef<string | null>(null);
   const expectedConversationBoundaryKey = `${appMode}:${
     appMode === 'cloud'
       ? `${authenticatedUserId ?? 'signed-out'}:${hasCloudSession ? 'connected' : 'disconnected'}`
       : 'device'
   }`;
+
+  useEffect(
+    () =>
+      subscribeToLocalModelCatalogChanges(() => {
+        if (useAppModeStore.getState().mode === 'local') {
+          setModelCatalogRetry((currentRevision) => currentRevision + 1);
+        }
+      }),
+    [],
+  );
 
   // Hydrate the conversation set owned by the active execution boundary.
   // `chatStorageMode` is a separate, explicit synchronization preference and
@@ -485,6 +500,19 @@ const DesktopShell = () => {
   // downstream consumers that read it from the appModeStore.
 
   const subscriptionFetchStatus = useAccountStore((state) => state.subscriptionFetchStatus);
+  const modelCatalogBoundaryKey =
+    appMode === 'local'
+      ? 'local:device'
+      : `cloud:${authenticatedUserId ?? 'signed-out'}:${cloudSessionEpoch}`;
+  // Local reachability must not be restarted by unrelated account-plan
+  // hydration. Cloud retains those dependencies because they determine the
+  // entitled catalog for the current signed-in owner.
+  const modelCatalogDependencyKey =
+    appMode === 'local'
+      ? modelCatalogBoundaryKey
+      : `${modelCatalogBoundaryKey}:${hasCloudSession ? 'connected' : 'disconnected'}:${
+          accountPlan ?? 'resolving'
+        }:${subscriptionFetchStatus}`;
 
   // Track when subscription fetch fails so we can show the degraded-state banner
   useEffect(() => {
@@ -834,23 +862,28 @@ const DesktopShell = () => {
   // Initialize providers + load mode-appropriate models into the chat package's model store.
   useLayoutEffect(() => {
     let cancelled = false;
-    // Clear the previous execution plane synchronously. Model discovery is
-    // asynchronous, so retaining the old list would temporarily present a
-    // Local/BYOK model as Cloud-capable (or a managed model as Local-capable).
     const initialModelStore = useChatModelStore.getState();
-    initialModelStore.setModels([]);
-    initialModelStore.selectModel('');
+    const previousSelectedModelId = initialModelStore.selectedModelId;
+    const clearForBoundaryChange = modelCatalogBoundaryRef.current !== modelCatalogBoundaryKey;
+    modelCatalogBoundaryRef.current = modelCatalogBoundaryKey;
+    // A real Local/Cloud or cloud-owner switch clears synchronously. A refresh
+    // within the same trust boundary keeps the last verified catalog and
+    // explicit selection usable while the probes run.
+    initialModelStore.beginModelCatalogLoad(clearForBoundaryChange);
     setModelCatalogError(null);
 
     async function initModels() {
       const currentMode = appMode;
+      const currentAuthState = useAuthStore.getState();
+      const currentHasCloudSession = selectHasCloudAccountSession(currentAuthState);
+      const currentPlan = currentAuthState.plan;
+      const currentSubscriptionFetchStatus = useAccountStore.getState().subscriptionFetchStatus;
       try {
         if (cancelled) return;
 
-        if (currentMode === 'cloud' && !hasCloudSession) {
+        if (currentMode === 'cloud' && !currentHasCloudSession) {
           const modelStore = useChatModelStore.getState();
-          modelStore.setModels([]);
-          modelStore.selectModel('');
+          modelStore.completeModelCatalogLoad([], '');
           return;
         }
 
@@ -867,11 +900,10 @@ const DesktopShell = () => {
           // Retry restores the real tier. Entitlement is still enforced
           // server-side on every request.
           const effectivePlan =
-            accountPlan ?? (subscriptionFetchStatus === 'failed' ? ('free' as const) : null);
+            currentPlan ?? (currentSubscriptionFetchStatus === 'failed' ? ('free' as const) : null);
           if (!effectivePlan) {
-            const modelStore = useChatModelStore.getState();
-            modelStore.setModels([]);
-            modelStore.selectModel('');
+            // Account entitlement is still resolving. Preserve an honest
+            // loading state rather than diagnosing an empty model catalog.
             return;
           }
 
@@ -882,70 +914,63 @@ const DesktopShell = () => {
             throw new Error('No managed models are available for this account and Desktop.');
           }
 
-          const modelStore = useChatModelStore.getState();
-          modelStore.setModels(
-            entitledModels.map((model) =>
-              createChatModelInfo({
-                id: model.id,
-                name: model.name,
-                provider: model.provider,
-                isLocal: false,
-                isByok: false,
-              }),
-            ),
+          const managedModels = entitledModels.map((model) =>
+            createChatModelInfo({
+              id: model.id,
+              name: model.name,
+              provider: model.provider,
+              isLocal: false,
+              isByok: false,
+            }),
           );
-          const updatedModelStore = useChatModelStore.getState();
-          if (
-            !updatedModelStore.models.some(
-              (model) => model.id === updatedModelStore.selectedModelId,
-            )
-          ) {
-            updatedModelStore.selectModel(
-              updatedModelStore.models.some((model) => model.id === 'auto')
-                ? 'auto'
-                : (updatedModelStore.models[0]?.id ?? ''),
-            );
-          }
+          const nextManagedModelId = managedModels.some(
+            (model) => model.id === previousSelectedModelId,
+          )
+            ? previousSelectedModelId
+            : managedModels.some((model) => model.id === 'auto')
+              ? 'auto'
+              : (managedModels[0]?.id ?? '');
+          useChatModelStore.getState().completeModelCatalogLoad(managedModels, nextManagedModelId);
           return;
         }
 
-        const rawRustModels = await invoke<unknown>('llm_get_available_models');
-        if (cancelled) return;
-        let rustModels = parseDiscoveredChatModels(rawRustModels);
+        let rustModels: ReturnType<typeof parseDiscoveredChatModels>;
         if (currentMode === 'local') {
-          // Defensive direct-fetch fallback: `llm_get_available_models` only appends a
-          // local runtime's models when the router already has it registered
-          // (`has_provider`), which can race with app startup before the settings
-          // rehydration callback (or the lazy chat-send registration) has run. Bypass
-          // that gate here for each local runtime the same way, so a running server is
-          // never hidden from the picker just because of registration timing.
-          const localRuntimeFetches: Array<{ provider: string; command: string }> = [
-            { provider: 'ollama', command: 'llm_list_ollama_models' },
-            { provider: 'lmstudio', command: 'llm_list_lmstudio_models' },
-            { provider: 'llamacpp', command: 'llm_list_llamacpp_models' },
-            { provider: 'vllm', command: 'llm_list_vllm_models' },
+          // `llm_get_available_models` can race provider registration. Probe
+          // every supported local runtime directly as well, but do so
+          // concurrently: absent runtimes each have a bounded native timeout
+          // and must not add up to a 15–20 second false-empty picker.
+          const catalogFetches: Array<{ source: string; command: string }> = [
+            { source: 'registered providers', command: 'llm_get_available_models' },
+            { source: 'ollama', command: 'llm_list_ollama_models' },
+            { source: 'lmstudio', command: 'llm_list_lmstudio_models' },
+            { source: 'llamacpp', command: 'llm_list_llamacpp_models' },
+            { source: 'vllm', command: 'llm_list_vllm_models' },
           ];
-          const seenModelIds = new Set(rustModels.map((model) => model.id));
-          for (const { provider, command } of localRuntimeFetches) {
-            if (rustModels.some((model) => model.provider.toLowerCase() === provider)) {
-              continue;
+          const results = await Promise.allSettled(
+            catalogFetches.map(({ command }) => invoke<unknown>(command)),
+          );
+          if (cancelled) return;
+
+          const seenModelIds = new Set<string>();
+          rustModels = results.flatMap((result, index) => {
+            if (result.status === 'rejected') {
+              console.warn(
+                `Failed to load ${catalogFetches[index]?.source ?? 'unknown'} models for local picker:`,
+                result.reason,
+              );
+              return [];
             }
-            try {
-              const rawDirectModels = await invoke<unknown>(command);
-              if (cancelled) return;
-              const directModels = parseDiscoveredChatModels(rawDirectModels);
-              rustModels = [
-                ...rustModels,
-                ...directModels.filter((model) => {
-                  if (seenModelIds.has(model.id)) return false;
-                  seenModelIds.add(model.id);
-                  return true;
-                }),
-              ];
-            } catch (error) {
-              console.warn(`Failed to directly load ${provider} models for local picker:`, error);
-            }
-          }
+            return parseDiscoveredChatModels(result.value).filter((model) => {
+              if (seenModelIds.has(model.id)) return false;
+              seenModelIds.add(model.id);
+              return true;
+            });
+          });
+        } else {
+          const rawRustModels = await invoke<unknown>('llm_get_available_models');
+          if (cancelled) return;
+          rustModels = parseDiscoveredChatModels(rawRustModels);
         }
         const visibleModels = rustModels.filter((model) => {
           const provider = model.provider.toLowerCase();
@@ -976,39 +1001,39 @@ const DesktopShell = () => {
             provider,
             isLocal,
             isByok,
+            ...(model.runtimeCapabilities
+              ? { runtimeCapabilities: model.runtimeCapabilities }
+              : {}),
           });
         });
         if (cancelled) return;
-        useChatModelStore.getState().setModels(chatModels);
         // Mode-safe selection: keep the active model consistent with the mode's
         // available set. In Local mode an auto-routing / cloud model must never
         // stay active — the egress guard blocks cloud calls in Local mode, so a
         // stale "Auto Economy" (managed_cloud) selection routes to a blocked
         // cloud model and fails silently. If the current selection isn't in the
-        // set, drop onto the first local/BYOK model (or clear, so the picker's
-        // "No local model" empty-state guides the user); in cloud mode fall back
-        // to the default auto-routing model.
+        // set, preserve a previously explicit choice only when it remains
+        // reachable. Never turn provider discovery order into a recommendation;
+        // otherwise clear so the picker asks the user to choose. Cloud keeps its
+        // explicit auto-routing default.
         {
-          const ms = useChatModelStore.getState();
-          const nextId = currentMode === 'local' ? (ms.models[0]?.id ?? '') : 'auto';
-          if (
-            !ms.models.some((m) => m.id === ms.selectedModelId) &&
-            nextId !== ms.selectedModelId
-          ) {
-            ms.selectModel(nextId);
-          }
+          const nextId =
+            currentMode === 'local' &&
+            chatModels.some((model) => model.id === previousSelectedModelId)
+              ? previousSelectedModelId
+              : '';
+          useChatModelStore.getState().completeModelCatalogLoad(chatModels, nextId);
         }
       } catch {
         if (cancelled) return;
         // Reachability is unknown. Never turn static catalog membership into a
         // fake Local/BYOK/Managed availability claim.
         const modelStore = useChatModelStore.getState();
-        modelStore.setModels([]);
-        modelStore.selectModel('');
         const message =
           currentMode === 'local'
             ? 'No verified local or BYOK model is reachable. Start a local runtime or configure a provider in Settings.'
             : 'The managed model catalog is unavailable. Retry after the connection recovers.';
+        modelStore.failModelCatalogLoad(message, clearForBoundaryChange);
         setModelCatalogError(message);
         toast.error(message);
       }
@@ -1017,14 +1042,7 @@ const DesktopShell = () => {
     return () => {
       cancelled = true;
     };
-  }, [
-    accountPlan,
-    appMode,
-    authenticatedUserId,
-    hasCloudSession,
-    modelCatalogRetry,
-    subscriptionFetchStatus,
-  ]);
+  }, [appMode, modelCatalogBoundaryKey, modelCatalogDependencyKey, modelCatalogRetry]);
 
   // Sync desktop auth user profile → chat package's settingsStore
   useEffect(() => {
@@ -1555,6 +1573,11 @@ const DesktopShell = () => {
       .getState()
       .setGenericWebSearchDeploymentEnabled(genericWebSearchDeploymentEnabled);
   }, [genericWebSearchDeploymentEnabled]);
+  const canOfferStripePlanChanges = getDesktopSubscriptionOwnerPolicy(
+    subscriptionSource,
+    subscriptionStatus,
+    subscriptionFetchStatus === 'succeeded',
+  ).canStartStripePlanChange;
   const chatHostBridge = useMemo<ChatHostBridge>(
     () => ({
       getSnapshot: () => {
@@ -1606,16 +1629,20 @@ const DesktopShell = () => {
       // SAME owned Stripe checkout window the billing settings use — the shared
       // card renders no CTA at all when this is absent, so there is never a
       // button that leads nowhere.
-      openUpgrade: (requiredTier: string) => {
-        void (async () => {
-          const { openCheckout } = await import('./lib/stripeCheckout');
-          const { normalizeBillingPlanTier } = await import('@agiworkforce/types');
-          const failure = await openCheckout(normalizeBillingPlanTier(requiredTier));
-          if (failure) toast.error(failure);
-        })().catch((error: unknown) => {
-          toast.error(error instanceof Error ? error.message : 'Could not open checkout.');
-        });
-      },
+      ...(canOfferStripePlanChanges
+        ? {
+            openUpgrade: (requiredTier: string) => {
+              void (async () => {
+                const { openCheckout } = await import('./lib/stripeCheckout');
+                const { normalizeBillingPlanTier } = await import('@agiworkforce/types');
+                const failure = await openCheckout(normalizeBillingPlanTier(requiredTier));
+                if (failure) toast.error(failure);
+              })().catch((error: unknown) => {
+                toast.error(error instanceof Error ? error.message : 'Could not open checkout.');
+              });
+            },
+          }
+        : {}),
       // Managed-cloud generated files (x_generated_files): fetch bytes from
       // the authenticated /api/files route. Bearer is ONLY attached to uris on
       // our cloud API base (never leaked to arbitrary hosts); guardedFetch
@@ -1665,7 +1692,7 @@ const DesktopShell = () => {
         }
       },
     }),
-    [],
+    [canOfferStripePlanChanges],
   );
 
   const commandOptions = useMemo(() => {
@@ -2004,12 +2031,12 @@ const DesktopShell = () => {
             />
           )}
         </Suspense>
-        {isTauri && (
+        {(isTauri || isElectronHost) && (
           <Suspense fallback={null}>
             <UpdateChecker onUpdateNow={openSettings} />
           </Suspense>
         )}
-        {isTauri && (
+        {(isTauri || isElectronHost) && (
           <Suspense fallback={null}>
             <UpdateDialog open={updateDialogOpen} onOpenChange={setUpdateDialogOpen} />
           </Suspense>

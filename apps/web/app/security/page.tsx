@@ -8,6 +8,7 @@ import {
   POLICY_LAST_UPDATED,
   contactMailto,
 } from '@/lib/legal-constants';
+import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Security',
@@ -63,13 +64,13 @@ const BOUNDARIES: {
     mark: '◆',
     mode: 'Local',
     title: 'Nothing we operate is in the path.',
-    body: 'Desktop Local mode runs the model on your own hardware through Ollama or LM Studio. Chats, files, and sessions are written to a SQLite database on your disk. No AGI server, no subprocessor, and no network egress to us is involved in the request, so there is nothing on our side to breach, subpoena, or retain.',
+    body: `Desktop Local mode runs the model on your own hardware through ${DESKTOP_LOCAL_RUNTIMES.label}. Chats, files, and sessions are written to a SQLite database on your disk. No AGI server, no subprocessor, and no network egress to us is involved in the request, so there is nothing on our side to breach, subpoena, or retain.`,
   },
   {
     mark: '◇',
     mode: 'BYOK',
     title: 'Your key, your provider, direct.',
-    body: 'On Desktop and the CLI, requests made with your own provider key travel from your machine to that provider. Your key is stored encrypted on the device, never on our servers. We are not in the request path, so we hold neither the prompt nor the completion — but the provider you chose does, under their terms.',
+    body: `On ${BYOK_SURFACES.label}, requests made with your own provider key travel from the local runtime to that provider. The key stays in that runtime, never on our servers. We are not in the request path, so we hold neither the prompt nor the completion — but the provider you chose does, under their terms.`,
   },
   {
     mark: '●',

@@ -641,6 +641,16 @@ fn get_model_entry(model_id: &str) -> Option<&'static ModelEntry> {
     CONFIG.models.get(&canonical_model_id)
 }
 
+/// Whether the canonical catalog verifies this exact model for AGI Tasks.
+///
+/// Provider runtime discovery can prove generic function-call transport, but
+/// it cannot establish agentic planning quality or compatibility with AGI's
+/// registered tool vocabulary. Unknown/dynamic models therefore fail closed.
+pub fn model_is_verified_for_agi_tasks(model_id: &str) -> bool {
+    get_model_entry(model_id)
+        .is_some_and(|entry| entry.capabilities.agentic && entry.capabilities.tools)
+}
+
 /// Whether this model's provider contract uses adaptive rather than
 /// manually-budgeted thinking.
 pub fn model_uses_adaptive_thinking(model_id: &str) -> bool {

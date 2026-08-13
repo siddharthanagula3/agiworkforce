@@ -7,7 +7,6 @@
  * Uses the 4-chars-per-token heuristic (consistent with tokenCounter.ts).
  */
 
-import * as vscode from 'vscode';
 import { estimateTextTokens } from '@agiworkforce/agent-core';
 import {
   MODEL_CONTEXT_LIMITS,
@@ -15,6 +14,7 @@ import {
   CHARS_PER_TOKEN,
   normalizeConfiguredModelId,
 } from '../features/model-picker/modelConstants';
+import { Config } from '../platform/config';
 
 // ─── Budget modes ────────────────────────────────────────────────────────────
 
@@ -45,8 +45,7 @@ export interface ContextBudget {
  * @returns Context budget with token and character limits.
  */
 export function getContextBudget(mode: 'chat' | 'agent'): ContextBudget {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  const model = normalizeConfiguredModelId(config.get<string>('model'));
+  const model = normalizeConfiguredModelId(Config.model());
 
   const modelContextWindow = MODEL_CONTEXT_LIMITS[model] ?? DEFAULT_CONTEXT_LIMIT;
   const budgetPercent = MODE_BUDGET_PERCENT[mode] ?? 3;

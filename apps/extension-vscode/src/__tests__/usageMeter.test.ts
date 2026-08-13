@@ -61,10 +61,12 @@ describe('usageMeter', () => {
       remaining: 0.75,
       resetsAt: '2026-06-01T00:00:00.000Z',
       source: 'managed-plan',
+      accountPlanTier: 'max',
+      managedDeveloperEligible: true,
     });
   });
 
-  it('does not invent remaining quota when managed usage totals are missing', async () => {
+  it('keeps Basic on Local or BYOK without inventing Managed Cloud quota', async () => {
     vi.mocked(fetchTierInfo).mockResolvedValue({
       tier: 'basic',
       resetsAt: '2026-06-01T00:00:00.000Z',
@@ -73,11 +75,13 @@ describe('usageMeter', () => {
     await expect(resolveUsageMeter(secrets, 6_200)).resolves.toEqual({
       remaining: null,
       resetsAt: '2026-06-01T00:00:00.000Z',
-      source: 'managed-plan',
+      source: 'user-api-key',
+      accountPlanTier: 'basic',
+      managedDeveloperEligible: false,
     });
   });
 
-  it.each(['free', 'max_15x', 'team', 'enterprise'] as const)(
+  it.each(['max_15x', 'team', 'enterprise'] as const)(
     'preserves the canonical %s plan returned by account usage',
     async (tier) => {
       vi.mocked(fetchTierInfo).mockResolvedValue({
@@ -91,9 +95,28 @@ describe('usageMeter', () => {
         remaining: 0.9,
         resetsAt: '2026-06-01T00:00:00.000Z',
         source: 'managed-plan',
+        accountPlanTier: tier,
+        managedDeveloperEligible: true,
       });
     },
   );
+
+  it('shows a recorded paid plan as needing billing attention when entitlement is paused', async () => {
+    vi.mocked(fetchTierInfo).mockResolvedValue({
+      tier: 'free',
+      accountPlanTier: 'pro',
+      subscriptionStatus: 'past_due',
+    });
+
+    await expect(resolveUsageMeter(secrets, 100)).resolves.toEqual({
+      remaining: null,
+      resetsAt: null,
+      source: 'user-api-key',
+      accountPlanTier: 'pro',
+      managedDeveloperEligible: false,
+      subscriptionStatus: 'past_due',
+    });
+  });
 
   it('falls back to not-AGI-managed usage when no cloud tier is available', async () => {
     await expect(resolvePlanTier(secrets)).resolves.toBe('byok');

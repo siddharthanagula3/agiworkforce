@@ -153,4 +153,11 @@ export class ChatEditorPanel {
       instance.stateManager.pushFollowUpBehavior();
     }
   }
+
+  /** Keep every open editor chat aligned with the latest account entitlement. */
+  static refreshAccountPresentation(): void {
+    for (const instance of ChatEditorPanel.instances) {
+      void instance.stateManager.refreshAccountPresentation();
+    }
+  }
 }

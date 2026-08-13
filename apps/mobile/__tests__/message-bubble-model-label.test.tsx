@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import type { ChatMessage } from '@/types/chat';
 
 jest.mock('@/src/ui/theme', () => {
@@ -88,7 +88,22 @@ jest.mock('@/src/features/chat/components/ThinkingChip', () => {
 });
 jest.mock('@/src/features/chat/components/ToolCallTimeline', () => {
   const RN = require('react-native');
-  return { ToolCallTimeline: () => <RN.Text>Legacy tool timeline</RN.Text> };
+  return {
+    ToolCallTimeline: () => <RN.Text>Legacy tool timeline</RN.Text>,
+    ToolCallDetailsSheet: ({
+      tool,
+    }: {
+      tool: { searchResults?: Array<{ title: string }> } | null;
+    }) =>
+      tool ? (
+        <RN.View>
+          <RN.Text>Structured tool details</RN.Text>
+          {tool.searchResults?.map((result) => (
+            <RN.Text key={result.title}>{result.title}</RN.Text>
+          ))}
+        </RN.View>
+      ) : null,
+  };
 });
 jest.mock('@/src/features/chat/components/AgentActivityTimeline', () => {
   const RN = require('react-native');
@@ -98,9 +113,31 @@ jest.mock('@/src/features/chat/components/AgentActivityTimeline', () => {
     ),
   };
 });
-jest.mock('@/src/features/chat/components/InlineArtifactCard', () => ({
-  InlineArtifactCard: () => null,
-}));
+jest.mock('@/src/features/chat/components/InlineArtifactCard', () => {
+  const RN = require('react-native');
+  return {
+    InlineArtifactCard: ({
+      artifact,
+    }: {
+      artifact: {
+        id: string;
+        type: string;
+        title: string;
+        content: string;
+        generatedFile?: { fileName: string };
+      };
+    }) => (
+      <RN.Text testID={`inline-artifact-${artifact.id}`}>
+        {[
+          artifact.title,
+          artifact.type,
+          artifact.generatedFile?.fileName ?? 'no-file',
+          artifact.content,
+        ].join('|')}
+      </RN.Text>
+    ),
+  };
+});
 jest.mock('@/src/features/chat/components/ArtifactFullScreen', () => ({
   ArtifactFullScreen: () => null,
 }));
@@ -142,12 +179,19 @@ jest.mock('@/src/features/chat/components/ReportFlagButton', () => ({
 }));
 
 import { MessageBubble } from '@/src/features/chat/components/MessageBubble';
+import { useArtifactStore } from '@/src/features/artifacts/store';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { DEFAULT_LOCAL_MODEL_ID, getShortDisplayName } from '@/src/features/model-picker/service';
 
 const LOCAL_MODEL_LABEL = getShortDisplayName(DEFAULT_LOCAL_MODEL_ID);
 const SYNTHETIC_CLOUD_MODEL_ID = 'fixture-cloud-model';
 
 describe('MessageBubble model label', () => {
+  beforeEach(() => {
+    useArtifactStore.setState({ artifacts: [] });
+    useChatAppModeStore.setState({ appMode: 'local' });
+  });
+
   it('shows the friendly local model name instead of the internal model ID', () => {
     const message: ChatMessage = {
       id: 'm-1',
@@ -226,6 +270,42 @@ describe('MessageBubble model label', () => {
     expect(view.getByText('Legacy thinking')).toBeTruthy();
   });
 
+  it('opens structured search details from the VoiceOver message action', () => {
+    const message: ChatMessage = {
+      id: 'm-search-a11y',
+      role: 'assistant',
+      content: 'Here is the current result.',
+      createdAt: new Date().toISOString(),
+      model: SYNTHETIC_CLOUD_MODEL_ID,
+      toolCalls: [
+        {
+          id: 'search-1',
+          name: 'web_search',
+          status: 'completed',
+          output: '{"type":"web_search_tool_result","content":[{"url":"https://example.test"}]}',
+          searchResults: [
+            {
+              title: 'Official announcement',
+              url: 'https://example.test/announcement',
+              snippet: 'Verified source',
+            },
+          ],
+        },
+      ],
+    };
+
+    const view = render(<MessageBubble message={message} />);
+    const bubble = view.getByLabelText('AGI message: Here is the current result.');
+
+    fireEvent(bubble, 'accessibilityAction', {
+      nativeEvent: { actionName: 'tool-search-1' },
+    });
+
+    expect(view.getByText('Structured tool details')).toBeTruthy();
+    expect(view.getByText('Official announcement')).toBeTruthy();
+    expect(view.queryByText(/web_search_tool_result/)).toBeNull();
+  });
+
   it('omits the thinking chip entirely when the turn produced no reasoning', () => {
     const message: ChatMessage = {
       id: 'm-no-reasoning',
@@ -275,5 +355,115 @@ describe('MessageBubble model label', () => {
     expect(view.queryByText(/Canonical activity/)).toBeNull();
     expect(view.getByText('Legacy thinking')).toBeTruthy();
     expect(view.getByText('Fallback answer.')).toBeTruthy();
+  });
+
+  it('renders a rich message-owned generated file when the artifact store is empty', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const message: ChatMessage = {
+      id: 'm-generated-file',
+      role: 'assistant',
+      content: 'Your report is ready.',
+      createdAt: '2026-08-13T00:00:00.000Z',
+      artifacts: [
+        {
+          id: 'generated-report',
+          type: 'document',
+          title: 'Quarterly report',
+          content: '',
+          generatedFile: {
+            id: 'generated-report',
+            computeSessionId: '',
+            ownerUserId: '',
+            sourceSurface: 'web',
+            privacyMode: 'managed',
+            providerMode: 'ManagedGateway',
+            kind: 'pdf',
+            fileName: 'quarterly-report.pdf',
+            mimeType: 'application/pdf',
+            uri: 'https://media.example/quarterly-report.pdf',
+            byteCount: 4096,
+            checksumSha256: 'f'.repeat(64),
+            previewDerivatives: [],
+            createdAt: '2026-08-13T00:00:00.000Z',
+          },
+        },
+      ],
+    };
+
+    const view = render(<MessageBubble message={message} />);
+
+    expect(view.getByTestId('inline-artifact-generated-report').props.children).toBe(
+      'Quarterly report|document|quarterly-report.pdf|',
+    );
+  });
+
+  it('lets the rich message artifact replace a duplicate store row and omits wrong-scope rows', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useArtifactStore.setState({
+      artifacts: [
+        {
+          id: 'same-id',
+          messageId: 'm-merge',
+          title: 'Store fallback',
+          kind: 'document',
+          content: 'plain store content',
+          ageLabel: 'Now',
+          sourceLabel: 'AGI',
+          accentColor: '#000000',
+          previewLines: [],
+          provenance: { scope: 'cloud', ownerId: 'user-fixture' },
+        },
+        {
+          id: 'wrong-scope',
+          messageId: 'm-merge',
+          title: 'Local private artifact',
+          kind: 'document',
+          content: 'must stay local',
+          ageLabel: 'Now',
+          sourceLabel: 'AGI',
+          accentColor: '#000000',
+          previewLines: [],
+          provenance: { scope: 'local' },
+        },
+      ],
+    });
+    const message: ChatMessage = {
+      id: 'm-merge',
+      role: 'assistant',
+      content: 'Finished.',
+      createdAt: '2026-08-13T00:00:00.000Z',
+      artifacts: [
+        {
+          id: 'same-id',
+          type: 'document',
+          title: 'Rich generated file',
+          content: '',
+          generatedFile: {
+            id: 'same-id',
+            computeSessionId: '',
+            ownerUserId: '',
+            sourceSurface: 'web',
+            privacyMode: 'managed',
+            providerMode: 'ManagedGateway',
+            kind: 'docx',
+            fileName: 'rich-result.docx',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            uri: 'https://media.example/rich-result.docx',
+            byteCount: 1024,
+            checksumSha256: 'a'.repeat(64),
+            previewDerivatives: [],
+            createdAt: '2026-08-13T00:00:00.000Z',
+          },
+        },
+      ],
+    };
+
+    const view = render(<MessageBubble message={message} />);
+
+    expect(view.getByTestId('inline-artifact-same-id').props.children).toBe(
+      'Rich generated file|document|rich-result.docx|',
+    );
+    expect(view.queryByTestId('inline-artifact-wrong-scope')).toBeNull();
+    expect(view.queryByText('Store fallback')).toBeNull();
   });
 });

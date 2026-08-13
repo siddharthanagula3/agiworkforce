@@ -468,6 +468,10 @@ export function ModelPickerSheet({
       <BottomSheet
         ref={sheetRef as React.RefObject<BottomSheet>}
         index={-1}
+        // The library's default accessible wrapper swallows all descendant
+        // model rows on iOS. Keep the handle adjustable and expose the actual
+        // search, effort, model, and close controls individually.
+        accessible={false}
         snapPoints={snapPoints}
         enablePanDownToClose
         enableDynamicSizing={false}

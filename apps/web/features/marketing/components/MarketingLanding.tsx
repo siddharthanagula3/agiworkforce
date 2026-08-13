@@ -20,7 +20,7 @@ import {
   TrustTriptych,
 } from '@/features/marketing/components/FlagshipSections';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
-import { SURFACE_STATUS } from '@/lib/marketing-constants';
+import { DESKTOP_LOCAL_RUNTIMES, SURFACE_STATUS } from '@/lib/marketing-constants';
 
 const WEB_CHAT_ENTRY_HREF = '/login?redirectTo=%2F';
 
@@ -64,7 +64,7 @@ export function MarketingLanding() {
               tagline: 'Runs on your machine.',
               body: 'The native app, built in Rust. Local models, encrypted keys, connectors, and scheduled work. The Chrome extension pairs with it.',
               capabilities: [
-                'Local models via Ollama & LM Studio',
+                `Local models via ${DESKTOP_LOCAL_RUNTIMES.label}`,
                 'BYOK keys, encrypted at rest',
                 'MCP connectors & tool approvals',
                 'Artifacts workbench',
@@ -174,7 +174,7 @@ export function MarketingLanding() {
               body: 'Models on your hardware. Works offline. Free.',
               points: [
                 'Local chats, files, and sessions never silently leave your device',
-                'Ollama & LM Studio on Desktop and CLI',
+                'Ollama, LM Studio, llama.cpp & vLLM on Desktop',
                 'On-device Local Mode on Mobile',
                 'No account required',
               ],
@@ -184,7 +184,7 @@ export function MarketingLanding() {
               mode: 'BYOK',
               glyph: '◇',
               title: 'Your keys, your bill.',
-              body: 'Bring provider keys on Desktop and CLI.',
+              body: 'Bring provider keys on Desktop, CLI, and VS Code.',
               points: [
                 'Keys stored encrypted, on your machine',
                 'Traffic goes directly to your provider',

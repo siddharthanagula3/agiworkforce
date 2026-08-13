@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatProjectStore } from '@agiworkforce/unified-chat';
+import { managedCloudConversationPath } from '@agiworkforce/cloud-contracts';
 import { getModelsForTierAndSurface } from '@agiworkforce/types';
 import { useChatStore, type Conversation } from '@shared/stores/web-chat-store';
 import { useConversations, useProjectConversations } from './useConversations';
@@ -270,6 +271,64 @@ describe('useConversations.loadConversation pagination races', () => {
         model: DEEP_LINK_CONVERSATION.model,
       }),
     );
+  });
+
+  it('loads every message page before installing the transcript', async () => {
+    const wireMessage = (id: string, content: string) => ({
+      id,
+      role: 'assistant' as const,
+      content,
+      model: null,
+      provider: null,
+      input_tokens: 0,
+      output_tokens: 0,
+      created_at: '2026-07-16T00:02:00.000Z',
+      metadata: null,
+    });
+    const firstMessages = [
+      wireMessage('10000000-0000-4000-8000-000000000001', 'first'),
+      wireMessage('10000000-0000-4000-8000-000000000002', 'second'),
+    ];
+    const finalMessage = wireMessage('10000000-0000-4000-8000-000000000003', 'third');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (!url.includes(DEEP_LINK_CONVERSATION.id)) {
+          return conversationListResponse([WIRE_CONVERSATION]);
+        }
+        const secondPage = url.includes('offset=2');
+        return new Response(
+          JSON.stringify({
+            conversation: DEEP_LINK_CONVERSATION,
+            messages: secondPage ? [finalMessage] : firstMessages,
+            total: 3,
+            hasMore: !secondPage,
+          }),
+          { status: 200 },
+        );
+      }),
+    );
+    const { result } = renderHook(() => useConversations());
+    await waitFor(() => expect(vi.mocked(fetch)).toHaveBeenCalled());
+
+    await act(async () => {
+      expect(await result.current.loadConversation(DEEP_LINK_CONVERSATION.id)).toBe(true);
+    });
+
+    expect(
+      useChatStore
+        .getState()
+        .messagesByConversation[DEEP_LINK_CONVERSATION.id]?.map(({ content }) => content),
+    ).toEqual(['first', 'second', 'third']);
+    const detailUrls = vi
+      .mocked(fetch)
+      .mock.calls.map(([input]) => String(input))
+      .filter((url) => url.includes(DEEP_LINK_CONVERSATION.id));
+    expect(detailUrls).toEqual([
+      `${managedCloudConversationPath(DEEP_LINK_CONVERSATION.id)}?limit=500&offset=0`,
+      `${managedCloudConversationPath(DEEP_LINK_CONVERSATION.id)}?limit=500&offset=2`,
+    ]);
   });
 
   it('preserves a deep-linked detail when the first sidebar page resolves later', async () => {

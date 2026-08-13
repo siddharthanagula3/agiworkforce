@@ -81,6 +81,7 @@ describe('POST /api/portal', () => {
   it('opens the portal for a verified linked customer', async () => {
     mocks.query.mockResolvedValueOnce([
       {
+        plan_tier: 'pro',
         stripe_customer_id: 'cus_123',
         stripe_subscription_id: 'sub_123',
         status: 'active',
@@ -94,6 +95,48 @@ describe('POST /api/portal', () => {
       customer: 'cus_123',
       return_url: 'https://agiworkforce.com/pricing',
     });
+  });
+
+  it.each([
+    ['apple', { apple_original_transaction_id: 'apple-tx-1' }],
+    ['google', { google_purchase_token: 'play-token-1' }],
+    ['manual', {}],
+    [
+      'unverified',
+      { stripe_subscription_id: 'sub_123', apple_original_transaction_id: 'apple-tx-1' },
+    ],
+  ])('refuses the Stripe portal for an active %s-owned subscription', async (_source, ids) => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'pro',
+        stripe_customer_id: 'cus_123',
+        stripe_subscription_id: null,
+        status: 'active',
+        ...ids,
+      },
+    ]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(409);
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
+  });
+
+  it('does not send an ended store subscription to a Stripe portal', async () => {
+    mocks.query.mockResolvedValueOnce([
+      {
+        plan_tier: 'pro',
+        stripe_customer_id: 'cus_old',
+        stripe_subscription_id: null,
+        apple_original_transaction_id: 'apple-tx-ended',
+        status: 'expired',
+      },
+    ]);
+
+    const response = await POST(request());
+
+    expect(response.status).toBe(409);
+    expect(mocks.createPortalSession).not.toHaveBeenCalled();
   });
 
   describe('email fallback (BIZ-015: no cross-customer portal sessions)', () => {

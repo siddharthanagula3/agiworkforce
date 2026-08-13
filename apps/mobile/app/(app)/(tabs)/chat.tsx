@@ -3,7 +3,14 @@ import { View, Alert, Keyboard, ScrollView, KeyboardAvoidingView, Platform } fro
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+// `expo-router`'s re-export, NOT `@react-navigation/native`'s. The monorepo
+// resolves FIVE copies of @react-navigation/native@7.2.0 (built against
+// react-native 0.83.10 and 0.86.2). The app and expo-router's container end
+// up on different module instances, so their React context objects differ and
+// the raw hook throws "Couldn't find a navigation object" — a render error on
+// the chat tab, i.e. app launch. expo-router's export is bound to the instance
+// that actually owns the navigator.
+import { useFocusEffect } from 'expo-router';
 import { Download } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -18,8 +25,10 @@ import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { TemporaryChatToggle } from '@/src/features/chat/components/TemporaryChatToggle';
 import { AgiMark } from '@/components/ui/AgiMark';
 import {
+  TaskChips,
   TASK_CHIP_SEND_CONTEXT,
   type TaskChipType,
+  type TaskSuggestionType,
 } from '@/src/features/chat/components/TaskChips';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { ProjectSelectorBar } from '@/src/features/chat/components/ProjectSelectorBar';
@@ -115,6 +124,10 @@ export default function ChatTabScreen() {
   const completeVideoGeneration = useChatStore((s) => s.completeVideoGeneration);
   const failVideoGeneration = useChatStore((s) => s.failVideoGeneration);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
+  const setMediaMode = useChatViewStore((s) => s.setMediaMode);
+  const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
+  const videoResolution = useChatViewStore((s) => s.videoResolution);
+  const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
   const deleteMessage = useChatStore((s) => s.deleteMessage);
   const setPaywallError = useChatStore((s) => s.setPaywallError);
   const clearError = useChatStore((s) => s.clearError);
@@ -164,14 +177,11 @@ export default function ChatTabScreen() {
       clearSelectedSkill();
     }
   }, [clearSelectedSkill, clerkUserId, isClerkLoaded, skillSelection]);
-  // Only a model the picker can actually select counts as "ready" (SIX-21).
-  // `readySystemModelIds` reports the OS-resident tier-1 row (Apple
-  // Intelligence / AICore), but `service.ts` deliberately filters
-  // system-runtime-only rows out of LOCAL_MODEL_LIST, so `resolveLocalModelRef`
-  // can never resolve one. Counting those ids hid this banner on a fresh
-  // install on an Apple-Intelligence device: no model was selectable, nothing
-  // offered to download, and the first send failed in chatExecutionStore.
-  // The same guard covers an installed row the catalog has since retired.
+  // Only a model the picker can actually resolve counts as "ready" (SIX-21).
+  // `readySystemModelIds` reports the OS-resident Tier-1 row (Apple
+  // Intelligence / AICore); those catalog rows now reach LOCAL_MODEL_LIST and
+  // are enabled only by the native capability probe. The same lookup also
+  // rejects an installed id the catalog has since retired.
   const hasReadyLocalModel = useMemo(
     () =>
       [...installedModelIds, ...readySystemModelIds].some((modelId) =>
@@ -227,11 +237,26 @@ export default function ChatTabScreen() {
 
   useEffect(() => {
     if (appMode === 'cloud') {
-      if (!cloudChatAvailable || !cloudUnlocked || !DEFAULT_CLOUD_MODEL_ID) {
+      if (!cloudChatAvailable || !DEFAULT_CLOUD_MODEL_ID) {
         setAppMode('local');
         setModel(DEFAULT_LOCAL_MODEL_ID);
         return;
       }
+      // The persisted mode hydrates before Clerk necessarily resolves its
+      // native session. `cloudUnlocked` is deliberately false in that pending
+      // window, even for a signed-in user; treating it as a denial overwrote a
+      // persisted Cloud preference with Local on every cold start. Wait for
+      // definitive auth. A loaded signed-out session still fails closed.
+      if (!isClerkLoaded) return;
+      if (!isClerkSignedIn) {
+        setAppMode('local');
+        setModel(DEFAULT_LOCAL_MODEL_ID);
+        return;
+      }
+      // ClerkTokenBridge publishes cloudUnlocked immediately before
+      // isClerkSignedIn. Keep the preference intact if React observes the
+      // intermediate render; the bridge will unlock the controls next.
+      if (!cloudUnlocked) return;
       if (executionModeForSelection(selectedModel, appMode) !== 'cloud') {
         setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
       }
@@ -245,6 +270,8 @@ export default function ChatTabScreen() {
     appMode,
     cloudChatAvailable,
     cloudUnlocked,
+    isClerkLoaded,
+    isClerkSignedIn,
     selectedModel,
     setAppMode,
     setModel,
@@ -267,8 +294,8 @@ export default function ChatTabScreen() {
       try {
         if (activeMode === 'cloud' && !FEATURES.cloudChat) {
           Alert.alert(
-            'AGI Cloud is not ready on mobile',
-            'Local Mode is ready now. Cloud chat will be enabled when the mobile Cloud release is active.',
+            'AGI Cloud is unavailable in this build',
+            'This build has Cloud chat turned off. Local Mode remains available and stays on this device.',
           );
           return false;
         }
@@ -286,6 +313,10 @@ export default function ChatTabScreen() {
               executionMode: activeMode,
               text: trimmed,
               mediaMode,
+              // Video output shape from the composer sheet; the resolver narrows
+              // these to the wire contract's literal unions.
+              aspectRatio: videoAspectRatio,
+              resolution: videoResolution,
               subscriptionTier,
               isClerkSignedIn,
               ownerId: clerkUserId,
@@ -309,6 +340,8 @@ export default function ChatTabScreen() {
             displayText: trimmed,
             prompt: videoRequest.prompt,
             model: videoRequest.model,
+            aspectRatio: videoRequest.aspectRatio,
+            resolution: videoRequest.resolution,
             ownerId: videoRequest.ownerId,
             begin: beginVideoGeneration,
             progress: updateVideoGenerationProgress,
@@ -342,6 +375,7 @@ export default function ChatTabScreen() {
               ownerId: clerkUserId,
               grantedCapabilities,
               isOnline,
+              aspectRatio: imageAspectRatio,
             });
 
         // Image output is a specialist media route, not a chat-completions
@@ -364,6 +398,7 @@ export default function ChatTabScreen() {
             displayText: trimmed,
             prompt: imageRequest.prompt,
             model: imageRequest.model,
+            aspectRatio: imageRequest.aspectRatio,
             ownerId: imageRequest.ownerId,
             begin: beginImageGeneration,
             complete: completeImageGeneration,
@@ -449,12 +484,41 @@ export default function ChatTabScreen() {
       completeVideoGeneration,
       failVideoGeneration,
       mediaMode,
+      videoAspectRatio,
+      videoResolution,
+      imageAspectRatio,
       deleteMessage,
       setPaywallError,
       setSendError,
       selectedSkillName,
       clearSelectedSkill,
     ],
+  );
+
+  const [activeTaskChip, setActiveTaskChip] = useState<TaskChipType | null>(null);
+  const handleTaskSuggestion = useCallback(
+    (suggestion: TaskSuggestionType) => {
+      if (suggestion === 'image') {
+        setActiveTaskChip(null);
+        setMediaMode('image');
+      } else {
+        setMediaMode('text');
+        setActiveTaskChip((current) => (current === suggestion ? null : suggestion));
+      }
+      chatInputAttachRef.current?.focus?.();
+    },
+    [setMediaMode],
+  );
+  const handleComposerSend = useCallback(
+    async (
+      text: string,
+      attachments?: import('@/src/features/chat/components/AttachmentPreview').Attachment[],
+    ): Promise<boolean> => {
+      const accepted = await handleSend(text, attachments, activeTaskChip ?? undefined);
+      if (accepted) setActiveTaskChip(null);
+      return accepted;
+    },
+    [activeTaskChip, handleSend],
   );
 
   const handleOpenModelPicker = useCallback(
@@ -852,13 +916,21 @@ export default function ChatTabScreen() {
           )}
         </ScrollView>
 
+        <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
+          <TaskChips
+            activeChip={activeTaskChip}
+            onChipPress={handleTaskSuggestion}
+            showCloudSuggestions={activeMode === 'cloud'}
+          />
+        </View>
+
         {/* Mode-aware: shows local projects in Local, cloud projects in Cloud.
             Trigger lives in the "+" sheet; this renders the picker modal only. */}
         <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
 
         {voiceInlineVisible ? null : (
           <ChatInput
-            onSend={handleSend}
+            onSend={handleComposerSend}
             onOpenModelPicker={handleOpenModelPicker}
             onOpenVoiceMode={handleOpenVoiceMode}
             onOpenCompare={compareAction}

@@ -49,6 +49,16 @@ These rules must stay mirrored in `AGENTS.md` and guarded by
 - Local to BYOK must be an explicit fork/continuation with context selection, secret scan, payload preview, user consent, and visible provider label.
 - Managed cloud is in public alpha and open by default — the private-beta/waitlist launch gate has been removed (founder decision, 2026-06-27). The `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains ONLY as an incident-response kill-switch (set to `0`/`false`/`off` to re-gate). Billing, metering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls must keep pace with public usage, but they no longer gate access.
 - Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status. If the repo does not prove it, mark it unknown or add a tracked gap.
+- Finish what you start. Do not ship a capability in half: if a control is
+  added, it must be wired through every layer to the thing it claims to do —
+  UI state, client options type, request contract, network body, and server
+  handler — and verified by observing the real request or result, not by a
+  passing typecheck. A picker that renders but never reaches the API, a model
+  added to the registry with no way to select it, or a validated parameter no
+  caller can send are all failures, not progress. If the full path genuinely
+  cannot be completed, stop and record the exact remaining step in
+  `ExecutionPlan.md` as `TODO` or in `FoundersAssistance.md` as
+  `BLOCKED_BY_HUMAN` — never leave a half-wired surface and describe it as done.
 - Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
 - Treat unusual product behavior as a bug, not as background noise: unreadable UI, dead or duplicate controls, unexpected redirects, visible console/network errors, stale provider/model labels, fake availability badges, and confusing auth or upgrade gates must be fixed immediately when reproducible, or recorded as a concrete blocker with evidence.
 - Do not treat generated audit/report markdown as remediation. Audit files are triage queues: open the cited source files, confirm the issue in implementation, patch production paths when safe, and only summarize after code changes or explicit blocked risks are recorded.

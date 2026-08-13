@@ -181,9 +181,16 @@ describe('tool-loop web_search integration', () => {
     vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
 
     try {
-      const output = await collect(
-        runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
-      );
+      const processed = makeProcessed([webSearchToolDef()]);
+      processed.chatRequest = {
+        model: 'test-model',
+        messages: [{ role: 'user', content: 'What happened in the news today?' }],
+        stream: true,
+        web_search: true,
+      } as never;
+      processed.resolvedTaskType = 'research';
+      processed.llmRequest.tool_choice = 'required';
+      const output = await collect(runToolLoop(processed, { approvalMode: 'auto' }));
 
       // 1. Timeline: running with the "Searching the web" phrase, then completed.
       expect(output).toContain('"x_tool_status"');
@@ -205,6 +212,16 @@ describe('tool-loop web_search integration', () => {
       expect(output).toContain('"title":"Today in the news"');
       expect(output).toContain('"encrypted_content":"A summary of the top stories."');
       expect(output).toContain('"position":1');
+
+      // Search is mandatory only for the first provider step. Once the real
+      // result is appended, the provider must be free to synthesize the final
+      // cited answer instead of being trapped in an endless required-tool loop.
+      expect(factoryMocks.streamRequest.mock.calls[0]?.[2]).toMatchObject({
+        tool_choice: 'required',
+      });
+      expect(factoryMocks.streamRequest.mock.calls[1]?.[2]).toMatchObject({
+        tool_choice: 'auto',
+      });
 
       expect(
         agentEvents(output).find((entry) => entry.event.type === 'source-list')?.event,

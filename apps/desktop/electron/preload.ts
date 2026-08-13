@@ -70,6 +70,14 @@ const agiHost: ElectronHostBridge = {
   async relaunch(): Promise<void> {
     await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.relaunch);
   },
+
+  async checkForUpdate() {
+    return ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.checkUpdate);
+  },
+
+  async openUpdateInstaller(): Promise<void> {
+    await ipcRenderer.invoke(ELECTRON_IPC_CHANNELS.openUpdateInstaller);
+  },
 };
 
 contextBridge.exposeInMainWorld('agiHost', agiHost);

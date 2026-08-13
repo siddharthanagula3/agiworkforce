@@ -1,20 +1,40 @@
-// SYNC-RULE COMPLIANCE — Chrome surface (browser-session only)
+// SYNC-RULE COMPLIANCE — Chrome surface
 //
-// Locked rule: "CLI, VS Code, and Chrome must not sync consumer chat history.
-// They may keep separate browser-session history, event streams, exports,
-// and explicit user-approved handoffs."
+// Rule as amended: CLI and VS Code stay local/workspace/task scoped. Chrome
+// automatically mirrors a conversation to the signed-in AGI account ONLY when
+// every turn in it was inferred in Managed Cloud. A Local or BYOK turn
+// permanently disqualifies that conversation (founder decision, 2026-08-13).
 //
-// This surface is compliant:
-//   • Browser conversations (`agi_browser_conversations_v1`) are written exclusively to
-//     `chrome.storage.local` — device-scoped, never synced to Google's servers
-//     or to any consumer-identity endpoint.
-//   • No `ConversationSyncService` from `@agiworkforce/types` is imported or
-//     constructed here.
-//   • No POSTs to `/api/chat/conversations` or any web-surface consumer endpoint.
-//   • Bridge calls execute a turn but do not transfer ownership or persistence;
-//     Chrome remains the sole owner of its browser-scoped conversation records.
+// How this surface stays inside the rule:
+//   • Browser conversations (`agi_browser_conversations_v2`) remain
+//     AUTHORITATIVE in `chrome.storage.local` — device-scoped, never written to
+//     `chrome.storage.sync`. The account copy is a one-way replica; nothing is
+//     ever read back from it into Chrome.
+//   • Eligibility is per-message provenance (`HistoryMessage.runtime ===
+//     'managed-cloud'` for EVERY message), and the disqualification is sticky.
+//     An unstamped (pre-feature) message fails closed.
+//   • Eligible signed-in chats mirror automatically to the shared account
+//     conversation store. Writes force `skipLlm: true`, so they can never
+//     trigger inference or billing.
+//   • ALL cloud egress for this feature is confined to
+//     `features/cloud-bridge/conversationSync.ts` and its transport in
+//     `features/cloud-bridge/conversationSyncClient.ts` — the cloud-bridge gate
+//     enforced by `scripts/check-no-cloud-ipc-v1.mjs`. No other module in this
+//     extension may construct a Managed Cloud chat client.
+//   • Local eviction (30-day TTL, quota trims) NEVER deletes the account copy.
+//     Cloud deletes originate only from an explicit user deletion in the
+//     history drawer.
+//   • Bridge calls execute a turn but do not transfer ownership or persistence.
 
-import type { ExtensionMessage, ExtensionResponse, ConnectionStatus, ScheduledTask } from './types';
+import type {
+  ConnectionStatus,
+  ExtensionMessage,
+  ExtensionResponse,
+  InPagePromptMessage,
+  InPagePromptOutcome,
+  InPagePromptResponse,
+  ScheduledTask,
+} from './types';
 import { logger, RateLimiter, withTimeout, storageUtils, sleep } from './utils';
 import { t } from './i18n';
 import { describeComputerUseAction } from './features/computer-use/describeAction';
@@ -26,6 +46,7 @@ import {
   handleDeleteShortcut,
   planShortcutReplay,
 } from './features/background/shortcuts';
+import { validateShortcutReplayTarget } from './features/shortcuts/origin';
 import { initializeSyncedPreferences } from './features/background/synced-preferences';
 import {
   loadScheduledTasks,
@@ -123,6 +144,13 @@ import {
   getManagedCloudAuthContext,
   getManagedModelAccess,
 } from './features/cloud-bridge/freeTrialClient';
+import {
+  abortConversationSyncForOwnerChange,
+  queueCloudConversationDeletion,
+  scheduleConversationSync,
+  sweepConversationSync,
+  SYNC_SWEEP_ALARM,
+} from './features/cloud-bridge/conversationSync';
 import { resolveComputerUseModel } from './features/computer-use/cloudAgentClient';
 import { signOutClerkIfCurrent } from './features/cloud-bridge/clerkAuth';
 import {
@@ -459,6 +487,10 @@ async function invalidateManagedCloudOwner(
 }
 
 function retireManagedCloudOwner(owner: ManagedCloudOwner): void {
+  // Drop every debounced and in-flight conversation mirror before the new
+  // identity is exposed. The transport-boundary owner re-check in
+  // `conversationSyncClient` is the backstop; this stops the work outright.
+  abortConversationSyncForOwnerChange();
   retiredManagedCloudOwners.add(managedCloudOwnerKey(owner));
   while (retiredManagedCloudOwners.size > 100) {
     const oldest = retiredManagedCloudOwners.values().next().value;
@@ -1338,8 +1370,8 @@ chrome.notifications?.onClicked?.addListener((notifId: string) => {
   chrome.notifications.clear(notifId, () => {});
 });
 
-async function ensureTabGroup(tabId: number): Promise<void> {
-  if (!chrome.tabGroups) return;
+async function ensureTabGroup(tabId: number): Promise<boolean> {
+  if (!chrome.tabGroups) return false;
   try {
     const groups = await chrome.tabGroups.query({ title: TAB_GROUP_NAME });
     if (groups.length > 0 && groups[0]?.id !== undefined) {
@@ -1348,9 +1380,11 @@ async function ensureTabGroup(tabId: number): Promise<void> {
       const groupId = await chrome.tabs.group({ tabIds: [tabId] });
       await chrome.tabGroups.update(groupId, { title: TAB_GROUP_NAME, color: 'blue' });
     }
+    return true;
   } catch (err) {
     // tabGroups API may not be available in all contexts
     logger.debug('Tab group operation failed (non-fatal)', err);
+    return false;
   }
 }
 
@@ -1452,6 +1486,10 @@ async function handleReplayShortcut(
   const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!activeTab?.id) {
     return { success: false, error: 'No active tab' } as ExtensionResponse;
+  }
+  const replayTarget = validateShortcutReplayTarget(shortcut, activeTab.url);
+  if (!replayTarget.ok) {
+    return { success: false, error: replayTarget.error } as ExtensionResponse;
   }
   const taskId = `replay_${Date.now()}`;
   const result = await forwardToContentScript(activeTab.id, {
@@ -3471,6 +3509,29 @@ async function handleMessageAsync(
     // is supplied, so they are in EXTENSION_PAGE_ONLY_MESSAGE_TYPES — otherwise
     // a content script in a background tab could regroup the tab the user is
     // actually looking at.
+    case 'GET_TAB_GROUP_STATE': {
+      let resolvedTabId = tabId;
+      if (!resolvedTabId) {
+        const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        resolvedTabId = activeTab?.id;
+      }
+      if (!resolvedTabId) {
+        return { success: false, error: 'No active tab' } as ExtensionResponse;
+      }
+      const activeTab = await chrome.tabs.get(resolvedTabId);
+      if (typeof activeTab.groupId !== 'number' || activeTab.groupId < 0) {
+        return { success: true, grouped: false } as ExtensionResponse;
+      }
+      if (!chrome.tabGroups) {
+        return { success: false, error: 'Tab groups are not available' } as ExtensionResponse;
+      }
+      const activeGroup = await chrome.tabGroups.get(activeTab.groupId);
+      return {
+        success: true,
+        grouped: activeGroup.title === TAB_GROUP_NAME,
+      } as ExtensionResponse;
+    }
+
     case 'ADD_TAB_TO_GROUP': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -3480,8 +3541,14 @@ async function handleMessageAsync(
       if (!resolvedTabId) {
         return { success: false, error: 'No active tab' } as ExtensionResponse;
       }
-      await ensureTabGroup(resolvedTabId);
-      return { success: true, grouped: true } as ExtensionResponse;
+      const grouped = await ensureTabGroup(resolvedTabId);
+      return grouped
+        ? ({ success: true, grouped: true } as ExtensionResponse)
+        : ({
+            success: false,
+            grouped: false,
+            error: t('spTabGroupUpdateFailed'),
+          } as ExtensionResponse);
     }
 
     case 'REMOVE_TAB_FROM_GROUP': {
@@ -3743,24 +3810,13 @@ async function handleMessageAsync(
       }
     }
 
-    case 'IN_PAGE_PROMPT' as ExtensionMessage['type']: {
-      // Sent by the in-page chat panel (content-script) to run a prompt and
-      // return the full accumulated response text. Uses the same Managed
-      // Cloud-only owner as CHAT_MESSAGE but resolves to a simple
-      // { success, text } rather than broadcasting chunks, since content
-      // scripts cannot receive chunked messages while the panel waits.
-      const promptPayload = message as unknown as { prompt?: string };
-      const promptText = typeof promptPayload.prompt === 'string' ? promptPayload.prompt : '';
-      if (!promptText) {
-        return { success: false, error: 'Missing prompt' } as ExtensionResponse;
-      }
-      try {
-        const responseText = await handleInPagePrompt(promptText);
-        return { success: true, text: responseText } as ExtensionResponse;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Prompt failed';
-        return { success: false, error: msg } as ExtensionResponse;
-      }
+    case 'IN_PAGE_PROMPT': {
+      const { prompt, pageContext } = message as InPagePromptMessage;
+      return handleInPagePrompt(
+        typeof prompt === 'string' ? prompt : '',
+        typeof pageContext === 'string' ? pageContext : undefined,
+        sender.tab?.url ?? sender.url,
+      );
     }
 
     // SECURITY: every memory case is in EXTENSION_PAGE_ONLY_MESSAGE_TYPES.
@@ -3829,6 +3885,43 @@ async function handleMessageAsync(
       quickModeCache = qmMsg.enabled === true;
       await chrome.storage.local.set({ agi_quick_mode: quickModeCache });
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
+    }
+
+    // ── Account-backed conversation mirroring ────────────────────────────
+    // Every case here re-validates the caller-supplied owner and refuses a
+    // retired incarnation. `SYNC_CONVERSATION` in particular replies
+    // immediately and NEVER awaits the flush: local chat must not be able to
+    // stall or fail because the account mirror is slow or down.
+    case 'SYNC_CONVERSATION' as ExtensionMessage['type']: {
+      const syncMsg = message as import('./types').SyncConversationMessage;
+      const syncOwner = normalizeManagedCloudOwner(syncMsg.owner);
+      if (!syncOwner || isRetiredManagedCloudOwner(syncOwner)) {
+        return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
+      }
+      if (typeof syncMsg.conversationId !== 'string' || syncMsg.conversationId.length === 0) {
+        return { success: false, error: 'conversationId is required' } as ExtensionResponse;
+      }
+      scheduleConversationSync(syncOwner, syncMsg.conversationId, syncMsg.streaming === true);
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'DELETE_CLOUD_CONVERSATION' as ExtensionMessage['type']: {
+      const delCloudMsg = message as import('./types').DeleteCloudConversationMessage;
+      const delOwner = normalizeManagedCloudOwner(delCloudMsg.owner);
+      if (!delOwner || isRetiredManagedCloudOwner(delOwner)) {
+        return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
+      }
+      // Await only the local tombstone write, not the remote DELETE. A success
+      // response therefore means the deletion is durable across worker
+      // eviction, while the network drain remains best-effort in the background.
+      const queued = await queueCloudConversationDeletion(
+        delOwner,
+        delCloudMsg.cloudConversationId,
+        delCloudMsg.organizationId,
+      );
+      return queued
+        ? ({ success: true } as ExtensionResponse)
+        : ({ success: false, error: 'Could not queue account chat deletion' } as ExtensionResponse);
     }
 
     case 'AGI_START_COMPUTER_USE' as ExtensionMessage['type']: {
@@ -5115,6 +5208,18 @@ async function handleChatMessage(
               agentEvent: chunk.envelope,
               ...(chunk.durableReplay ? { durableReplay: true } : {}),
             }),
+          onGeneratedFiles: (chunk) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              generatedFiles: chunk.files,
+            }),
+          onInteractiveCard: (chunk) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              interactiveCard: chunk.card,
+            }),
           onRunReference: async (cloudRun) => {
             if (activeChatStreams.get(streamKey) !== activeStream) return;
             activeStream.cloudRun = { ...cloudRun };
@@ -5377,6 +5482,18 @@ async function handleResolveChatApproval(
                 agentEvent: chunk.envelope,
                 ...(chunk.durableReplay ? { durableReplay: true } : {}),
               }),
+            onGeneratedFiles: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                generatedFiles: chunk.files,
+              }),
+            onInteractiveCard: (chunk) =>
+              publishManagedChatChunk(streamKey, activeStream, id, {
+                text: '',
+                done: false,
+                interactiveCard: chunk.card,
+              }),
             onRunReference: (cloudRun) => {
               if (activeChatStreams.get(streamKey) !== activeStream) return;
               activeStream.cloudRun = { ...cloudRun };
@@ -5428,18 +5545,66 @@ async function handleResolveChatApproval(
  * browser automation, never chat inference, and there is no local or BYOK
  * fallback — a failed Managed Cloud turn surfaces its error.
  */
-async function handleInPagePrompt(prompt: string): Promise<string> {
-  const credential = await getManagedCloudAuthContext();
-  if (!credential || isRetiredManagedCloudOwner(credential.owner)) {
-    return 'Sign in to use AGI Cloud chat.';
+function inPagePromptFailure(
+  outcome: InPagePromptOutcome,
+  message: string,
+  retryable = false,
+): InPagePromptResponse {
+  return { success: false, outcome, message, retryable };
+}
+
+function mapInPagePromptFailure(
+  result: Extract<ChromeManagedChatResult, { status: 'error' }>,
+): InPagePromptResponse {
+  switch (result.code) {
+    case 'auth_required':
+      return inPagePromptFailure('signed_out', 'Sign in to use AGI Managed Cloud.');
+    case 'plan_required':
+      return inPagePromptFailure(
+        'plan_required',
+        'Managed Cloud chat is not available for this AGI account.',
+      );
+    case 'quota_exceeded':
+      return inPagePromptFailure(
+        'quota_exceeded',
+        'Your shared AGI Managed Cloud usage limit has been reached.',
+      );
+    case 'account_unavailable':
+      return inPagePromptFailure('account_unavailable', result.message, true);
+    case 'rate_limited':
+      return inPagePromptFailure('rate_limited', result.message, true);
+    case 'cancelled':
+      return inPagePromptFailure('cancelled', 'Request cancelled.');
+    case 'invalid_request':
+    case 'model_not_admitted':
+      return inPagePromptFailure('request_rejected', result.message);
+    default:
+      return inPagePromptFailure('retryable_error', result.message, true);
   }
-  let systemPrompt: string | undefined;
+}
+
+async function handleInPagePrompt(
+  prompt: string,
+  pageContext?: string,
+  senderUrl?: string,
+): Promise<InPagePromptResponse> {
+  if (!prompt.trim()) {
+    return inPagePromptFailure('request_rejected', 'Enter a question or choose a page action.');
+  }
+  let credential: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
   try {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (activeTab?.url) systemPrompt = getPlatformPrompt(activeTab.url) ?? undefined;
-  } catch {
-    // Optional platform context must not change the Managed Cloud boundary.
+    credential = await getManagedCloudAuthContext();
+  } catch (error) {
+    return inPagePromptFailure(
+      'account_unavailable',
+      error instanceof Error ? error.message : 'Could not verify the AGI account.',
+      true,
+    );
   }
+  if (!credential || isRetiredManagedCloudOwner(credential.owner)) {
+    return inPagePromptFailure('signed_out', 'Sign in to use AGI Managed Cloud.');
+  }
+  const systemPrompt = senderUrl ? (getPlatformPrompt(senderUrl) ?? undefined) : undefined;
 
   let responseText = '';
   const id = `in_page:${crypto.randomUUID()}`;
@@ -5459,6 +5624,7 @@ async function handleInPagePrompt(prompt: string): Promise<string> {
       {
         id,
         text: prompt,
+        pageContext,
         modelSelection: 'auto',
         systemPrompt,
         signal: activeStream.controller.signal,
@@ -5482,16 +5648,25 @@ async function handleInPagePrompt(prompt: string): Promise<string> {
     if (result.status === 'error' && result.code === 'auth_required') {
       await invalidateRejectedManagedCloudCredential(activeStream);
     }
+  } catch (error) {
+    return inPagePromptFailure(
+      'retryable_error',
+      error instanceof Error ? error.message : 'AGI Managed Cloud request failed.',
+      true,
+    );
   } finally {
     if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
   }
 
   if (result.status === 'success') {
-    return responseText || 'AGI Cloud completed the request without a text response.';
+    return {
+      success: true,
+      text: responseText || 'AGI Managed Cloud completed the request without a text response.',
+      provider: 'managed_cloud',
+      modelSelection: 'auto',
+    };
   }
-  if (result.code === 'auth_required') return 'Sign in to use AGI Cloud chat.';
-  if (result.code === 'quota_exceeded') return 'Your AGI Cloud usage limit has been reached.';
-  return result.message;
+  return mapInPagePromptFailure(result);
 }
 
 function isValidMessage(message: unknown): message is ExtensionMessage {
@@ -5512,7 +5687,27 @@ chrome.alarms.create('keep-alive', { periodInMinutes: 1.0 }, () => {
     logger.warn('Failed to create keep-alive alarm', chrome.runtime.lastError.message);
   }
 });
+
+// Durable catch-up for the account mirror. An MV3 worker can be evicted
+// mid-debounce, which would strand every pending conversation write; the sweep
+// re-derives the work from stored state instead of from memory.
+chrome.alarms.create(SYNC_SWEEP_ALARM, { periodInMinutes: 1.0 }, () => {
+  if (chrome.runtime.lastError) {
+    logger.warn('Failed to create conversation sync alarm', chrome.runtime.lastError.message);
+  }
+});
+void sweepConversationSync().catch((error) => {
+  logger.debug('Conversation sync sweep on worker start failed', error);
+});
+
 chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === SYNC_SWEEP_ALARM) {
+    void sweepConversationSync().catch((error) => {
+      logger.debug('Conversation sync sweep failed', error);
+    });
+    return;
+  }
+
   if (alarm.name === 'keep-alive') {
     logger.debug('Keeping service worker alive');
     void recoverScheduledTaskRuns().catch((error) => {

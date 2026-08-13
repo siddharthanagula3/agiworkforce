@@ -43,6 +43,10 @@ vi.mock('@/lib/server/object-storage', () => ({
     value.startsWith('https://cdn/') ? value.slice(12) : null,
   objectKeyFromStorageUri: (value: string) => value,
 }));
+vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  deleteProjectKnowledgeObject: (...args: unknown[]) => mocks.deleteObject(...args),
+  isProjectKnowledgeObjectStorageConfigured: () => mocks.objectStorageConfigured(),
+}));
 
 process.env['JWT_SECRET'] = 'test-developer-jwt-secret-at-least-32-bytes';
 
@@ -53,6 +57,7 @@ import {
   eraseUserAccountData,
 } from './account-erasure';
 import { POST as refreshDeviceSession } from '@/app/api/auth/device/refresh/route';
+import { CURRENT_TERMS_VERSION } from '@/lib/server/terms';
 
 /**
  * Columns that make a row personal to one account. A table carrying any of
@@ -228,6 +233,22 @@ describe('account erasure inventory', () => {
 
   it('deletes the profile row last', () => {
     expect(USER_SCOPED_TABLES.at(-1)).toEqual({ table: 'profiles', column: 'id' });
+  });
+
+  it('deletes account-owned plugin and native-store state rather than retaining it', () => {
+    const deleted = new Set(USER_SCOPED_TABLES.map((entry) => entry.table));
+    const retained = new Set(Object.keys(UNDELETED_USER_TABLES));
+    const anonymized = new Set(ANONYMIZED_USER_COLUMNS.map((entry) => entry.table));
+
+    for (const table of [
+      'plugin_installations',
+      'mobile_iap_transactions',
+      'mobile_iap_accounts',
+    ]) {
+      expect(deleted.has(table), `${table} must be erased with its owning account`).toBe(true);
+      expect(retained.has(table), `${table} must not survive account erasure`).toBe(false);
+      expect(anonymized.has(table), `${table} is not shared with another owner`).toBe(false);
+    }
   });
 });
 
@@ -498,6 +519,8 @@ describe('POST /api/auth/device/refresh', () => {
             revoked_at: null,
             owner_missing: owner.owner_missing,
             owner_deletion_scheduled_for: owner.deletionScheduledFor,
+            owner_terms_version: CURRENT_TERMS_VERSION,
+            owner_terms_accepted_at: new Date().toISOString(),
           },
         ];
       }

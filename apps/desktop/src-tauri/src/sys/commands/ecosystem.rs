@@ -315,7 +315,7 @@ fn imported_server_to_mcp_config(
             command: command.clone(),
             args: imported.args.clone(),
             env: imported.env.clone(),
-            enabled: true,
+            enabled: false,
             transport: None,
         }
     } else {
@@ -326,7 +326,7 @@ fn imported_server_to_mcp_config(
             command: String::new(),
             args: Vec::new(),
             env: HashMap::new(),
-            enabled: true,
+            enabled: false,
             transport: imported.url.clone().map(|url| {
                 crate::core::mcp::TransportConfig::Http(crate::core::mcp::HttpSseConfig {
                     url,
@@ -343,11 +343,12 @@ fn imported_server_to_mcp_config(
 /// used to be a pure scan-and-return function — the frontend showed
 /// "Imported N MCP server(s)" on success, but nothing was ever written
 /// anywhere and the live MCP client never learned about the scanned servers.
-/// It now persists every discovered server into the shared CLI dotfile
+/// It persists every discovered server into the shared CLI dotfile
 /// (`~/.agiworkforce/mcp.json`, via `McpServersConfig::write_dotfile_servers`
 /// — the same durable store `dotfile_add_mcp_server` uses) and reloads the
-/// live MCP client so the servers actually connect, matching what the
-/// success toast already claims.
+/// live MCP client's discovered configuration. Imported entries remain
+/// disabled: discovery is not approval to execute a local command or contact
+/// a remote endpoint.
 #[tauri::command]
 pub async fn import_ecosystem_mcp_servers(
     mcp_state: tauri::State<'_, crate::sys::commands::mcp::McpState>,
@@ -401,10 +402,8 @@ pub async fn import_ecosystem_mcp_servers(
 
         crate::core::mcp::config::McpServersConfig::write_dotfile_servers(&entries)?;
 
-        // Reload the live MCP client so the newly-persisted servers actually
-        // connect now, instead of only existing on disk until the next app
-        // restart — the exact gap that made the pre-fix version's success
-        // toast a lie.
+        // Reload discovery so Settings shows the persisted entries now. The
+        // user still connects each one explicitly after reviewing its target.
         mcp_state.reload_active_config(&app).await?;
     }
 

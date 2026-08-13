@@ -3,7 +3,7 @@
 Status: Current
 Owner: Founder + platform lead
 Last reviewed: 2026-07-11
-Last updated: 2026-08-05
+Last updated: 2026-08-13
 
 This is the conflict-resolution index for current product and architecture decisions. It is intentionally shorter than the archived PRD corpus.
 
@@ -39,8 +39,8 @@ Archived source material:
 3. The six-surface product boundary is Web, Desktop, Mobile, CLI, VS Code, and Chrome.
    Evidence: `docs/current/product-suite.md`, `docs/surfaces/*.md`, `PLAN.md`.
 
-4. Normal synced app chat is only for Web, Mobile, and Desktop. CLI, VS Code, and Chrome stay local/workspace/task scoped unless the user explicitly hands off selected, redacted context into a synced app chat.
-   Evidence: `docs/current/product-suite.md`, `PLAN.md`.
+4. Normal synced app chat is shared by Web, Mobile Cloud, and both Desktop Cloud shells. Chrome remains cloud-only and keeps `chrome.storage.local` authoritative, but every conversation whose turns all carry Managed Cloud provenance automatically mirrors into the same signed-in account conversation store so it is available on Web, Mobile Cloud, Tauri Cloud, and Electron Cloud. Unknown-provenance or any Local/BYOK turn fails closed and permanently disqualifies that Chrome conversation. CLI and VS Code remain local/workspace/task scoped unless the user explicitly hands off selected, redacted context. (Founder decision, 2026-08-13; supersedes Chrome's separate-store rule.)
+   Evidence: `docs/current/product-suite.md`, `docs/current/trust-mode-surface-matrix.md`, `apps/extension/THREAT_MODEL.md`.
 
 5. Mobile v1 ships as Local + Cloud; Mobile does not expose BYOK (see `docs/current/source-of-truth.md` surface roles — updated 2026-07-08; the earlier "Local + explicit BYOK" mobile wording was stale). Managed Cloud / AGI Compute Credits / subscriptions are in public alpha and open by default (founder decision 2026-06-27); the private-beta/waitlist launch gate is removed and `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an incident-response kill-switch only. Ledgering, payment rails, fraud, refund, chargeback, and provider-term controls must keep pace with public usage but no longer gate access; managed access stays subscription/entitlement-gated, and Local/BYOK are never silently routed into managed cloud. (Updated 2026-06-27: superseded the prior "remain waitlist or private beta until ... verified" wording.)
    Evidence: `docs/current/commercial-and-launch.md`, `docs/current/product-suite.md` (the profit-first enterprise-readiness doc was retired in `906fe5cda`; git history only).

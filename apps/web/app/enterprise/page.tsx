@@ -100,7 +100,7 @@ export default function EnterprisePage() {
             },
             {
               k: 'BYOK posture',
-              v: 'The strongest control available today, and it needs no feature work from us: every seat can run fully local, or on your own provider keys on Desktop and CLI, and no conversation content reaches AGI infrastructure at all. It is architecture rather than administration — there is no org-wide BYOK enforcement, so we cannot stop a member choosing managed cloud. Requiring it org-wide is a contract-scoped commitment.',
+              v: 'The strongest control available today, and it needs no feature work from us: every seat can run fully local, or on your own provider keys on Desktop, CLI, and VS Code, and no conversation content reaches AGI infrastructure at all. It is architecture rather than administration — there is no org-wide BYOK enforcement, so we cannot stop a member choosing managed cloud. Requiring it org-wide is a contract-scoped commitment.',
             },
             {
               k: 'Service levels',

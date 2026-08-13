@@ -75,9 +75,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     const nonce = getNonce();
     const initialMode = this._stateManager.mode ?? Config.agentMode();
     const initialEffort = this._stateManager.effort ?? Config.agentEffort();
-    const initialModel = normalizeConfiguredModelId(
-      vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-    );
+    const initialModel = normalizeConfiguredModelId(Config.model());
     const supportsEffort = this._stateManager.modelSupportsEffort(initialModel);
     webviewView.webview.html = getWebviewContent(
       webviewView.webview,
@@ -154,6 +152,11 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
   /** Push the current browser/device-auth state into the visible account control. */
   public pushAccountStatus(): void {
     void this._stateManager.pushAccountStatus();
+  }
+
+  /** Reconcile identity, plan usage, and the header boundary after auth changes. */
+  public refreshAccountPresentation(): void {
+    void this._stateManager.refreshAccountPresentation();
   }
 
   /** Replay the persisted first-run experience in an already-open sidebar. */

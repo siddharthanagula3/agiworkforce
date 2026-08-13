@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, ScrollView, View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { useNavigation } from '@react-navigation/native';
+// From `expo-router`, not `@react-navigation/native` — see the note in
+// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
+// navigation package, so the raw hook can land on a different context
+// instance than the one expo-router's navigator provides.
+import { useNavigation } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';

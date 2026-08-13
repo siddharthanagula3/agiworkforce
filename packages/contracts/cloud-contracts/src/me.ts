@@ -32,6 +32,12 @@ export const MePlanSchema = z.object({
   /** Unix seconds, or null when there is no active subscription period. */
   current_period_end: z.number().nullable(),
   /**
+   * True when the billing owner has accepted a cancellation that takes effect
+   * at `current_period_end`. Optional only for rollout compatibility with
+   * older `/api/me` deployments; the current route always emits it.
+   */
+  cancel_at_period_end: z.boolean().optional(),
+  /**
    * Billing owner for cross-platform management and duplicate-purchase
    * prevention. Optional only for rollout compatibility with older servers;
    * the current `/api/me` route always emits it.

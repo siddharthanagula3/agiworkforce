@@ -22,7 +22,8 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/server/media-storage', () => ({
   storeMedia: (...args: unknown[]) => mockStoreMedia(...args),
-  isMediaStorageConfigured: () => mockIsConfigured(),
+  deleteStoredMedia: vi.fn(),
+  isGeneratedMediaStorageConfigured: () => mockIsConfigured(),
 }));
 
 vi.mock('@/lib/server/media-assets', () => ({
@@ -60,8 +61,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockIsConfigured.mockReturnValue(true);
   mockStoreMedia.mockImplementation(async (p: { data: Buffer }) => ({
-    url: 'https://media.example/f',
-    pathname: 'media/f',
+    url: 'private-media/file/owner/f',
+    pathname: 'private-media/file/owner/f',
     byteSize: p.data.byteLength,
   }));
   mockInsertMediaAsset.mockResolvedValue('asset-1');

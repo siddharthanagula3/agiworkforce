@@ -1215,6 +1215,7 @@ pub fn run() {
             crate::sys::commands::agi_submit_goal,
             crate::sys::commands::agi_submit_goal_parallel,
             crate::sys::commands::agi_get_goal_status,
+            crate::sys::commands::agi_get_task_state,
             crate::sys::commands::agi_list_goals,
             crate::sys::commands::agi_cancel_goal,
             crate::sys::commands::agi_pause_goal,

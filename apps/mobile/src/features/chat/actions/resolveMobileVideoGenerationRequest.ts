@@ -1,4 +1,10 @@
 import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
+import {
+  MANAGED_MEDIA_VIDEO_ASPECT_RATIOS,
+  MANAGED_MEDIA_VIDEO_RESOLUTIONS,
+  type ManagedMediaVideoAspectRatio,
+  type ManagedMediaVideoResolution,
+} from '@agiworkforce/cloud-contracts';
 import { resolveMediaModelId } from './mediaMode';
 
 export type MobileVideoGenerationBlockCode =
@@ -25,10 +31,15 @@ export type MobileVideoGenerationRequestDecision =
       status: 'ready';
       prompt: string;
       model: string;
+      aspectRatio: ManagedMediaVideoAspectRatio;
+      resolution: ManagedMediaVideoResolution;
       ownerId: string;
     };
 
 export interface ResolveMobileVideoGenerationRequestInput {
+  /** Video output shape selected in the composer sheet. */
+  aspectRatio: string;
+  resolution: string;
   executionMode: 'local' | 'cloud';
   text: string;
   /** Composer output kind. 'video' means every send this turn is a video request. */
@@ -128,5 +139,24 @@ export function resolveMobileVideoGenerationRequest(
     return blocked('route_unavailable');
   }
 
-  return { status: 'ready', prompt, model: modelId, ownerId: input.ownerId };
+  return {
+    status: 'ready',
+    prompt,
+    model: modelId,
+    // The picker's values come from the model catalog, which is a wider type
+    // than the wire contract's literal unions. Narrow here instead of casting:
+    // an unrecognised value falls back to the route's own default rather than
+    // being sent and rejected.
+    aspectRatio: MANAGED_MEDIA_VIDEO_ASPECT_RATIOS.includes(
+      input.aspectRatio as ManagedMediaVideoAspectRatio,
+    )
+      ? (input.aspectRatio as ManagedMediaVideoAspectRatio)
+      : '16:9',
+    resolution: MANAGED_MEDIA_VIDEO_RESOLUTIONS.includes(
+      input.resolution as ManagedMediaVideoResolution,
+    )
+      ? (input.resolution as ManagedMediaVideoResolution)
+      : '720p',
+    ownerId: input.ownerId,
+  };
 }

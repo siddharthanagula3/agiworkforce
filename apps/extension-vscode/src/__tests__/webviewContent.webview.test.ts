@@ -108,7 +108,7 @@ describe('getWebviewContent — CSP', () => {
 });
 
 describe('getWebviewContent — structural smoke', () => {
-  it('presents chat as a local developer session without cloud-auth gating', () => {
+  it('presents workspace chat without a blanket cloud-auth gate', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
@@ -137,22 +137,29 @@ describe('getWebviewContent — structural smoke', () => {
       .map((style) => style.textContent ?? '')
       .join('\n');
 
-    // The pill's label and title are populated by updateRuntimePill() from the
-    // live usageMeter source (VSCX-06) — the markup no longer hardcodes a
-    // boundary, so this only asserts the element survives the narrow layout.
-    expect(doc.querySelector('.runtime-pill')).not.toBeNull();
-    expect(styles).not.toContain('.runtime-pill { display: none; }');
-    expect(styles).not.toContain('.provider-badge { display: none !important; }');
+    // One stable identity is recomputed from the live boundary and provider.
+    // It must survive the narrowest supported sidebar instead of splitting or
+    // hiding either routing fact in a second badge.
+    expect(doc.querySelector('#sessionIdentity')?.getAttribute('role')).toBe('status');
+    expect(doc.querySelector('#sessionIdentity')?.getAttribute('aria-live')).toBe('polite');
+    expect(doc.querySelector('.provider-badge')).toBeNull();
+    expect(doc.querySelector('#newChatBtn')).not.toBeNull();
+    expect(doc.querySelector('#actionsBtn')?.getAttribute('aria-label')).toBe('More actions');
+    expect(doc.querySelector('#accountBtn')).toBeNull();
+    expect(doc.querySelector('#historyBtn')).toBeNull();
     expect(styles).toContain(
-      '.header-left { gap: 4px; max-width: calc(100% - 112px); overflow: hidden; }',
+      '.header-left { gap: 4px; max-width: calc(100% - 64px); overflow: hidden; }',
     );
-    expect(styles).toContain('.runtime-pill { max-width: 66px;');
-    expect(styles).toContain('.provider-badge { max-width: 54px;');
+    expect(styles).toContain('.session-identity { max-width: calc(100vw - 108px); }');
     const scriptBody = Array.from(doc.querySelectorAll('script'))
       .map((script) => script.textContent ?? '')
       .join('\n');
-    expect(scriptBody).toContain('providerBadgeEl.title = providerLabel');
-    expect(scriptBody).toContain('updateRuntimePill(payload.source)');
+    expect(scriptBody).toContain('function renderSessionIdentity()');
+    expect(scriptBody).toContain(
+      "sessionProviderLabel.textContent = showProviderIdentity ? activeProviderIdentity : ''",
+    );
+    expect(scriptBody).toContain('function applyAuthoritativeSessionBoundary(trustMode, provider)');
+    expect(scriptBody).toContain("updateRuntimePill(trustMode === 'local'");
   });
 
   it('labels model, mode, effort, and the actual Enter shortcut without ambiguity', () => {
@@ -163,55 +170,57 @@ describe('getWebviewContent — structural smoke', () => {
       .join('\n');
 
     expect(doc.querySelector('#modelPill')?.textContent).toBe('Model · Auto');
-    expect(doc.querySelector('#modeChip')?.textContent).toContain('Mode ·');
-    expect(doc.querySelector('#effortChip')?.textContent).toContain('Effort ·');
+    expect(doc.querySelector('#controlsSummary')).not.toBeNull();
+    expect(doc.querySelector('#controlsSummary')?.getAttribute('title')).toBe(
+      'Mode and reasoning effort',
+    );
+    expect(doc.querySelector('#modeChip')).toBeNull();
+    expect(doc.querySelector('#effortChip')).toBeNull();
     expect(doc.querySelector('#composerHint')?.textContent).toContain('Enter to send');
     expect(doc.querySelector('#composerHint')?.textContent).toContain('Shift+Enter for newline');
     expect(scriptBody).toContain("'Model · ' +");
-    expect(scriptBody).toContain("'Mode · ' +");
-    expect(scriptBody).toContain("'Effort · ' +");
+    expect(scriptBody).toContain('function renderControlsSummary()');
+    expect(scriptBody).toContain("mode + ' · ' + effortShort");
+    expect(scriptBody).toContain("'Controls: ' + mode + ' mode'");
   });
 
-  it('colours code from the fixed panel palette and exposes Copy to keyboard focus', () => {
+  it('colours code from the shared host/fallback aliases and exposes Copy to keyboard focus', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const styles = Array.from(doc.querySelectorAll('style'))
       .map((style) => style.textContent ?? '')
       .join('\n');
 
-    // This asserted --vscode-textPreformat-foreground / -textCodeBlock-background
-    // until the 2026-07-27 founder decision fixed the panel palette so it renders
-    // identically in VS Code, Cursor, Windsurf and Antigravity. Host-themed text
-    // on a fixed background is precisely the mixed-family pairing that produced
-    // #ececec on pale yellow at ~1.10:1, and panelPaletteConsistency.test.ts now
-    // rejects it — so the old expectation had become the bug.
+    // Code follows the same host-derived surface/text aliases as the rest of the
+    // webview. Direct preformat tokens previously drifted from adjacent native
+    // views and could create unmatched foreground/background pairs.
     expect(styles).toContain('pre code { color: var(--text-primary)');
     expect(styles).toContain('pre { background: var(--bg-overlay)');
     expect(styles).not.toContain('var(--vscode-textPreformat-foreground');
     expect(styles).toContain('.copy-btn:focus-visible');
   });
 
-  it('exposes a visible AGI Cloud account control with signed-in and reconnect states', () => {
+  it('keeps account identity available while moving account and history behind More', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const scriptBody = Array.from(doc.querySelectorAll('script'))
       .map((script) => script.textContent ?? '')
       .join('\n');
 
-    expect(doc.querySelector('#accountBtn')?.getAttribute('aria-label')).toBe('AGI Cloud account');
-    expect(doc.querySelector('#accountStatusDot')).not.toBeNull();
-    expect(scriptBody).toContain("vscode.postMessage({ type: 'openAccount' })");
+    expect(doc.querySelector('#accountBtn')).toBeNull();
+    expect(doc.querySelector('#accountStatusDot')).toBeNull();
+    expect(doc.querySelector('#historyBtn')).toBeNull();
+    expect(doc.querySelector('#actionsBtn')?.getAttribute('title')).toBe('More');
+    expect(scriptBody).toContain("vscode.postMessage({ type: 'openActionSheet' })");
     expect(scriptBody).toContain("msg.type === 'accountStatus'");
-    expect(scriptBody).toContain("'Reconnect to AGI Cloud'");
     expect(scriptBody).toContain('activeAccountIdentity.displayName');
     expect(scriptBody).toContain('activeAccountIdentity.email');
-    expect(scriptBody).toContain('activeAccountIdentity.accountType');
     expect(scriptBody).toContain('activeAccountIdentity.planName');
-    expect(scriptBody).toContain("accountBtn.setAttribute('aria-label', accountBtn.title)");
+    expect(scriptBody).toContain("' · Account: ' + activeAccountIdentity.displayName");
     expect(scriptBody).toContain("' (not used for provider billing)'");
   });
 
-  it('provides an inline first-run recovery path for an unavailable local runtime', () => {
+  it('provides an inline first-run recovery path for an unavailable developer runtime', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const scriptBody = Array.from(doc.querySelectorAll('script'))
@@ -221,7 +230,12 @@ describe('getWebviewContent — structural smoke', () => {
     expect(doc.querySelector('#runtimeStatus')?.getAttribute('role')).toBe('status');
     expect(doc.querySelector('#runtimeSettingsBtn')?.textContent).toContain('Open setup');
     expect(scriptBody).toContain("msg.type === 'runtimeStatus'");
-    expect(scriptBody).toContain("vscode.postMessage({ type: 'openSettings' })");
+    expect(scriptBody).toContain(
+      'No workspace prompt will be sent until the protocol-7 runtime connects.',
+    );
+    expect(scriptBody).toContain("runtimeSettingsBtn.addEventListener('click'");
+    expect(scriptBody).toContain("runtimeBlock === 'workspace-required'");
+    expect(scriptBody).toContain(": 'openSettings'");
   });
 
   it('keeps async chat updates announced and exposes keyboard-native popup controls', () => {
@@ -253,14 +267,17 @@ describe('getWebviewContent — structural smoke', () => {
       'edit files, run commands, and test this workspace',
     );
     expect(doc.querySelector('#composerHint')?.textContent).toContain('to send');
-    expect(doc.querySelector('#plusMenuLabel')?.textContent).toBe('Add to this chat');
+    expect(doc.querySelector('#plusMenuLabel')?.textContent).toBe('Add workspace context');
     expect(doc.querySelector('#plusMenuUpload')?.textContent).toContain('Workspace files');
     expect(doc.querySelector('#plusMenuBrowse')?.textContent).toContain('Browse the web');
     expect(doc.querySelector('#plusMenuBrowse')?.textContent).toContain(
       'Local privacy mode refuses network',
     );
     expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Plan mode');
-    expect(doc.querySelector('#plusMenuActions')?.textContent).toContain('Tools and actions');
+    // Mode and effort stay as a direct, compact composer control instead of
+    // being duplicated inside the attachment menu.
+    expect(doc.querySelector('#controlsSummary')).not.toBeNull();
+    expect(doc.querySelector('#plusMenuActions')).toBeNull();
   });
 
   it('keeps the primary composer controls on-screen in a narrow VS Code sidebar', () => {
@@ -271,10 +288,14 @@ describe('getWebviewContent — structural smoke', () => {
       .join('\n');
 
     expect(styles).toContain('@media (max-width: 480px)');
-    expect(styles).toMatch(
-      /\.mode-chip,\s*\.effort-chip\s*\{\s*display:\s*none\s*!important;\s*\}/,
-    );
-    expect(doc.querySelector('#plusMenuActions')?.textContent).toContain('Models, reasoning');
+    expect(styles).toContain('@media (max-width: 380px)');
+    expect(styles).toContain('.composer-card.is-streaming .controls-summary { display: none; }');
+    expect(styles).not.toMatch(/(?:^|\n)\s*\.controls-summary \{ display: none; \}/);
+    expect(styles).toContain('.controls-summary { max-width: 86px; }');
+    expect(styles).toContain('.controls-summary { max-width: 72px; }');
+    expect(styles).toContain('.composer-card.is-streaming .controls-summary { display: none; }');
+    expect(doc.querySelector('#controlsSummary')).not.toBeNull();
+    expect(doc.querySelector('#plusMenuActions')).toBeNull();
   });
 
   it('submits an attachment-only turn with a visible trusted prompt', () => {
@@ -363,16 +384,22 @@ describe('getWebviewContent — structural smoke', () => {
     expect(scriptBody).toContain('opt.dataset.displayLabel || opt.text');
   });
 
-  it('renders the host-provided Auto routing identity without claiming a provider', () => {
+  it('renders host-provided provider routing inside the stable session identity', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
     const scriptBody = Array.from(doc.querySelectorAll('script'))
       .map((script) => script.textContent ?? '')
       .join('\n');
 
-    expect(scriptBody).toContain('providerBadgeDotEl.style.background = brandColor');
-    expect(scriptBody).toContain("providerBadgeEl.style.background = 'var(--bg-overlay)'");
-    expect(scriptBody).toContain("providerBadgeEl.style.display = 'inline-flex'");
+    expect(doc.querySelector('#sessionBoundaryLabel')).not.toBeNull();
+    expect(doc.querySelector('#sessionProviderLabel')).not.toBeNull();
+    expect(scriptBody).toContain("activeProviderIdentity = providerLabel || ''");
+    expect(scriptBody).toContain(
+      "sessionProviderLabel.textContent = showProviderIdentity ? activeProviderIdentity : ''",
+    );
+    expect(scriptBody).toContain("sessionIdentity.setAttribute('data-boundary', spec.boundary)");
+    expect(scriptBody).not.toContain('providerBadgeDotEl');
+    expect(scriptBody).not.toContain('providerBadgeEl.style');
   });
 
   it('nonce is present on style and script tags', () => {

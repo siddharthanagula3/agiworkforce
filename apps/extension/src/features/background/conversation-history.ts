@@ -1,9 +1,17 @@
 import {
   AgentEventEnvelopeSchema,
   ManagedCloudAgentRunReferenceSchema,
+  parseGeneratedFilesDelta,
+  readPersistedInteractiveCards,
+  type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
-import type { Effort, RoutingTaskType } from '@agiworkforce/types';
+import {
+  getModelMetadataById,
+  type Effort,
+  type InteractiveCard,
+  type RoutingTaskType,
+} from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import {
   normalizeManagedCloudOwner,
@@ -12,7 +20,7 @@ import {
   type ManagedCloudOwner,
 } from '../cloud-bridge/managedCloudAuthority';
 
-const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
+export const BROWSER_STORE_KEY = 'agi_browser_conversations_v2';
 const LEGACY_BROWSER_STORE_KEY = 'agi_browser_conversations_v1';
 const LEGACY_HISTORY_KEY = 'agi_conversation_history';
 const LEGACY_ACTIVE_MESSAGES_KEY = 'agi_side_panel_messages';
@@ -28,6 +36,7 @@ const MAX_NORMALIZED_STORE_CONTENT_CHARS = 3 * 1024 * 1024;
 const MAX_NORMALIZED_CONVERSATION_CONTENT_CHARS = 768 * 1024;
 const MAX_STORED_AGENT_EVENTS_PER_MESSAGE = 200;
 const MAX_STORED_AGENT_EVENTS_TOTAL = 1_000;
+const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
 const MAX_AGENT_EVENT_SERIALIZED_CHARS = 32_000;
 const MAX_AGENT_EVENT_SERIALIZED_CHARS_TOTAL = 512 * 1024;
 const TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -43,6 +52,26 @@ const BACKGROUND_DELIVERY_ID_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 export const BACKGROUND_ANSWER_TRUNCATION_NOTICE =
   '\n\n[Answer truncated because it exceeded the browser-local history limit.]';
 
+/**
+ * Bookkeeping bounds for the account-backed conversation mirror.
+ *
+ * These are deliberately fixed-size: they must never consume the content
+ * budget in `HistoryNormalizationBudget`, or turning cloud sync on would start
+ * evicting real messages.
+ */
+const MAX_CLOUD_SYNC_ERROR_CHARS = 200;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Which runtime actually produced a turn.
+ *
+ * This is provenance, not a preference: it is stamped at the point of dispatch
+ * by whichever code path executed the turn. It is the sole gate on account-
+ * backed persistence, so it must never be inferred, defaulted, or backfilled.
+ * An absent value means "unknown", which fails closed (never synced).
+ */
+export type ConversationRuntime = 'managed-cloud' | 'local';
+
 export interface HistoryMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -55,6 +84,57 @@ export interface HistoryMessage {
   cloudApprovalError?: string;
   /** The assistant turn used the per-request Quick overlay, not durable routing. */
   managedQuickMode?: boolean;
+  /** Exact catalog route that produced this assistant turn. */
+  model?: string;
+  /** Canonical provider for `model`, re-derived from the catalog on restore. */
+  provider?: string;
+  /** Validated durable descriptors emitted by `x_generated_files`. */
+  generatedFiles?: GeneratedFileWire[];
+  /** Validated durable card envelopes emitted by `x_interactive_card`. */
+  interactiveCards?: InteractiveCard[];
+  /**
+   * Runtime that actually produced this turn. Absent = unknown = never eligible
+   * for cloud persistence. Messages written before account-backed mirroring
+   * shipped therefore stay browser-local forever, by design.
+   */
+  runtime?: ConversationRuntime;
+  /** Server-side `web_messages.id` (UUID). Minted lazily at the first sync attempt. */
+  cloudMessageId?: string;
+  /** Wall-clock time the cloud accepted this exact content. */
+  cloudSyncedAt?: number;
+  /** `content.length` at the moment of acceptance; a mismatch means "dirty, re-send". */
+  cloudSyncedChars?: number;
+  /** Compact change detector for all fields mirrored in the cloud message payload. */
+  cloudSyncedFingerprint?: string;
+}
+
+/**
+ * Per-conversation mirror bookkeeping.
+ *
+ * The local record stays authoritative; this is only what we know about the
+ * replica. `blockedReason: 'non-cloud-runtime'` is STICKY — a Local/BYOK turn
+ * permanently disqualifies the thread and can never be cleared, which is what
+ * makes the trust-boundary rule enforceable rather than advisory.
+ */
+export interface ConversationCloudSyncState {
+  /** `web_conversations.id` (UUID). Minted when the first create is claimed. */
+  conversationId?: string;
+  /**
+   * Server-confirmed workspace owning the replica. `null` is Personal;
+   * `undefined` is an older/unacknowledged binding and must never be used for
+   * a mutation whose scope could follow the account's current workspace.
+   */
+  organizationId?: string | null;
+  /** False only while the first idempotent create has not been acknowledged. */
+  createAcknowledged?: boolean;
+  /** Title last accepted by the server, so an update is only sent when it changed. */
+  syncedTitle?: string;
+  state: 'idle' | 'pending' | 'error' | 'blocked';
+  blockedReason?: 'non-cloud-runtime' | 'auth' | 'not-found' | 'workspace';
+  lastError?: string;
+  lastAttemptAt?: number;
+  /** Local backoff floor for 429/5xx. The shared client does not retry 4xx. */
+  retryAfter?: number;
 }
 
 export interface ConversationEntry {
@@ -65,6 +145,8 @@ export interface ConversationEntry {
   messages: HistoryMessage[];
   savedAt: number;
   routing: ConversationRoutingState;
+  /** Account-mirror bookkeeping. Absent until the first automatic sync attempt. */
+  cloudSync?: ConversationCloudSyncState;
 }
 
 export interface ConversationRoutingState {
@@ -82,6 +164,11 @@ export interface BackgroundTurn {
   timestamp?: number;
   /** Shared by both messages so a restarted worker cannot append the turn twice. */
   deliveryId?: string;
+  /**
+   * Runtime that produced `answer`. Required for cloud eligibility; an omitted
+   * value means the turn is never mirrored to the account.
+   */
+  runtime?: ConversationRuntime;
 }
 
 export interface BackgroundTurnAppendResult {
@@ -300,6 +387,55 @@ function normalizeHistoryMessage(
       normalized.cloudApprovalError = message['cloudApprovalError'];
     }
     if (message['managedQuickMode'] === true) normalized.managedQuickMode = true;
+    if (isSafeModelReference(message['model'])) {
+      const modelMetadata = getModelMetadataById(message['model']);
+      // Chrome's managed router admits catalog models only. Re-derive the
+      // provider from that catalog instead of trusting a mutable storage field.
+      if (modelMetadata) {
+        normalized.model = message['model'];
+        normalized.provider = modelMetadata.provider;
+      }
+    }
+    const rawGeneratedFiles = message['generatedFiles'];
+    const generatedFiles = parseGeneratedFilesDelta({
+      files: Array.isArray(rawGeneratedFiles)
+        ? rawGeneratedFiles.slice(0, MAX_STORED_GENERATED_FILES_PER_MESSAGE)
+        : [],
+    });
+    if (generatedFiles.length > 0) normalized.generatedFiles = generatedFiles;
+    const interactiveCards = readPersistedInteractiveCards({
+      interactiveCards: message['interactiveCards'],
+    });
+    if (interactiveCards.length > 0) normalized.interactiveCards = interactiveCards;
+  }
+  // Cloud-mirror bookkeeping. Every field here is DROPPED on an unrecognized
+  // value rather than rejected: `normalizeConversationEntry` discards the whole
+  // conversation when any message fails to normalize, so a corrupt
+  // `cloudMessageId` must degrade the message to "unsynced" (it will be re-sent
+  // under a fresh id) instead of destroying the user's transcript.
+  if (message['runtime'] === 'managed-cloud' || message['runtime'] === 'local') {
+    normalized.runtime = message['runtime'];
+  }
+  if (
+    typeof message['cloudMessageId'] === 'string' &&
+    UUID_PATTERN.test(message['cloudMessageId'])
+  ) {
+    normalized.cloudMessageId = message['cloudMessageId'];
+  }
+  if (typeof message['cloudSyncedAt'] === 'number' && Number.isFinite(message['cloudSyncedAt'])) {
+    normalized.cloudSyncedAt = message['cloudSyncedAt'];
+  }
+  if (
+    typeof message['cloudSyncedChars'] === 'number' &&
+    Number.isFinite(message['cloudSyncedChars'])
+  ) {
+    normalized.cloudSyncedChars = message['cloudSyncedChars'];
+  }
+  if (
+    typeof message['cloudSyncedFingerprint'] === 'string' &&
+    /^[0-9]+:[0-9a-f]{8}:[0-9a-f]{8}$/.test(message['cloudSyncedFingerprint'])
+  ) {
+    normalized.cloudSyncedFingerprint = message['cloudSyncedFingerprint'];
   }
   return normalized;
 }
@@ -357,6 +493,88 @@ function normalizeRoutingState(value: unknown): ConversationRoutingState {
   return normalized;
 }
 
+/**
+ * Validate the cloud-mirror bookkeeping attached to a stored conversation.
+ *
+ * Same discipline as the message normalizer: anything unrecognized is dropped,
+ * never rejected. Losing the binding costs one duplicate cloud conversation;
+ * rejecting the entry would cost the user their chat.
+ */
+function normalizeCloudSyncState(value: unknown): ConversationCloudSyncState | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const state =
+    raw['state'] === 'pending' || raw['state'] === 'error' || raw['state'] === 'blocked'
+      ? raw['state']
+      : 'idle';
+  const normalized: ConversationCloudSyncState = { state };
+  if (typeof raw['conversationId'] === 'string' && UUID_PATTERN.test(raw['conversationId'])) {
+    normalized.conversationId = raw['conversationId'];
+  }
+  if (
+    raw['organizationId'] === null ||
+    (typeof raw['organizationId'] === 'string' && UUID_PATTERN.test(raw['organizationId']))
+  ) {
+    normalized.organizationId = raw['organizationId'];
+  }
+  if (typeof raw['createAcknowledged'] === 'boolean') {
+    normalized.createAcknowledged = raw['createAcknowledged'];
+  }
+  if (
+    typeof raw['syncedTitle'] === 'string' &&
+    raw['syncedTitle'].length > 0 &&
+    raw['syncedTitle'].length <= MAX_CONVERSATION_TITLE_CHARS &&
+    !containsControlCharacter(raw['syncedTitle'])
+  ) {
+    normalized.syncedTitle = raw['syncedTitle'];
+  }
+  if (
+    raw['blockedReason'] === 'non-cloud-runtime' ||
+    raw['blockedReason'] === 'auth' ||
+    raw['blockedReason'] === 'not-found' ||
+    raw['blockedReason'] === 'workspace'
+  ) {
+    normalized.blockedReason = raw['blockedReason'];
+  }
+  if (typeof raw['lastError'] === 'string' && raw['lastError'].length > 0) {
+    const bounded = boundCloudSyncErrorText(raw['lastError']);
+    if (bounded) normalized.lastError = bounded;
+  }
+  if (typeof raw['lastAttemptAt'] === 'number' && Number.isFinite(raw['lastAttemptAt'])) {
+    normalized.lastAttemptAt = raw['lastAttemptAt'];
+  }
+  if (typeof raw['retryAfter'] === 'number' && Number.isFinite(raw['retryAfter'])) {
+    normalized.retryAfter = raw['retryAfter'];
+  }
+  // Nothing worth persisting: an all-defaults record only adds storage bytes.
+  const isEmpty =
+    normalized.state === 'idle' &&
+    normalized.conversationId === undefined &&
+    normalized.organizationId === undefined &&
+    normalized.createAcknowledged === undefined &&
+    normalized.syncedTitle === undefined &&
+    normalized.blockedReason === undefined &&
+    normalized.lastError === undefined &&
+    normalized.lastAttemptAt === undefined &&
+    normalized.retryAfter === undefined;
+  return isEmpty ? undefined : normalized;
+}
+
+/** Strip control characters and bound an error string before it reaches storage. */
+function boundCloudSyncErrorText(value: string): string | undefined {
+  let stripped = '';
+  for (
+    let index = 0;
+    index < value.length && stripped.length < MAX_CLOUD_SYNC_ERROR_CHARS;
+    index += 1
+  ) {
+    const code = value.charCodeAt(index);
+    stripped += code <= 0x1f || code === 0x7f ? ' ' : value[index];
+  }
+  const trimmed = stripped.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function normalizeConversationEntry(
   value: unknown,
   budget: HistoryNormalizationBudget,
@@ -383,13 +601,15 @@ function normalizeConversationEntry(
   if (messages.length !== rawMessages.length) return undefined;
   const title = entry['title'].trim();
   if (!title) return undefined;
-  const normalized = {
+  const cloudSync = normalizeCloudSyncState(entry['cloudSync']);
+  const normalized: ConversationEntry = {
     id: entry['id'],
     owner,
     title,
     messages,
     savedAt: entry['savedAt'],
     routing: normalizeRoutingState(entry['routing']),
+    ...(cloudSync ? { cloudSync } : {}),
   };
   commitHistoryNormalizationBudget(budget, entryBudget);
   return normalized;
@@ -431,6 +651,60 @@ function normalizeMessages(
   }
   normalized.reverse();
   return normalized;
+}
+
+/**
+ * Re-attach cloud-sync bookkeeping (and provenance) from the stored entry onto
+ * an incoming message array.
+ *
+ * `upsertConversation` replaces `entry.messages` wholesale from the side
+ * panel's 50-message window, and the panel knows nothing about
+ * `cloudMessageId`. Without this, every save would look like "nothing has ever
+ * been synced" and re-POST the entire thread under fresh ids.
+ *
+ * Matching is on (role, timestamp): the panel assigns `timestamp` once at push
+ * time and never changes it, whereas `content` mutates on every stream chunk —
+ * so content cannot be part of the key.
+ *
+ * `cloudSyncedChars` is carried verbatim on purpose. If the message grew since
+ * it was accepted, the recorded length no longer matches the current content
+ * and the sync worker re-sends it under the SAME `cloudMessageId`, which the
+ * server upserts (`on conflict (id) do update`) instead of duplicating.
+ */
+function carryForwardCloudSyncState(
+  existing: readonly HistoryMessage[],
+  incoming: HistoryMessage[],
+): HistoryMessage[] {
+  if (existing.length === 0) return incoming;
+  const byKey = new Map<string, HistoryMessage>();
+  for (const message of existing) {
+    byKey.set(`${message.role}:${message.timestamp}`, message);
+  }
+  return incoming.map((message) => {
+    const prior = byKey.get(`${message.role}:${message.timestamp}`);
+    if (!prior) return message;
+    return {
+      ...message,
+      // Provenance is carried forward when the incoming copy omits it. This is
+      // what lets a restored-from-history conversation keep its eligibility
+      // instead of failing closed on every restore.
+      ...(message.runtime === undefined && prior.runtime !== undefined
+        ? { runtime: prior.runtime }
+        : {}),
+      ...(message.cloudMessageId === undefined && prior.cloudMessageId !== undefined
+        ? { cloudMessageId: prior.cloudMessageId }
+        : {}),
+      ...(message.cloudSyncedAt === undefined && prior.cloudSyncedAt !== undefined
+        ? { cloudSyncedAt: prior.cloudSyncedAt }
+        : {}),
+      ...(message.cloudSyncedChars === undefined && prior.cloudSyncedChars !== undefined
+        ? { cloudSyncedChars: prior.cloudSyncedChars }
+        : {}),
+      ...(message.cloudSyncedFingerprint === undefined && prior.cloudSyncedFingerprint !== undefined
+        ? { cloudSyncedFingerprint: prior.cloudSyncedFingerprint }
+        : {}),
+    };
+  });
 }
 
 function pruneExpired(entries: ConversationEntry[]): ConversationEntry[] {
@@ -629,6 +903,20 @@ function fitConversationEntryToBudget(entry: ConversationEntry): ConversationEnt
   return serializedByteLength(fitted) <= MAX_CONVERSATION_ENTRY_BYTES ? fitted : undefined;
 }
 
+/**
+ * STORAGE PRESSURE ONLY — NEVER A CLOUD SIGNAL.
+ *
+ * Everything this function drops (30-day TTL, the 1 MiB per-entry cap, the
+ * 4 MiB store cap) is an eviction forced by `chrome.storage.local` quota, not
+ * an expression of user intent. Do NOT hang "mirror local state to the cloud"
+ * logic off `writeStore` or off this function: doing so silently converts quota
+ * pressure into permanent deletion of the account-side replica, which is the
+ * longer-lived copy the user is relying on.
+ *
+ * Cloud DELETEs originate from exactly one place: an explicit user deletion via
+ * `deleteConversation`, whose returned `cloudConversationId` is the only handle
+ * any caller is given.
+ */
 function boundConversationStoreForWrite(store: BrowserConversationStore): BrowserConversationStore {
   const candidates = pruneExpired(store.conversations)
     .slice(0, MAX_CONVERSATIONS)
@@ -754,18 +1042,25 @@ export async function appendBackgroundTurn(
   if (answer.length === 0) return undefined;
 
   const at = turn.timestamp ?? Date.now();
+  const assistantModel =
+    routing.currentModelKey && routing.currentModelKey !== 'auto'
+      ? getModelMetadataById(routing.currentModelKey)
+      : undefined;
   const appended: HistoryMessage[] = [
     {
       role: 'user',
       content: turn.prompt,
       timestamp: at,
       ...(turn.deliveryId ? { backgroundDeliveryId: turn.deliveryId } : {}),
+      ...(turn.runtime ? { runtime: turn.runtime } : {}),
     },
     {
       role: 'assistant',
       content: answer,
       timestamp: at + 1,
       ...(turn.deliveryId ? { backgroundDeliveryId: turn.deliveryId } : {}),
+      ...(turn.runtime ? { runtime: turn.runtime } : {}),
+      ...(assistantModel ? { model: assistantModel.id, provider: assistantModel.provider } : {}),
     },
   ];
 
@@ -791,9 +1086,15 @@ export async function appendBackgroundTurn(
       existing && turn.deliveryId
         ? existing.messages.filter((message) => message.backgroundDeliveryId !== turn.deliveryId)
         : (existing?.messages ?? []);
-    const messages = normalizeMessages([...retainedMessages, ...appended]).slice(
+    const normalizedMessages = normalizeMessages([...retainedMessages, ...appended]).slice(
       -MAX_BACKGROUND_MESSAGES,
     );
+    // A retried delivery rewrites the same (role, timestamp) pair, so carry the
+    // prior `cloudMessageId` forward. Otherwise the retry would mint fresh ids
+    // and the account would end up with two copies of one background turn.
+    const messages = existing
+      ? carryForwardCloudSyncState(existing.messages, normalizedMessages)
+      : normalizedMessages;
     const entry: ConversationEntry = {
       id: conversationId,
       owner: { ...owner },
@@ -801,6 +1102,9 @@ export async function appendBackgroundTurn(
       messages,
       savedAt: Date.now(),
       routing: normalizeRoutingState(routing),
+      // Preserve the existing cloud binding: this entry is rebuilt from
+      // scratch, so without this the thread would be re-created in the account.
+      ...(existing?.cloudSync ? { cloudSync: existing.cloudSync } : {}),
     };
     store.conversations = [
       entry,
@@ -848,7 +1152,13 @@ function normalizeBackgroundAnswer(value: string): string {
   return `${prefix.trimEnd()}${BACKGROUND_ANSWER_TRUNCATION_NOTICE}`;
 }
 
-/** Save an independent archived browser conversation. */
+/**
+ * Save an independent archived browser conversation.
+ *
+ * NOT a production path — no caller outside the test suite. It is deliberately
+ * left without cloud-mirror semantics (no carry-forward, no binding): teaching
+ * it sync would ship a cloud write path that nothing exercises in production.
+ */
 export async function saveConversation(
   owner: ManagedCloudOwner,
   messages: HistoryMessage[],
@@ -888,15 +1198,22 @@ export async function upsertConversation(
     const existing = store.conversations.find(
       (entry) => entry.id === conversationId && sameManagedCloudOwner(entry.owner, owner),
     );
+    // The panel sends a plain transcript window with no cloud bookkeeping, so
+    // re-attach what the stored record already knows before it is overwritten.
+    const carried = existing
+      ? carryForwardCloudSyncState(existing.messages, normalizedMessages)
+      : normalizedMessages;
     const entry: ConversationEntry = existing
       ? {
+          // `cloudSync` survives via this spread — the explicit fields below
+          // must never shadow it.
           ...existing,
-          title: deriveTitle(normalizedMessages),
-          messages: normalizedMessages,
+          title: deriveTitle(carried),
+          messages: carried,
           savedAt: Date.now(),
           routing: normalizeRoutingState(routing),
         }
-      : createConversation(owner, normalizedMessages, routing, conversationId);
+      : createConversation(owner, carried, routing, conversationId);
     store.activeConversationId = conversationId;
     store.activeOwner = { ...owner };
     store.conversations = [
@@ -943,7 +1260,14 @@ export async function persistConversationSeed(
   });
 }
 
-/** Persist the current Chrome conversation, updating its existing record in place. */
+/**
+ * Persist the current Chrome conversation, updating its existing record in
+ * place.
+ *
+ * NOT a production path (see `saveConversation`) — the side panel uses
+ * `upsertConversation`, which is the only writer that carries cloud-mirror
+ * bookkeeping forward.
+ */
 export async function saveActiveConversation(
   owner: ManagedCloudOwner,
   messages: HistoryMessage[],
@@ -1078,13 +1402,36 @@ export async function getConversation(
   );
 }
 
-export async function deleteConversation(owner: ManagedCloudOwner, id: string): Promise<void> {
+export interface ConversationDeletionRecord {
+  /**
+   * Present only when the deleted thread had a cloud replica the caller must
+   * also delete. This is the ONLY handle any code is given for a cloud DELETE —
+   * see the note on `boundConversationStoreForWrite` for why quota eviction
+   * must never produce one.
+   */
+  cloudConversationId?: string;
+  /** Stable scope for the remote delete; null means Personal. */
+  organizationId?: string | null;
+}
+
+/**
+ * Delete a browser conversation the caller owns.
+ *
+ * Returns `undefined` when nothing was deleted, preserving the previous no-op
+ * behavior for a missing or unowned id.
+ */
+export async function deleteConversation(
+  owner: ManagedCloudOwner,
+  id: string,
+): Promise<ConversationDeletionRecord | undefined> {
   assertManagedCloudOwner(owner);
-  await mutateStore(async (store) => {
-    const ownsTarget = store.conversations.some(
+  return mutateStore(async (store) => {
+    const target = store.conversations.find(
       (entry) => entry.id === id && sameManagedCloudOwner(entry.owner, owner),
     );
-    if (!ownsTarget) return;
+    if (!target) return undefined;
+    const cloudConversationId = target.cloudSync?.conversationId;
+    const organizationId = target.cloudSync?.organizationId;
     store.conversations = store.conversations.filter(
       (entry) => entry.id !== id || !sameManagedCloudOwner(entry.owner, owner),
     );
@@ -1093,5 +1440,272 @@ export async function deleteConversation(owner: ManagedCloudOwner, id: string): 
       store.activeOwner = null;
     }
     await writeStore(store);
+    return cloudConversationId && organizationId !== undefined
+      ? { cloudConversationId, organizationId }
+      : {};
   });
+}
+
+// ─── Account-backed mirror bookkeeping ─────────────────────────────────────
+//
+// None of the functions below perform network I/O, and none of them may ever
+// start doing so: they all run inside `mutateStore`, which holds the
+// `navigator.locks` conversation-store lock. An HTTP round trip taken while
+// holding that lock would stall the other extension context's chat writes for
+// the duration of the request.
+
+/**
+ * True when every message in the thread carries Managed Cloud provenance and
+ * the thread has not been stickily disqualified.
+ *
+ * Fails closed on an empty transcript and on any message with no `runtime`
+ * stamp (pre-feature records, and anything a future code path forgets to
+ * stamp).
+ */
+export function isCloudPersistenceEligible(entry: ConversationEntry): boolean {
+  if (entry.cloudSync?.blockedReason === 'non-cloud-runtime') return false;
+  if (entry.messages.length === 0) return false;
+  return entry.messages.every((message) => message.runtime === 'managed-cloud');
+}
+
+/**
+ * Non-cryptographic, compact change detector for the exact durable projection.
+ * Two independent 32-bit accumulators make accidental collisions negligible;
+ * this is only dirty-state bookkeeping, never a security or integrity check.
+ */
+export function cloudMessageSyncFingerprint(message: HistoryMessage): string {
+  const serialized = JSON.stringify({
+    role: message.role,
+    content: message.content,
+    managedQuickMode: message.managedQuickMode === true,
+    cloudAgentRunId: message.cloudAgentRun?.runId,
+    model: message.model,
+    provider: message.provider,
+    generatedFiles: message.generatedFiles,
+    interactiveCards: message.interactiveCards,
+  });
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < serialized.length; index += 1) {
+    const code = serialized.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return `${serialized.length}:${(first >>> 0).toString(16).padStart(8, '0')}:${(second >>> 0)
+    .toString(16)
+    .padStart(8, '0')}`;
+}
+
+/**
+ * Messages that still owe the cloud a write: non-empty content, and either
+ * never accepted or accepted with any different mirrored content/metadata.
+ */
+export function pendingCloudMessages(entry: ConversationEntry): HistoryMessage[] {
+  return entry.messages.filter(
+    (message) =>
+      message.content.trim().length > 0 &&
+      (message.cloudSyncedAt === undefined ||
+        message.cloudSyncedChars !== message.content.length ||
+        message.cloudSyncedFingerprint !== cloudMessageSyncFingerprint(message)),
+  );
+}
+
+/**
+ * Read-only scan backing the worker's catch-up sweep.
+ */
+export async function listConversationsNeedingCloudSync(
+  owner: ManagedCloudOwner,
+): Promise<ConversationEntry[]> {
+  assertManagedCloudOwner(owner);
+  const now = Date.now();
+  return (await readAfterMutations()).conversations.filter((entry) => {
+    if (!sameManagedCloudOwner(entry.owner, owner)) return false;
+    if (!isCloudPersistenceEligible(entry)) return false;
+    if (entry.cloudSync?.retryAfter !== undefined && entry.cloudSync.retryAfter > now) return false;
+    if (
+      entry.cloudSync?.blockedReason === 'not-found' ||
+      entry.cloudSync?.blockedReason === 'workspace'
+    ) {
+      return false;
+    }
+    return (
+      pendingCloudMessages(entry).length > 0 ||
+      (entry.cloudSync?.conversationId !== undefined &&
+        (entry.cloudSync.syncedTitle !== entry.title ||
+          entry.cloudSync.organizationId === undefined ||
+          entry.cloudSync.createAcknowledged !== true))
+    );
+  });
+}
+
+/**
+ * Bind a local conversation to a cloud UUID and mint a `cloudMessageId` for
+ * every message that lacks one.
+ *
+ * Idempotent by construction: an existing binding is returned unchanged, so two
+ * concurrent flushes cannot create two cloud rows for one thread. Minting is
+ * lazy, so empty and provenance-ineligible threads do not consume bookkeeping
+ * space in the 4 MiB local budget.
+ *
+ * Returns `undefined` when the thread is missing or not cloud-eligible.
+ */
+export async function claimCloudConversationBinding(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  mintCloudConversationId: () => string,
+): Promise<ConversationEntry | undefined> {
+  assertManagedCloudOwner(owner);
+  if (!isSafeConversationId(conversationId)) return undefined;
+  return mutateStore(async (store) => {
+    const index = store.conversations.findIndex(
+      (entry) => entry.id === conversationId && sameManagedCloudOwner(entry.owner, owner),
+    );
+    const existing = index >= 0 ? store.conversations[index] : undefined;
+    if (!existing || index < 0) return undefined;
+    if (!isCloudPersistenceEligible(existing)) return undefined;
+
+    const hadBinding = existing.cloudSync?.conversationId !== undefined;
+    const minted = existing.cloudSync?.conversationId ?? mintCloudConversationId();
+    if (!UUID_PATTERN.test(minted)) return undefined;
+
+    const messages = existing.messages.map((message) =>
+      message.cloudMessageId || message.content.trim().length === 0
+        ? message
+        : { ...message, cloudMessageId: crypto.randomUUID() },
+    );
+    const cloudSync: ConversationCloudSyncState = {
+      ...(existing.cloudSync ?? { state: 'idle' }),
+      conversationId: minted,
+      ...(!hadBinding ? { createAcknowledged: false } : {}),
+      state: 'pending',
+      lastAttemptAt: Date.now(),
+    };
+    const entry: ConversationEntry = { ...existing, messages, cloudSync };
+    store.conversations = store.conversations.map((candidate, candidateIndex) =>
+      candidateIndex === index ? entry : candidate,
+    );
+    await writeStore(store);
+    return entry;
+  });
+}
+
+/**
+ * Commit acceptance for messages the server confirmed. Unmatched ids are
+ * ignored so a stale batch cannot mark a re-minted message as synced.
+ */
+export async function recordCloudMessagesSynced(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  results: readonly {
+    cloudMessageId: string;
+    syncedChars: number;
+    syncedFingerprint: string;
+  }[],
+  syncedTitle?: string,
+): Promise<void> {
+  assertManagedCloudOwner(owner);
+  if (results.length === 0 && syncedTitle === undefined) return;
+  const accepted = new Map(results.map((result) => [result.cloudMessageId, result]));
+  const at = Date.now();
+  await mutateStore(async (store) => {
+    const index = store.conversations.findIndex(
+      (entry) => entry.id === conversationId && sameManagedCloudOwner(entry.owner, owner),
+    );
+    const existing = index >= 0 ? store.conversations[index] : undefined;
+    if (!existing || index < 0) return;
+    const messages = existing.messages.map((message) => {
+      if (!message.cloudMessageId) return message;
+      const result = accepted.get(message.cloudMessageId);
+      if (!result) return message;
+      return {
+        ...message,
+        cloudSyncedAt: at,
+        cloudSyncedChars: result.syncedChars,
+        cloudSyncedFingerprint: result.syncedFingerprint,
+      };
+    });
+    const cloudSync: ConversationCloudSyncState = {
+      ...(existing.cloudSync ?? { state: 'idle' }),
+      state: 'idle',
+      ...(syncedTitle !== undefined ? { syncedTitle } : {}),
+    };
+    // A successful write clears transient auth/backoff state, but terminal
+    // trust/deletion/workspace blocks are sticky and cannot be revived by a
+    // stale completion.
+    const hasTerminalBlock =
+      cloudSync.blockedReason === 'non-cloud-runtime' ||
+      cloudSync.blockedReason === 'not-found' ||
+      cloudSync.blockedReason === 'workspace';
+    if (hasTerminalBlock) {
+      cloudSync.state = 'blocked';
+    } else {
+      delete cloudSync.lastError;
+      delete cloudSync.retryAfter;
+      if (cloudSync.blockedReason === 'auth') delete cloudSync.blockedReason;
+    }
+    store.conversations = store.conversations.map((candidate, candidateIndex) =>
+      candidateIndex === index ? { ...existing, messages, cloudSync } : candidate,
+    );
+    await writeStore(store);
+  });
+}
+
+/**
+ * Record a non-fatal failure, backoff, or block. Never throws: this runs on the
+ * failure path of a best-effort mirror, and a storage error here must not turn
+ * into an unhandled rejection in the service worker.
+ */
+export async function recordCloudSyncState(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  patch: Partial<ConversationCloudSyncState>,
+): Promise<void> {
+  try {
+    assertManagedCloudOwner(owner);
+    await mutateStore(async (store) => {
+      const index = store.conversations.findIndex(
+        (entry) => entry.id === conversationId && sameManagedCloudOwner(entry.owner, owner),
+      );
+      const existing = index >= 0 ? store.conversations[index] : undefined;
+      if (!existing || index < 0) return;
+      const merged: ConversationCloudSyncState = {
+        ...(existing.cloudSync ?? { state: 'idle' }),
+        ...patch,
+      };
+      // Terminal blocks outrank every later state transition. In particular,
+      // a deleted cloud row is never rebound or partially re-created.
+      const terminalReason = existing.cloudSync?.blockedReason;
+      if (
+        terminalReason === 'non-cloud-runtime' ||
+        terminalReason === 'not-found' ||
+        terminalReason === 'workspace'
+      ) {
+        merged.state = 'blocked';
+        merged.blockedReason = terminalReason;
+      }
+      const normalized = normalizeCloudSyncState(merged) ?? { state: 'idle' };
+      store.conversations = store.conversations.map((candidate, candidateIndex) =>
+        candidateIndex === index ? { ...existing, cloudSync: normalized } : candidate,
+      );
+      await writeStore(store);
+    });
+  } catch {
+    // Best-effort bookkeeping only. The sweep alarm retries from stored state.
+  }
+}
+
+/**
+ * Permanently disqualify a thread because a non-Managed-Cloud turn landed in
+ * it. Sticky: `normalizeCloudSyncState` round-trips the reason and
+ * `recordCloudSyncState` refuses to overwrite it.
+ *
+ * The existing cloud copy is deliberately left alone — a local turn means "stop
+ * mirroring", not "delete what the user already has in their account".
+ */
+export async function blockCloudPersistence(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  reason: 'non-cloud-runtime',
+): Promise<void> {
+  await recordCloudSyncState(owner, conversationId, { state: 'blocked', blockedReason: reason });
 }

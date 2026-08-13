@@ -91,9 +91,7 @@ moves a local developer session across a trust boundary.
 | `agiWorkforce.cliPath`                   | `agi`   | Local CLI binary used to launch `app-server`.                                               |
 | `agiWorkforce.model`                     | `auto`  | Routes each turn using the task and the models available to the resolved plan.              |
 | `agiWorkforce.inlineCompletions.enabled` | `false` | Explicit opt-in for sending surrounding code to the cloud completion utility.               |
-| `agiWorkforce.mcp.enabled`               | `false` | Enables MCP-related extension integration. Runtime MCP discovery remains app-server owned.  |
 | `agiWorkforce.desktopBridge.enabled`     | `false` | Shows authenticated Desktop availability; IDE sessions and actions remain app-server owned. |
-| `agiWorkforce.useProviderStream`         | `false` | Opt-in account-authenticated transport for cloud-backed editor utilities only.              |
 | `agiWorkforce.telemetryEnabled`          | `false` | Extension telemetry opt-in, also subject to VS Code telemetry settings.                     |
 
 The user-facing settings table lives in `README.md`. Keep both truthful against

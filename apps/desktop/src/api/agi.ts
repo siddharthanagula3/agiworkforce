@@ -24,11 +24,21 @@ import { invoke, isTauri } from '../lib/tauri-mock';
 // ============================================================================
 
 /** Configuration for the AGI core engine. */
+export interface AGIResourceLimits {
+  cpuPercent?: number;
+  memoryMb?: number;
+  networkMbps?: number;
+  storageMb?: number;
+}
+
 export interface AGICoreConfig {
-  maxIterations?: number;
-  timeoutSecs?: number;
-  enableReflection?: boolean;
-  enableSwarm?: boolean;
+  maxConcurrentTools?: number;
+  knowledgeMemoryMb?: number;
+  enableLearning?: boolean;
+  enableSelfImprovement?: boolean;
+  resourceLimits?: AGIResourceLimits;
+  maxPlanningDepth?: number;
+  enableMultimodal?: boolean;
 }
 
 /** Response from submitting a goal. */
@@ -55,6 +65,8 @@ export interface SubmitGoalRequest {
   priority?: 'low' | 'medium' | 'high' | 'critical';
   deadline?: number;
   successCriteria?: string[];
+  modelId?: string;
+  provider?: string;
 }
 
 /** Knowledge base entry. */
@@ -168,6 +180,8 @@ export async function submitGoalSwarm(
         priority: request.priority,
         deadline: request.deadline,
         successCriteria: request.successCriteria,
+        modelId: request.modelId,
+        provider: request.provider,
       },
     });
   } catch (error) {
@@ -202,6 +216,8 @@ export async function submitGoalAuto(
         priority: request.priority,
         deadline: request.deadline,
         successCriteria: request.successCriteria,
+        modelId: request.modelId,
+        provider: request.provider,
       },
     });
   } catch (error) {

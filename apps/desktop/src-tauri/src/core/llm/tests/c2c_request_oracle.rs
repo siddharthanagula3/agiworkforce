@@ -781,7 +781,7 @@ fn ollama_text_system_temp_max_tokens_is_byte_identical() {
     ]);
     for stream in [true, false] {
         let old = old_ollama::build(&request, &request.messages, None, None, stream);
-        let new = build_ollama_chat_body(&request, &request.messages, None, None, stream);
+        let new = build_ollama_chat_body(&request, &request.messages, None, None, 32_768, stream);
         verify_parity(&format!("ollama_text stream={stream}"), old, new, &[]);
     }
 }
@@ -805,7 +805,7 @@ fn ollama_think_variants_are_byte_identical() {
             ..ollama_request(vec![msg("user", "Hello")])
         };
         let old = old_ollama::build(&request, &request.messages, None, None, true);
-        let new = build_ollama_chat_body(&request, &request.messages, None, None, true);
+        let new = build_ollama_chat_body(&request, &request.messages, None, None, 32_768, true);
         // Pin the exact wire semantics per variant before the byte check.
         match label {
             "none" => assert!(new.get("think").is_none(), "no opinion → field omitted"),
@@ -829,7 +829,7 @@ fn ollama_max_tokens_edges() {
             ..ollama_request(vec![msg("user", "Hello")])
         };
         let old = old_ollama::build(&request, &request.messages, None, None, true);
-        let new = build_ollama_chat_body(&request, &request.messages, None, None, true);
+        let new = build_ollama_chat_body(&request, &request.messages, None, None, 32_768, true);
         verify_parity(&format!("ollama_max_tokens_{label}"), old, new, deltas);
     }
 }
@@ -848,7 +848,14 @@ fn ollama_native_tools_and_tool_history() {
         msg("user", "Thanks — now summarize it."),
     ]);
     let old = old_ollama::build(&request, &request.messages, Some(&tools), None, true);
-    let new = build_ollama_chat_body(&request, &request.messages, Some(&tools), None, true);
+    let new = build_ollama_chat_body(
+        &request,
+        &request.messages,
+        Some(&tools),
+        None,
+        32_768,
+        true,
+    );
     verify_parity(
         "ollama_tools_history",
         old,
@@ -869,7 +876,14 @@ fn ollama_bare_array_tool_schema_is_normalized_by_the_crate() {
     let tools = vec![desktop_tool("read_many", array_schema)];
     let request = ollama_request(vec![msg("user", "Read these files")]);
     let old = old_ollama::build(&request, &request.messages, Some(&tools), None, true);
-    let new = build_ollama_chat_body(&request, &request.messages, Some(&tools), None, true);
+    let new = build_ollama_chat_body(
+        &request,
+        &request.messages,
+        Some(&tools),
+        None,
+        32_768,
+        true,
+    );
     assert_eq!(
         new["tools"][0]["function"]["parameters"]["properties"]["paths"]["items"],
         json!({})
@@ -890,7 +904,7 @@ fn ollama_non_object_tool_args_are_hardened() {
         tool_result_msg("call_9", "ok"),
     ]);
     let old = old_ollama::build(&request, &request.messages, None, None, true);
-    let new = build_ollama_chat_body(&request, &request.messages, None, None, true);
+    let new = build_ollama_chat_body(&request, &request.messages, None, None, 32_768, true);
     verify_parity(
         "ollama_non_object_args",
         old,
@@ -919,7 +933,14 @@ fn ollama_images_move_from_top_level_to_last_user_message() {
         Some(images.clone()),
         true,
     );
-    let new = build_ollama_chat_body(&request, &request.messages, None, Some(&images), true);
+    let new = build_ollama_chat_body(
+        &request,
+        &request.messages,
+        None,
+        Some(&images),
+        32_768,
+        true,
+    );
     verify_parity("ollama_images", old, new, &[Delta::OllamaImagesPerMessage]);
 }
 

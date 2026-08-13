@@ -26,6 +26,7 @@ import type {
   TauriAttachmentPayload,
 } from '@agiworkforce/unified-chat';
 import type { Conversation, ChatMessage } from '@agiworkforce/unified-chat';
+import { useChatModelStore } from '@agiworkforce/unified-chat';
 import {
   getModelMetadataById,
   getToolDisplayLabel,
@@ -430,22 +431,31 @@ async function encodeAttachmentsForIpc(files: File[]): Promise<TauriAttachmentPa
  * which tools this turn may offer. It was never sent, so the filter had nothing
  * to filter on and every model was offered every tool.
  *
- * The catalog is the only capability source the renderer has, so an off-catalog
- * model (any local Ollama build) still resolves to `undefined` — the native side
- * owns what an unknown model may be offered, and closes the managed-cloud gate.
+ * Catalog models use the generated registry. Dynamic Local models use only the
+ * provider metadata carried through discovery; absent metadata stays unknown
+ * and the native side closes every tool gate.
  */
 function resolveModelCapabilities(modelId: string | undefined) {
   const capabilities = modelId ? getModelMetadataById(modelId)?.capabilities : undefined;
-  if (!capabilities) return undefined;
+  const runtimeModel = modelId
+    ? useChatModelStore.getState().models.find((candidate) => candidate.id === modelId)
+    : undefined;
+  if (!capabilities && runtimeModel?.metadataSource !== 'runtime') return undefined;
 
   return {
-    tools: capabilities.tools,
-    vision: capabilities.vision,
-    computerUse: capabilities.computerUse,
-    search: capabilities.search,
-    codeExecution: capabilities.codeExecution,
-    imageGen: capabilities.imageGen,
-    agentic: capabilities.agentic,
+    tools: capabilities?.tools ?? runtimeModel?.supportsTools ?? false,
+    vision: capabilities?.vision ?? runtimeModel?.supportsVision ?? false,
+    // A provider's generic function-calling flag proves only that it can emit
+    // structured tool calls. It does not prove the model is suitable for
+    // computer control, code execution, or an autonomous agent loop. Dynamic
+    // Local models therefore expose those specialist capabilities only when a
+    // canonical capability record says so; unknown stays unavailable.
+    computerUse: capabilities?.computerUse ?? false,
+    search: capabilities?.search ?? false,
+    codeExecution: capabilities?.codeExecution ?? false,
+    imageGen: capabilities?.imageGen ?? false,
+    agentic: capabilities?.agentic ?? false,
+    thinking: capabilities?.thinking ?? runtimeModel?.supportsThinking ?? false,
   };
 }
 
@@ -454,6 +464,9 @@ function resolveModelCapabilities(modelId: string | undefined) {
 // ---------------------------------------------------------------------------
 
 export class TauriRuntime implements ChatRuntime {
+  /** Local Web search is network egress and is exposed only as a one-turn composer choice. */
+  readonly supportsExplicitLocalWebSearch = true;
+
   /**
    * The native chat request does not accept the shared composer's
    * Ask/Auto/Plan/Bypass value. Keep the shared control hidden until that value
@@ -558,6 +571,7 @@ export class TauriRuntime implements ChatRuntime {
       options?.attachments && options.attachments.length > 0
         ? await encodeAttachmentsForIpc(options.attachments)
         : undefined;
+    const localToolScope = options?.workMode === 'agiwork' ? 'agi_work' : options?.localToolScope;
     const params: SendMessageParams = {
       conversationId,
       content,
@@ -571,6 +585,8 @@ export class TauriRuntime implements ChatRuntime {
       systemPrompt: options?.systemPrompt,
       agentMode: options?.agentMode,
       effort: options?.effort,
+      localToolScope,
+      enableTools: localToolScope !== undefined,
     };
     for await (const chunk of this._streamMessage(params)) {
       if (this._streamCallbacks.size > 0) {
@@ -657,6 +673,8 @@ export class TauriRuntime implements ChatRuntime {
       // `focusMode`/`enableAgentMode` below for why mapping it onto
       // `enableAgentMode` was the LOCAL-CHAT-NOINVOKE-01 root cause.
       effort,
+      localToolScope,
+      enableTools,
     } = params;
     const frontendMessageId = crypto.randomUUID();
     const userId = this.getCurrentUserId();
@@ -1068,13 +1086,16 @@ export class TauriRuntime implements ChatRuntime {
 
     // Kick off the Rust-side stream after listeners are ready.
     try {
+      const resolvedModelCapabilities = resolveModelCapabilities(model);
       await invoke('chat_send_message', {
         request: {
           content,
           userId,
           provider,
           modelOverride: model,
-          modelCapabilities: resolveModelCapabilities(model),
+          modelCapabilities: resolvedModelCapabilities,
+          toolScope: localToolScope,
+          enableTools,
           conversationId: backendConversationId,
           attachments: attachments ?? [],
           stream: true,
@@ -1091,7 +1112,7 @@ export class TauriRuntime implements ChatRuntime {
           preferCloudCredits: false,
           // Composer controls — the Rust ChatSendMessageRequest already accepts
           // these camelCase aliases; they were previously dropped client-side.
-          thinkingMode: thinkingEnabled,
+          thinkingMode: resolvedModelCapabilities?.thinking ? thinkingEnabled : undefined,
           reasoningEffort: effort,
           customInstructions: mergedCustomInstructions,
           // BUG (LOCAL-CHAT-NOINVOKE-01 root cause, found 2026-07-03): `agentMode`

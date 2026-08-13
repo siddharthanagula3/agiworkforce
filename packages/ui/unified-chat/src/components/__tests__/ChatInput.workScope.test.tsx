@@ -60,6 +60,21 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     expect(screen.getByTestId('host-policy').textContent).toBe('Terminal: Read-only');
   });
 
+  it('sends explicit Local Web search as a one-turn scope and clears it afterward', () => {
+    const { onSend, textarea } = renderComposer({ supportsExplicitLocalWebSearch: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add attachment' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search the web' }));
+    fireEvent.change(textarea, { target: { value: 'Find current release notes' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send message/ }));
+
+    expect(onSend.mock.calls[0]?.[8]).toBe('web_search');
+
+    fireEvent.change(textarea, { target: { value: 'Now answer locally' } });
+    fireEvent.click(screen.getByRole('button', { name: /Send message/ }));
+    expect(onSend.mock.calls[1]?.[8]).toBeUndefined();
+  });
+
   it('uses the host-selected Command/Ctrl+Enter submission gesture', () => {
     const { onSend, textarea } = renderComposer({ sendShortcut: 'mod-enter' });
     fireEvent.change(textarea, { target: { value: 'Keep Enter for a newline' } });
@@ -136,14 +151,20 @@ describe('ChatInput work scope (Chat | AGI Work toggle + project/folder picker)'
     const { onSend, textarea } = renderComposer({
       projectPicker: picker,
       canUseAgiWork: false,
+      agiWorkUnavailableReason:
+        'AGI Work is not available for this local model. Project chat still works.',
       onSelectFolder: vi.fn(),
     });
 
     expect(screen.queryByRole('group', { name: 'Composer mode' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'AGI Work' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Project' })).not.toBeNull();
+    expect(screen.queryByRole('status')).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Project' }));
+    expect(screen.getByRole('status').textContent).toContain(
+      'AGI Work is not available for this local model. Project chat still works.',
+    );
     expect(screen.queryByText(/Choose a local folder/)).toBeNull();
 
     fireEvent.change(textarea, { target: { value: 'Project chat' } });

@@ -16,6 +16,7 @@ import {
   type BulkConversationAction,
 } from '../services/conversation-data-service';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
+import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
 const NAMESPACE = 'privacy';
 
@@ -773,7 +774,7 @@ export function PrivacySection() {
           {deleteSuccess ? (
             <p style={{ fontSize: 13, color: 'var(--text-2)', margin: 0 }}>
               Account deletion scheduled. Your account and all data will be permanently deleted
-              within 24 hours. To stop this, email support@agiworkforce.com before then.
+              within 24 hours. To stop this, email {CONTACT_EMAIL} before then.
             </p>
           ) : (
             <>

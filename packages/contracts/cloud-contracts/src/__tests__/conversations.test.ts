@@ -161,8 +161,14 @@ describe('managed-cloud conversation wire contract', () => {
   });
 
   it('normalizes snake_case rows once for Mobile, Desktop, and Web adapters', () => {
-    expect(normalizeManagedCloudConversation(conversation)).toEqual({
+    expect(
+      normalizeManagedCloudConversation({
+        ...conversation,
+        organization_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      }),
+    ).toEqual({
       id: conversation.id,
+      organizationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       title: 'Cloud chat',
       model: MANAGED_CLOUD_DEFAULT_MODEL_SELECTION,
       projectId: 'project-1',

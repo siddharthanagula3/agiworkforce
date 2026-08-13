@@ -1,7 +1,8 @@
-import { View, Pressable, Linking } from 'react-native';
+import { Alert, View, Pressable } from 'react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
+import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import type { ToolSearchResult } from '@/types/chat';
 
 /**
@@ -51,9 +52,12 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
   const colors = useThemeColors();
   const hostname = hostnameOf(result.url);
 
-  const handlePress = () => {
+  const handlePress = async () => {
     if (isValidExternalHttpUrl(result.url)) {
-      Linking.openURL(result.url).catch(() => undefined);
+      const opened = await openUntrustedUrlInAppBrowser(result.url);
+      if (!opened) {
+        Alert.alert('Could not open source', 'Check your connection and try again.');
+      }
     }
   };
 

@@ -29,6 +29,7 @@ import {
 import { useAppModeStore } from '../appModeStore';
 import { invoke } from '../../lib/tauri-mock';
 import { toast } from 'sonner';
+import { useChatModelStore } from '@agiworkforce/unified-chat';
 
 const mockInvoke = vi.mocked(invoke);
 
@@ -44,6 +45,21 @@ describe('agentTaskStore', () => {
     // the trustMode each submission sends is deterministic, not an accident
     // of the non-Tauri test environment's default.
     useAppModeStore.setState({ mode: 'local' });
+    useChatModelStore.getState().setModels([
+      {
+        id: 'fixture-local-model',
+        name: 'Fixture local model',
+        provider: 'ollama',
+        tier: 'standard',
+        supportsThinking: false,
+        supportsVision: false,
+        supportsTools: false,
+        contextWindow: 4096,
+        isLocal: true,
+        isByok: false,
+      },
+    ]);
+    useChatModelStore.getState().selectModel('fixture-local-model');
   });
 
   describe('canonical lifecycle ownership', () => {
@@ -104,6 +120,18 @@ describe('agentTaskStore', () => {
   });
 
   describe('submitGoal', () => {
+    it('preserves string-shaped native submission errors for the user', async () => {
+      mockInvoke.mockRejectedValueOnce('Selected Ollama provider is unavailable');
+
+      await expect(useAgentTaskStore.getState().submitGoal('Write a report')).rejects.toBe(
+        'Selected Ollama provider is unavailable',
+      );
+      expect(toast.error).toHaveBeenCalledOnce();
+      expect(toast.error).toHaveBeenCalledWith(
+        'Failed to submit goal: Selected Ollama provider is unavailable',
+      );
+    });
+
     it('calls invoke with correct command and adds a queued task', async () => {
       mockInvoke.mockResolvedValueOnce({ goalId: 'goal-123' });
 
@@ -111,7 +139,13 @@ describe('agentTaskStore', () => {
       const taskId = await submitGoal('Write a report');
 
       expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal', {
-        request: { description: 'Write a report', priority: 'medium', trustMode: 'local' },
+        request: {
+          description: 'Write a report',
+          priority: 'medium',
+          trustMode: 'local',
+          modelId: 'fixture-local-model',
+          provider: 'ollama',
+        },
       });
       expect(taskId).toBe('goal-123');
 
@@ -124,13 +158,34 @@ describe('agentTaskStore', () => {
 
     it('sends the managed trust boundary when the workspace is in cloud mode', async () => {
       useAppModeStore.setState({ mode: 'cloud' });
+      useChatModelStore.getState().setModels([
+        {
+          id: 'fixture-managed-model',
+          name: 'Fixture managed model',
+          provider: 'managed_cloud',
+          tier: 'standard',
+          supportsThinking: false,
+          supportsVision: false,
+          supportsTools: false,
+          contextWindow: 4096,
+          isLocal: false,
+          isByok: false,
+        },
+      ]);
+      useChatModelStore.getState().selectModel('fixture-managed-model');
       mockInvoke.mockResolvedValueOnce({ goalId: 'goal-cloud-1' });
 
       const { submitGoal } = useAgentTaskStore.getState();
       await submitGoal('Summarize cloud docs');
 
       expect(mockInvoke).toHaveBeenCalledWith('agi_submit_goal', {
-        request: { description: 'Summarize cloud docs', priority: 'medium', trustMode: 'managed' },
+        request: {
+          description: 'Summarize cloud docs',
+          priority: 'medium',
+          trustMode: 'managed',
+          modelId: 'fixture-managed-model',
+          provider: 'managed_cloud',
+        },
       });
     });
 
@@ -176,10 +231,9 @@ describe('agentTaskStore', () => {
     it('uses the engine goal id and actual result for parallel execution', async () => {
       mockInvoke.mockResolvedValueOnce({
         goalId: 'goal-parallel-123',
-        bestResult: {
-          score: 0.95,
-          result: { success: true, error: null },
-        },
+        state: 'ready_for_review',
+        output: 'The inspected result is ready.',
+        error: null,
       });
 
       const { submitGoal } = useAgentTaskStore.getState();
@@ -191,6 +245,8 @@ describe('agentTaskStore', () => {
           priority: 'medium',
           numAgents: 3,
           trustMode: 'local',
+          modelId: 'fixture-local-model',
+          provider: 'ollama',
         },
       });
       expect(taskId).toBe('goal-parallel-123');
@@ -198,14 +254,16 @@ describe('agentTaskStore', () => {
       const { tasks } = useAgentTaskStore.getState();
       expect(tasks.length).toBe(1);
       expect(tasks[0]!.id).toBe('goal-parallel-123');
-      expect(tasks[0]!.status).toBe('queued');
-      expect(tasks[0]!.result).toContain('0.95');
+      expect(tasks[0]!.status).toBe('ready_for_review');
+      expect(tasks[0]!.result).toBe('The inspected result is ready.');
     });
 
     it('holds a caller-supplied agent count inside the engine fan-out ceiling', async () => {
       mockInvoke.mockResolvedValue({
         goalId: 'goal-parallel-clamped',
-        bestResult: { score: 0.5, result: { success: true, error: null } },
+        state: 'ready_for_review',
+        output: 'Done',
+        error: null,
       });
 
       const { submitGoal } = useAgentTaskStore.getState();
@@ -239,13 +297,12 @@ describe('agentTaskStore', () => {
       );
     });
 
-    it('records a parallel result error without inferring lifecycle state', async () => {
+    it('records the canonical failed state and error returned by parallel execution', async () => {
       mockInvoke.mockResolvedValueOnce({
         goalId: 'goal-parallel-failed',
-        bestResult: {
-          score: 0.1,
-          result: { success: false, error: 'Tool execution failed' },
-        },
+        state: 'failed',
+        output: null,
+        error: 'Tool execution failed',
       });
 
       await useAgentTaskStore.getState().submitGoal('Parallel task', { parallel: true });
@@ -253,7 +310,7 @@ describe('agentTaskStore', () => {
       expect(useAgentTaskStore.getState().tasks).toEqual([
         expect.objectContaining({
           id: 'goal-parallel-failed',
-          status: 'queued',
+          status: 'failed',
           error: 'Tool execution failed',
         }),
       ]);
@@ -273,10 +330,9 @@ describe('agentTaskStore', () => {
       });
       mockInvoke.mockResolvedValueOnce({
         goalId: 'goal-parallel-existing',
-        bestResult: {
-          score: 0.9,
-          result: { success: true, error: null },
-        },
+        state: 'ready_for_review',
+        output: 'Canonical final output',
+        error: null,
       });
 
       await useAgentTaskStore.getState().submitGoal('Parallel task', { parallel: true });
@@ -284,7 +340,11 @@ describe('agentTaskStore', () => {
       const { tasks } = useAgentTaskStore.getState();
       expect(tasks).toHaveLength(1);
       expect(tasks[0]).toEqual(
-        expect.objectContaining({ id: 'goal-parallel-existing', status: 'running' }),
+        expect.objectContaining({
+          id: 'goal-parallel-existing',
+          status: 'ready_for_review',
+          result: 'Canonical final output',
+        }),
       );
     });
   });
@@ -292,6 +352,7 @@ describe('agentTaskStore', () => {
   describe('submitGoalSwarm', () => {
     it('sends the local trust boundary on the swarm payload', async () => {
       mockInvoke.mockResolvedValueOnce({
+        success: true,
         goalId: 'goal-swarm-1',
         summary: 'Swarm finished',
         succeeded: 2,
@@ -311,9 +372,18 @@ describe('agentTaskStore', () => {
           deadline: undefined,
           successCriteria: undefined,
           trustMode: 'local',
+          modelId: 'fixture-local-model',
+          provider: 'ollama',
         },
       });
       expect(taskId).toBe('goal-swarm-1');
+      expect(useAgentTaskStore.getState().tasks[0]).toEqual(
+        expect.objectContaining({
+          id: 'goal-swarm-1',
+          status: 'ready_for_review',
+          completedAt: expect.any(String),
+        }),
+      );
     });
   });
 
@@ -330,6 +400,8 @@ describe('agentTaskStore', () => {
           deadline: undefined,
           successCriteria: undefined,
           trustMode: 'local',
+          modelId: 'fixture-local-model',
+          provider: 'ollama',
         },
       });
       expect(taskId).toBe('goal-auto-1');
@@ -337,6 +409,21 @@ describe('agentTaskStore', () => {
 
     it('sends the managed trust boundary when the workspace is in cloud mode', async () => {
       useAppModeStore.setState({ mode: 'cloud' });
+      useChatModelStore.getState().setModels([
+        {
+          id: 'fixture-managed-model',
+          name: 'Fixture managed model',
+          provider: 'managed_cloud',
+          tier: 'standard',
+          supportsThinking: false,
+          supportsVision: false,
+          supportsTools: false,
+          contextWindow: 4096,
+          isLocal: false,
+          isByok: false,
+        },
+      ]);
+      useChatModelStore.getState().selectModel('fixture-managed-model');
       mockInvoke.mockResolvedValueOnce({ goalId: 'goal-auto-cloud-1' });
 
       await useAgentTaskStore.getState().submitGoalAuto('Summarize cloud usage');
@@ -345,6 +432,8 @@ describe('agentTaskStore', () => {
         request: expect.objectContaining({
           description: 'Summarize cloud usage',
           trustMode: 'managed',
+          modelId: 'fixture-managed-model',
+          provider: 'managed_cloud',
         }),
       });
     });
@@ -355,7 +444,7 @@ describe('agentTaskStore', () => {
       mockInvoke.mockResolvedValueOnce(undefined).mockResolvedValueOnce({
         state: 'cancelled',
         currentIteration: 0,
-        context: { toolResults: [] },
+        context: { tool_results: [] },
       });
 
       useAgentTaskStore.setState({
@@ -408,6 +497,110 @@ describe('agentTaskStore', () => {
   });
 
   describe('fetchTasks', () => {
+    it('fails a persisted active task honestly when the native process no longer owns it', async () => {
+      useAgentTaskStore.setState({
+        tasks: [
+          {
+            id: 'goal-interrupted',
+            goal: 'Apply repository changes',
+            status: 'running',
+            createdAt: '2026-08-13T00:00:00.000Z',
+          },
+        ],
+      });
+      mockInvoke
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce('AGI not initialized')
+        .mockResolvedValueOnce(null);
+
+      await useAgentTaskStore.getState().fetchTasks();
+
+      expect(mockInvoke).toHaveBeenNthCalledWith(2, 'agi_get_goal_status', {
+        goalId: 'goal-interrupted',
+      });
+      expect(mockInvoke).toHaveBeenNthCalledWith(3, 'agi_get_task_state', {
+        goalId: 'goal-interrupted',
+      });
+      expect(useAgentTaskStore.getState().tasks[0]).toEqual(
+        expect.objectContaining({
+          status: 'failed',
+          completedAt: expect.any(String),
+          error: expect.stringContaining('native execution state cannot be recovered'),
+        }),
+      );
+    });
+
+    it('recovers a state-only native task after a renderer reload', async () => {
+      useAgentTaskStore.setState({
+        tasks: [
+          {
+            id: 'goal-live-swarm',
+            goal: 'Inspect in parallel',
+            status: 'queued',
+            createdAt: '2026-08-13T00:00:00.000Z',
+            executionMode: 'swarm',
+          },
+        ],
+      });
+      mockInvoke
+        .mockResolvedValueOnce([])
+        .mockRejectedValueOnce('Goal goal-live-swarm not found')
+        .mockResolvedValueOnce('running');
+
+      await useAgentTaskStore.getState().fetchTasks();
+
+      expect(useAgentTaskStore.getState().tasks[0]).toEqual(
+        expect.objectContaining({
+          id: 'goal-live-swarm',
+          status: 'running',
+          executionMode: 'swarm',
+        }),
+      );
+    });
+
+    it('preserves locally recorded execution metadata for backend-known tasks', async () => {
+      useAgentTaskStore.setState({
+        tasks: [
+          {
+            id: 'goal-swarm',
+            goal: 'Original goal',
+            status: 'paused',
+            createdAt: '2026-08-13T00:00:00.000Z',
+            executionMode: 'swarm',
+            pauseReason: 'Waiting for review',
+            swarmMetrics: {
+              succeeded: 3,
+              failed: 1,
+              wallTimeMs: 1_200,
+              speedupRatio: 2.5,
+              criticalPathLength: 2,
+              maxParallelism: 4,
+              summary: 'Three workers completed successfully.',
+            },
+          },
+        ],
+      });
+      mockInvoke.mockResolvedValueOnce([
+        {
+          id: 'goal-swarm',
+          description: 'Original goal',
+          priority: 'medium',
+          constraints: [],
+          successCriteria: [],
+        },
+      ]);
+
+      await useAgentTaskStore.getState().fetchTasks();
+
+      expect(useAgentTaskStore.getState().tasks[0]).toEqual(
+        expect.objectContaining({
+          executionMode: 'swarm',
+          pauseReason: 'Waiting for review',
+          swarmMetrics: expect.objectContaining({ succeeded: 3, failed: 1 }),
+        }),
+      );
+    });
+
     it('sets loading to false after fetch completes', async () => {
       mockInvoke.mockResolvedValueOnce([]);
 
@@ -437,7 +630,7 @@ describe('agentTaskStore', () => {
       mockInvoke.mockResolvedValueOnce({
         state: 'queued',
         currentIteration: 0,
-        context: { toolResults: [] },
+        context: { tool_results: [] },
       });
 
       const { getTaskStatus } = useAgentTaskStore.getState();
@@ -449,7 +642,7 @@ describe('agentTaskStore', () => {
       mockInvoke.mockResolvedValueOnce({
         state: 'completed',
         currentIteration: 5,
-        context: { toolResults: [{ result: 'Done!', error: null }] },
+        context: { tool_results: [{ result: 'Done!', error: null }] },
       });
 
       useAgentTaskStore.setState({

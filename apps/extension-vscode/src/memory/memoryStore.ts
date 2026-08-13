@@ -1,7 +1,7 @@
 /**
- * memoryStore.ts — Shared cross-conversation memory store for VS Code extension.
+ * memoryStore.ts — Workspace-scoped memory store for VS Code developer sessions.
  *
- * Persists facts in `vscode.ExtensionContext.globalState` ONLY.
+ * Persists facts in `vscode.ExtensionContext.workspaceState` ONLY.
  * v1 LOCAL ONLY — no cloud sync. NOT written to consumer chat tables.
  *
  * Schema is intentionally minimal and backward-compatible:
@@ -58,8 +58,10 @@ function isMemoryFact(v: unknown): v is MemoryFact {
   );
 }
 
-export function loadFacts(globalState: vscode.ExtensionContext['globalState']): MemoryFact[] {
-  const stored = globalState.get<unknown>(MEMORY_STORE_KEY);
+type MemoryState = vscode.ExtensionContext['workspaceState'];
+
+export function loadFacts(workspaceState: MemoryState): MemoryFact[] {
+  const stored = workspaceState.get<unknown>(MEMORY_STORE_KEY);
   if (!Array.isArray(stored)) return [];
   return stored.filter(isMemoryFact).map((fact) => ({
     ...fact,
@@ -74,9 +76,9 @@ export function loadFacts(globalState: vscode.ExtensionContext['globalState']): 
  * cannot close the trust marker or masquerade as a higher-priority instruction.
  */
 export function buildMemoryContextInput(
-  globalState: vscode.ExtensionContext['globalState'],
+  workspaceState: MemoryState,
 ): MemoryContextInput | undefined {
-  const facts = loadFacts(globalState).slice(0, MAX_MEMORY_FACTS_PER_TURN);
+  const facts = loadFacts(workspaceState).slice(0, MAX_MEMORY_FACTS_PER_TURN);
   if (facts.length === 0) return undefined;
 
   const lines: string[] = [];
@@ -110,19 +112,13 @@ export function buildMemoryContextInput(
   };
 }
 
-export async function saveFacts(
-  globalState: vscode.ExtensionContext['globalState'],
-  facts: MemoryFact[],
-): Promise<void> {
-  await globalState.update(MEMORY_STORE_KEY, facts);
+export async function saveFacts(workspaceState: MemoryState, facts: MemoryFact[]): Promise<void> {
+  await workspaceState.update(MEMORY_STORE_KEY, facts);
   _onDidChange.fire();
 }
 
-export async function addFact(
-  globalState: vscode.ExtensionContext['globalState'],
-  text: string,
-): Promise<MemoryFact> {
-  const facts = loadFacts(globalState);
+export async function addFact(workspaceState: MemoryState, text: string): Promise<MemoryFact> {
+  const facts = loadFacts(workspaceState);
   const now = new Date().toISOString();
   const trimmed = text.trim();
   const fact: MemoryFact = {
@@ -135,16 +131,16 @@ export async function addFact(
     importance: 5,
   };
   facts.unshift(fact);
-  await saveFacts(globalState, facts);
+  await saveFacts(workspaceState, facts);
   return fact;
 }
 
 export async function updateFact(
-  globalState: vscode.ExtensionContext['globalState'],
+  workspaceState: MemoryState,
   id: string,
   newText: string,
 ): Promise<boolean> {
-  const facts = loadFacts(globalState);
+  const facts = loadFacts(workspaceState);
   const idx = facts.findIndex((f) => f.id === id);
   if (idx === -1) return false;
   const trimmed = newText.trim();
@@ -154,26 +150,21 @@ export async function updateFact(
     category: classifyMemoryCategory(trimmed),
     updatedAt: new Date().toISOString(),
   };
-  await saveFacts(globalState, facts);
+  await saveFacts(workspaceState, facts);
   return true;
 }
 
-export async function deleteFact(
-  globalState: vscode.ExtensionContext['globalState'],
-  id: string,
-): Promise<boolean> {
-  const facts = loadFacts(globalState);
+export async function deleteFact(workspaceState: MemoryState, id: string): Promise<boolean> {
+  const facts = loadFacts(workspaceState);
   const before = facts.length;
   const next = facts.filter((f) => f.id !== id);
   if (next.length === before) return false;
-  await saveFacts(globalState, next);
+  await saveFacts(workspaceState, next);
   return true;
 }
 
-export async function clearFacts(
-  globalState: vscode.ExtensionContext['globalState'],
-): Promise<void> {
-  await saveFacts(globalState, []);
+export async function clearFacts(workspaceState: MemoryState): Promise<void> {
+  await saveFacts(workspaceState, []);
 }
 
 export function containsFact(facts: readonly MemoryFact[], text: string): boolean {

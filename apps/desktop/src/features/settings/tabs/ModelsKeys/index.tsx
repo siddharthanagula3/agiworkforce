@@ -1,12 +1,10 @@
 import React, { Suspense, lazy } from 'react';
-import { Check, Download, HardDrive, KeyRound, Loader2, Server, Zap } from 'lucide-react';
+import { Check, Download, Loader2, Server } from 'lucide-react';
 import type { Provider } from '@agiworkforce/types';
-import { toast } from 'sonner';
 import { validateUrl } from '@/utils/security';
 import { invoke } from '@/lib/tauri-mock';
 import { McpClient } from '@/api/mcp';
 import { Button } from '@/ui/Button';
-import { Label } from '@/ui/Label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { Switch } from '@/ui/Switch';
 
@@ -209,16 +207,9 @@ function BYOKApiKeysSection() {
 
 export interface ModelsKeysTabProps {
   resolvedLLMConfig: {
-    providerMode?: 'auto' | 'local' | 'cloud';
     ollamaUrl?: string;
     defaultModels?: Record<string, string>;
   };
-  chatPreferences: {
-    alwaysUseAgentMode?: boolean;
-    autoApproveTools?: boolean;
-    compactMode?: boolean;
-    promptCompletionEnabled?: boolean;
-  } | null;
   ollamaModels: string[];
   selectedOllamaModel: string;
   checkingOllama: boolean;
@@ -226,22 +217,16 @@ export interface ModelsKeysTabProps {
   ollamaEnabled: boolean;
   installingOllamaModel: boolean;
   ollamaInstallError: string | null;
-  onProviderModeChange: (mode: 'auto' | 'local' | 'cloud') => void;
   onOllamaUrlChange: (url: string) => void;
   onOllamaEnabledChange: (enabled: boolean) => void;
   onOllamaModelChange: (model: string) => void;
   onRefreshOllamaState: () => Promise<void>;
   onInstallOllamaModel: (modelName: string) => Promise<void>;
-  onAgentModeChange: (value: boolean) => void;
-  onAutoApproveToolsChange: (value: boolean) => void;
-  onCompactModeChange: (value: boolean) => void;
-  onPromptCompletionChange: (value: boolean) => void;
   onExportSettings: () => void;
 }
 
 export function ModelsKeysTab({
   resolvedLLMConfig,
-  chatPreferences,
   ollamaModels,
   selectedOllamaModel,
   checkingOllama,
@@ -249,19 +234,44 @@ export function ModelsKeysTab({
   ollamaEnabled,
   installingOllamaModel,
   ollamaInstallError,
-  onProviderModeChange,
   onOllamaUrlChange,
   onOllamaEnabledChange,
   onOllamaModelChange,
   onRefreshOllamaState,
   onInstallOllamaModel,
-  onAgentModeChange,
-  onAutoApproveToolsChange,
-  onCompactModeChange,
-  onPromptCompletionChange,
   onExportSettings,
 }: ModelsKeysTabProps) {
   const [modelToInstall, setModelToInstall] = React.useState('');
+  const persistedOllamaUrl = resolvedLLMConfig.ollamaUrl ?? 'http://localhost:11434';
+  const [ollamaUrlInput, setOllamaUrlInput] = React.useState(persistedOllamaUrl);
+  const [ollamaUrlError, setOllamaUrlError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setOllamaUrlInput(persistedOllamaUrl);
+    setOllamaUrlError(null);
+  }, [persistedOllamaUrl]);
+
+  const commitOllamaUrl = React.useCallback(() => {
+    const raw = ollamaUrlInput.trim();
+    if (!raw) {
+      const defaultUrl = 'http://localhost:11434';
+      setOllamaUrlInput(defaultUrl);
+      setOllamaUrlError(null);
+      onOllamaUrlChange(defaultUrl);
+      return;
+    }
+
+    const result = validateUrl(raw, { allowLocalhost: true });
+    if (!result.valid) {
+      setOllamaUrlError(result.error ?? 'Enter a valid HTTP or HTTPS URL');
+      return;
+    }
+
+    const sanitized = result.sanitized ?? raw;
+    setOllamaUrlInput(sanitized);
+    setOllamaUrlError(null);
+    onOllamaUrlChange(sanitized);
+  }, [ollamaUrlInput, onOllamaUrlChange]);
 
   const installModel = React.useCallback(() => {
     const modelName = modelToInstall.trim();
@@ -281,90 +291,37 @@ export function ModelsKeysTab({
         <h3 className="text-lg font-semibold mb-4">Local Models</h3>
         <div className="space-y-6">
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Request routing</label>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {(['auto', 'local', 'cloud'] as const).map((mode) => {
-                const active = (resolvedLLMConfig.providerMode ?? 'auto') === mode;
-                const Icon = mode === 'auto' ? Zap : mode === 'local' ? HardDrive : KeyRound;
-                const label =
-                  mode === 'auto' ? 'Auto' : mode === 'local' ? 'Local models' : 'BYOK providers';
-                const description =
-                  mode === 'auto'
-                    ? 'Prefer local models, then your keys when selected.'
-                    : mode === 'local'
-                      ? 'Use Ollama only. Nothing leaves this device.'
-                      : 'Use your saved provider keys directly.';
-                return (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => onProviderModeChange(mode)}
-                    className={`rounded-lg border px-3 py-3 text-left transition-colors ${
-                      active
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background border-border hover:bg-accent'
-                    }`}
-                  >
-                    <span className="flex items-center gap-2 text-sm font-semibold">
-                      <Icon className="h-4 w-4" />
-                      {label}
-                    </span>
-                    <span
-                      className={`mt-1 block text-xs ${
-                        active ? 'text-primary-foreground/75' : 'text-muted-foreground'
-                      }`}
-                    >
-                      {description}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {(resolvedLLMConfig.providerMode ?? 'auto') === 'local'
-                ? 'Always use local Ollama. No data leaves your machine.'
-                : (resolvedLLMConfig.providerMode ?? 'auto') === 'cloud'
-                  ? 'Always use configured BYOK providers (OpenAI, Anthropic, etc.).'
-                  : 'Automatically route to the best provider for each task.'}
-            </p>
-          </div>
-
-          {(resolvedLLMConfig.providerMode ?? 'auto') !== 'cloud' && (
-            <div className="flex flex-col gap-2">
-              <label htmlFor="ollama-base-url" className="text-sm font-medium">
-                Ollama URL
-              </label>
-              <input
-                id="ollama-base-url"
-                aria-label="Ollama URL"
-                type="url"
-                value={resolvedLLMConfig.ollamaUrl ?? 'http://localhost:11434'}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (!raw.trim()) {
-                    onOllamaUrlChange(raw);
-                    return;
-                  }
-                  try {
-                    new URL(raw);
-                    const result = validateUrl(raw, { allowLocalhost: true });
-                    if (!result.valid) {
-                      toast.error(result.error ?? 'Invalid Ollama URL');
-                      return;
-                    }
-                    onOllamaUrlChange(result.sanitized ?? raw);
-                  } catch {
-                    onOllamaUrlChange(raw);
-                  }
-                }}
-                placeholder="http://localhost:11434"
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
+            <label htmlFor="ollama-base-url" className="text-sm font-medium">
+              Ollama URL
+            </label>
+            <input
+              id="ollama-base-url"
+              aria-label="Ollama URL"
+              type="url"
+              value={ollamaUrlInput}
+              onChange={(e) => {
+                setOllamaUrlInput(e.target.value);
+                if (ollamaUrlError) setOllamaUrlError(null);
+              }}
+              onBlur={commitOllamaUrl}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur();
+              }}
+              aria-invalid={ollamaUrlError ? 'true' : undefined}
+              aria-describedby={ollamaUrlError ? 'ollama-base-url-error' : undefined}
+              placeholder="http://localhost:11434"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            {ollamaUrlError ? (
+              <p id="ollama-base-url-error" role="alert" className="text-xs text-destructive">
+                {ollamaUrlError}
+              </p>
+            ) : (
               <p className="text-xs text-muted-foreground">
                 URL for the local Ollama server. Default: http://localhost:11434
               </p>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="rounded-lg border border-border bg-card p-6">
             <div className="flex items-start justify-between gap-4">
@@ -528,64 +485,6 @@ export function ModelsKeysTab({
           <Download className="mr-2 h-4 w-4" />
           Export Settings
         </Button>
-      </div>
-
-      <div className="pt-6 border-t border-border">
-        <h3 className="text-lg font-semibold mb-4">Model Behavior</h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="agentMode">Always Use Agent Mode</Label>
-              <p className="text-xs text-muted-foreground">
-                Agent mode enables tool use, web browsing, and code execution
-              </p>
-            </div>
-            <Switch
-              id="agentMode"
-              checked={chatPreferences?.alwaysUseAgentMode ?? false}
-              onCheckedChange={onAgentModeChange}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="autoApprove">Auto-Approve Tools</Label>
-              <p className="text-xs text-muted-foreground">
-                Automatically approve safe tool executions without confirmation
-              </p>
-            </div>
-            <Switch
-              id="autoApprove"
-              checked={chatPreferences?.autoApproveTools ?? false}
-              onCheckedChange={onAutoApproveToolsChange}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="compactMode">Compact Mode</Label>
-              <p className="text-xs text-muted-foreground">
-                Reduce spacing between messages for a denser view
-              </p>
-            </div>
-            <Switch
-              id="compactMode"
-              checked={chatPreferences?.compactMode ?? false}
-              onCheckedChange={onCompactModeChange}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div className="space-y-0.5">
-              <Label htmlFor="promptCompletion">Prompt Completion</Label>
-              <p className="text-xs text-muted-foreground">
-                Show AI-powered suggestions as you type
-              </p>
-            </div>
-            <Switch
-              id="promptCompletion"
-              checked={chatPreferences?.promptCompletionEnabled ?? true}
-              onCheckedChange={onPromptCompletionChange}
-            />
-          </div>
-        </div>
       </div>
 
       <div className="pt-4 text-xs text-muted-foreground">

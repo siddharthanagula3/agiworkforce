@@ -74,7 +74,10 @@ export const FloatingChat = () => {
             attachments: [],
             conversationId: activeConversationId ? uuidToDbId(activeConversationId) : null,
             stream: true,
-            enableTools: true,
+            // Floating chat has no tool-scope/approval control. Keep it a
+            // capability-honest text chat instead of silently advertising the
+            // entire native tool registry.
+            enableTools: false,
             frontendMessageId: assistantMessageId,
           },
         });

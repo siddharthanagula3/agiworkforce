@@ -12,7 +12,7 @@
 
 # AGI Workforce for VS Code
 
-AI pair programming that stays inside your repository. Chat, agent runs, code
+AI pair programming that stays scoped to your repository. Chat, agent runs, code
 edits, and session history are scoped to the workspace you have open and are
 driven by the AGI CLI running on your own machine.
 
@@ -21,15 +21,15 @@ driven by the AGI CLI running on your own machine.
 ## Requirements
 
 - VS Code 1.100 or newer.
-- The **AGI CLI** available as `agi` on your `PATH` — chat, agent runs, and
+- **AGI CLI 1.7.1 or newer** available as `agi` on your `PATH` — chat, agent runs, and
   session history all run through the local `agi app-server` process. If the
   binary lives elsewhere, point `agiWorkforce.cliPath` at it.
 - A trusted workspace. In a restricted workspace, agent file writes are
-  disabled and endpoint/CLI-path settings cannot be overridden by workspace
-  settings.
-- An AGI Cloud account **only** for the cloud-backed extras (inline
-  completions, and the Account & Usage view). Local chat needs no sign-in and
-  no extension API key.
+  disabled and trust-boundary, endpoint, CLI-path, and Desktop-bridge settings
+  cannot be overridden by workspace settings.
+- An AGI Cloud account only when you choose Managed Cloud or cloud-backed
+  editor extras such as inline completions. Local models and provider BYOK stay
+  available through the AGI CLI without an AGI subscription.
 
 ## Quick start
 
@@ -63,13 +63,14 @@ cursor. `agiWorkforce.autoApplyFixes` is off by default.
 **Agent modes with explicit approval.** `ask` confirms writes and commands,
 `auto` (the default) runs read-only work on its own while writes and commands
 still ask, `plan` proposes a plan before editing, and `bypass` skips prompts
-only after you confirm the risk. Cycle modes with `Shift+Tab`
-while the chat view is focused.
+only after you confirm the risk. Use the composer control or
+**AGI Workforce: Choose Agent Mode**; normal Tab and Shift+Tab focus traversal is
+never repurposed to change authority.
 
 **Model selection that reflects what you can actually use.**
 `AGI Workforce: Select Model` lists the models available to the resolved plan
 and providers; the default `auto` routes each turn by task. The status bar
-shows the active model, agent mode, and MCP state.
+shows the active model and non-default agent mode.
 
 **Session history per workspace.** The History view lists developer sessions
 owned by the local runtime, so you can reopen or delete earlier conversations.
@@ -79,8 +80,9 @@ generate docs, code review with diagnostics, explain error, terminal command
 suggestion and output explanation, hover actions, CodeLens actions, and a token
 counter. Hover, CodeLens, and inline completions are each opt-in.
 
-**Memory.** Curate short facts in the Memory view; they are injected as
-untrusted context on later turns and stay bounded in size.
+**Workspace memory.** Curate short facts in the Memory view; they are stored
+only in this VS Code workspace and injected as bounded, untrusted context on
+later developer turns.
 
 ## Commands
 
@@ -112,7 +114,6 @@ The most used ones:
 | `agiWorkforce.agent.effort`                 | `medium`                              | Reasoning effort (`low`–`max`) for providers with an explicit effort axis.                       |
 | `agiWorkforce.agent.thinking`               | `false`                               | Extended thinking for cloud-backed editor utilities only.                                        |
 | `agiWorkforce.composer.followUpBehavior`    | `queue`                               | Whether a message sent mid-turn queues or steers. `Ctrl/Cmd+Enter` uses the other behavior once. |
-| `agiWorkforce.streamingEnabled`             | `true`                                | Stream responses as they are generated.                                                          |
 | `agiWorkforce.contextLines`                 | `50`                                  | Surrounding lines included as context.                                                           |
 | `agiWorkforce.hoverEnabled`                 | `false`                               | Quick actions when hovering an identifier.                                                       |
 | `agiWorkforce.codeLensEnabled`              | `false`                               | Action lenses above functions and classes.                                                       |
@@ -120,11 +121,8 @@ The most used ones:
 | `agiWorkforce.inlineCompletions.enabled`    | `false`                               | Ghost-text completions. Sends surrounding code to AGI Cloud; sensitive files are excluded.       |
 | `agiWorkforce.inlineCompletions.debounceMs` | `300`                                 | Delay before requesting a completion.                                                            |
 | `agiWorkforce.inlineCompletions.maxLength`  | `500`                                 | Maximum completion length in characters.                                                         |
-| `agiWorkforce.mcp.enabled`                  | `false`                               | MCP for cloud-backed editor utilities. Developer-session MCP is configured in the AGI CLI.       |
 | `agiWorkforce.desktopBridge.enabled`        | `false`                               | Show authenticated AGI Desktop availability over the local health bridge.                        |
 | `agiWorkforce.desktopBridge.port`           | `8787`                                | Port for that local bridge.                                                                      |
-| `agiWorkforce.useProviderStream`            | `false`                               | Account-authenticated transport for cloud-backed editor utilities.                               |
-| `agiWorkforce.gatewayUrl`                   | `https://api.agiworkforce.com`        | Gateway base URL for the provider-stream path.                                                   |
 | `agiWorkforce.apiEndpoint`                  | `https://agiworkforce.com/api/llm/v1` | API base URL for cloud-backed editor utilities.                                                  |
 | `agiWorkforce.telemetryEnabled`             | `false`                               | Anonymous usage telemetry, also subject to VS Code's own telemetry setting.                      |
 
@@ -133,9 +131,12 @@ explanations.
 
 ## Privacy
 
-- Local developer sessions run through the AGI CLI on your machine. VS Code
-  sessions stay workspace scoped and are not synced into AGI Web, Mobile, or
-  Desktop chat history.
+- The developer-session host runs through the AGI CLI on your machine. Local
+  models stay on-device, provider BYOK sends directly to the named provider,
+  and Managed Cloud sends to AGI infrastructure. The header identifies the
+  active boundary before the request is sent.
+- VS Code sessions stay workspace scoped and are not synced into AGI Web,
+  Mobile, or Desktop chat history.
 - Telemetry is **off** by default and honors VS Code's global telemetry
   setting.
 - Inline completions are **off** by default; enabling them sends surrounding

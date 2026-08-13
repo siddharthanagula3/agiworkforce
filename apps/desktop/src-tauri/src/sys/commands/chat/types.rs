@@ -148,6 +148,16 @@ fn default_auto_inject_skills() -> Option<bool> {
     Some(true)
 }
 
+/// Exact user-selected native tool lane for one chat turn. This is separate
+/// from model capability: capability says what a model can format, while scope
+/// says what the user authorized this request to access.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ChatToolScope {
+    WebSearch,
+    AgiWork,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ChatSendMessageRequest {
     #[serde(default, alias = "conversationId")]
@@ -169,6 +179,8 @@ pub struct ChatSendMessageRequest {
     pub stream: Option<bool>,
     #[serde(default, alias = "enableTools")]
     pub enable_tools: Option<bool>,
+    #[serde(default, alias = "toolScope")]
+    pub tool_scope: Option<ChatToolScope>,
     #[serde(default, alias = "conversationMode")]
     pub conversation_mode: Option<String>,
     #[serde(default, alias = "workflowHash")]
@@ -293,6 +305,8 @@ pub struct ModelCapabilitiesDto {
     pub image_gen: bool,
     #[serde(default)]
     pub agentic: bool,
+    #[serde(default)]
+    pub thinking: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

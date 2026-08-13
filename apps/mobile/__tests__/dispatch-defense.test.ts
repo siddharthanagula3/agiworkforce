@@ -52,7 +52,7 @@
  *   - Non-object payloads are silently ignored
  *
  *  Connection health (companion service)
- *   - sendApprovalResponse is a no-op when status !== 'connected'
+ *   - sendApprovalResponse rejects terminal states and queues transient reconnect states
  *   - sendApprovalResponse calls sendControl with approval_response when connected
  *   - sendAgentCommand is a no-op when not connected
  *   - sendAgentCommand sends relay-safe control message when connected
@@ -77,8 +77,7 @@
  *   - selectAgent sets selectedAgentId
  *   - clearCompleted removes only completed agents
  *   - addApproval appends to pendingApprovals
- *   - approveRequest sets status to 'approved' and calls sendControl
- *   - rejectRequest sets status to 'rejected' and calls sendControl with reason
+ *   - approval decisions stay pending until Desktop emits approval_closed
  *
  *  Companion Notifications
  *   - notifyCompanionMessage fans out to all registered listeners
@@ -127,7 +126,7 @@
 // ---------------------------------------------------------------------------
 
 jest.mock('@/stores/connectionStore', () => {
-  const mockSendControl = jest.fn();
+  const mockSendControl = jest.fn().mockResolvedValue(true);
   const mockConnect = jest.fn();
   const mockDisconnect = jest.fn();
   const mockRecordHeartbeat = jest.fn();
@@ -661,9 +660,9 @@ describe('QR Pairing — extractPairingCode', () => {
 // ===========================================================================
 
 describe('Connection Store — sendControl delegation', () => {
-  it('sendApprovalResponse calls sendControl with approval_response action when connected', () => {
+  it('sendApprovalResponse calls sendControl with approval_response action when connected', async () => {
     setConnectionStatus('connected');
-    sendApprovalResponse('req-001', true);
+    await sendApprovalResponse('req-001', true);
     expect(mockSendControl).toHaveBeenCalledWith('approval_response', {
       version: 1,
       requestId: 'req-001',
@@ -672,34 +671,38 @@ describe('Connection Store — sendControl delegation', () => {
     });
   });
 
-  it('sendApprovalResponse sets approved: false for deny action', () => {
+  it('sendApprovalResponse sets approved: false for deny action', async () => {
     setConnectionStatus('connected');
-    sendApprovalResponse('req-002', false);
+    await sendApprovalResponse('req-002', false);
     const [, payload] = mockSendControl.mock.calls[0] as [string, Record<string, unknown>];
     expect(payload.approved).toBe(false);
   });
 
-  it('sendApprovalResponse is a no-op when status is disconnected', () => {
+  it('sendApprovalResponse is a no-op when status is disconnected', async () => {
     setConnectionStatus('disconnected');
-    sendApprovalResponse('req-003', true);
+    await sendApprovalResponse('req-003', true);
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendApprovalResponse is a no-op when status is connecting', () => {
+  it('sendApprovalResponse is a no-op when status is connecting', async () => {
     setConnectionStatus('connecting');
-    sendApprovalResponse('req-004', true);
+    await sendApprovalResponse('req-004', true);
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendApprovalResponse is a no-op when status is stale', () => {
+  it('sendApprovalResponse queues instead of claiming an immediate send when status is stale', async () => {
     setConnectionStatus('stale');
-    sendApprovalResponse('req-005', true);
+    await sendApprovalResponse('req-005', true);
     expect(mockSendControl).not.toHaveBeenCalled();
+    expect(connectionMod.__mocks.queueControl).toHaveBeenCalledWith(
+      'approval_response',
+      expect.objectContaining({ requestId: 'req-005', approved: true }),
+    );
   });
 
-  it('sendApprovalResponse respondedAt is a valid ISO date string', () => {
+  it('sendApprovalResponse respondedAt is a valid ISO date string', async () => {
     setConnectionStatus('connected');
-    sendApprovalResponse('req-006', true);
+    await sendApprovalResponse('req-006', true);
     const [, payload] = mockSendControl.mock.calls[0] as [string, Record<string, unknown>];
     const respondedAt = payload.respondedAt as string;
     expect(() => new Date(respondedAt).toISOString()).not.toThrow();
@@ -762,9 +765,9 @@ describe('Connection Store — sendControl delegation', () => {
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendDispatchTask creates a versioned new-task request while connected', () => {
+  it('sendDispatchTask creates a versioned new-task request while connected', async () => {
     setConnectionStatus('connected');
-    const requestId = sendDispatchTask({
+    const requestId = await sendDispatchTask({
       prompt: 'Prepare release notes',
       title: 'Release notes',
     });
@@ -782,18 +785,25 @@ describe('Connection Store — sendControl delegation', () => {
     );
   });
 
-  it('sendDispatchTask rejects empty input and disconnected sessions', () => {
+  it('sendDispatchTask rejects empty input and disconnected sessions', async () => {
     setConnectionStatus('connected');
-    expect(sendDispatchTask({ prompt: '   ' })).toBeNull();
+    await expect(sendDispatchTask({ prompt: '   ' })).resolves.toBeNull();
 
     setConnectionStatus('disconnected');
-    expect(sendDispatchTask({ prompt: 'Do the work' })).toBeNull();
+    await expect(sendDispatchTask({ prompt: 'Do the work' })).resolves.toBeNull();
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('cancelDispatchTask sends the request-to-task cancellation mapping', () => {
+  it('sendDispatchTask reports a local transport rejection instead of staying on Sending', async () => {
     setConnectionStatus('connected');
-    cancelDispatchTask('request-1', 'goal-1');
+    mockSendControl.mockResolvedValueOnce(false);
+
+    await expect(sendDispatchTask({ prompt: 'Do the work' })).resolves.toBeNull();
+  });
+
+  it('cancelDispatchTask sends the request-to-task cancellation mapping', async () => {
+    setConnectionStatus('connected');
+    await cancelDispatchTask('request-1', 'goal-1');
     expect(mockSendControl).toHaveBeenCalledWith(
       'dispatch.task.cancel',
       expect.objectContaining({
@@ -1758,9 +1768,9 @@ describe('Cross-device thread persistence — queueControl', () => {
     });
   });
 
-  it('queues approval decisions while reconnecting', () => {
+  it('queues approval decisions while reconnecting', async () => {
     setConnectionStatus('reconnecting');
-    sendApprovalResponse('req-stale', true);
+    await sendApprovalResponse('req-stale', true);
     expect(connectionMod.__mocks.queueControl).toHaveBeenCalledWith(
       'approval_response',
       expect.objectContaining({
@@ -1772,9 +1782,9 @@ describe('Cross-device thread persistence — queueControl', () => {
     expect(mockSendControl).not.toHaveBeenCalled();
   });
 
-  it('sendControl is called immediately when connected after reconnect', () => {
+  it('sendControl is called immediately when connected after reconnect', async () => {
     setConnectionStatus('connected');
-    sendApprovalResponse('req-ready', true);
+    await sendApprovalResponse('req-ready', true);
     expect(mockSendControl).toHaveBeenCalledWith('approval_response', expect.any(Object));
   });
 });

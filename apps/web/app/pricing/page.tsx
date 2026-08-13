@@ -36,6 +36,12 @@ import {
   type UpgradeConfirmRequest,
 } from '@features/billing/components/UpgradeConfirmDialog';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
+import { useBillingStore } from '@shared/stores/web-auth-store';
+import { isBillingPolicyReady } from '@shared/stores/billing-policy';
+import {
+  billingOwnerPlanActionLabel,
+  billingOwnerPlanChangeMessage,
+} from '@features/billing/lib/subscription-owner-presentation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Reveal } from '@/features/marketing/components/Reveal';
@@ -47,9 +53,8 @@ import { Reveal } from '@/features/marketing/components/Reveal';
 //
 // NEXT_PUBLIC_CHECKOUT_ENABLED MUST be kept equal to the server-side
 // STRIPE_CHECKOUT_ENABLED flag (app/api/checkout/route.ts) and to the same
-// client flag in features/billing/pages/BillingDashboard.tsx — see the
-// comment block in apps/web/.env.example. If they diverge, the CTA and the
-// API will disagree about whether checkout is actually available.
+// server-side checkout flag — see apps/web/.env.example. If they diverge, the
+// CTA and the API will disagree about whether checkout is actually available.
 const CHECKOUT_ENABLED_RAW = process.env['NEXT_PUBLIC_CHECKOUT_ENABLED']?.trim().toLowerCase();
 const CHECKOUT_ENABLED =
   CHECKOUT_ENABLED_RAW !== '0' &&
@@ -174,7 +179,10 @@ export default function PricingPage() {
   const { t } = useTranslation('pricing');
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const authInitialized = useAuthStore((s) => s.initialized);
   const { data: billing, isLoading: billingLoading } = useBillingData();
+  const accountSubscription = useBillingStore((s) => s.subscription);
+  const billingPolicyReady = useBillingStore(isBillingPolicyReady);
 
   // Nine billing tiers exist, but showing all nine at once is where people stall.
   // ChatGPT and Claude both segment by audience first and then show three or four
@@ -187,9 +195,8 @@ export default function PricingPage() {
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
-  // Team is billed per seat. Start at the minimum (the owner's own seat) rather
-  // than a made-up "typical team size" — the buyer picks the real number and the
-  // total below updates from it.
+  // Team is billed per seat. Start at the contract minimum of two seats; the
+  // buyer picks the real count and the total below updates from it.
   const [teamSeats, setTeamSeats] = useState<number>(MIN_PURCHASABLE_SEATS);
   // Team billing cadence is independent of the individual-plan `annual` toggle
   // (different section, different product). Defaults to monthly and only becomes
@@ -303,7 +310,9 @@ export default function PricingPage() {
     ['active', 'trialing'].includes(billing.status ?? '');
   const paidPlanSelectionDisabled =
     pendingPlan !== null ||
+    !authInitialized ||
     (Boolean(user) && billingLoading) ||
+    (Boolean(user) && hasActivePaidPlan && !billingPolicyReady) ||
     !CHECKOUT_ENABLED ||
     (Boolean(user) && !hasActivePaidPlan && pricingStatus !== 'ready');
 
@@ -351,6 +360,13 @@ export default function PricingPage() {
   }
 
   function renderPlanAction(plan: CheckoutPlan, upgradeLabel: string) {
+    if (!authInitialized) {
+      return (
+        <button type="button" className="agi-tier-cta" disabled>
+          Checking account…
+        </button>
+      );
+    }
     const relationship = planRelationship(plan);
     if (relationship === 'current') {
       return (
@@ -363,6 +379,17 @@ export default function PricingPage() {
       return (
         <Link href="/billing" className="agi-tier-cta agi-tier-cta--ghost">
           Manage billing
+        </Link>
+      );
+    }
+    if (
+      hasActivePaidPlan &&
+      billingPolicyReady &&
+      accountSubscription?.subscription_source !== 'stripe'
+    ) {
+      return (
+        <Link href="/settings/billing" className="agi-tier-cta agi-tier-cta--ghost">
+          {billingOwnerPlanActionLabel(accountSubscription?.subscription_source)}
         </Link>
       );
     }
@@ -400,6 +427,14 @@ export default function PricingPage() {
     // screen — confirm the exact prorated amount first via UpgradeConfirmDialog
     // instead of charging silently.
     if (hasActivePaidPlan) {
+      if (!billingPolicyReady) {
+        toast.error('Billing details are still loading. Please try again in a moment.');
+        return;
+      }
+      if (accountSubscription?.subscription_source !== 'stripe') {
+        toast.error(billingOwnerPlanChangeMessage(accountSubscription?.subscription_source));
+        return;
+      }
       setUpgradeConfirm({
         plan,
         billingInterval:
@@ -459,7 +494,7 @@ export default function PricingPage() {
       imageGeneration: 'Model-dependent',
       videoGeneration: 'Model-dependent',
       apiAccess: 'No managed access',
-      developerSurfaces: 'CLI',
+      developerSurfaces: 'Desktop, CLI & VS Code',
       teamControls: 'No',
       bestFor: t('compareLocalBestFor'),
     },
@@ -476,7 +511,7 @@ export default function PricingPage() {
       imageGeneration: 'Provider-dependent',
       videoGeneration: 'Provider-dependent',
       apiAccess: 'Your provider API',
-      developerSurfaces: 'CLI',
+      developerSurfaces: 'Desktop, CLI & VS Code',
       teamControls: 'No',
       bestFor: t('compareByokBestFor'),
     },
