@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { stripTrailingSlashes } from '@agiworkforce/types';
 import {
   MANAGED_CLOUD_CHAT_BASE_PATH,
+  MANAGED_CLOUD_ORGANIZATION_HEADER,
+  MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
   ManagedCloudConversationListQuerySchema,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudConversationResponseSchema,
@@ -55,6 +57,12 @@ export interface ManagedCloudConversationDetail {
 
 export interface ManagedCloudChatRequestOptions {
   signal?: AbortSignal;
+  /**
+   * Stable workspace bound to the conversation. `null` explicitly means the
+   * Personal workspace; `undefined` preserves the server's active-workspace
+   * fallback for callers that are not operating on an existing binding.
+   */
+  organizationId?: string | null;
 }
 
 export interface ManagedCloudSaveMessageOptions extends ManagedCloudChatRequestOptions {
@@ -219,16 +227,31 @@ export function createManagedCloudChatClient(
   const baseUrl = normalizeBaseUrl(config.baseUrl ?? '');
   const fetchImpl = config.fetchImpl ?? globalThis.fetch.bind(globalThis);
 
-  async function readHeaders(signal?: AbortSignal): Promise<ManagedCloudChatHeaders> {
+  async function readHeaders(
+    signal?: AbortSignal,
+    organizationId?: string | null,
+  ): Promise<ManagedCloudChatHeaders> {
     throwIfAborted(signal);
     const token = await awaitWithAbort(Promise.resolve(config.getAuthToken?.()), signal);
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(organizationId !== undefined
+        ? {
+            [MANAGED_CLOUD_ORGANIZATION_HEADER]:
+              organizationId ?? MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE,
+          }
+        : {}),
+    };
   }
 
-  async function mutationHeaders(json: boolean, signal?: AbortSignal): Promise<HeadersInit> {
+  async function mutationHeaders(
+    json: boolean,
+    signal?: AbortSignal,
+    organizationId?: string | null,
+  ): Promise<HeadersInit> {
     const headers: ManagedCloudChatHeaders = {
       ...(json ? { 'Content-Type': 'application/json' } : {}),
-      ...(await readHeaders(signal)),
+      ...(await readHeaders(signal, organizationId)),
     };
     return config.decorateMutationHeaders
       ? await awaitWithAbort(Promise.resolve(config.decorateMutationHeaders(headers)), signal)
@@ -253,7 +276,7 @@ export function createManagedCloudChatClient(
       if (parsedQuery.includeHistoryStats) params.set('includeHistoryStats', '1');
       const suffix = params.size > 0 ? `?${params.toString()}` : '';
       const response = await request(`${MANAGED_CLOUD_CHAT_BASE_PATH}${suffix}`, {
-        headers: await readHeaders(options.signal),
+        headers: await readHeaders(options.signal, options.organizationId),
         ...(options.signal ? { signal: options.signal } : {}),
       });
       const body = await parseContract(
@@ -273,7 +296,7 @@ export function createManagedCloudChatClient(
       const body = ManagedCloudCreateConversationRequestSchema.parse(input);
       const response = await request(MANAGED_CLOUD_CHAT_BASE_PATH, {
         method: 'POST',
-        headers: await mutationHeaders(true, options.signal),
+        headers: await mutationHeaders(true, options.signal, options.organizationId),
         body: JSON.stringify(body),
         ...(options.signal ? { signal: options.signal } : {}),
       });
@@ -291,7 +314,7 @@ export function createManagedCloudChatClient(
       if (query.offset !== undefined) params.set('offset', String(query.offset));
       const suffix = params.size > 0 ? `?${params.toString()}` : '';
       const response = await request(`${managedCloudConversationPath(conversationId)}${suffix}`, {
-        headers: await readHeaders(options.signal),
+        headers: await readHeaders(options.signal, options.organizationId),
         ...(options.signal ? { signal: options.signal } : {}),
       });
       const body = await parseContract(
@@ -313,7 +336,7 @@ export function createManagedCloudChatClient(
       const body = ManagedCloudUpdateConversationRequestSchema.parse(input);
       const response = await request(managedCloudConversationPath(conversationId), {
         method: 'PUT',
-        headers: await mutationHeaders(true, options.signal),
+        headers: await mutationHeaders(true, options.signal, options.organizationId),
         body: JSON.stringify(body),
         ...(options.signal ? { signal: options.signal } : {}),
       });
@@ -328,7 +351,7 @@ export function createManagedCloudChatClient(
     async deleteConversation(conversationId, options = {}) {
       const response = await request(managedCloudConversationPath(conversationId), {
         method: 'DELETE',
-        headers: await mutationHeaders(false, options.signal),
+        headers: await mutationHeaders(false, options.signal, options.organizationId),
         ...(options.signal ? { signal: options.signal } : {}),
       });
       await parseContract(
@@ -347,7 +370,7 @@ export function createManagedCloudChatClient(
         try {
           const response = await request(managedCloudConversationMessagesPath(conversationId), {
             method: 'POST',
-            headers: await mutationHeaders(true, options.signal),
+            headers: await mutationHeaders(true, options.signal, options.organizationId),
             body: JSON.stringify(body),
             ...(options.signal ? { signal: options.signal } : {}),
           });
@@ -377,7 +400,7 @@ export function createManagedCloudChatClient(
     async deleteMessage(conversationId, messageId, options = {}) {
       const response = await request(managedCloudMessagePath(conversationId, messageId), {
         method: 'DELETE',
-        headers: await mutationHeaders(false, options.signal),
+        headers: await mutationHeaders(false, options.signal, options.organizationId),
         ...(options.signal ? { signal: options.signal } : {}),
       });
       await parseContract(

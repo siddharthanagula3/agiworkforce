@@ -29,6 +29,7 @@
 
 import { validateGatewayUrl } from '../../background/policy';
 import { getAuthToken } from '../cloud-bridge/freeTrialClient';
+import { BoundedSseDecoder } from '../cloud-bridge/boundedSseDecoder';
 
 export { getAuthToken };
 
@@ -74,6 +75,8 @@ export function resolveComputerUseModel(tier: string | null | undefined): string
 export const DEFAULT_GATEWAY_BASE = 'https://api.agiworkforce.com';
 
 const GATEWAY_URL_OVERRIDE_KEY = 'agi_gateway_url';
+/** Bound one pending computer-use SSE event before parsing provider-controlled JSON. */
+const COMPUTER_USE_MAX_SSE_FRAME_CHARS = 1_048_576;
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 
@@ -281,16 +284,6 @@ export interface CloudAgentResponse {
 
 // ─── SSE parser ───────────────────────────────────────────────────────────────
 
-/** Minimal SSE data line parser — extracts `data: ...` payload strings. */
-function* parseSseChunk(chunk: string): Generator<string> {
-  for (const line of chunk.split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('data: ')) {
-      yield trimmed.slice(6);
-    }
-  }
-}
-
 /** Merge a streaming tool_calls delta into the accumulator. */
 function mergeToolCallDelta(
   acc: ToolCall[],
@@ -422,11 +415,70 @@ export async function callCloud(
   signal?.addEventListener('abort', cancelReader, { once: true });
 
   const decoder = new TextDecoder();
+  const sseDecoder = new BoundedSseDecoder(COMPUTER_USE_MAX_SSE_FRAME_CHARS);
   let textContent = '';
   const toolCallsAcc: ToolCall[] = [];
   let isDone = false;
-  let buffer = '';
   let tokensUsed = 0; // P2-7: accumulate token usage from SSE usage fields
+
+  const consumeSseData = (data: string): void => {
+    if (data === '[DONE]') {
+      isDone = true;
+      return;
+    }
+
+    let parsed: {
+      choices?: Array<{
+        finish_reason?: string | null;
+        delta?: {
+          content?: string | null;
+          tool_calls?: Array<{
+            index: number;
+            id?: string;
+            type?: string;
+            function?: { name?: string; arguments?: string };
+          }>;
+        };
+      }>;
+      // P2-7: OpenAI-style usage field (may appear in final chunk)
+      usage?: {
+        prompt_tokens?: number;
+        completion_tokens?: number;
+        total_tokens?: number;
+      };
+    };
+
+    try {
+      parsed = JSON.parse(data) as typeof parsed;
+    } catch {
+      return; // malformed complete event — skip
+    }
+
+    // P2-7: Accumulate token usage when the gateway emits it
+    if (parsed.usage?.total_tokens) {
+      tokensUsed = parsed.usage.total_tokens;
+    } else if (
+      parsed.usage?.prompt_tokens !== undefined &&
+      parsed.usage?.completion_tokens !== undefined
+    ) {
+      tokensUsed = (parsed.usage.prompt_tokens ?? 0) + (parsed.usage.completion_tokens ?? 0);
+    }
+
+    const choice = parsed.choices?.[0];
+    if (!choice) return;
+
+    if (choice.finish_reason === 'stop') isDone = true;
+
+    const delta = choice.delta;
+    if (!delta) return;
+
+    if (typeof delta.content === 'string') {
+      textContent += delta.content;
+    }
+    if (Array.isArray(delta.tool_calls)) {
+      mergeToolCallDelta(toolCallsAcc, delta.tool_calls);
+    }
+  };
 
   try {
     while (true) {
@@ -441,77 +493,35 @@ export async function callCloud(
       }
       if (done) break;
 
-      // Accumulate chunks into buffer; parse only complete lines.
-      buffer += decoder.decode(value, { stream: true });
-
-      // Extract all complete SSE lines from the buffer in one pass.
-      // parseSseChunk yields data payloads from every `data: ...` line present.
-      // We do NOT reset buffer inside the loop — all lines are already in buffer
-      // and the generator reads them all before we clear.
-      for (const data of parseSseChunk(buffer)) {
-        if (data === '[DONE]') {
-          isDone = true;
-          break;
-        }
-
-        let parsed: {
-          choices?: Array<{
-            finish_reason?: string | null;
-            delta?: {
-              content?: string | null;
-              tool_calls?: Array<{
-                index: number;
-                id?: string;
-                type?: string;
-                function?: { name?: string; arguments?: string };
-              }>;
-            };
-          }>;
-          // P2-7: OpenAI-style usage field (may appear in final chunk)
-          usage?: {
-            prompt_tokens?: number;
-            completion_tokens?: number;
-            total_tokens?: number;
-          };
-        };
-
-        try {
-          parsed = JSON.parse(data) as typeof parsed;
-        } catch {
-          continue; // malformed chunk — skip
-        }
-
-        // P2-7: Accumulate token usage when the gateway emits it
-        if (parsed.usage?.total_tokens) {
-          tokensUsed = parsed.usage.total_tokens;
-        } else if (
-          parsed.usage?.prompt_tokens !== undefined &&
-          parsed.usage?.completion_tokens !== undefined
-        ) {
-          tokensUsed = (parsed.usage.prompt_tokens ?? 0) + (parsed.usage.completion_tokens ?? 0);
-        }
-
-        const choice = parsed.choices?.[0];
-        if (!choice) continue;
-
-        if (choice.finish_reason === 'stop') isDone = true;
-
-        const delta = choice.delta;
-        if (!delta) continue;
-
-        if (typeof delta.content === 'string') {
-          textContent += delta.content;
-        }
-        if (Array.isArray(delta.tool_calls)) {
-          mergeToolCallDelta(toolCallsAcc, delta.tool_calls);
-        }
+      // Network reads can split anywhere, including in the middle of `data:` or
+      // a JSON string. Decode incrementally and emit only complete SSE events;
+      // clearing a raw read buffer here used to silently drop split tool calls.
+      for (const data of sseDecoder.push(decoder.decode(value, { stream: true }))) {
+        consumeSseData(data);
+        if (isDone) break;
       }
 
-      // Clear the buffer after fully parsing; incomplete trailing lines would need
-      // a line-boundary tracker but SSE lines are always newline-terminated.
-      buffer = '';
-
       if (isDone) break;
+    }
+
+    if (!isDone) {
+      const trailingText = decoder.decode();
+      if (trailingText) {
+        for (const data of sseDecoder.push(trailingText)) {
+          consumeSseData(data);
+          if (isDone) break;
+        }
+      }
+    }
+
+    if (!isDone) {
+      const finished = sseDecoder.finish();
+      for (const data of finished.events) {
+        consumeSseData(data);
+        if (isDone) break;
+      }
+      // An event without its terminating blank line is incomplete by SSE rules
+      // and is deliberately discarded rather than interpreted as valid output.
     }
   } finally {
     signal?.removeEventListener('abort', cancelReader);

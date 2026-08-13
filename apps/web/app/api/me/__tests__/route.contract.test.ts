@@ -86,7 +86,7 @@ describe('GET /api/me — shared cloud contract', () => {
       plan_tier: 'pro',
       status: 'active',
       current_period_end: '2026-08-05T00:00:00.000Z',
-      stripe_subscription_id: 'sub_contract_1',
+      stripe_subscription_id: 'sub_contract1',
     });
     const res = await GET(makeGetRequest());
     expect(res.status).toBe(200);
@@ -99,6 +99,7 @@ describe('GET /api/me — shared cloud contract', () => {
     if (parsed.success) {
       expect(parsed.data.plan.tier).toBe('pro');
       expect(parsed.data.plan.current_period_end).toBeTypeOf('number');
+      expect(parsed.data.plan.cancel_at_period_end).toBe(false);
       expect(parsed.data.plan.subscription_source).toBe('stripe');
       expect(parsed.data.feature_flags.advanced_model_access).toBe(true);
       expect(parsed.data.feature_flags.generic_web_search).toBe(true);
@@ -127,6 +128,7 @@ describe('GET /api/me — shared cloud contract', () => {
         display_name: 'Free',
         status: 'none',
         current_period_end: null,
+        cancel_at_period_end: false,
         subscription_source: 'none',
       });
       expect(parsed.data.routing_preferences).toEqual({});
@@ -160,6 +162,21 @@ describe('GET /api/me — shared cloud contract', () => {
     const parsed = MeResponseSchema.parse(await res.json());
 
     expect(parsed.plan.subscription_source).toBe(source);
+  });
+
+  it('omits the owner when provider identifiers contradict each other', async () => {
+    mockGetSubscription.mockResolvedValue({
+      plan_tier: 'pro',
+      status: 'active',
+      current_period_end: '2026-08-05T00:00:00.000Z',
+      stripe_subscription_id: 'sub_contract1',
+      apple_original_transaction_id: 'original-apple-1',
+    });
+
+    const res = await GET(makeGetRequest());
+    const parsed = MeResponseSchema.parse(await res.json());
+
+    expect(parsed.plan.subscription_source).toBeUndefined();
   });
 
   it('fails closed when subscription entitlement cannot be verified', async () => {

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
+import * as accountApi from '../utils/api';
 import { SettingsPanel } from '../features/settings/SettingsPanel';
 import {
   BYPASS_CANCEL_ACTION,
@@ -24,7 +25,6 @@ describe('SettingsPanel', () => {
       apiEndpoint: 'https://agiworkforce.com/api/llm/v1',
       model: 'auto',
       cliPath: 'agi',
-      streamingEnabled: true,
       contextLines: 50,
       telemetryEnabled: false,
       hoverEnabled: false,
@@ -36,14 +36,10 @@ describe('SettingsPanel', () => {
       'agent.mode': 'auto',
       'agent.effort': 'medium',
       'agent.thinking': false,
-      'mcp.enabled': false,
       'desktopBridge.enabled': false,
       'desktopBridge.port': 8787,
       telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
-      useProviderStream: false,
-      gatewayUrl: 'https://api.agiworkforce.com',
       currentTier: 'unknown',
-      tier: 'byok',
     };
     configurationUpdate = vi.fn(async (key: string, value: unknown) => {
       values[key] = value;
@@ -263,5 +259,40 @@ describe('SettingsPanel', () => {
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
       'agi-workforce.restartLocalRuntime',
     );
+  });
+
+  it('publishes the cleared account state when a concurrent refresh invalidates the token', async () => {
+    vi.spyOn(accountApi, 'getAccountAuthState')
+      .mockResolvedValueOnce({ status: 'signed-in' })
+      .mockResolvedValueOnce({ status: 'signed-out' });
+    vi.spyOn(accountApi, 'fetchAccountIdentity').mockResolvedValue({
+      displayName: 'Signed-in user',
+      email: 'user@example.com',
+      accountType: 'Personal account',
+      planName: 'Pro',
+      tier: 'pro',
+    });
+    vi.spyOn(accountApi, 'fetchTierInfo').mockResolvedValue({
+      tier: 'pro',
+      subscriptionStatus: 'active',
+    });
+    SettingsPanel.createOrShow(context, 'account');
+
+    await webviewMessageHandler!({ type: 'settings.ready' });
+
+    expect(accountApi.fetchAccountIdentity).toHaveBeenCalledOnce();
+    expect(accountApi.fetchTierInfo).toHaveBeenCalledOnce();
+    expect(panelPostMessage).toHaveBeenCalledWith({
+      type: 'settings.snapshot',
+      state: expect.objectContaining({
+        accountConnected: false,
+        accountStatus: 'signed-out',
+      }),
+    });
+    const snapshot = panelPostMessage.mock.calls.find(
+      ([message]) => message?.type === 'settings.snapshot',
+    )?.[0];
+    expect(snapshot?.state).not.toHaveProperty('accountIdentity');
+    expect(snapshot?.state).not.toHaveProperty('tierInfo');
   });
 });

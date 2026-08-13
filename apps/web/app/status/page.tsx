@@ -228,9 +228,9 @@ export default async function StatusPage() {
               </p>
               <h3 className="agi-fl-trust-title">Traffic goes straight to your provider.</h3>
               <p className="agi-fl-trust-body">
-                BYOK requests on Desktop and CLI travel directly from your machine to the provider
-                you chose. If a model misbehaves, the provider&rsquo;s own status page is the source
-                of truth.
+                BYOK requests on Desktop, CLI, and VS Code travel directly from the local runtime to
+                the provider you chose. If a model misbehaves, the provider&rsquo;s own status page
+                is the source of truth.
               </p>
             </div>
             <div className="agi-fl-trust-card">

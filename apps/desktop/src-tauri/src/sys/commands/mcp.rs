@@ -40,13 +40,31 @@ pub struct McpConfigLocation {
     pub exists: bool,
 }
 
-async fn build_runtime_config(raw_config: &McpServersConfig) -> Result<McpServersConfig, String> {
-    let mut runtime_config = raw_config.clone();
-    runtime_config
+/// Resolve credentials only for the server the user explicitly chose to
+/// connect. Resolving every configured server here can refresh OAuth tokens or
+/// emit credential lookups for unrelated, disconnected integrations.
+async fn build_runtime_server_config(
+    raw_config: &McpServersConfig,
+    server_name: &str,
+) -> Result<McpServerConfig, String> {
+    let server_config = raw_config
+        .mcp_servers
+        .get(server_name)
+        .ok_or_else(|| format!("Server '{}' not found in configuration", server_name))?
+        .clone();
+    let mut scoped = McpServersConfig {
+        mcp_servers: HashMap::from([(server_name.to_string(), server_config)]),
+    };
+    scoped
         .inject_credentials()
         .await
         .map_err(|e| format!("Failed to inject credentials: {}", e))?;
-    Ok(runtime_config)
+    scoped.mcp_servers.remove(server_name).ok_or_else(|| {
+        format!(
+            "Server '{}' disappeared while resolving credentials",
+            server_name
+        )
+    })
 }
 
 fn resolve_config_location() -> Result<McpConfigLocation, String> {
@@ -155,7 +173,8 @@ impl McpState {
             .map_err(|e| format!("Failed to save MCP config: {}", e))
     }
 
-    /// Reload active MCP config from disk and reconnect enabled servers.
+    /// Reload active MCP config from disk without starting any process or
+    /// network transport.
     /// The config source is resolved by `McpServersConfig::default_config_path()`,
     /// which resolves project config precedence when a project folder is active.
     pub async fn reload_active_config(&self, app: &tauri::AppHandle) -> Result<String, String> {
@@ -182,7 +201,6 @@ impl McpState {
         // not dead scaffolding (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01).
         raw_config.merge_dotfile_servers();
 
-        let runtime_config = build_runtime_config(&raw_config).await?;
         *self.config.lock() = raw_config;
 
         let mut warnings: Vec<String> = Vec::new();
@@ -212,70 +230,19 @@ impl McpState {
             }
         }
 
-        let mut connected_count = 0;
-        let mut total_tools = 0;
-        for (name, server_config) in &runtime_config.mcp_servers {
-            if !server_config.enabled {
-                continue;
-            }
-
-            match self
-                .client
-                .connect_server(name.clone(), server_config.clone())
-                .await
-            {
-                Ok(_) => {
-                    connected_count += 1;
-                    emit_mcp_event(
-                        app,
-                        McpEvent::ServerConnectionChanged {
-                            server_name: name.clone(),
-                            connected: true,
-                            error: None,
-                        },
-                    );
-
-                    let tool_count = self
-                        .client
-                        .list_server_tools(name)
-                        .map(|tools| tools.len())
-                        .unwrap_or(0);
-                    total_tools += tool_count;
-                    emit_mcp_event(
-                        app,
-                        McpEvent::ToolsUpdated {
-                            server_name: name.clone(),
-                            tool_count,
-                        },
-                    );
-                }
-                Err(err) => {
-                    let err_str = err.to_string();
-                    warnings.push(format!("failed to connect '{}': {}", name, err_str));
-                    emit_mcp_event(
-                        app,
-                        McpEvent::ServerConnectionChanged {
-                            server_name: name.clone(),
-                            connected: false,
-                            error: Some(err_str),
-                        },
-                    );
-                }
-            }
-        }
-
         emit_mcp_event(
             app,
             McpEvent::SystemInitialized {
-                server_count: connected_count,
-                tool_count: total_tools,
+                server_count: 0,
+                tool_count: 0,
             },
         );
 
         let location = resolve_config_location()?;
+        let configured_count = self.config.lock().mcp_servers.len();
         let summary = format!(
-            "MCP initialized from {} config ({}). Connected to {} server(s) with {} tool(s)",
-            location.source, location.path, connected_count, total_tools
+            "MCP loaded from {} config ({}). {} server(s) available; connect explicitly to start one",
+            location.source, location.path, configured_count
         );
 
         if warnings.is_empty() {
@@ -377,24 +344,28 @@ impl McpState {
                 .map_err(|e| format!("Failed to persist filesystem MCP config: {}", e))?;
         }
 
-        // Restart the server to apply new config
+        // Changing a filesystem root must not turn a configured-but-disconnected
+        // server into a running process. In particular, the packaged filesystem
+        // entry uses npx, which may contact npm and install code. Only preserve a
+        // connection that the user had already started explicitly.
+        let was_connected = self
+            .client
+            .get_connected_servers()
+            .contains(&"filesystem".to_string());
+
+        // Restart an already-live server to apply the new config.
         let server_config = self.config.lock().mcp_servers.get("filesystem").cloned();
 
-        // Disconnect existing session if any
-        if self
-            .client
-            .list_servers()
-            .contains(&"filesystem".to_string())
-        {
+        if was_connected {
             if let Err(e) = self.client.disconnect_server("filesystem").await {
                 tracing::warn!("[MCP] Failed to disconnect filesystem server: {}", e);
             }
         }
 
-        // Reconnect with new config
+        // Reconnect only when this method is preserving an existing explicit
+        // connection. `enabled` is configuration state, not execution consent.
         if let Some(config) = server_config {
-            // Only restart if the server is enabled
-            if config.enabled {
+            if was_connected {
                 match self
                     .client
                     .connect_server("filesystem".to_string(), config)
@@ -423,7 +394,7 @@ impl McpState {
                 }
             } else {
                 tracing::info!(
-                    "[MCP] Filesystem server not enabled, config updated but not started"
+                    "[MCP] Filesystem server is disconnected; roots updated without starting it"
                 );
                 Ok(true)
             }
@@ -726,19 +697,23 @@ pub async fn mcp_connect_server(
         .ok_or_else(|| format!("Server '{}' not found in configuration", name))?
         .clone();
 
-    let confirmation = ToolConfirmationRequest {
-        request_id: uuid::Uuid::new_v4().to_string(),
-        tool_name: "mcp_connect_server".to_string(),
-        tool_description: format!(
-            "Connect to MCP server '{}' (command: {} {})",
-            name,
+    let connection_target = match raw_server_config.transport.as_ref() {
+        Some(crate::core::mcp::transport::TransportConfig::Http(http)) => {
+            format!("remote endpoint {}", http.url)
+        }
+        _ => format!(
+            "local command {} {}",
             raw_server_config.command,
             raw_server_config.args.join(" ")
         ),
+    };
+    let confirmation = ToolConfirmationRequest {
+        request_id: uuid::Uuid::new_v4().to_string(),
+        tool_name: "mcp_connect_server".to_string(),
+        tool_description: format!("Connect to MCP server '{}' ({})", name, connection_target),
         parameters: serde_json::json!({
             "server": name.clone(),
-            "command": raw_server_config.command.clone(),
-            "args": raw_server_config.args.clone(),
+            "target": connection_target,
         }),
         risk_level: RiskLevel::High,
         safety_tier: ToolSafetyTier::RequiresExplicitApproval,
@@ -760,12 +735,7 @@ pub async fn mcp_connect_server(
         return Err("MCP server connection cancelled".to_string());
     }
 
-    let runtime_config = build_runtime_config(&raw_config).await?;
-    let server_config = runtime_config
-        .mcp_servers
-        .get(&name)
-        .ok_or_else(|| format!("Server '{}' not found in runtime configuration", name))?
-        .clone();
+    let server_config = build_runtime_server_config(&raw_config, &name).await?;
 
     state
         .client
@@ -1161,15 +1131,26 @@ pub async fn mcp_update_config(
         serde_json::from_value(new_config).map_err(|e| format!("Invalid config: {}", e))?;
     let existing_config = state.config.lock().clone();
     restore_redacted_env_values(&mut parsed_config, &existing_config, "<redacted>");
-    let runtime_config = build_runtime_config(&parsed_config).await?;
-
+    let connected_servers = state.client.get_connected_servers();
+    let servers_to_disconnect: Vec<String> = connected_servers
+        .into_iter()
+        .filter(|server_name| {
+            let previous = existing_config.mcp_servers.get(server_name);
+            let next = parsed_config.mcp_servers.get(server_name);
+            match (previous, next) {
+                (Some(previous), Some(next)) => {
+                    serde_json::to_value(previous).ok() != serde_json::to_value(next).ok()
+                }
+                _ => true,
+            }
+        })
+        .collect();
     state.persist_config_snapshot(&parsed_config).await?;
 
     *state.config.lock() = parsed_config;
 
     let mut warnings: Vec<String> = Vec::new();
-    let connected_servers = state.client.get_connected_servers();
-    for server_name in connected_servers {
+    for server_name in servers_to_disconnect {
         match state.client.disconnect_server(&server_name).await {
             Ok(_) => {
                 emit_mcp_event(
@@ -1192,55 +1173,8 @@ pub async fn mcp_update_config(
         }
     }
 
-    for (name, server_config) in runtime_config.mcp_servers.iter() {
-        if !server_config.enabled {
-            continue;
-        }
-
-        match state
-            .client
-            .connect_server(name.clone(), server_config.clone())
-            .await
-        {
-            Ok(_) => {
-                emit_mcp_event(
-                    &app,
-                    McpEvent::ServerConnectionChanged {
-                        server_name: name.clone(),
-                        connected: true,
-                        error: None,
-                    },
-                );
-                let tool_count = state
-                    .client
-                    .list_server_tools(name)
-                    .map(|tools| tools.len())
-                    .unwrap_or(0);
-                emit_mcp_event(
-                    &app,
-                    McpEvent::ToolsUpdated {
-                        server_name: name.clone(),
-                        tool_count,
-                    },
-                );
-            }
-            Err(err) => {
-                let err_str = err.to_string();
-                warnings.push(format!("failed to connect '{}': {}", name, err_str));
-                emit_mcp_event(
-                    &app,
-                    McpEvent::ServerConnectionChanged {
-                        server_name: name.clone(),
-                        connected: false,
-                        error: Some(err_str),
-                    },
-                );
-            }
-        }
-    }
-
     if warnings.is_empty() {
-        Ok("Configuration updated successfully".to_string())
+        Ok("Configuration updated. Connect a server explicitly to start it.".to_string())
     } else {
         Ok(format!(
             "Configuration updated with warnings: {}",
@@ -1318,54 +1252,25 @@ async fn set_server_enabled(
             return Ok(format!("Server '{}' enabled", trimmed));
         }
 
-        let runtime_config = build_runtime_config(&snapshot).await?;
-        let server_config = runtime_config
-            .mcp_servers
-            .get(trimmed)
-            .ok_or_else(|| format!("Server '{}' not found in runtime configuration", trimmed))?
-            .clone();
-        if let Err(err) = state
-            .client
-            .connect_server(trimmed.to_string(), server_config)
-            .await
-        {
-            {
-                let mut config_guard = state.config.lock();
-                if let Some(entry) = config_guard.mcp_servers.get_mut(trimmed) {
-                    entry.enabled = false;
-                }
-            }
-            let rollback_snapshot = state.config.lock().clone();
-            if let Err(save_err) = state.persist_config_snapshot(&rollback_snapshot).await {
-                tracing::warn!(
-                    "Failed to rollback persisted enabled state for '{}': {}",
-                    trimmed,
-                    save_err
-                );
-            }
-            return Err(format!("Failed to start '{}': {}", trimmed, err));
-        }
         emit_mcp_event(
             &app,
             McpEvent::ServerConnectionChanged {
                 server_name: trimmed.to_string(),
-                connected: true,
+                connected: false,
                 error: None,
             },
         );
-        let tool_count = state
-            .client
-            .list_server_tools(trimmed)
-            .map(|tools| tools.len())
-            .unwrap_or(0);
         emit_mcp_event(
             &app,
             McpEvent::ToolsUpdated {
                 server_name: trimmed.to_string(),
-                tool_count,
+                tool_count: 0,
             },
         );
-        Ok(format!("Server '{}' enabled", trimmed))
+        Ok(format!(
+            "Server '{}' enabled. Connect it explicitly to start it.",
+            trimmed
+        ))
     } else {
         {
             let config_guard = state.config.lock();
@@ -1607,10 +1512,13 @@ pub async fn mcp_install_server(
             transport: None,
         },
         "git" => McpServerConfig {
-            command: "npx".to_string(),
+            // The current official Git reference server is a Python package.
+            // There is no @modelcontextprotocol/server-git npm package.
+            command: "uvx".to_string(),
             args: vec![
-                "-y".to_string(),
-                "@modelcontextprotocol/server-git".to_string(),
+                "mcp-server-git".to_string(),
+                "--repository".to_string(),
+                ".".to_string(),
             ],
             env: HashMap::new(),
             enabled: false,
@@ -1802,7 +1710,7 @@ pub async fn mcp_install_server(
 /// Update the filesystem MCP server allowed directories.
 ///
 /// This command updates the MCP filesystem server to use the specified directories
-/// as allowed roots. It restarts the server if it's currently enabled.
+/// as allowed roots. It restarts the server only if the user already connected it.
 ///
 /// This should be called when the user changes allowed directories in settings.
 #[tauri::command]
@@ -1826,5 +1734,50 @@ pub async fn mcp_update_filesystem_directories(
         )),
         Ok(false) => Ok("Filesystem server already configured with these directories".to_string()),
         Err(e) => Err(e),
+    }
+}
+
+#[cfg(test)]
+mod filesystem_root_update_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn disconnected_legacy_enabled_filesystem_server_stays_disconnected_after_root_update() {
+        let state = McpState::new();
+        {
+            let mut config = state.config.lock();
+            let filesystem = config
+                .mcp_servers
+                .get_mut("filesystem")
+                .expect("packaged filesystem config");
+            // Simulate a user profile written by an older release, where the
+            // packaged default was incorrectly marked enabled.
+            filesystem.enabled = true;
+            filesystem.args = vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+                ".".to_string(),
+            ];
+        }
+
+        let root = std::env::temp_dir().to_string_lossy().to_string();
+        let changed = state
+            .update_filesystem_roots_for_session(&[root.clone()])
+            .await
+            .expect("root update should succeed");
+
+        assert!(changed);
+        assert!(
+            state.client.get_connected_servers().is_empty(),
+            "a root update must never start a disconnected MCP server"
+        );
+        assert_eq!(
+            state.config.lock().mcp_servers["filesystem"].args,
+            vec![
+                "-y".to_string(),
+                "@modelcontextprotocol/server-filesystem".to_string(),
+                root,
+            ]
+        );
     }
 }

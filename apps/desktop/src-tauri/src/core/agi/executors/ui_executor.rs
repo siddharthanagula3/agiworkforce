@@ -182,9 +182,9 @@ impl UiExecutor {
             let mut mouse_guard = self.automation.mouse.lock().await;
             let mouse = mouse_guard.as_mut().ok_or_else(|| {
                 anyhow!(
-                "Mouse automation requires Input Monitoring permission. \
+                    "Mouse automation requires Input Monitoring permission. \
                  Grant it in System Settings \u{2192} Privacy & Security \u{2192} Input Monitoring."
-            )
+                )
             })?;
             mouse.click(x, y, MouseButton::Left)?;
 

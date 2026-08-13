@@ -3,11 +3,13 @@ import { Check, ExternalLink, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/ui/Button';
+import { relaunchApp } from '@/lib/tauri-mock';
 
 interface AutomationPermissions {
   accessibility: boolean;
-  screen_recording: boolean;
-  input_monitoring: boolean;
+  screenRecording: boolean;
+  inputMonitoring: boolean;
+  automationServiceReady: boolean;
 }
 
 interface PermissionRowProps {
@@ -82,8 +84,7 @@ export function AutomationPermissionsSettings() {
 
   const refresh = useCallback(async () => {
     try {
-      const result =
-        (await automation.checkAutomationPermissions()) as unknown as AutomationPermissions;
+      const result = await automation.checkAutomationPermissions();
       setPermissions(result);
     } catch (err) {
       console.error('Failed to check automation permissions:', err);
@@ -113,7 +114,10 @@ export function AutomationPermissionsSettings() {
   );
 
   const allGranted =
-    permissions?.accessibility && permissions?.screen_recording && permissions?.input_monitoring;
+    permissions?.accessibility && permissions?.screenRecording && permissions?.inputMonitoring;
+  const restartRequired = Boolean(
+    permissions?.accessibility && !permissions.automationServiceReady,
+  );
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
@@ -156,7 +160,7 @@ export function AutomationPermissionsSettings() {
           <PermissionRow
             label="Screen Recording"
             description="Required for taking screenshots and visual verification during agent tasks. Enable in System Settings → Privacy & Security → Screen Recording."
-            granted={permissions?.screen_recording ?? false}
+            granted={permissions?.screenRecording ?? false}
             kind="screen_recording"
             onRequest={handleRequest}
             requesting={requesting === 'screen_recording'}
@@ -164,7 +168,7 @@ export function AutomationPermissionsSettings() {
           <PermissionRow
             label="Input Monitoring"
             description="Required for keyboard and mouse simulation during automation. Enable in System Settings → Privacy & Security → Input Monitoring."
-            granted={permissions?.input_monitoring ?? false}
+            granted={permissions?.inputMonitoring ?? false}
             kind="input_monitoring"
             onRequest={handleRequest}
             requesting={requesting === 'input_monitoring'}
@@ -172,14 +176,25 @@ export function AutomationPermissionsSettings() {
         </div>
       )}
 
-      {allGranted && (
+      {allGranted && permissions?.automationServiceReady && (
         <p className="mt-4 text-xs text-green-600 flex items-center gap-1.5">
           <Check className="h-3.5 w-3.5" />
           All permissions granted — agent mode is ready.
         </p>
       )}
 
-      {!allGranted && !loading && (
+      {restartRequired && (
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
+          <p className="text-xs text-amber-700 dark:text-amber-200">
+            Accessibility is granted. Restart AGI to initialize the protected automation service.
+          </p>
+          <Button size="sm" onClick={() => void relaunchApp()}>
+            Restart AGI
+          </Button>
+        </div>
+      )}
+
+      {!allGranted && !loading && !restartRequired && (
         <p className="mt-4 text-xs text-muted-foreground">
           After granting permissions in System Settings, click <strong>Refresh</strong> to update
           the status. You may need to restart the app for changes to take effect.

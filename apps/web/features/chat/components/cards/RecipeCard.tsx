@@ -25,6 +25,13 @@ interface ParsedRecipe {
   description: string;
   ingredients: string[];
   instructions: string[];
+  /**
+   * Trailing sections the recipe layout has no slot for — "Notes", "Tips",
+   * "Variations", "Storage". These were parsed into a dead `'other'` branch
+   * and dropped on the floor, so a recipe answer rendered as a card lost
+   * everything after its instructions with no indication anything was missing.
+   */
+  extraSections: Array<{ heading: string; lines: string[] }>;
 }
 
 function parseRecipe(content: string): ParsedRecipe {
@@ -42,6 +49,7 @@ function parseRecipe(content: string): ParsedRecipe {
   type Section = 'preamble' | 'ingredients' | 'instructions' | 'other';
   let currentSection: Section = 'preamble';
   const descLines: string[] = [];
+  const extraSections: Array<{ heading: string; lines: string[] }> = [];
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -96,8 +104,13 @@ function parseRecipe(content: string): ParsedRecipe {
       continue;
     }
     if (/^#{1,4}\s/.test(trimmed) && currentSection !== 'preamble') {
-      // Some other header section (e.g. "Notes") -- stop parsing instructions
+      // Some other header section (e.g. "Notes"). Stop parsing instructions,
+      // but KEEP the section — dropping it silently truncated the answer.
       currentSection = 'other';
+      extraSections.push({
+        heading: trimmed.replace(/^#{1,4}\s*/, '').replace(/\*\*/g, ''),
+        lines: [],
+      });
       continue;
     }
 
@@ -115,6 +128,9 @@ function parseRecipe(content: string): ParsedRecipe {
         .replace(/^\*\*step\s+\d+[:.]\*\*\s*/i, '')
         .replace(/^step\s+\d+[:.]\s*/i, '');
       if (cleaned) instructions.push(cleaned);
+    } else if (currentSection === 'other') {
+      const cleaned = trimmed.replace(/^[-*]\s+/, '').replace(/^\d+\.\s+/, '');
+      if (cleaned) extraSections[extraSections.length - 1]?.lines.push(cleaned);
     }
   }
 
@@ -133,6 +149,7 @@ function parseRecipe(content: string): ParsedRecipe {
     description,
     ingredients,
     instructions,
+    extraSections: extraSections.filter((section) => section.lines.length > 0),
   };
 }
 
@@ -273,6 +290,24 @@ export function RecipeCard({ content }: RecipeCardProps) {
             </ol>
           </section>
         )}
+
+        {/* Anything the recipe layout has no dedicated slot for — Notes, Tips,
+            Variations, Storage. Rendered rather than dropped so the card is
+            never a lossy view of the answer. */}
+        {recipe.extraSections.map((section) => (
+          <section key={section.heading} className="mt-6" data-testid="recipe-extra-section">
+            <h4 className="mb-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              {section.heading}
+            </h4>
+            <ul className="space-y-1.5">
+              {section.lines.map((line, i) => (
+                <li key={`${section.heading}-${i}`} className="text-sm leading-relaxed">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
       </CardContent>
     </Card>
   );

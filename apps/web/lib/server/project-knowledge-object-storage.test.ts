@@ -11,8 +11,11 @@ import {
 
 vi.mock('./object-storage', () => ({
   isObjectStorageConfigured: () => false,
+  isPrivateObjectStorageConfigured: () => false,
   getObject: vi.fn(),
+  getPrivateObject: vi.fn(),
   deleteObject: vi.fn(),
+  deletePrivateObject: vi.fn(),
 }));
 
 describe('local project knowledge storage', () => {

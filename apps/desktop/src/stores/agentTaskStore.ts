@@ -10,6 +10,7 @@ import type {
   AgentTaskStateChanged,
 } from '@agiworkforce/types/protocol';
 import type { PrivacyMode } from '@agiworkforce/types';
+import { useChatModelStore } from '@agiworkforce/unified-chat';
 
 const MAX_LIVE_TASK_ENTRIES = 100;
 
@@ -69,6 +70,24 @@ function captureGoalSubmissionAuthority(authority?: GoalSubmissionAuthority) {
       }
     },
   };
+}
+
+interface GoalModelTarget {
+  modelId?: string;
+  provider?: string;
+}
+
+function captureGoalModelTarget(target?: GoalModelTarget): { modelId: string; provider: string } {
+  const modelState = useChatModelStore.getState();
+  const selected = modelState.getSelectedModel();
+  const modelId = target?.modelId?.trim() || selected?.id.trim();
+  const provider = target?.provider?.trim() || selected?.provider.trim();
+
+  if (!modelId || !provider) {
+    throw new Error('Choose an available model before launching a Task.');
+  }
+
+  return { modelId, provider };
 }
 
 function isAbortError(error: unknown): boolean {
@@ -136,7 +155,8 @@ interface AgentTaskStoreState {
       /** Parallel only: how many agents race the goal in their own sandboxes. */
       numAgents?: number;
       parallel?: boolean;
-    } & GoalSubmissionAuthority,
+    } & GoalSubmissionAuthority &
+      GoalModelTarget,
   ) => Promise<string>;
   submitGoalSwarm: (
     goal: string,
@@ -144,7 +164,8 @@ interface AgentTaskStoreState {
       priority?: string;
       deadline?: number;
       successCriteria?: string[];
-    } & GoalSubmissionAuthority,
+    } & GoalSubmissionAuthority &
+      GoalModelTarget,
   ) => Promise<string>;
   submitGoalAuto: (
     goal: string,
@@ -152,7 +173,8 @@ interface AgentTaskStoreState {
       priority?: string;
       deadline?: number;
       successCriteria?: string[];
-    } & GoalSubmissionAuthority,
+    } & GoalSubmissionAuthority &
+      GoalModelTarget,
   ) => Promise<string>;
   shouldUseSwarm: (description: string) => Promise<boolean>;
   fetchTasks: () => Promise<void>;
@@ -184,19 +206,23 @@ interface SubmitGoalResponse {
 
 interface SubmitParallelGoalResponse {
   goalId: string;
-  bestResult: {
-    score: number;
-    result: {
-      success: boolean;
-      error?: string | null;
-    };
-  };
+  state: AgentTaskStatus;
+  output?: string | null;
+  error?: string | null;
 }
 
 interface GoalStatusResponse {
-  context: { toolResults: Array<{ result?: unknown; error?: string | null }> };
+  // ExecutionContext is a Rust-native structure and intentionally keeps its
+  // snake_case wire names. Live events use the separate camelCase protocol.
+  context: { tool_results: Array<{ result?: unknown; error?: string | null }> };
   state: AgentTaskStatus;
   currentIteration: number;
+}
+
+interface NativeTaskSnapshot {
+  state: AgentTaskStatus;
+  context?: GoalStatusResponse['context'];
+  currentIteration?: number;
 }
 
 interface ReflectionInsightResponse {
@@ -285,6 +311,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
         submitGoal: async (goal, options = {}) => {
           try {
             const authority = captureGoalSubmissionAuthority(options);
+            const modelTarget = captureGoalModelTarget(options);
             await ensureAgiInitialized();
             authority.assertCurrent();
             if (options.parallel) {
@@ -294,19 +321,28 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
                   priority: 'medium',
                   numAgents: parallelAgentCount(options.numAgents),
                   trustMode: authority.trustMode,
+                  ...modelTarget,
                 },
               });
               const taskId = result.goalId;
               set((state) => ({
-                tasks: upsertSubmittedAgentTask(state.tasks, {
-                  id: taskId,
-                  goal,
-                  status: 'queued',
-                  createdAt: new Date().toISOString(),
-                  result: `Parallel execution returned a best score of ${result.bestResult.score}.`,
-                  error: result.bestResult.result.error ?? undefined,
-                  executionMode: 'parallel',
-                }),
+                tasks: upsertSubmittedAgentTask(
+                  state.tasks,
+                  {
+                    id: taskId,
+                    goal,
+                    status: result.state,
+                    createdAt: new Date().toISOString(),
+                    completedAt:
+                      isTerminalAgentTaskStatus(result.state) || result.state === 'ready_for_review'
+                        ? new Date().toISOString()
+                        : undefined,
+                    result: result.output ?? undefined,
+                    error: result.error ?? undefined,
+                    executionMode: 'parallel',
+                  },
+                  true,
+                ),
               }));
               return taskId;
             }
@@ -317,6 +353,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
                 priority: 'medium',
                 maxSteps: goalIterationLimit(options.maxIterations),
                 trustMode: authority.trustMode,
+                ...modelTarget,
               },
             });
 
@@ -335,9 +372,8 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
             return taskId;
           } catch (error) {
             if (!isAbortError(error)) {
-              toast.error(
-                `Failed to submit goal: ${error instanceof Error ? error.message : 'Unknown error'}`,
-              );
+              const message = error instanceof Error ? error.message : String(error);
+              toast.error(`Failed to submit goal: ${message || 'Unknown error'}`);
             }
             throw error;
           }
@@ -346,6 +382,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
         submitGoalSwarm: async (goal, options = {}) => {
           try {
             const authority = captureGoalSubmissionAuthority(options);
+            const modelTarget = captureGoalModelTarget(options);
             await ensureAgiInitialized();
             authority.assertCurrent();
             const result = await invoke<SwarmGoalResponse>('agi_submit_goal_swarm', {
@@ -355,28 +392,36 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
                 deadline: options.deadline,
                 successCriteria: options.successCriteria,
                 trustMode: authority.trustMode,
+                ...modelTarget,
               },
             });
 
             const taskId = result.goalId;
+            const status: AgentTaskStatus = result.success ? 'ready_for_review' : 'failed';
             set((state) => ({
-              tasks: upsertSubmittedAgentTask(state.tasks, {
-                id: taskId,
-                goal,
-                status: 'queued',
-                createdAt: new Date().toISOString(),
-                result: result.summary,
-                executionMode: 'swarm',
-                swarmMetrics: {
-                  succeeded: result.succeeded,
-                  failed: result.failed,
-                  wallTimeMs: result.wallTimeMs,
-                  speedupRatio: result.speedupRatio,
-                  criticalPathLength: result.criticalPathLength,
-                  maxParallelism: result.maxParallelism,
-                  summary: result.summary,
+              tasks: upsertSubmittedAgentTask(
+                state.tasks,
+                {
+                  id: taskId,
+                  goal,
+                  status,
+                  createdAt: new Date().toISOString(),
+                  completedAt: new Date().toISOString(),
+                  result: result.summary,
+                  error: result.success ? undefined : result.summary,
+                  executionMode: 'swarm',
+                  swarmMetrics: {
+                    succeeded: result.succeeded,
+                    failed: result.failed,
+                    wallTimeMs: result.wallTimeMs,
+                    speedupRatio: result.speedupRatio,
+                    criticalPathLength: result.criticalPathLength,
+                    maxParallelism: result.maxParallelism,
+                    summary: result.summary,
+                  },
                 },
-              }),
+                true,
+              ),
             }));
             return taskId;
           } catch (err) {
@@ -389,6 +434,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
         submitGoalAuto: async (goal, options = {}) => {
           try {
             const authority = captureGoalSubmissionAuthority(options);
+            const modelTarget = captureGoalModelTarget(options);
             await ensureAgiInitialized();
             authority.assertCurrent();
             const result = await invoke<SubmitGoalResponse>('agi_submit_goal_auto', {
@@ -398,6 +444,7 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
                 deadline: options.deadline,
                 successCriteria: options.successCriteria,
                 trustMode: authority.trustMode,
+                ...modelTarget,
               },
             });
 
@@ -432,27 +479,50 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
           try {
             const goals = await invoke<GoalFromBackend[]>('agi_list_goals');
             const existingTasks = get().tasks;
-
-            const updatedTasks = goals.map((g) => {
-              const existing = existingTasks.find((t) => t.id === g.id);
-              return {
-                id: g.id,
-                goal: g.description,
-                status: existing?.status ?? 'queued',
-                createdAt: existing?.createdAt ?? new Date().toISOString(),
-                completedAt: existing?.completedAt,
-                iterations: existing?.iterations,
-                result: existing?.result,
-                insights: existing?.insights,
-                error: existing?.error,
-              };
-            });
-
-            // Keep local tasks that aren't in backend (e.g. parallel tasks)
             const backendIds = new Set(goals.map((g) => g.id));
-            const localOnly = existingTasks.filter((t) => !backendIds.has(t.id));
+            const recoveryEntries = await Promise.all(
+              existingTasks
+                .filter((task) => isActiveAgentTaskStatus(task.status) && !backendIds.has(task.id))
+                .map(async (task) => [task.id, await readNativeTaskSnapshot(task.id)] as const),
+            );
+            const recoveryByTaskId = new Map(recoveryEntries);
+            const recoveredAt = new Date().toISOString();
 
-            set({ tasks: [...updatedTasks, ...localOnly], loading: false });
+            set((state) => {
+              // Events can arrive while recovery IPC is in flight. Merge
+              // against the current store, not the snapshot captured above.
+              const updatedTasks = goals.map((goal) => {
+                const existing = state.tasks.find((task) => task.id === goal.id);
+                return {
+                  id: goal.id,
+                  goal: goal.description,
+                  status: existing?.status ?? ('queued' as AgentTaskStatus),
+                  createdAt: existing?.createdAt ?? recoveredAt,
+                  completedAt: existing?.completedAt,
+                  iterations: existing?.iterations,
+                  result: existing?.result,
+                  insights: existing?.insights,
+                  error: existing?.error,
+                  executionMode: existing?.executionMode,
+                  swarmMetrics: existing?.swarmMetrics,
+                  pauseReason: existing?.pauseReason,
+                };
+              });
+
+              const localOnly = state.tasks
+                .filter((task) => !backendIds.has(task.id))
+                .map((task) => {
+                  if (!isActiveAgentTaskStatus(task.status) || !recoveryByTaskId.has(task.id)) {
+                    return task;
+                  }
+                  const snapshot = recoveryByTaskId.get(task.id);
+                  return snapshot
+                    ? mergeNativeTaskSnapshot(task, snapshot, recoveredAt)
+                    : markTaskInterruptedByRestart(task, recoveredAt);
+                });
+
+              return { tasks: [...updatedTasks, ...localOnly], loading: false };
+            });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.error('[AgentTaskStore] Failed to fetch tasks:', err);
@@ -462,42 +532,17 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
         },
 
         getTaskStatus: async (taskId) => {
-          try {
-            const response = await invoke<GoalStatusResponse>('agi_get_goal_status', {
-              goalId: taskId,
-            });
+          const snapshot = await readNativeTaskSnapshot(taskId);
+          if (!snapshot) return null;
 
-            const mappedStatus = response.state;
-            const lastResult = response.context.toolResults.at(-1);
+          const recoveredAt = new Date().toISOString();
+          set((state) => ({
+            tasks: state.tasks.map((task) =>
+              task.id === taskId ? mergeNativeTaskSnapshot(task, snapshot, recoveredAt) : task,
+            ),
+          }));
 
-            set((state) => ({
-              tasks: state.tasks.map((t) =>
-                t.id === taskId
-                  ? {
-                      ...t,
-                      status: mappedStatus,
-                      iterations: response.currentIteration,
-                      result:
-                        lastResult?.result === undefined
-                          ? t.result
-                          : typeof lastResult.result === 'string'
-                            ? lastResult.result
-                            : JSON.stringify(lastResult.result),
-                      error: lastResult?.error ?? t.error,
-                      completedAt:
-                        isTerminalAgentTaskStatus(mappedStatus) ||
-                        mappedStatus === 'ready_for_review'
-                          ? (t.completedAt ?? new Date().toISOString())
-                          : undefined,
-                    }
-                  : t,
-              ),
-            }));
-
-            return get().tasks.find((t) => t.id === taskId) ?? null;
-          } catch {
-            return null;
-          }
+          return get().tasks.find((task) => task.id === taskId) ?? null;
         },
 
         cancelTask: async (taskId) => {
@@ -594,7 +639,11 @@ export const useAgentTaskStore = create<AgentTaskStoreState>()(
   ),
 );
 
-function upsertSubmittedAgentTask(tasks: AgentTask[], submitted: AgentTask): AgentTask[] {
+function upsertSubmittedAgentTask(
+  tasks: AgentTask[],
+  submitted: AgentTask,
+  authoritativeResult = false,
+): AgentTask[] {
   const existingIndex = tasks.findIndex((task) => task.id === submitted.id);
   if (existingIndex === -1) {
     return [...tasks, submitted];
@@ -602,12 +651,20 @@ function upsertSubmittedAgentTask(tasks: AgentTask[], submitted: AgentTask): Age
 
   const existing = tasks[existingIndex]!;
   const nextTasks = [...tasks];
-  nextTasks[existingIndex] = {
-    ...submitted,
-    ...existing,
-    goal: existing.goal || submitted.goal,
-    executionMode: existing.executionMode ?? submitted.executionMode,
-  };
+  nextTasks[existingIndex] = authoritativeResult
+    ? {
+        ...existing,
+        ...submitted,
+        goal: existing.goal || submitted.goal,
+        createdAt: existing.createdAt,
+        executionMode: existing.executionMode ?? submitted.executionMode,
+      }
+    : {
+        ...submitted,
+        ...existing,
+        goal: existing.goal || submitted.goal,
+        executionMode: existing.executionMode ?? submitted.executionMode,
+      };
   return nextTasks;
 }
 
@@ -892,6 +949,66 @@ function isTerminalAgentTaskStatus(status: AgentTaskStatus): boolean {
   return (
     status === 'completed' || status === 'failed' || status === 'cancelled' || status === 'archived'
   );
+}
+
+function isActiveAgentTaskStatus(status: AgentTaskStatus): boolean {
+  return (
+    status === 'queued' ||
+    status === 'running' ||
+    status === 'awaiting_input' ||
+    status === 'paused'
+  );
+}
+
+async function readNativeTaskSnapshot(taskId: string): Promise<NativeTaskSnapshot | null> {
+  try {
+    return await invoke<GoalStatusResponse>('agi_get_goal_status', { goalId: taskId });
+  } catch {
+    // Swarm execution has a canonical task state but intentionally does not
+    // retain the sequential engine's ExecutionContext. The state-only command
+    // also returns null when a fresh process has no ownership of this task.
+    try {
+      const state = await invoke<AgentTaskStatus | null>('agi_get_task_state', { goalId: taskId });
+      return state ? { state } : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+function mergeNativeTaskSnapshot(
+  task: AgentTask,
+  snapshot: NativeTaskSnapshot,
+  recoveredAt: string,
+): AgentTask {
+  const lastResult = snapshot.context?.tool_results.at(-1);
+  return {
+    ...task,
+    status: snapshot.state,
+    iterations: snapshot.currentIteration ?? task.iterations,
+    result:
+      lastResult?.result === undefined
+        ? task.result
+        : typeof lastResult.result === 'string'
+          ? lastResult.result
+          : JSON.stringify(lastResult.result),
+    error: snapshot.state === 'running' ? undefined : (lastResult?.error ?? task.error),
+    completedAt:
+      isTerminalAgentTaskStatus(snapshot.state) || snapshot.state === 'ready_for_review'
+        ? (task.completedAt ?? recoveredAt)
+        : undefined,
+  };
+}
+
+function markTaskInterruptedByRestart(task: AgentTask, recoveredAt: string): AgentTask {
+  return {
+    ...task,
+    status: 'failed',
+    completedAt: task.completedAt ?? recoveredAt,
+    pauseReason: undefined,
+    error:
+      'The Desktop runtime ended before this Task reported a final result. Its native execution state cannot be recovered; review any external changes before retrying.',
+  };
 }
 
 export function applyAgentTaskStateChanged(payload: AgentTaskStateChanged): void {

@@ -54,10 +54,6 @@ jest.mock('lucide-react-native', () => {
 
 jest.mock('@react-navigation/drawer', () => ({}));
 
-jest.mock('../src/shared/components/DesktopCompanionWidget', () => ({
-  DesktopCompanionWidget: jest.fn().mockReturnValue(null),
-}));
-
 jest.mock('../src/features/chat/components/ModeSwitchModal', () => {
   const { View, Pressable } = require('react-native');
   return {
@@ -207,7 +203,12 @@ describe('DrawerContent', () => {
     expect(getByText('AGI')).toBeTruthy();
     expect(getAllByText('Projects').length).toBeGreaterThan(0);
     expect(getByText('Chats')).toBeTruthy();
-    expect(getByText('Artifacts')).toBeTruthy();
+    expect(getByText('Library')).toBeTruthy();
+    expect(getByText('Remote')).toBeTruthy();
+    // Artifacts, Skills, Tasks and Notifications were de-listed (founder
+    // 2026-08-13): Library already covers generated media, and Notifications
+    // lives in Settings. Their ROUTES still exist — only the drawer rows are gone.
+    expect(queryByText('Artifacts')).toBeNull();
     expect(queryByText('AGI Agent')).toBeNull();
     expect(getByText('Recents')).toBeTruthy();
     expect(getByText('Settings')).toBeTruthy();
@@ -215,19 +216,23 @@ describe('DrawerContent', () => {
     expect(queryByText(/byok/i)).toBeNull();
   });
 
-  it('shows cloud-only drawer items (Tasks, Schedules, Projects) while in Cloud mode', () => {
+  it('shows cloud-only drawer items (AGI Work, Schedules, Projects) while in Cloud mode', () => {
     const local = renderDrawer();
     expect(local.queryByText('Schedules')).toBeNull();
-    expect(local.queryByText('Skills')).toBeNull();
+    expect(local.queryByText('AGI Work')).toBeNull();
     local.unmount();
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
+    // AGI Work is plan-gated (`agi_work`), so a free tier would hide the row and
+    // the assertion below would pass for the wrong reason.
+    useTierStore.setState({ tier: 'max' });
     const cloud = renderDrawer();
 
-    // Cloud mode shows the durable Tasks + Schedules rows and (synced) Projects.
-    expect(cloud.getByLabelText('Tasks. Cloud')).toBeTruthy();
+    // Cloud mode shows Schedules and AGI Work (which replaced the duplicate
+    // "Tasks" row — both pointed at the same agent runs) plus synced Projects.
+    expect(cloud.getByLabelText('AGI Work. Cloud')).toBeTruthy();
     expect(cloud.getByLabelText('Schedules. Cloud')).toBeTruthy();
-    expect(cloud.getByLabelText('Skills. Cloud')).toBeTruthy();
+    expect(cloud.queryByText('Skills')).toBeNull();
     // Projects nav row is visible in cloud mode (task: unblock cloud projects).
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
     // The local project "Launch demo" should NOT appear in cloud mode
@@ -245,24 +250,26 @@ describe('DrawerContent', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/schedules');
   });
 
-  it('opens the durable Cloud task list from the drawer', () => {
-    useChatAppModeStore.setState({ appMode: 'cloud' });
+  it('opens Remote as a first-class drawer destination', () => {
     const { getByLabelText } = renderDrawer();
 
-    fireEvent.press(getByLabelText('Tasks. Cloud'));
+    fireEvent.press(getByLabelText('Remote'));
+
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/companion');
+  });
+
+  it('opens the durable agent-run list from AGI Work', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useTierStore.setState({ tier: 'max' });
+    const { getByLabelText } = renderDrawer();
+
+    // AGI Work NAVIGATES; it no longer flips a session stance. `workMode` is a
+    // property of a cloud agent run, so "the AGI Work chats" ARE the runs list.
+    fireEvent.press(getByLabelText('AGI Work. Cloud'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('/(app)/agents');
-  });
-
-  it('opens the Managed Cloud Skills catalog from the drawer', () => {
-    useChatAppModeStore.setState({ appMode: 'cloud' });
-    const { getByLabelText } = renderDrawer();
-
-    fireEvent.press(getByLabelText('Skills. Cloud'));
-
-    expect(mockCloseDrawer).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/skills');
   });
 
   it('renders projects and recents', () => {
@@ -360,27 +367,15 @@ describe('DrawerContent', () => {
     });
   });
 
-  // PAR-M18. `app/(app)/notifications` had zero inbound navigation, so agent,
-  // task and schedule results landed somewhere the user could not reach.
-  it('reaches the notification centre from the primary nav', () => {
-    const { getByLabelText } = renderDrawer();
+  // PAR-M18 originally added a Notifications row here because
+  // `app/(app)/notifications` had zero inbound navigation. The row was removed
+  // (founder 2026-08-13: "notifications should be in settings") — but the
+  // capability must not regress with it, so this asserts the row is gone AND
+  // that the centre is still reachable from the header badge in DrawerButton,
+  // which is the always-visible half of that entry point.
+  it('no longer duplicates Notifications in the drawer', () => {
+    const { queryByLabelText } = renderDrawer();
 
-    fireEvent.press(getByLabelText('Notifications'));
-
-    expect(mockCloseDrawer).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenCalledWith('/(app)/notifications');
-  });
-
-  it('marks Notifications active only on the centre, not on notification settings', () => {
-    mockPathname = '/notifications';
-    const centre = renderDrawer();
-    expect(centre.getByLabelText('Notifications').props.accessibilityState.selected).toBe(true);
-    centre.unmount();
-
-    mockPathname = '/settings/notifications';
-    const preferences = renderDrawer();
-    expect(preferences.getByLabelText('Notifications').props.accessibilityState.selected).toBe(
-      false,
-    );
+    expect(queryByLabelText('Notifications')).toBeNull();
   });
 });

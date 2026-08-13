@@ -66,6 +66,16 @@ describe('native mobile IAP hook', () => {
     expect(mockFetchCatalog).not.toHaveBeenCalled();
   });
 
+  it('does not expose JSON parser internals when the catalog deployment returns HTML', async () => {
+    mockFetchCatalog.mockRejectedValueOnce(new Error('JSON Parse error: Unexpected character: <'));
+
+    const { result } = renderHook(() => useMobileIap({ enabled: true }));
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.catalog).toBeNull();
+    expect(result.current.error).toBe('Native purchases are unavailable right now.');
+  });
+
   it('verifies a consumable on the server before acknowledging it to the store', async () => {
     const definition = MOBILE_IAP_PRODUCT_DEFINITIONS.find((item) => item.kind === 'top_up')!;
     const product = { ...definition, productId: 'fixture.topup' };

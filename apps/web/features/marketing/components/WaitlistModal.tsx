@@ -108,20 +108,19 @@ function WaitlistDialog({
             </span>
             <DialogTitle className="agi-waitlist-title">You&rsquo;re on the list.</DialogTitle>
             <DialogDescription className="agi-waitlist-lede">
-              We&rsquo;ll email you the moment AGI Cloud access opens for your address. Until then,
-              AGI Web, Local, and BYOK are ready today.
+              We&rsquo;ll email you when the Enterprise program opens for your requirements. Managed
+              Cloud is already open in public alpha, and current availability for Local and BYOK is
+              listed on each surface page.
             </DialogDescription>
           </div>
         ) : (
           <>
-            <p className="agi-waitlist-eyebrow">Team &amp; Enterprise · early access</p>
-            <DialogTitle className="agi-waitlist-title">
-              Request Team &amp; Enterprise access
-            </DialogTitle>
+            <p className="agi-waitlist-eyebrow">Enterprise · early access</p>
+            <DialogTitle className="agi-waitlist-title">Discuss Enterprise access</DialogTitle>
             <DialogDescription className="agi-waitlist-lede">
-              Managed cloud is already open in public alpha — sign in to start. This list is for
-              Team &amp; Enterprise (org seats, SSO, admin controls). Leave your email and
-              we&rsquo;ll reach out as those land · no account required.
+              Managed Cloud is open in public alpha. Team pricing and current checkout availability
+              are shown on Pricing. This list is for contract-scoped Enterprise requirements such as
+              SSO, custom retention, and governance controls · no account required.
             </DialogDescription>
 
             <form onSubmit={handleSubmit} noValidate className="agi-waitlist-form">
@@ -209,7 +208,7 @@ export function WaitlistModalProvider({ children }: { children: ReactNode }) {
  * mounted so the action is never dead.
  */
 export function WaitlistTrigger({
-  label = 'Team & Enterprise access',
+  label = 'Enterprise early access',
   source = 'website',
   className,
 }: {

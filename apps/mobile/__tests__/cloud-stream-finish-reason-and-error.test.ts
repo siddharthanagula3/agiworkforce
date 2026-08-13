@@ -244,6 +244,20 @@ describe('cloud send: x_stream_error capture (mid-stream provider failure)', () 
 
     expect(lastAssistantMessage()?.metadata?.streamError).toBeUndefined();
   });
+
+  it('marks a cleanly closed empty provider stream as retryable instead of a successful blank bubble', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'answer this', CLOUD_MODEL);
+
+    expect(lastAssistantMessage()?.metadata?.streamError).toEqual({
+      message: 'AGI Cloud returned an empty response. Try again.',
+      code: 'empty_response',
+      retryable: true,
+    });
+  });
 });
 
 describe('cloud send: canonical agent activity', () => {

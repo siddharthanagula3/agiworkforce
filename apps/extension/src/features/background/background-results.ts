@@ -20,6 +20,9 @@ import {
 import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
 import type { ChromeManagedRoutingMetadata } from '../../types';
 import { logger } from '../../utils';
+// Worker-only import. `conversation-history.ts` deliberately stays free of it
+// so the storage seam remains safe to import from the side panel too.
+import { scheduleConversationSync } from '../cloud-bridge/conversationSync';
 import {
   normalizeManagedCloudOwner,
   sameManagedCloudOwner,
@@ -126,12 +129,21 @@ export async function recordBackgroundChatResult(
       prompt: delivery.prompt,
       answer,
       ...(delivery.deliveryId ? { deliveryId: delivery.deliveryId } : {}),
+      // Provenance, not a guess: every background run reaching this function
+      // was executed by `executeChromeManagedChat` against Managed Cloud.
+      runtime: 'managed-cloud',
     },
     routing,
   );
   if (!entry) return undefined;
   if (entry.status !== 'unchanged') {
+    // Delivery callbacks fire on LOCAL persistence proof only. A cloud-mirror
+    // failure must never suppress the user's completion notification.
     delivery.onDelivered?.(entry.persistedAnswer, owner);
+    // Reuse the existing `deliveryId` idempotency rather than inventing a
+    // second one: an 'unchanged' result means the store already holds this
+    // turn, so there is nothing new to mirror.
+    scheduleConversationSync(owner, delivery.conversationId);
   }
   return entry.entry;
 }

@@ -79,6 +79,7 @@ describe('desktop chat runtime composition root', () => {
     expect(cloud.supportsResearch).toBe(false);
     expect(web.supportsResearch).toBe(true);
     expect(local.supportsManagedWebSearch).not.toBe(true);
+    expect(local.supportsExplicitLocalWebSearch).toBe(true);
     expect(cloud.supportsManagedWebSearch).toBe(true);
     expect(web.supportsManagedWebSearch).toBe(true);
   });

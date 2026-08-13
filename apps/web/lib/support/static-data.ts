@@ -3,6 +3,8 @@
  * These are served from in-memory until a DB-backed CMS is added.
  */
 
+import { DESKTOP_LOCAL_RUNTIMES } from '@/lib/marketing-constants';
+
 export interface FAQ {
   id: string;
   category: string;
@@ -36,8 +38,7 @@ export const STATIC_FAQS: FAQ[] = [
     id: 'faq-002',
     category: 'getting-started',
     question: 'Which AI providers are supported?',
-    answer:
-      'AGI supports 10+ providers including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, and LM Studio. More providers are added regularly.',
+    answer: `AGI supports 10+ provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and custom OpenAI-compatible endpoints. Desktop Local mode supports ${DESKTOP_LOCAL_RUNTIMES.label}. The in-product catalog is the current source of truth.`,
     display_order: 2,
     is_published: true,
   },
@@ -86,8 +87,7 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     title: 'Getting started with AGI',
     slug: 'getting-started',
     excerpt: 'Learn how to set up AGI and start your first conversation.',
-    content:
-      '# Getting started with AGI\n\n1. Create an account at agi.app.\n2. Add at least one provider key in Settings > Providers.\n3. Start a new chat from the sidebar and select your provider.\n\nFor Local-only mode, download the desktop app and run Ollama or LM Studio locally - no API key needed.',
+    content: `# Getting started with AGI\n\n1. Create an account at agiworkforce.com.\n2. Choose Local, BYOK, or managed Cloud.\n3. Start a new chat and confirm the visible route label.\n\nFor Desktop Local mode, install a supported runtime (${DESKTOP_LOCAL_RUNTIMES.label}) and model; no AGI API key is needed.`,
     views: 1240,
   },
   {

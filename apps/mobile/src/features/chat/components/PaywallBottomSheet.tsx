@@ -218,6 +218,9 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
       <BottomSheet
         ref={sheetRef}
         index={-1}
+        // Expose the upgrade/recovery controls instead of announcing the
+        // entire sheet as one opaque adjustable element.
+        accessible={false}
         onChange={handleSheetChange}
         enablePanDownToClose
         enableDynamicSizing

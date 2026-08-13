@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { CapabilityGrid } from '@/features/marketing/components/FlagshipSections';
-import { MARKETING } from '../../lib/marketing-constants';
+import { DESKTOP_LOCAL_RUNTIMES, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Help',
@@ -52,13 +52,13 @@ export default function HelpPage() {
             {
               meta: 'BYOK',
               title: 'Add your API key',
-              body: 'Bring your own provider keys on Desktop and CLI, encrypted at rest on your machine.',
+              body: 'Bring your own provider keys on Desktop, CLI, and VS Code. The local runtime owns and protects the key.',
               href: '/byok',
             },
             {
               meta: 'Local',
               title: 'Run offline',
-              body: 'Ollama or LM Studio on your own hardware. No keys, no quotas, no internet.',
+              body: `Desktop supports ${DESKTOP_LOCAL_RUNTIMES.label}; CLI supports its documented local integrations. After setup, Local inference is offline-capable with no AGI key or quota.`,
               href: '/local',
             },
             {

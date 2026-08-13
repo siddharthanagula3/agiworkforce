@@ -110,6 +110,12 @@ function buildModalStyles(): string {
       color:var(--agi-ext-text); background:var(--agi-ext-hover);
     }
 
+    .agi-modal button:focus-visible,
+    .agi-modal input:focus-visible {
+      outline:2px solid var(--agi-ext-focus);
+      outline-offset:2px;
+    }
+
     /* ── Tabs ── */
     .agi-tabs {
       display:flex; gap:0;
@@ -232,6 +238,15 @@ function buildModalStyles(): string {
 
     .agi-form-fields { display:block; }
     .agi-form-fields.hidden { display:none; }
+
+    @media (forced-colors: active) {
+      .agi-modal-backdrop { background:Canvas; }
+      .agi-modal,
+      .agi-input,
+      .agi-btn { border:1px solid CanvasText; }
+      .agi-btn { background:Highlight; color:HighlightText; }
+      .agi-spinner { border-color:HighlightText; border-top-color:transparent; }
+    }
   `;
 }
 
@@ -327,14 +342,20 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   tabInviteBtn.className = 'agi-tab-btn active';
   tabInviteBtn.setAttribute('type', 'button');
   tabInviteBtn.setAttribute('role', 'tab');
+  tabInviteBtn.id = 'agi-modal-tab-invite';
+  tabInviteBtn.setAttribute('aria-controls', 'agi-modal-panel-invite');
   tabInviteBtn.setAttribute('aria-selected', 'true');
+  tabInviteBtn.tabIndex = 0;
   tabInviteBtn.textContent = 'Redeem a code';
 
   const tabWaitlistBtn = document.createElement('button');
   tabWaitlistBtn.className = 'agi-tab-btn';
   tabWaitlistBtn.setAttribute('type', 'button');
   tabWaitlistBtn.setAttribute('role', 'tab');
+  tabWaitlistBtn.id = 'agi-modal-tab-waitlist';
+  tabWaitlistBtn.setAttribute('aria-controls', 'agi-modal-panel-waitlist');
   tabWaitlistBtn.setAttribute('aria-selected', 'false');
+  tabWaitlistBtn.tabIndex = -1;
   tabWaitlistBtn.textContent = 'Product updates';
 
   tabs.appendChild(tabInviteBtn);
@@ -348,6 +369,8 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   const inviteContent = document.createElement('div');
   inviteContent.className = 'agi-tab-content active';
   inviteContent.setAttribute('role', 'tabpanel');
+  inviteContent.id = 'agi-modal-panel-invite';
+  inviteContent.setAttribute('aria-labelledby', 'agi-modal-tab-invite');
 
   const inviteSuccess = document.createElement('div');
   inviteSuccess.className = 'agi-success';
@@ -420,6 +443,9 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   const waitlistContent = document.createElement('div');
   waitlistContent.className = 'agi-tab-content';
   waitlistContent.setAttribute('role', 'tabpanel');
+  waitlistContent.id = 'agi-modal-panel-waitlist';
+  waitlistContent.setAttribute('aria-labelledby', 'agi-modal-tab-waitlist');
+  waitlistContent.setAttribute('aria-hidden', 'true');
 
   const waitlistSuccess = document.createElement('div');
   waitlistSuccess.className = 'agi-success';
@@ -546,6 +572,7 @@ export class InviteCodeModal {
   private activeTab: InviteCodeTab;
   private inviteLoading = false;
   private waitlistLoading = false;
+  private returnFocus: HTMLElement | null = null;
 
   constructor(props: InviteCodeModalProps) {
     this.props = props;
@@ -579,15 +606,30 @@ export class InviteCodeModal {
       if (e.target === els.backdrop) this.close();
     });
 
-    // Keyboard close
+    // Keep keyboard focus inside the aria-modal surface until it closes.
     this.host.addEventListener('keydown', (e: Event) => {
-      if ((e as KeyboardEvent).key === 'Escape') this.close();
+      const event = e as KeyboardEvent;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        this.close();
+        return;
+      }
+      if (event.key === 'Tab') this.trapFocus(event);
     });
 
     // Tab switching
     els.tabInviteBtn.addEventListener('click', () => this.switchTab('invite'));
     els.tabWaitlistBtn.addEventListener('click', () => this.switchTab('waitlist'));
     els.inviteSwitchBtn.addEventListener('click', () => this.switchTab('waitlist'));
+    for (const tab of [els.tabInviteBtn, els.tabWaitlistBtn]) {
+      tab.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const showWaitlist = event.key === 'ArrowRight' || event.key === 'End';
+        this.switchTab(showWaitlist ? 'waitlist' : 'invite');
+        (showWaitlist ? els.tabWaitlistBtn : els.tabInviteBtn).focus();
+      });
+    }
 
     // Invite input
     els.inviteInput.addEventListener('input', () => {
@@ -624,6 +666,33 @@ export class InviteCodeModal {
     this.els.waitlistSubmitBtn.disabled = !valid || this.waitlistLoading;
   }
 
+  private getFocusableElements(): HTMLElement[] {
+    return Array.from(
+      this.shadow.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), a[href], select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((element) => {
+      if (element.closest('.hidden')) return false;
+      const tabPanel = element.closest<HTMLElement>('[role="tabpanel"]');
+      return tabPanel === null || tabPanel.classList.contains('active');
+    });
+  }
+
+  private trapFocus(event: KeyboardEvent): void {
+    const focusable = this.getFocusableElements();
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!first || !last) return;
+    const active = this.shadow.activeElement;
+    if (event.shiftKey && (active === first || active === null)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   private switchTab(tab: InviteCodeTab): void {
     this.activeTab = tab;
 
@@ -631,11 +700,15 @@ export class InviteCodeModal {
 
     this.els.tabInviteBtn.classList.toggle('active', isInvite);
     this.els.tabInviteBtn.setAttribute('aria-selected', String(isInvite));
+    this.els.tabInviteBtn.tabIndex = isInvite ? 0 : -1;
     this.els.tabWaitlistBtn.classList.toggle('active', !isInvite);
     this.els.tabWaitlistBtn.setAttribute('aria-selected', String(!isInvite));
+    this.els.tabWaitlistBtn.tabIndex = isInvite ? -1 : 0;
 
     this.els.inviteContent.classList.toggle('active', isInvite);
+    this.els.inviteContent.setAttribute('aria-hidden', String(!isInvite));
     this.els.waitlistContent.classList.toggle('active', !isInvite);
+    this.els.waitlistContent.setAttribute('aria-hidden', String(isInvite));
 
     if (isInvite) {
       this.els.inviteInput.focus();
@@ -739,6 +812,10 @@ export class InviteCodeModal {
   }
 
   show(): void {
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLElement && activeElement !== this.host) {
+      this.returnFocus = activeElement;
+    }
     this.els.backdrop.classList.remove('hidden');
     // Reset to defaultTab on every open
     this.switchTab(this.props.defaultTab ?? 'invite');
@@ -766,8 +843,15 @@ export class InviteCodeModal {
   }
 
   close(): void {
-    this.els.backdrop.classList.add('hidden');
+    this.hideAndRestoreFocus();
     this.props.onClose();
+  }
+
+  private hideAndRestoreFocus(): void {
+    this.els.backdrop.classList.add('hidden');
+    const returnFocus = this.returnFocus;
+    this.returnFocus = null;
+    if (returnFocus?.isConnected) returnFocus.focus();
   }
 
   mount(container: Element): void {
@@ -782,7 +866,7 @@ export class InviteCodeModal {
     this.props = { ...this.props, ...props };
     if ('open' in props) {
       if (props.open) this.show();
-      else this.els.backdrop.classList.add('hidden');
+      else this.hideAndRestoreFocus();
     }
   }
 }

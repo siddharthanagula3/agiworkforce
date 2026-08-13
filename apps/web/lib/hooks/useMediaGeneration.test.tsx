@@ -215,6 +215,38 @@ describe('useMediaGeneration', () => {
    * polled. Fake timers drive the poll so the test does not sleep 5s per tick.
    */
   describe('generateVideo', () => {
+    it('serializes the complete catalog-backed output tuple', async () => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          task_id: VIDEO_TASK_ID,
+          status: 'queued',
+          provider: VIDEO_PROVIDER,
+          model: VIDEO_MODEL.id,
+          estimated_duration_secs: 210,
+        }),
+      } as Response);
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await result.current.startVideoGeneration('a portrait launch film', {
+          modelId: VIDEO_MODEL.id,
+          aspectRatio: '21:9',
+          resolution: '480p',
+          durationSecs: 8,
+        });
+      });
+
+      expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+        prompt: 'a portrait launch film',
+        model: VIDEO_MODEL.id,
+        aspect_ratio: '21:9',
+        resolution: '480p',
+        duration_secs: 8,
+      });
+    });
+
     it('starts a task, polls status, and resolves with the finished URLs', async () => {
       vi.useFakeTimers();
       try {

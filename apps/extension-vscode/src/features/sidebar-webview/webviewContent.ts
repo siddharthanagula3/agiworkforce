@@ -36,26 +36,17 @@ export function getNonce(): string {
 /**
  * Generates the webview HTML.
  *
- * COLOUR POLICY — this panel does NOT follow the host theme.
+ * COLOUR POLICY — geometry and the terra brand accent are AGI-owned; surfaces,
+ * text, controls, focus, and state colours follow the host theme. The sidebar
+ * sits directly above native History, Context, and Memory views, so pinning the
+ * webview dark in a light or high-contrast host makes one product look like two
+ * unrelated extensions. `agiVsCodeCssVars` remains the fallback for hosts that
+ * omit a VS Code colour token.
  *
- * Its surface, text and border tokens resolve to a FIXED dark palette
- * (`agiVsCodeCssVars` in packages/ui/design-tokens), a founder decision from
- * 2026-07-27 so the panel looks the same in VS Code, Cursor, Windsurf and
- * Antigravity. In a Light+ or High Contrast theme it therefore stays dark by
- * design.
- *
- * This comment previously read "Light/HC themes work automatically", which was
- * the opposite of what the tokens do — and believing it is how host-themed
- * colours ended up composited onto the fixed panel, producing pairings like
- * #ececec text on a pale-yellow warning background at ~1.10:1.
- *
- * The rule that follows from the decision: within a single rule, background and
- * foreground must come from the SAME family — either both --vscode-* or both
- * fixed. `panelPaletteConsistency.test.ts` enforces it.
- *
- * Genuine exceptions exist and are deliberate: the diff tokens and
- * --agi-vscode-danger stay theme-derived because they must match the editor's
- * own diff and error colours to be legible as those things.
+ * Stateful foreground/background pairs must still come from the same family.
+ * Warning, error, diff, button, and focus colours therefore use matching host
+ * tokens with complete AGI fallbacks rather than mixing a host background with
+ * a fixed-palette foreground.
  */
 export function getWebviewContent(
   webview: vscode.Webview,
@@ -95,7 +86,6 @@ export function getWebviewContent(
     .join('');
   const modeLabel = escapeHtml(AGENT_MODE_LABEL[initialMode]);
   const effortLabel = escapeHtml(EFFORT_LABEL[initialEffort]);
-  const effortHidden = supportsEffort ? '' : ' style="display:none"';
   const followUpBehaviorLiteral = initialFollowUpBehavior === 'steer' ? 'steer' : 'queue';
 
   // Codicon font — copied to out/codicons/ by esbuild.js so it's included in the VSIX.
@@ -125,16 +115,26 @@ export function getWebviewContent(
   <link rel="stylesheet" href="${codiconCssUri}" />
   <style nonce="${nonce}">
     :root {
-      /* VS Code theme variables with AGI dark-mode fallbacks */
+      /* Host theme first; AGI tokens are complete fallbacks for compatible IDEs. */
       ${cssVarsToString(agiVsCodeCssVars)}
-      --bg-base: var(--agi-vscode-bg);
-      --bg-elevated: var(--agi-vscode-surface);
-      --bg-overlay: var(--agi-vscode-overlay);
-      --accent-teal: var(--agi-vscode-button);
+      --bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));
+      --bg-elevated: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background, var(--agi-vscode-surface)));
+      --bg-overlay: var(--vscode-dropdown-background, var(--agi-vscode-overlay));
+      --accent-teal: var(--vscode-button-background, var(--agi-vscode-button));
       --accent-terra: var(--agi-vscode-terra);
-      --text-primary: var(--agi-vscode-text);
-      --text-secondary: var(--agi-vscode-text-muted);
-      --border: var(--agi-vscode-border);
+      --accent-terra-foreground: var(--agi-vscode-button-text);
+      --text-primary: var(--vscode-foreground, var(--agi-vscode-text));
+      --text-secondary: var(--vscode-descriptionForeground, var(--agi-vscode-text-muted));
+      --border: var(--vscode-panel-border, var(--vscode-widget-border, var(--agi-vscode-border)));
+      --button-text: var(--vscode-button-foreground, var(--agi-vscode-button-text));
+      --hover: var(--vscode-list-hoverBackground, var(--agi-vscode-hover));
+      --success: var(--vscode-testing-iconPassed, var(--agi-vscode-success));
+      --warning: var(--vscode-inputValidation-warningForeground, var(--vscode-editorWarning-foreground, var(--agi-vscode-warning)));
+      --warning-bg: var(--vscode-inputValidation-warningBackground, var(--agi-vscode-warning-bg));
+      --warning-border: var(--vscode-inputValidation-warningBorder, var(--agi-vscode-warning-border));
+      --error: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground, var(--agi-vscode-danger)));
+      --error-bg: var(--vscode-inputValidation-errorBackground, var(--agi-vscode-danger-bg));
+      --error-border: var(--vscode-inputValidation-errorBorder, var(--agi-vscode-danger-border));
       --radius-md: 8px;
       --radius-lg: 12px;
       --transition: cubic-bezier(0.16, 1, 0.3, 1);
@@ -186,8 +186,10 @@ export function getWebviewContent(
     }
     .brand-mark svg { display: block; width: 18px; height: 18px; }
 
-    /* Workspace-local app-server identity. */
-    .runtime-pill {
+    /* One stable trust-boundary identity. The boundary and provider used to be
+       separate badges, which could briefly disagree while host messages arrived
+       in different orders. This single surface is recomputed from both facts. */
+    .session-identity {
       display: inline-flex;
       align-items: center;
       gap: 5px;
@@ -200,9 +202,12 @@ export function getWebviewContent(
       background: var(--bg-overlay);
       border: 1px solid var(--border);
       white-space: nowrap;
-      flex-shrink: 0;
+      min-width: 0;
+      max-width: min(190px, 52vw);
+      overflow: hidden;
+      flex-shrink: 1;
     }
-    .runtime-pill-dot {
+    .session-identity-dot {
       width: 6px;
       height: 6px;
       border-radius: 50%;
@@ -213,22 +218,24 @@ export function getWebviewContent(
        in CSS rather than in inline styles the script has to write. Managed
        cloud is the only boundary whose prompts leave the machine, so it is the
        only one tinted as a warning. */
-    .runtime-pill[data-boundary='local'] .runtime-pill-dot {
-      background: var(--agi-vscode-success);
+    .session-identity[data-boundary='local'] .session-identity-dot {
+      background: var(--success);
     }
-    .runtime-pill[data-boundary='byok'] .runtime-pill-dot {
-      background: var(--agi-vscode-button);
+    .session-identity[data-boundary='byok'] .session-identity-dot {
+      background: var(--accent-teal);
     }
-    .runtime-pill[data-boundary='cloud'] .runtime-pill-dot {
-      background: var(--agi-vscode-warning);
+    .session-identity[data-boundary='cloud'] .session-identity-dot {
+      background: var(--warning);
     }
-    .runtime-pill[data-boundary='cloud'] {
-      color: var(--agi-vscode-warning);
-      border-color: var(--agi-vscode-warning-border);
-      background: var(--agi-vscode-warning-bg);
+    .session-identity[data-boundary='cloud'] {
+      color: var(--warning);
+      border-color: var(--warning-border);
+      background: var(--warning-bg);
     }
-    .runtime-pill-label,
-    .provider-badge > span:last-child {
+    .session-identity[data-boundary='none'] .session-identity-dot {
+      background: var(--text-secondary);
+    }
+    .session-identity-copy {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -241,60 +248,12 @@ export function getWebviewContent(
       min-width: 0;
     }
 
-    .provider-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.3px;
-      padding: 2px 7px 2px 5px;
-      border-radius: 10px;
-      color: var(--text-primary);
-      white-space: nowrap;
-      /*
-       * Must yield. flex-shrink:0 on a variable-length provider name let the
-       * badge hold its intrinsic width and paint over the four header icon
-       * buttons between roughly 341px and 450px. Its inner label already has
-       * min-width:0 + ellipsis (see .provider-badge > span:last-child above);
-       * this is what lets that truncation actually engage.
-       */
-      min-width: 0;
-      flex-shrink: 1;
-      overflow: hidden;
-      transition: background 0.25s ease;
-    }
-
-    .provider-badge-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--vscode-descriptionForeground);
-      flex-shrink: 0;
-    }
-
     .header-actions {
       display: flex;
       gap: 2px;
       align-items: center;
       flex-shrink: 0;
     }
-
-    .account-status-dot {
-      position: absolute;
-      right: 4px;
-      bottom: 4px;
-      width: 6px;
-      height: 6px;
-      border: 1px solid var(--bg-elevated);
-      border-radius: 50%;
-      background: var(--text-secondary);
-    }
-    .account-status-dot.signed-in {
-      background: var(--vscode-testing-iconPassed, #3fb950);
-    }
-    .account-status-dot.expired { background: var(--vscode-editorWarning-foreground, #f59e0b); }
-    #accountBtn { position: relative; }
 
     .icon-btn {
       background: none;
@@ -320,19 +279,15 @@ export function getWebviewContent(
     .runtime-status {
       margin: 8px 10px 0;
       padding: 10px;
-      /*
-       * Fixed-palette warning, NOT --vscode-inputValidation-*. This panel is a
-       * deliberately fixed-dark surface, so --text-primary is always #ececec.
-       * Pairing that with the host's warning background rendered near-white text
-       * on Light+'s pale yellow (~1.10:1 — an apparently empty yellow strip with
-       * a floating button). --agi-vscode-warning-bg is a translucent warm
-       * overlay authored to composite on this panel, so both sides now come from
-       * one palette. Never pair a --vscode-* background with an --agi-vscode-*
-       * foreground, or the reverse.
-       */
-      border: 1px solid var(--agi-vscode-warning-border);
+      /* VS Code input-validation tokens are designed for a thin input popup,
+       * not a persistent sidebar card. Some host themes pair a saturated
+       * yellow foreground with a pale green validation background, which made
+       * this first-run blocker both visually loud and difficult to read. Keep
+       * the host warning hue, but build the card on the normal sidebar surface
+       * and use the regular foreground for explanatory copy. */
+      border: 1px solid color-mix(in srgb, var(--warning) 42%, var(--border));
       border-radius: var(--radius-md);
-      background: var(--agi-vscode-warning-bg);
+      background: color-mix(in srgb, var(--warning) 10%, var(--bg-elevated));
       color: var(--text-primary);
       display: none;
       flex-direction: column;
@@ -343,6 +298,7 @@ export function getWebviewContent(
 
     .runtime-status strong {
       font-size: 12px;
+      color: var(--warning);
     }
 
     .runtime-status button {
@@ -548,9 +504,8 @@ export function getWebviewContent(
     .onboarding-button--primary {
       border-color: var(--accent-teal);
       background: var(--accent-teal);
-      /* Fixed fill needs a fixed foreground: --vscode-button-foreground is
-         whatever the host theme pairs with ITS button colour, not with our teal. */
-      color: var(--agi-vscode-button-text);
+      /* Both values are host button aliases, so they change as one pair. */
+      color: var(--button-text);
     }
     .onboarding-button:disabled {
       cursor: not-allowed;
@@ -627,11 +582,11 @@ export function getWebviewContent(
     .message.user[data-delivery-state='running']::after { content: 'Running'; }
     .message.user[data-delivery-state='steered']::after { content: 'Steered'; }
     .message.user[data-delivery-state='failed'] {
-      border-color: var(--vscode-inputValidation-errorBorder, var(--agi-vscode-danger));
+      border-color: var(--error-border);
     }
     .message.user[data-delivery-state='failed']::after {
       content: 'Not sent';
-      color: var(--vscode-errorForeground, var(--agi-vscode-danger));
+      color: var(--error);
     }
     .message.user[data-delivery-state='cancelled']::after { content: 'Cancelled'; }
 
@@ -645,9 +600,9 @@ export function getWebviewContent(
     }
 
     .message.error {
-      background: var(--agi-vscode-danger-bg);
-      border: 1px solid var(--agi-vscode-danger-border);
-      color: var(--agi-vscode-danger);
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
+      color: var(--error);
       align-self: stretch;
     }
 
@@ -797,7 +752,7 @@ export function getWebviewContent(
       background: var(--accent-terra);
       border: none;
       border-radius: 50%;
-      color: var(--agi-vscode-button-text);
+      color: var(--accent-terra-foreground);
       cursor: pointer;
       font-size: 14px;
       height: 26px;
@@ -858,7 +813,7 @@ export function getWebviewContent(
       white-space: nowrap;
     }
     .follow-up-status.visible { display: inline; }
-    .follow-up-status.error { color: var(--vscode-errorForeground); }
+    .follow-up-status.error { color: var(--error); }
 
     /* ── Plus-menu popover ── */
     .plus-menu {
@@ -951,12 +906,23 @@ export function getWebviewContent(
     }
     .model-popover.open { display: block; }
     .model-popover__group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 9px 8px 5px;
+    }
+    .model-popover__group-title {
       color: var(--text-secondary);
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.4px;
-      padding: 7px 8px 4px;
       text-transform: uppercase;
+    }
+    .model-popover__group-description {
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 400;
+      line-height: 1.3;
     }
     .model-popover__option {
       width: 100%;
@@ -1001,16 +967,8 @@ export function getWebviewContent(
     }
 
     /* ── Code blocks ── */
-    /*
-     * Code blocks use the AGI panel palette, NOT --vscode-* colours.
-     *
-     * This panel is deliberately fixed-dark (founder decision 2026-07-27), so a
-     * theme-derived code background lands a light-theme grey block inside a dark
-     * panel, and --vscode-editor-foreground puts near-black text on it. The block
-     * became a bright, muddy rectangle that did not belong to the surface around
-     * it. Same rule as .runtime-status and .usage-meter-banner: never composite a
-     * host-themed colour onto this panel.
-     */
+    /* Code blocks use the same host-derived surface/text aliases as the chat,
+       with AGI fallbacks for compatible hosts that omit those colour tokens. */
     pre { background: var(--bg-overlay); border: 1px solid var(--border); border-radius: 6px; padding: 12px; overflow-x: auto; margin: 8px 0; }
     code { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 12px; }
     pre code { color: var(--text-primary); }
@@ -1030,14 +988,12 @@ export function getWebviewContent(
     .copy-btn, .apply-btn { background: var(--vscode-button-secondaryBackground, var(--bg-overlay)); border: 1px solid var(--border); border-radius: 4px; color: var(--vscode-button-secondaryForeground, var(--text-primary)); font-size: 11px; padding: 2px 8px; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
     .code-block-wrapper:hover .copy-btn, .code-block-wrapper:hover .apply-btn { opacity: 1; }
     .copy-btn:focus-visible, .apply-btn:focus-visible { opacity: 1; }
-    /* Hover keeps the panel palette on BOTH sides. Borrowing the host's hover
-       background under our fixed #ececec text put near-white on a light grey in
-       every light theme. */
-    .copy-btn:hover { background: var(--agi-vscode-hover); color: var(--text-primary); }
+    /* Hover keeps background and foreground on the same host/fallback aliases. */
+    .copy-btn:hover { background: var(--hover); color: var(--text-primary); }
     .apply-btn { background: var(--vscode-button-background); border-color: transparent; color: var(--vscode-button-foreground); }
     .apply-btn:hover { background: var(--vscode-button-hoverBackground); }
 
-    /* ── Composer controls row (mode chip + effort chip + model chip) ── */
+    /* ── Composer controls row ── */
     .composer-controls {
       display: flex;
       align-items: center;
@@ -1045,7 +1001,7 @@ export function getWebviewContent(
       flex-wrap: wrap;
     }
 
-    .mode-chip, .effort-chip, .model-chip {
+    .controls-summary, .model-chip {
       background: var(--bg-overlay);
       border: 1px solid var(--border);
       border-radius: 12px;
@@ -1070,16 +1026,13 @@ export function getWebviewContent(
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .mode-chip:hover, .effort-chip:hover, .model-chip:hover {
+    .controls-summary:hover, .model-chip:hover {
       /* Panel palette on both sides — see .copy-btn:hover. */
       color: var(--text-primary);
-      background: var(--agi-vscode-hover);
+      background: var(--hover);
       border-color: var(--vscode-focusBorder);
     }
-    .mode-chip.active {
-      border-color: var(--accent-teal);
-      color: var(--accent-teal);
-    }
+    .controls-summary { max-width: 92px; }
 
     .chip-separator {
       flex: 1;
@@ -1105,12 +1058,12 @@ export function getWebviewContent(
     }
 
     .usage-meter-banner.warn {
-      /* Same fixed-palette rule as .runtime-status — the banner's text is
-       * --text-secondary (#b4b4b4), which vanished on a light host's warning
-       * background in exactly the low-quota state where the Upgrade CTA matters. */
-      background: var(--agi-vscode-warning-bg);
-      border-bottom-color: var(--agi-vscode-warning-border);
+      /* Matched host warning aliases keep low-quota copy legible in every theme. */
+      background: var(--warning-bg);
+      border-bottom-color: var(--warning-border);
+      color: var(--warning);
     }
+    .usage-meter-banner.warn .usage-reset { color: inherit; opacity: 0.85; }
 
     .usage-meter-collapsed {
       display: flex;
@@ -1178,7 +1131,7 @@ export function getWebviewContent(
       background: var(--accent-terra);
       border: none;
       border-radius: 8px;
-      color: var(--agi-vscode-button-text);
+      color: var(--accent-terra-foreground);
       cursor: pointer;
       font-size: 10px;
       font-weight: 700;
@@ -1261,15 +1214,60 @@ export function getWebviewContent(
     }
 
     /* ── Inline tool-call (design-spec §4) ── */
-    .tool-call-stack {
-      border-left: 1px solid var(--border);
-      padding-left: 12px;
-      margin-left: 8px;
+    .activity-group {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--bg-elevated);
+      margin-bottom: 4px;
+    }
+    .activity-group__summary {
+      display: grid;
+      grid-template-columns: 16px auto minmax(0, 1fr) 12px;
+      align-items: center;
+      gap: 7px;
+      width: 100%;
+      min-height: 38px;
+      padding: 7px 10px;
+      border: 0;
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer;
+      font: inherit;
+      text-align: left;
+    }
+    .activity-group__summary:hover { background: var(--bg-overlay); }
+    .activity-group__icon { color: var(--accent-teal); }
+    .activity-group[data-status='working'] .activity-group__icon {
+      animation: tool-spin 1s linear infinite;
+    }
+    .activity-group[data-status='error'] .activity-group__icon {
+      color: var(--error);
+    }
+    .activity-group__title { font-size: 12px; font-weight: 600; }
+    .activity-group__meta {
+      min-width: 0;
+      overflow: hidden;
+      color: var(--text-secondary);
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .activity-group__chevron {
+      color: var(--text-secondary);
+      font-size: 10px;
+      transition: transform 160ms ease;
+    }
+    .activity-group--collapsed .activity-group__chevron { transform: rotate(-90deg); }
+    .activity-group__body {
       display: flex;
       flex-direction: column;
       gap: 4px;
-      margin-bottom: 4px;
+      padding: 0 8px 8px;
+      border-top: 1px solid var(--border);
     }
+    .activity-group--collapsed .activity-group__body { display: none; }
+    .tool-call-stack { display: block; }
 
     .tool-call {
       display: flex;
@@ -1308,8 +1306,8 @@ export function getWebviewContent(
     .tool-call--pending .tool-call__icon { animation: tool-spin 1s linear infinite; }
     @keyframes tool-spin { to { transform: rotate(360deg); } }
 
-    .tool-call--error .tool-call__bar { color: var(--agi-vscode-danger); }
-    .tool-call--error .tool-call__icon { color: var(--agi-vscode-danger); }
+    .tool-call--error .tool-call__bar { color: var(--error); }
+    .tool-call--error .tool-call__icon { color: var(--error); }
 
     /* Tool names are arbitrary-length (MCP servers namespace them, e.g.
      * "mcp__filesystem__read_text_file"). flex-shrink:0 with no ellipsis forced
@@ -1398,20 +1396,6 @@ export function getWebviewContent(
       line-height: 1.5;
     }
 
-    .tool-call-done {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      color: var(--text-secondary);
-      padding: 2px 4px;
-      margin-left: 8px;
-      opacity: 0.8;
-    }
-    .tool-call-done--error {
-      color: var(--agi-vscode-danger);
-    }
-
     /* ── Structured plan visualization ── */
     .plan-card {
       border: 1px solid var(--border);
@@ -1458,7 +1442,7 @@ export function getWebviewContent(
     .plan-card__step--completed .plan-card__step-text { text-decoration: line-through; }
     .plan-card__status { color: var(--text-secondary); flex: 0 0 13px; text-align: center; }
     .plan-card__step--in-progress .plan-card__status { color: var(--accent-teal); }
-    .plan-card__step--completed .plan-card__status { color: var(--agi-vscode-success); }
+    .plan-card__step--completed .plan-card__status { color: var(--success); }
 
     /* ── Empty state (design-spec §8) ── */
     .empty-state {
@@ -1537,32 +1521,55 @@ export function getWebviewContent(
       transition: background 0.12s, color 0.12s;
     }
     .prompt-chip:hover { background: var(--bg-overlay); color: var(--text-primary); }
+    .plus-btn:disabled,
+    .model-pill:disabled,
+    .controls-summary:disabled,
+    .prompt-chip:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+    .plus-btn:disabled:hover,
+    .model-pill:disabled:hover,
+    .controls-summary:disabled:hover,
+    .prompt-chip:disabled:hover {
+      color: var(--text-secondary);
+      background: var(--bg-elevated);
+    }
 
     /*
-     * VS Code sidebars commonly render at 260–400 px. Keeping Model, Mode, and
-     * Effort on one non-wrapping row pushed Send outside the composer at those
-     * widths. Mode and reasoning remain available through Tools and actions;
-     * the primary row keeps only +, Model, and Send so it stays usable.
+     * VS Code sidebars commonly render at 260–400 px. A single Controls summary
+     * keeps mode and effort visible without pushing Send outside the composer.
      */
     @media (max-width: 480px) {
-      .mode-chip,
-      .effort-chip { display: none !important; }
       .model-pill {
         min-width: 72px;
-        max-width: min(150px, calc(100vw - 112px));
+        max-width: min(132px, calc(100vw - 176px));
       }
+      .controls-summary { max-width: 86px; }
     }
 
     @media (max-width: 340px) {
       .header { padding-inline: 8px; }
-      .header-left { gap: 4px; max-width: calc(100% - 112px); overflow: hidden; }
+      .header-left { gap: 4px; max-width: calc(100% - 64px); overflow: hidden; }
       .header-actions { gap: 0; }
       .header-title { display: none; }
-      .runtime-pill { max-width: 66px; min-width: 0; overflow: hidden; flex-shrink: 1; }
-      .provider-badge { max-width: 54px; min-width: 0; overflow: hidden; flex-shrink: 1; }
-      .model-pill { max-width: 88px; }
+      .session-identity { max-width: calc(100vw - 108px); }
+      .model-pill { max-width: 78px; min-width: 58px; }
+      .controls-summary { max-width: 72px; }
       .composer-hint { display: none; }
       .empty-state-copy { max-width: 230px; }
+    }
+
+    @media (max-width: 380px) {
+      /* Follow-up Send grows into a worded control and sits beside Stop. Keep
+         the confirmed model visible; mode/effort stays one click away and its
+         current state returns as soon as streaming ends. */
+      .composer-card.is-streaming .controls-summary { display: none; }
+    }
+
+    @media (max-width: 280px) {
+      .model-pill { min-width: 0; max-width: 64px; }
+      .controls-summary { min-width: 0; max-width: 64px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1571,6 +1578,36 @@ export function getWebviewContent(
         transition-duration: 0.01ms !important;
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
+      }
+    }
+
+    @media (forced-colors: active) {
+      .header,
+      .composer-card,
+      .plus-menu,
+      .model-popover,
+      .activity-group,
+      .session-identity {
+        border-color: CanvasText;
+      }
+      #sendBtn {
+        forced-color-adjust: none;
+        color: HighlightText;
+        background: Highlight;
+      }
+      .session-identity[data-boundary] {
+        forced-color-adjust: none;
+        color: CanvasText;
+        background: Canvas;
+        border-color: CanvasText;
+      }
+      .session-identity[data-boundary] .session-identity-dot {
+        background: CanvasText;
+      }
+      button:focus-visible,
+      textarea:focus-visible {
+        outline: 2px solid Highlight;
+        outline-offset: 2px;
       }
     }
 
@@ -1607,9 +1644,9 @@ export function getWebviewContent(
     .attachment-chip.uploading { opacity: 0.65; }
     .attachment-chip.queued { opacity: 0.72; border-style: dashed; }
     .attachment-chip.failed {
-      color: var(--agi-vscode-danger);
-      border-color: var(--agi-vscode-danger-border);
-      background: var(--agi-vscode-danger-bg);
+      color: var(--error);
+      border-color: var(--error-border);
+      background: var(--error-bg);
     }
     .attachment-chip .codicon {
       font-size: 12px;
@@ -1659,28 +1696,24 @@ export function getWebviewContent(
     <div class="header-left">
       <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
       <span class="header-title">AGI</span>
-      <!-- Trust-boundary pill (VSCX-06). Hidden until renderUsageMeter()
-           reports a real source. It previously carried a fixed label and teal
-           dot asserting a workspace-local runtime on every boundary, including
-           BYOK and Managed Cloud. -->
-      <span class="runtime-pill" id="runtimePill" style="display:none"><span class="runtime-pill-dot" id="runtimePillDot"></span><span class="runtime-pill-label" id="runtimePillLabel"></span></span>
-      <span class="provider-badge" id="providerBadge" style="display:none">
-        <span class="provider-badge-dot" id="providerBadgeDot"></span>
-        <span id="providerBadgeText"></span>
+      <span
+        class="session-identity"
+        id="sessionIdentity"
+        role="status"
+        aria-live="polite"
+        style="display:none"
+      >
+        <span class="session-identity-dot" aria-hidden="true"></span>
+        <span class="session-identity-copy">
+          <span id="sessionBoundaryLabel"></span><span id="sessionIdentitySeparator" hidden> · </span><span id="sessionProviderLabel"></span>
+        </span>
       </span>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="accountBtn" title="AGI Cloud account" aria-label="AGI Cloud account">
-        <span class="codicon codicon-account" aria-hidden="true"></span>
-        <span class="account-status-dot" id="accountStatusDot" aria-hidden="true"></span>
-      </button>
-      <button class="icon-btn" id="historyBtn" title="Developer session history" aria-label="Developer session history">
-        <span class="codicon codicon-history" aria-hidden="true"></span>
-      </button>
       <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
         <span class="codicon codicon-add" aria-hidden="true"></span>
       </button>
-      <button class="icon-btn" id="actionsBtn" title="Actions" aria-label="Actions">
+      <button class="icon-btn" id="actionsBtn" title="More" aria-label="More actions">
         <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
       </button>
     </div>
@@ -1709,13 +1742,14 @@ export function getWebviewContent(
         <div class="onboarding-icon"><span class="codicon codicon-repo" aria-hidden="true"></span></div>
         <p class="onboarding-eyebrow">Developer session</p>
         <h2 id="onboardingTitle" tabindex="-1">Build with AGI in this repository.</h2>
-        <p class="onboarding-lede">
+        <p class="onboarding-lede" id="onboardingWorkspaceLede">
           Ask about code, attach workspace files, edit through reviewable diffs, run approved commands,
           and test the open project.
         </p>
         <div class="onboarding-card">
-          <strong>Workspace-scoped by default</strong>
-          <span>The sidebar, editor chat, and @agi use the local AGI runtime for this workspace. They do not silently merge into consumer Web, Mobile, or Desktop chat history.</span>
+          <strong id="onboardingWorkspaceCardTitle">Workspace-scoped by default</strong>
+          <span id="onboardingWorkspaceCardCopy">The sidebar, editor chat, and @agi stay scoped to this workspace. The header identifies whether inference uses Local, BYOK, or Managed Cloud. Developer sessions do not silently merge into consumer Web, Mobile, or Desktop chat history.</span>
+          <button type="button" class="onboarding-link" id="onboardingWorkspaceAction" hidden>Open folder</button>
         </div>
       </article>
 
@@ -1792,8 +1826,8 @@ export function getWebviewContent(
     </div>
   </section>
 
-  <div class="runtime-status" id="runtimeStatus" role="status">
-    <strong>Local runtime needs setup</strong>
+  <div class="runtime-status" id="runtimeStatus" role="status" aria-live="polite">
+    <strong id="runtimeStatusTitle">Developer runtime needs setup</strong>
     <span id="runtimeStatusMessage">Install or update the AGI CLI, then configure its path in Settings.</span>
     <button type="button" id="runtimeSettingsBtn">Open setup</button>
   </div>
@@ -1802,9 +1836,18 @@ export function getWebviewContent(
   <div class="usage-meter-banner" id="usageMeterBanner" style="display:none">
     <span class="byok-icon codicon codicon-key" id="meterByokIcon" style="display:none" aria-hidden="true"></span>
     <span class="local-icon codicon codicon-vm" id="meterLocalIcon" style="display:none" aria-hidden="true"></span>
+    <span class="codicon codicon-cloud" id="meterCloudIcon" style="display:none" aria-hidden="true"></span>
     <div class="usage-meter-bar-wrap" id="meterBarWrap" style="display:none">
-      <div class="usage-progress">
-        <div class="usage-progress-fill" id="meterFill" style="width:0%;background:var(--agi-vscode-button)"></div>
+      <div
+        class="usage-progress"
+        id="meterProgress"
+        role="progressbar"
+        aria-label="AGI Managed Cloud plan usage"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+      >
+        <div class="usage-progress-fill" id="meterFill" style="width:0%;background:var(--accent-teal)"></div>
       </div>
     </div>
     <span class="usage-text" id="meterText"></span>
@@ -1814,15 +1857,15 @@ export function getWebviewContent(
   </div>
   <!-- ── Usage meter collapsed pill ── -->
   <div class="usage-meter-collapsed" id="usageMeterCollapsed" style="display:none">
-    <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage meter">&#9660; Usage</button>
+    <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage details">&#9660; <span id="meterCollapsedLabel">Usage</span></button>
   </div>
 
   <!-- ── Messages ── -->
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
       <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
-      <div class="empty-state-headline">Build with AGI</div>
-      <div class="empty-state-copy">Ask about your code, edit files, run commands, and test this workspace.</div>
+      <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
+      <div class="empty-state-copy" id="emptyStateCopy">Ask about your code, edit files, run commands, and test this workspace.</div>
       <div class="prompt-chips">
         <button class="prompt-chip" data-prompt="/explain ">/explain</button>
         <button class="prompt-chip" data-prompt="/fix ">/fix</button>
@@ -1841,12 +1884,12 @@ export function getWebviewContent(
 
     <!-- Plus-menu popover -->
     <div class="plus-menu" id="plusMenu" role="menu" aria-label="Attach or add context">
-      <div class="plus-menu-label" id="plusMenuLabel">Add to this chat</div>
+      <div class="plus-menu-label" id="plusMenuLabel">Add workspace context</div>
       <button type="button" class="plus-menu-item" id="plusMenuUpload" role="menuitem">
         <span class="pm-icon codicon codicon-files" aria-hidden="true"></span>
         <span class="plus-menu-copy">
           <span class="plus-menu-title">Workspace files</span>
-          <span class="plus-menu-description">Pin files from the open workspace</span>
+          <span class="plus-menu-description">Pin files in this workspace's Context view</span>
         </span>
       </button>
       <button
@@ -1867,14 +1910,6 @@ export function getWebviewContent(
         <span class="plus-menu-copy">
           <span class="plus-menu-title">Plan mode</span>
           <span class="plus-menu-description">Review an approach before edits</span>
-        </span>
-      </button>
-      <div class="plus-menu-divider" aria-hidden="true"></div>
-      <button type="button" class="plus-menu-item" id="plusMenuActions" role="menuitem">
-        <span class="pm-icon codicon codicon-tools" aria-hidden="true"></span>
-        <span class="plus-menu-copy">
-          <span class="plus-menu-title">Tools and actions</span>
-          <span class="plus-menu-description">Models, reasoning, account, and context</span>
         </span>
       </button>
     </div>
@@ -1906,22 +1941,24 @@ export function getWebviewContent(
       <div class="attachment-strip" id="attachmentStrip" role="list" aria-label="Pending attachments"></div>
       <div class="input-row">
         <div class="input-wrapper">
-          <div class="mention-dropdown" id="mentionDropdown"></div>
+          <div class="mention-dropdown" id="mentionDropdown" role="listbox" aria-label="Workspace file suggestions"></div>
           <textarea
             id="userInput"
             placeholder="Ask AGI to do anything…"
             rows="1"
             spellcheck="true"
             aria-label="Chat input"
+            aria-autocomplete="list"
+            aria-controls="mentionDropdown"
+            aria-expanded="false"
           ></textarea>
           <div class="composer-hint" id="composerHint"><kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for newline</div>
         </div>
       </div>
       <div class="composer-bottom">
-        <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="true" aria-expanded="false">+</button>
-        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="true" aria-expanded="false">Model · Auto</button>
-        <button class="mode-chip" id="modeChip" title="Agent mode">Mode · ${modeLabel}</button>
-        <button class="effort-chip" id="effortChip" title="Reasoning effort"${effortHidden}>Effort · ${effortLabel}</button>
+        <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="menu" aria-expanded="false">+</button>
+        <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Model · Auto</button>
+        <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
@@ -1953,17 +1990,15 @@ export function getWebviewContent(
     const browseContextStrip = document.getElementById('browseContextStrip');
     const browseContextRemove = document.getElementById('browseContextRemove');
     const actionsBtn = document.getElementById('actionsBtn');
-    const accountBtn = document.getElementById('accountBtn');
-    const accountStatusDot = document.getElementById('accountStatusDot');
-    const historyBtn = document.getElementById('historyBtn');
     const newChatBtn = document.getElementById('newChatBtn');
     const mentionDropdown = document.getElementById('mentionDropdown');
-    const providerBadgeEl = document.getElementById('providerBadge');
-    const providerBadgeDotEl = document.getElementById('providerBadgeDot');
-    const providerBadgeTextEl = document.getElementById('providerBadgeText');
-    const modeChip = document.getElementById('modeChip');
-    const effortChip = document.getElementById('effortChip');
+    const sessionIdentity = document.getElementById('sessionIdentity');
+    const sessionBoundaryLabel = document.getElementById('sessionBoundaryLabel');
+    const sessionIdentitySeparator = document.getElementById('sessionIdentitySeparator');
+    const sessionProviderLabel = document.getElementById('sessionProviderLabel');
+    const controlsSummary = document.getElementById('controlsSummary');
     const runtimeStatusEl = document.getElementById('runtimeStatus');
+    const runtimeStatusTitleEl = document.getElementById('runtimeStatusTitle');
     const runtimeStatusMessageEl = document.getElementById('runtimeStatusMessage');
     const runtimeSettingsBtn = document.getElementById('runtimeSettingsBtn');
     const onboardingEl = document.getElementById('onboarding');
@@ -1977,6 +2012,10 @@ export function getWebviewContent(
     const onboardingTasks = document.getElementById('onboardingTasks');
     const onboardingPermissionDocs = document.getElementById('onboardingPermissionDocs');
     const onboardingPrivacySettings = document.getElementById('onboardingPrivacySettings');
+    const onboardingWorkspaceLede = document.getElementById('onboardingWorkspaceLede');
+    const onboardingWorkspaceCardTitle = document.getElementById('onboardingWorkspaceCardTitle');
+    const onboardingWorkspaceCardCopy = document.getElementById('onboardingWorkspaceCardCopy');
+    const onboardingWorkspaceAction = document.getElementById('onboardingWorkspaceAction');
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
@@ -1988,13 +2027,28 @@ export function getWebviewContent(
     const meterDismissBtn = document.getElementById('meterDismissBtn');
     const meterRestoreBtn = document.getElementById('meterRestoreBtn');
     const meterBarWrap = document.getElementById('meterBarWrap');
+    const meterProgress = document.getElementById('meterProgress');
+    const meterCollapsedLabel = document.getElementById('meterCollapsedLabel');
     const meterByokIcon = document.getElementById('meterByokIcon');
     const meterLocalIcon = document.getElementById('meterLocalIcon');
+    const meterCloudIcon = document.getElementById('meterCloudIcon');
 
     // Initial collapsed state (injected by extension host)
     var meterCollapsed = ${meterCollapsed ? 'true' : 'false'};
     var activeRuntimeSource = null;
+    // Plan usage and the runtime trust boundary have different authorities.
+    // The account usage endpoint can describe the signed-in account, but only
+    // ThreadSummary.trustMode from the CLI proves whether this developer session is Local,
+    // BYOK, or Managed Cloud. Keep the header neutral until that summary arrives.
+    var sessionBoundaryAuthoritative = false;
     var activeAccountIdentity = null;
+    var activeAccountStatus = 'loading';
+    var activeProviderIdentity = '';
+    var activeMode = '${initialMode}';
+    var activeEffort = '${initialEffort}';
+    var activeSupportsEffort = ${supportsEffort ? 'true' : 'false'};
+    var runtimeBlock = null;
+    var lastUsageMeterPayload = null;
     var onboardingStep = 0;
 
     // ── First-run onboarding helpers ──────────────────────────────────────────
@@ -2045,6 +2099,17 @@ export function getWebviewContent(
       }
     }
 
+    function onboardingFocusableElements() {
+      if (!onboardingEl) return [];
+      return Array.prototype.slice.call(
+        onboardingEl.querySelectorAll(
+          'button:not([disabled]):not([hidden]), [href]:not([hidden]), input:not([disabled]):not([hidden]), select:not([disabled]):not([hidden]), textarea:not([disabled]):not([hidden]), [tabindex]:not([tabindex="-1"]):not([hidden])',
+        ),
+      ).filter(function(element) {
+        return element.getAttribute('aria-hidden') !== 'true' && element.closest('[hidden]') === null;
+      });
+    }
+
     function completeOnboarding() {
       setOnboardingVisible(false);
       vscode.postMessage({ type: 'completeOnboarding' });
@@ -2052,6 +2117,11 @@ export function getWebviewContent(
 
     function updateOnboardingBoundary() {
       if (!onboardingBoundary) return;
+      if (!sessionBoundaryAuthoritative) {
+        onboardingBoundary.textContent =
+          'Runtime route pending: the AGI CLI will confirm Local, BYOK, or Managed Cloud before the first turn starts.';
+        return;
+      }
       if (activeRuntimeSource === 'user-api-key') {
         var byokText = 'Active boundary: BYOK · requests go directly to your provider.';
         if (activeAccountIdentity) {
@@ -2067,9 +2137,55 @@ export function getWebviewContent(
           cloudText += ' · ' + activeAccountIdentity.planName + ' plan.';
         }
         onboardingBoundary.textContent = cloudText;
+      } else if (activeRuntimeSource === 'managed-unavailable') {
+        onboardingBoundary.textContent =
+          'Managed Cloud developer access is not included in the current AGI plan. Local and provider BYOK remain available as separate boundaries.';
       } else {
         onboardingBoundary.textContent =
           'Active developer-session boundary: Local · workspace-scoped runtime; no AGI Cloud account is required.';
+      }
+    }
+
+    function renderOnboardingWorkspaceState(status) {
+      if (onboardingSteps.length === 0) return;
+      var heading = onboardingSteps[0].querySelector('h2');
+      if (!heading || !onboardingWorkspaceLede || !onboardingWorkspaceCardTitle ||
+          !onboardingWorkspaceCardCopy || !onboardingWorkspaceAction) return;
+      if (status === 'workspace-required') {
+        heading.textContent = 'Open a workspace to begin.';
+        onboardingWorkspaceLede.textContent =
+          'Choose a folder or workspace before AGI can read project context, attach files, or propose reviewable changes.';
+        onboardingWorkspaceCardTitle.textContent = 'No project is open';
+        onboardingWorkspaceCardCopy.textContent =
+          'Opening a workspace establishes the developer-session scope. You will choose Local, BYOK, or Managed Cloud separately.';
+        onboardingWorkspaceAction.textContent = 'Open folder';
+        onboardingWorkspaceAction.hidden = false;
+      } else if (status === 'workspace-untrusted') {
+        heading.textContent = 'Review this workspace first.';
+        onboardingWorkspaceLede.textContent =
+          'AGI keeps project files and tools disabled while VS Code is in Restricted Mode.';
+        onboardingWorkspaceCardTitle.textContent = 'Workspace Trust is required';
+        onboardingWorkspaceCardCopy.textContent =
+          'Review the folder contents, then use VS Code Workspace Trust before starting a developer session.';
+        onboardingWorkspaceAction.textContent = 'Manage trust';
+        onboardingWorkspaceAction.hidden = false;
+      } else if (status === 'unavailable') {
+        heading.textContent = 'Connect the developer runtime.';
+        onboardingWorkspaceLede.textContent =
+          'This workspace is open, but the local AGI runtime is not ready yet.';
+        onboardingWorkspaceCardTitle.textContent = 'Finish setup before sending';
+        onboardingWorkspaceCardCopy.textContent =
+          'Open Runtime settings to install or configure the AGI CLI. No prompt will be sent while setup is incomplete.';
+        onboardingWorkspaceAction.textContent = 'Open runtime setup';
+        onboardingWorkspaceAction.hidden = false;
+      } else {
+        heading.textContent = 'Build with AGI in this repository.';
+        onboardingWorkspaceLede.textContent =
+          'Ask about code, attach workspace files, edit through reviewable diffs, run approved commands, and test the open project.';
+        onboardingWorkspaceCardTitle.textContent = 'Workspace-scoped by default';
+        onboardingWorkspaceCardCopy.textContent =
+          'The sidebar, editor chat, and @agi stay scoped to this workspace. The header identifies whether inference uses Local, BYOK, or Managed Cloud. Developer sessions do not silently merge into consumer Web, Mobile, or Desktop chat history.';
+        onboardingWorkspaceAction.hidden = true;
       }
     }
 
@@ -2106,27 +2222,36 @@ export function getWebviewContent(
         vscode.postMessage({ type: 'openPrivacySettings' });
       });
     }
+    if (onboardingWorkspaceAction) {
+      onboardingWorkspaceAction.addEventListener('click', function() {
+        vscode.postMessage({
+          type: runtimeBlock === 'workspace-required'
+            ? 'openWorkspace'
+            : runtimeBlock === 'workspace-untrusted'
+              ? 'manageWorkspaceTrust'
+              : 'openSettings'
+        });
+      });
+    }
     if (onboardingEl) {
       onboardingEl.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') completeOnboarding();
+        if (event.key !== 'Tab') return;
+        // The screen-reader contract says this is a modal dialog. The inert state
+        // protects the rest of the sidebar, but it does not cycle focus back
+        // to the dialog's first/last control when keyboard users reach an end.
+        var focusable = onboardingFocusableElements();
+        if (focusable.length === 0) return;
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       });
-    }
-
-    // ── Provider badge helper ─────────────────────────────────────────────────
-    function updateProviderBadge(providerLabel, brandColor) {
-      if (!providerBadgeEl || !providerBadgeDotEl || !providerBadgeTextEl) return;
-      if (!providerLabel) {
-        providerBadgeTextEl.textContent = '';
-        providerBadgeEl.removeAttribute('title');
-        providerBadgeEl.style.display = 'none';
-        return;
-      }
-      providerBadgeEl.style.background = 'var(--bg-overlay)';
-      providerBadgeEl.style.border = '1px solid ' + brandColor;
-      providerBadgeDotEl.style.background = brandColor;
-      providerBadgeTextEl.textContent = providerLabel;
-      providerBadgeEl.title = providerLabel;
-      providerBadgeEl.style.display = 'inline-flex';
     }
 
     // ── Usage meter helpers ───────────────────────────────────────────────────
@@ -2144,53 +2269,177 @@ export function getWebviewContent(
     }
 
     // Trust boundary shown in the header pill. Local / BYOK / Managed Cloud are
-    // separate boundaries, so the pill names the live one rather than asserting
-    // a fixed local-runtime label. Managed Cloud is the only one that leaves the
-    // machine, so it is the only one styled as a warning.
-    var RUNTIME_PILL_BY_SOURCE = {
+    // separate boundaries. Account usage may prepare presentation data, but the
+    // pill names one only after the CLI reports the authoritative session route.
+    // Managed Cloud is the only route that leaves the machine, so it is the only
+    // one styled as a warning.
+    var SESSION_IDENTITY_BY_SOURCE = {
       'unbounded': { label: 'Local', boundary: 'local', title: 'Workspace-local runtime - nothing leaves this machine' },
       'user-api-key': { label: 'BYOK', boundary: 'byok', title: 'Your own API key - requests go straight to the provider' },
-      'managed-plan': { label: 'Cloud', boundary: 'cloud', title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
+      'managed-plan': { label: 'Managed Cloud', boundary: 'cloud', title: 'AGI Managed Cloud - prompts are sent to AGI infrastructure' },
+      'managed-unavailable': { label: 'Cloud unavailable', boundary: 'none', title: 'The signed-in AGI plan does not currently include Managed Cloud developer access' },
+      'runtime-unavailable': { label: 'Runtime unavailable', boundary: 'none', title: 'Connect the workspace-scoped AGI CLI before selecting a Local, BYOK, or Managed Cloud boundary' },
     };
 
-    function updateRuntimePill(source) {
-      var pill = document.getElementById('runtimePill');
-      var label = document.getElementById('runtimePillLabel');
-      if (!pill || !label) return;
-      activeRuntimeSource = source;
+    function renderSessionIdentity() {
+      if (!sessionIdentity || !sessionBoundaryLabel || !sessionProviderLabel ||
+          !sessionIdentitySeparator || !activeRuntimeSource) return;
+      if (runtimeBlock === 'workspace-required') {
+        renderNoWorkspaceIdentity();
+        return;
+      }
+      if (runtimeBlock === 'workspace-untrusted') {
+        renderBlockedWorkspaceIdentity();
+        return;
+      }
+      if (!sessionBoundaryAuthoritative) {
+        sessionBoundaryLabel.textContent = 'Route pending';
+        sessionProviderLabel.textContent = '';
+        sessionIdentitySeparator.hidden = true;
+        sessionIdentity.setAttribute('data-boundary', 'none');
+        sessionIdentity.title =
+          'The AGI CLI will confirm Local, BYOK, or Managed Cloud before the first turn starts.';
+        sessionIdentity.setAttribute('aria-label', 'Runtime route pending. ' + sessionIdentity.title);
+        sessionIdentity.style.display = 'inline-flex';
+        updateOnboardingBoundary();
+        return;
+      }
       // An unrecognised source falls back to the cloud label on purpose: never
       // claim "Local" for a boundary this webview cannot identify.
-      var spec = RUNTIME_PILL_BY_SOURCE[source] || RUNTIME_PILL_BY_SOURCE['managed-plan'];
-      label.textContent = spec.label;
-      pill.setAttribute('data-boundary', spec.boundary);
+      var spec = SESSION_IDENTITY_BY_SOURCE[activeRuntimeSource] || SESSION_IDENTITY_BY_SOURCE['managed-plan'];
+      var showProviderIdentity = activeRuntimeSource !== 'runtime-unavailable';
+      sessionBoundaryLabel.textContent = spec.label;
+      sessionProviderLabel.textContent = showProviderIdentity ? activeProviderIdentity : '';
+      sessionIdentitySeparator.hidden = !showProviderIdentity || !activeProviderIdentity;
+      sessionIdentity.setAttribute('data-boundary', spec.boundary);
       var title = spec.title;
-      if (activeAccountIdentity && source === 'managed-plan') {
+      if (showProviderIdentity && activeProviderIdentity) title += ' · Provider: ' + activeProviderIdentity;
+      if (activeAccountIdentity &&
+          (activeRuntimeSource === 'managed-plan' || activeRuntimeSource === 'managed-unavailable')) {
         title += ' · Account: ' + activeAccountIdentity.displayName;
         if (activeAccountIdentity.email) title += ' (' + activeAccountIdentity.email + ')';
         title += ' · ' + activeAccountIdentity.planName + ' plan';
-      } else if (activeAccountIdentity && source === 'user-api-key') {
+      } else if (activeAccountIdentity && activeRuntimeSource === 'user-api-key') {
         title += ' · AGI Cloud sign-in: ' + activeAccountIdentity.displayName +
           ' (not used for provider billing)';
       }
-      pill.title = title;
-      pill.style.display = 'inline-flex';
+      sessionIdentity.title = title;
+      sessionIdentity.setAttribute('aria-label', spec.label +
+        (showProviderIdentity && activeProviderIdentity ? ' using ' + activeProviderIdentity : '') + '. ' + title);
+      sessionIdentity.style.display = 'inline-flex';
       updateOnboardingBoundary();
     }
 
+    function renderNoWorkspaceIdentity() {
+      if (!sessionIdentity || !sessionBoundaryLabel || !sessionProviderLabel ||
+          !sessionIdentitySeparator) return;
+      sessionBoundaryLabel.textContent = 'No workspace';
+      sessionProviderLabel.textContent = '';
+      sessionIdentitySeparator.hidden = true;
+      sessionIdentity.setAttribute('data-boundary', 'none');
+      sessionIdentity.title =
+        'Open a workspace before choosing a Local, BYOK, or Managed Cloud developer-session boundary.';
+      sessionIdentity.setAttribute('aria-label', sessionIdentity.title);
+      sessionIdentity.style.display = 'inline-flex';
+    }
+
+    function renderBlockedWorkspaceIdentity() {
+      if (!sessionIdentity || !sessionBoundaryLabel || !sessionProviderLabel ||
+          !sessionIdentitySeparator) return;
+      sessionBoundaryLabel.textContent = 'Restricted workspace';
+      sessionProviderLabel.textContent = '';
+      sessionIdentitySeparator.hidden = true;
+      sessionIdentity.setAttribute('data-boundary', 'none');
+      sessionIdentity.title =
+        'Workspace Trust is required before a Local, BYOK, or Managed Cloud developer session can access this project.';
+      sessionIdentity.setAttribute('aria-label', sessionIdentity.title);
+      sessionIdentity.style.display = 'inline-flex';
+    }
+
+    function updateProviderBadge(providerLabel) {
+      activeProviderIdentity = providerLabel || '';
+      renderSessionIdentity();
+    }
+
+    function updateRuntimePill(source) {
+      // Runtime/account messages can arrive in either order after reload. Once
+      // the host has declared this workspace runtime unavailable, a stale model
+      // or meter event must not replace that honest state with a usable Local,
+      // BYOK, or Managed Cloud claim.
+      if (runtimeBlock !== null && source !== 'runtime-unavailable') return;
+      activeRuntimeSource = source;
+      renderSessionIdentity();
+    }
+
+    function applyAuthoritativeSessionBoundary(trustMode, provider) {
+      sessionBoundaryAuthoritative = true;
+      activeProviderIdentity = provider || '';
+      updateRuntimePill(trustMode === 'local'
+        ? 'unbounded'
+        : trustMode === 'byok'
+          ? 'user-api-key'
+          : 'managed-plan');
+    }
+
+    function resetAuthoritativeSessionBoundary() {
+      sessionBoundaryAuthoritative = false;
+      renderSessionIdentity();
+    }
+
     function renderUsageMeter(payload) {
-      updateRuntimePill(payload.source);
+      lastUsageMeterPayload = payload;
+      if (runtimeBlock !== null) {
+        if (usageMeterBanner) usageMeterBanner.style.display = 'none';
+        if (usageMeterCollapsed) usageMeterCollapsed.style.display = 'none';
+        if (runtimeBlock === 'workspace-required') renderNoWorkspaceIdentity();
+        else if (runtimeBlock === 'workspace-untrusted') renderBlockedWorkspaceIdentity();
+        else updateRuntimePill('runtime-unavailable');
+        return;
+      }
+      if (!sessionBoundaryAuthoritative && activeAccountStatus !== 'expired') {
+        updateRuntimePill(payload.managedDeveloperEligible === false
+          ? 'managed-unavailable'
+          : payload.source);
+      }
 
       if (!usageMeterBanner || !meterFill || !meterText || !meterReset || !upgradeBtn ||
-          !meterBarWrap || !meterByokIcon || !meterLocalIcon) return;
+          !meterBarWrap || !meterByokIcon || !meterLocalIcon || !meterCloudIcon) return;
 
       // Reset all conditional elements
       meterByokIcon.style.display = 'none';
       meterLocalIcon.style.display = 'none';
+      meterCloudIcon.style.display = 'none';
       meterBarWrap.style.display = 'none';
       upgradeBtn.style.display = 'none';
       usageMeterBanner.classList.remove('warn');
+      upgradeBtn.textContent = 'Upgrade';
+      upgradeBtn.dataset.action = 'upgrade';
+      if (meterCollapsedLabel) meterCollapsedLabel.textContent = 'Usage';
 
-      if (payload.source === 'unbounded') {
+      if (activeAccountStatus === 'expired') {
+        meterText.textContent = 'AGI Cloud session expired';
+        meterReset.textContent = '· Local and provider BYOK remain available';
+        upgradeBtn.textContent = 'Sign in again';
+        upgradeBtn.dataset.action = 'account';
+        upgradeBtn.style.display = 'inline-block';
+        usageMeterBanner.classList.add('warn');
+        if (meterCollapsedLabel) meterCollapsedLabel.textContent = 'Account needs attention';
+      } else if (payload.managedDeveloperEligible === false && payload.accountPlanTier) {
+        meterCloudIcon.style.display = 'inline';
+        var planLabel = payload.accountPlanTier.charAt(0).toUpperCase() + payload.accountPlanTier.slice(1).replace(/_/g, ' ');
+        var paidPlanNeedsAttention = ['pro', 'max', 'max_15x', 'team', 'enterprise'].includes(payload.accountPlanTier);
+        meterText.textContent = paidPlanNeedsAttention
+          ? planLabel + ' subscription needs attention · Managed Cloud paused'
+          : planLabel + ' account · Managed developer access requires Pro or above';
+        meterReset.textContent = '· Local and provider BYOK remain available';
+        upgradeBtn.textContent = paidPlanNeedsAttention ? 'Manage billing' : 'Upgrade';
+        upgradeBtn.dataset.action = paidPlanNeedsAttention ? 'billing' : 'upgrade';
+        upgradeBtn.style.display = 'inline-block';
+        usageMeterBanner.classList.add('warn');
+        if (meterCollapsedLabel) meterCollapsedLabel.textContent = paidPlanNeedsAttention
+          ? 'Billing needs attention'
+          : 'Upgrade for Cloud';
+      } else if (payload.source === 'unbounded') {
         meterLocalIcon.style.display = 'inline';
         meterText.textContent = payload.usageLabel || 'Local model - no quota tracking';
         meterReset.textContent = '';
@@ -2203,11 +2452,19 @@ export function getWebviewContent(
         meterBarWrap.style.display = payload.remaining !== null ? 'flex' : 'none';
         var pct = payload.remaining !== null ? payload.remaining * 100 : 100;
         var usedPct = 100 - pct;
-        var fillColor = pct < 20 ? 'var(--agi-vscode-terra)' : pct < 40 ? 'var(--vscode-editorWarning-foreground, #f59e0b)' : 'var(--agi-vscode-button)';
+        var fillColor = pct < 20 ? 'var(--agi-vscode-terra)' : pct < 40 ? 'var(--warning)' : 'var(--accent-teal)';
         meterFill.style.width = Math.max(0, Math.min(100, usedPct)) + '%';
         meterFill.style.background = fillColor;
-        meterText.textContent = 'Usage: ' + (payload.usageLabel || 'Managed usage unavailable');
+        if (meterProgress) {
+          meterProgress.setAttribute('aria-valuenow', String(Math.round(usedPct)));
+          meterProgress.setAttribute('aria-valuetext', Math.round(usedPct) + '% of plan usage used');
+        }
+        var exhausted = payload.remaining !== null && payload.remaining <= 0;
+        meterText.textContent = exhausted
+          ? 'Managed Cloud quota exhausted'
+          : 'Usage: ' + (payload.usageLabel || 'Managed usage unavailable');
         meterReset.textContent = payload.resetsIn ? '· ' + payload.resetsIn : '';
+        if (exhausted && meterCollapsedLabel) meterCollapsedLabel.textContent = 'Quota exhausted';
         if (payload.showUpgrade) {
           upgradeBtn.style.display = 'inline-block';
           usageMeterBanner.classList.add('warn');
@@ -2242,14 +2499,26 @@ export function getWebviewContent(
 
     if (runtimeSettingsBtn) {
       runtimeSettingsBtn.addEventListener('click', function() {
-        vscode.postMessage({ type: 'openSettings' });
+        vscode.postMessage({
+          type: runtimeBlock === 'workspace-required'
+            ? 'openWorkspace'
+            : runtimeBlock === 'workspace-untrusted'
+              ? 'manageWorkspaceTrust'
+              : 'openSettings'
+        });
       });
     }
 
     // Upgrade button — opens pricing page via extension host
     if (upgradeBtn) {
       upgradeBtn.addEventListener('click', function() {
-        vscode.postMessage({ type: 'upgradeClicked' });
+        vscode.postMessage({
+          type: upgradeBtn.dataset.action === 'account'
+            ? 'openAccount'
+            : upgradeBtn.dataset.action === 'billing'
+              ? 'manageBilling'
+              : 'upgradeClicked'
+        });
       });
     }
 
@@ -2268,7 +2537,96 @@ export function getWebviewContent(
     let clientMessageSeq = 0;
     let activeQueuedClientMessageId = null;
 
+    function syncComposerAvailability() {
+      var blocked = runtimeBlock !== null;
+      userInput.disabled = blocked;
+      if (plusBtn) plusBtn.disabled = blocked;
+      if (modelPill) modelPill.disabled = blocked;
+      if (controlsSummary) controlsSummary.disabled = blocked;
+      sendBtn.disabled = blocked;
+      document.querySelectorAll('.prompt-chip').forEach(function(chip) {
+        chip.disabled = blocked;
+      });
+      if (blocked) {
+        closeModelPopover();
+        if (plusMenu) plusMenu.classList.remove('open');
+        setBrowseWebEnabled(false);
+      }
+    }
+
+    function renderRuntimeAvailability(status, message) {
+      runtimeBlock = status === 'ready' ? null : status;
+      renderOnboardingWorkspaceState(status);
+      var headline = document.getElementById('emptyStateHeadline');
+      var copy = document.getElementById('emptyStateCopy');
+      if (status === 'ready') {
+        runtimeStatusEl.style.display = 'none';
+        if (headline) headline.textContent = 'Build with AGI';
+        if (copy) copy.textContent =
+          'Ask about your code, edit files, run commands, and test this workspace.';
+        if (lastUsageMeterPayload) renderUsageMeter(lastUsageMeterPayload);
+      } else {
+        var workspaceRequired = status === 'workspace-required';
+        var workspaceUntrusted = status === 'workspace-untrusted';
+        runtimeStatusTitleEl.textContent = workspaceRequired
+          ? 'Open a workspace to begin'
+          : workspaceUntrusted
+            ? 'Workspace is in Restricted Mode'
+            : 'Developer runtime needs setup';
+        runtimeStatusMessageEl.textContent = message || (workspaceRequired
+          ? 'Open a folder or workspace to begin.'
+          : workspaceUntrusted
+            ? 'Trust this workspace before AGI can use project files or tools.'
+            : 'The AGI CLI is unavailable.');
+        runtimeSettingsBtn.textContent = workspaceRequired
+          ? 'Open folder'
+          : workspaceUntrusted
+            ? 'Manage trust'
+            : 'Open setup';
+        runtimeStatusEl.style.display = 'flex';
+        if (headline) headline.textContent = workspaceRequired
+          ? 'Open a workspace'
+          : workspaceUntrusted
+            ? 'Review this workspace first'
+            : 'Connect the developer runtime';
+        if (copy) copy.textContent = workspaceRequired
+          ? 'Choose a folder to establish the developer-session scope.'
+          : workspaceUntrusted
+            ? 'Project context and tools stay disabled until you trust this workspace.'
+            : 'No workspace prompt will be sent until the protocol-7 runtime connects.';
+        if (usageMeterBanner) usageMeterBanner.style.display = 'none';
+        if (usageMeterCollapsed) usageMeterCollapsed.style.display = 'none';
+        if (workspaceRequired) renderNoWorkspaceIdentity();
+        if (workspaceUntrusted) renderBlockedWorkspaceIdentity();
+        if (!workspaceRequired && !workspaceUntrusted) updateRuntimePill('runtime-unavailable');
+      }
+      userInput.placeholder = runtimeBlock === 'workspace-required'
+        ? 'Open a workspace to start chatting'
+        : runtimeBlock === 'workspace-untrusted'
+          ? 'Trust this workspace to start chatting'
+          : runtimeBlock === 'unavailable'
+            ? 'Set up the developer runtime to start chatting'
+            : 'Ask AGI to do anything…';
+      syncComposerAvailability();
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+    function capitalizeControl(value) {
+      return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
+    }
+
+    function renderControlsSummary() {
+      if (!controlsSummary) return;
+      var mode = capitalizeControl(activeMode);
+      var effort = capitalizeControl(activeEffort);
+      var effortShort = effort === 'Medium' ? 'Med' : effort;
+      controlsSummary.textContent = activeSupportsEffort ? mode + ' · ' + effortShort : mode;
+      var fullLabel = 'Controls: ' + mode + ' mode' +
+        (activeSupportsEffort ? ', ' + effort + ' effort' : ', effort unavailable for this model');
+      controlsSummary.title = fullLabel;
+      controlsSummary.setAttribute('aria-label', fullLabel);
+    }
+
     function addMessage(role, text) {
       const div = document.createElement('div');
       div.className = 'message ' + role;
@@ -2277,6 +2635,8 @@ export function getWebviewContent(
       messagesEl.scrollTop = messagesEl.scrollHeight;
       return div;
     }
+
+    renderControlsSummary();
 
     function userMessageById(id) {
       if (!id) return null;
@@ -2324,7 +2684,8 @@ export function getWebviewContent(
 
     function setStreaming(value) {
       streaming = value;
-      sendBtn.disabled = false;
+      if (composerCard) composerCard.classList.toggle('is-streaming', value);
+      sendBtn.disabled = runtimeBlock !== null;
       sendBtn.classList.toggle('follow-up', value);
       var actionLabel = followUpBehavior === 'steer' ? 'Steer' : 'Queue';
       if (sendActionLabel) sendActionLabel.textContent = value ? actionLabel : '';
@@ -2336,7 +2697,7 @@ export function getWebviewContent(
           : 'Send (Enter)'
       );
       if (stopBtn) stopBtn.classList.toggle('visible', value);
-      userInput.disabled = false;
+      userInput.disabled = runtimeBlock !== null;
       if (composerHint) {
         composerHint.innerHTML = value
           ? '<kbd>Enter</kbd> to ' + actionLabel.toLowerCase() + ' · <kbd>Cmd/Ctrl+Enter</kbd> to ' +
@@ -2370,6 +2731,18 @@ export function getWebviewContent(
       if (modelPill) modelPill.setAttribute('aria-expanded', 'false');
     }
 
+    function openModelLoading() {
+      if (!modelPopoverEl) return;
+      modelPopoverEl.innerHTML = '';
+      var loading = document.createElement('div');
+      loading.className = 'model-popover__empty';
+      loading.setAttribute('role', 'status');
+      loading.textContent = 'Checking available models…';
+      modelPopoverEl.appendChild(loading);
+      modelPopoverEl.classList.add('open');
+      if (modelPill) modelPill.setAttribute('aria-expanded', 'true');
+    }
+
     function fallbackModelGroups() {
       var models = [];
       if (modelSelect) {
@@ -2383,7 +2756,12 @@ export function getWebviewContent(
           });
         }
       }
-      return models.length > 0 ? [{ label: 'Models', models: models }] : [];
+      return models.length > 0 ? [{
+        label: 'Availability resolving',
+        description: 'The host validates routing before selection',
+        boundary: 'unavailable',
+        models: models
+      }] : [];
     }
 
     function openModelPopover(groups, currentModel) {
@@ -2404,7 +2782,17 @@ export function getWebviewContent(
 
         var groupLabel = document.createElement('div');
         groupLabel.className = 'model-popover__group';
-        groupLabel.textContent = group.label || 'Models';
+        if (group.boundary) groupLabel.dataset.boundary = group.boundary;
+        var groupTitle = document.createElement('span');
+        groupTitle.className = 'model-popover__group-title';
+        groupTitle.textContent = group.label || 'Models';
+        groupLabel.appendChild(groupTitle);
+        if (group.description) {
+          var groupDescription = document.createElement('span');
+          groupDescription.className = 'model-popover__group-description';
+          groupDescription.textContent = group.description;
+          groupLabel.appendChild(groupDescription);
+        }
         modelPopoverEl.appendChild(groupLabel);
 
         for (var modelIndex = 0; modelIndex < group.models.length; modelIndex++) {
@@ -2437,11 +2825,9 @@ export function getWebviewContent(
             var target = event.currentTarget;
             var modelId = target && target.dataset ? target.dataset.modelId : '';
             if (!modelId) return;
-            if (modelSelect) modelSelect.value = modelId;
-            if (modelPill) {
-              var selectedLabel = target.querySelector('.model-popover__label');
-              modelPill.textContent = 'Model · ' + (selectedLabel ? selectedLabel.textContent : modelId);
-            }
+            // The privileged host re-checks tier/provider reachability. Keep
+            // the last confirmed pill until its canonical model event lands;
+            // otherwise a rejected selection is displayed as active.
             closeModelPopover();
             vscode.postMessage({ type: 'selectModel', payload: { modelId: modelId } });
           });
@@ -2561,6 +2947,7 @@ export function getWebviewContent(
 
     // ── Send ──────────────────────────────────────────────────────────────────
     function sendMessage(oneTurnBehavior) {
+      if (runtimeBlock !== null) return;
       const isFollowUp = streaming;
       const typedText = userInput.value.trim();
       const text = typedText || (pendingAttachmentCount === 1
@@ -2621,18 +3008,14 @@ export function getWebviewContent(
         if (e.key === 'ArrowDown') {
           e.preventDefault();
           if (mentionIndex < items.length - 1) {
-            if (items[mentionIndex]) items[mentionIndex].classList.remove('selected');
-            mentionIndex++;
-            if (items[mentionIndex]) { items[mentionIndex].classList.add('selected'); items[mentionIndex].scrollIntoView({ block: 'nearest' }); }
+            updateMentionSelection(items, mentionIndex + 1);
           }
           return;
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
           if (mentionIndex > 0) {
-            if (items[mentionIndex]) items[mentionIndex].classList.remove('selected');
-            mentionIndex--;
-            if (items[mentionIndex]) { items[mentionIndex].classList.add('selected'); items[mentionIndex].scrollIntoView({ block: 'nearest' }); }
+            updateMentionSelection(items, mentionIndex - 1);
           }
           return;
         }
@@ -2662,18 +3045,6 @@ export function getWebviewContent(
     actionsBtn.addEventListener('click', () => {
       vscode.postMessage({ type: 'openActionSheet' });
     });
-
-    if (accountBtn) {
-      accountBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'openAccount' });
-      });
-    }
-
-    if (historyBtn) {
-      historyBtn.addEventListener('click', () => {
-        vscode.postMessage({ type: 'openHistory' });
-      });
-    }
 
     if (newChatBtn) {
       newChatBtn.addEventListener('click', () => {
@@ -2720,6 +3091,10 @@ export function getWebviewContent(
           e.stopPropagation();
           close();
           if (opener) opener.focus();
+          return;
+        }
+        if (e.key === 'Tab') {
+          close();
           return;
         }
         if (e.key === 'ArrowDown') {
@@ -2775,7 +3150,7 @@ export function getWebviewContent(
       var plusMenuUpload = document.getElementById('plusMenuUpload');
       if (plusMenuUpload) {
         plusMenuUpload.addEventListener('click', () => {
-          plusMenu.classList.remove('open');
+          closePlusMenu();
           vscode.postMessage({ type: 'openFilePicker' });
         });
       }
@@ -2791,15 +3166,8 @@ export function getWebviewContent(
       var plusMenuAgentMode = document.getElementById('plusMenuPlanMode');
       if (plusMenuAgentMode) {
         plusMenuAgentMode.addEventListener('click', () => {
-          plusMenu.classList.remove('open');
-          vscode.postMessage({ type: 'openModePicker' });
-        });
-      }
-      var plusMenuActions = document.getElementById('plusMenuActions');
-      if (plusMenuActions) {
-        plusMenuActions.addEventListener('click', () => {
-          plusMenu.classList.remove('open');
-          vscode.postMessage({ type: 'openActionSheet' });
+          closePlusMenu();
+          vscode.postMessage({ type: 'setMode', payload: { mode: 'plan' } });
         });
       }
     }
@@ -2822,7 +3190,15 @@ export function getWebviewContent(
             plusMenu.classList.remove('open');
             if (plusBtn) plusBtn.setAttribute('aria-expanded', 'false');
           }
+          openModelLoading();
           vscode.postMessage({ type: 'openModelPopover' });
+        }
+      });
+      modelPill.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && modelPopoverEl && modelPopoverEl.classList.contains('open')) {
+          e.preventDefault();
+          closeModelPopover();
+          modelPill.focus();
         }
       });
     }
@@ -2835,13 +3211,11 @@ export function getWebviewContent(
       document.addEventListener('click', closeModelPopover);
     }
 
-    modeChip.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openModePicker' });
-    });
-
-    effortChip.addEventListener('click', () => {
-      vscode.postMessage({ type: 'openEffortPicker' });
-    });
+    if (controlsSummary) {
+      controlsSummary.addEventListener('click', () => {
+        vscode.postMessage({ type: 'openActionSheet', payload: { scope: 'composer' } });
+      });
+    }
 
     // ── Composer drag-drop + paste-image (P0 #3, 2026-05-21) ──────────────────
     var composerCard = document.getElementById('composerCard');
@@ -3158,14 +3532,6 @@ export function getWebviewContent(
         );
       }
 
-      else if (msg.type === 'toolCallDelta') {
-        var tc = toolCallMap[msg.payload.toolUseId];
-        if (tc) {
-          tc.inputBuf += msg.payload.deltaJson;
-          tc.requestEl.textContent = tc.inputBuf;
-        }
-      }
-
       else if (msg.type === 'toolCallEnd') {
         var tcEnd = toolCallMap[msg.payload.toolUseId];
         if (tcEnd) {
@@ -3177,6 +3543,7 @@ export function getWebviewContent(
           if (typeof msg.payload.elapsedMs === 'number') {
             tcEnd.summaryEl.textContent += ' · ' + formatElapsedMs(msg.payload.elapsedMs);
           }
+          updateActivitySummary(tcEnd.summaryEl.textContent, false);
         }
       }
 
@@ -3240,6 +3607,10 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'model') {
+        // A model choice can cause the CLI to establish a different provider
+        // boundary. Do not carry the previous session's trust label forward
+        // while that next route is unresolved.
+        resetAuthoritativeSessionBoundary();
         // Match by comparing option.value directly rather than building a CSS
         // selector via string concat — a model id containing a quote/"]" would
         // throw a SyntaxError and break model display (audit 218 L1726).
@@ -3261,62 +3632,32 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'providerBadge') {
-        updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor);
+        updateProviderBadge(msg.payload.providerLabel);
       }
 
       else if (msg.type === 'sessionBoundary') {
-        var boundarySource = msg.payload.trustMode === 'local'
-          ? 'unbounded'
-          : msg.payload.trustMode === 'byok'
-            ? 'user-api-key'
-            : 'managed-plan';
-        updateRuntimePill(boundarySource);
-        var boundaryPill = document.getElementById('runtimePill');
-        if (boundaryPill && msg.payload.provider) {
-          boundaryPill.title += ' · Provider: ' + msg.payload.provider;
-        }
+        applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
       }
 
       else if (msg.type === 'runtimeStatus') {
-        if (!runtimeStatusEl || !runtimeStatusMessageEl) return;
-        if (msg.payload.status === 'ready') {
-          runtimeStatusEl.style.display = 'none';
-        } else {
-          runtimeStatusMessageEl.textContent = msg.payload.message || 'The AGI CLI is unavailable.';
-          runtimeStatusEl.style.display = 'flex';
-        }
+        if (!runtimeStatusEl || !runtimeStatusTitleEl || !runtimeStatusMessageEl || !runtimeSettingsBtn) return;
+        renderRuntimeAvailability(msg.payload.status, msg.payload.message);
       }
 
       else if (msg.type === 'accountStatus') {
-        if (!accountBtn || !accountStatusDot) return;
-        accountStatusDot.classList.remove('signed-in', 'expired');
+        activeAccountStatus = msg.payload.status || 'signed-out';
         activeAccountIdentity = msg.payload.identity || null;
-        if (msg.payload.status === 'signed-in') {
-          accountStatusDot.classList.add('signed-in');
-          if (activeAccountIdentity) {
-            var accountTitle = 'AGI Cloud · ' + activeAccountIdentity.displayName;
-            if (activeAccountIdentity.email) {
-              accountTitle += ' (' + activeAccountIdentity.email + ')';
-            }
-            accountTitle += ' · ' + activeAccountIdentity.accountType +
-              ' · ' + activeAccountIdentity.planName + ' plan';
-            accountBtn.title = accountTitle;
-          } else {
-            accountBtn.title = 'AGI Cloud connected · identity unavailable';
-          }
-        } else if (msg.payload.status === 'expired') {
-          accountStatusDot.classList.add('expired');
-          accountBtn.title = 'Reconnect to AGI Cloud';
-        } else {
-          accountBtn.title = 'Sign in to AGI Cloud';
-        }
-        accountBtn.setAttribute('aria-label', accountBtn.title);
+        if (lastUsageMeterPayload) renderUsageMeter(lastUsageMeterPayload);
         if (activeRuntimeSource) updateRuntimePill(activeRuntimeSource);
         else updateOnboardingBoundary();
       }
 
       else if (msg.type === 'showOnboarding') {
         setOnboardingVisible(true);
+      }
+
+      else if (msg.type === 'hideOnboarding') {
+        setOnboardingVisible(false);
       }
 
       else if (msg.type === 'fileSearchResults') {
@@ -3338,11 +3679,17 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationLoaded') {
+        applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
         invalidateAttachmentBatches();
         messagesEl.innerHTML = '';
         activePlanCard = null;
         toolCallStack = null;
+        toolCallList = null;
+        activitySummaryButton = null;
+        activityIcon = null;
+        activityMeta = null;
         toolCallMap = {};
+        progressMap = {};
         currentAssistantEl = null;
         activeQueuedClientMessageId = null;
         accumulatedContent = '';
@@ -3378,6 +3725,7 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'conversationCleared') {
+        resetAuthoritativeSessionBoundary();
         invalidateAttachmentBatches();
         messagesEl.innerHTML = '';
         activePlanCard = null;
@@ -3385,8 +3733,8 @@ export function getWebviewContent(
         freshEmpty.className = 'empty-state';
         freshEmpty.id = 'emptyState';
         freshEmpty.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
-          '<div class="empty-state-headline">Build with AGI</div>' +
-          '<div class="empty-state-copy">Ask about your code, edit files, run commands, and test this workspace.</div>' +
+          '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
+          '<div class="empty-state-copy" id="emptyStateCopy">Ask about your code, edit files, run commands, and test this workspace.</div>' +
           '<div class="prompt-chips">' +
           '<button class="prompt-chip" data-prompt="/explain ">/explain</button>' +
           '<button class="prompt-chip" data-prompt="/fix ">/fix</button>' +
@@ -3405,8 +3753,14 @@ export function getWebviewContent(
         currentAssistantEl = null;
         activeQueuedClientMessageId = null;
         toolCallStack = null;
+        toolCallList = null;
+        activitySummaryButton = null;
+        activityIcon = null;
+        activityMeta = null;
         toolCallMap = {};
+        progressMap = {};
         setStreaming(false);
+        syncComposerAvailability();
         showFollowUpStatus('', '', false);
         pendingAttachmentCount = 0;
         if (attachmentStrip) attachmentStrip.replaceChildren();
@@ -3418,14 +3772,14 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'modeChanged') {
-        if (modeChip) modeChip.textContent = 'Mode · ' + msg.payload.mode.charAt(0).toUpperCase() + msg.payload.mode.slice(1);
+        activeMode = msg.payload.mode;
+        renderControlsSummary();
       }
 
       else if (msg.type === 'effortChanged') {
-        if (effortChip) {
-          effortChip.textContent = 'Effort · ' + msg.payload.effort.charAt(0).toUpperCase() + msg.payload.effort.slice(1);
-          effortChip.style.display = msg.payload.supportsEffort ? '' : 'none';
-        }
+        activeEffort = msg.payload.effort;
+        activeSupportsEffort = Boolean(msg.payload.supportsEffort);
+        renderControlsSummary();
       }
 
       else if (msg.type === 'usageMeter') {
@@ -3530,6 +3884,22 @@ export function getWebviewContent(
       mentionDropdown.innerHTML = '';
       mentionIndex = -1;
       mentionStart = -1;
+      userInput.setAttribute('aria-expanded', 'false');
+      userInput.removeAttribute('aria-activedescendant');
+    }
+
+    function updateMentionSelection(items, nextIndex) {
+      mentionIndex = nextIndex;
+      for (var itemIndex = 0; itemIndex < items.length; itemIndex++) {
+        var selected = itemIndex === mentionIndex;
+        items[itemIndex].classList.toggle('selected', selected);
+        items[itemIndex].setAttribute('aria-selected', String(selected));
+      }
+      var activeItem = items[mentionIndex];
+      if (activeItem) {
+        userInput.setAttribute('aria-activedescendant', activeItem.id);
+        activeItem.scrollIntoView({ block: 'nearest' });
+      }
     }
 
     function showMentionResults(files) {
@@ -3539,6 +3909,9 @@ export function getWebviewContent(
       files.forEach(function(f, idx) {
         var item = document.createElement('div');
         item.className = 'mention-item' + (idx === 0 ? ' selected' : '');
+        item.id = 'mention-option-' + idx;
+        item.setAttribute('role', 'option');
+        item.setAttribute('aria-selected', String(idx === 0));
         item.textContent = f.label;
         item._mentionReference = f;
         item.addEventListener('mousedown', function(e) {
@@ -3548,6 +3921,8 @@ export function getWebviewContent(
         mentionDropdown.appendChild(item);
       });
       mentionDropdown.className = 'mention-dropdown visible';
+      userInput.setAttribute('aria-expanded', 'true');
+      userInput.setAttribute('aria-activedescendant', 'mention-option-0');
     }
 
     function insertMention(file) {
@@ -3573,7 +3948,11 @@ export function getWebviewContent(
     }
 
     // ── Inline tool-call rendering (design-spec §4) ───────────────────────────
-    var toolCallStack = null; // active .tool-call-stack container
+    var toolCallStack = null; // active .activity-group container
+    var toolCallList = null;
+    var activitySummaryButton = null;
+    var activityIcon = null;
+    var activityMeta = null;
     var toolCallMap = {}; // toolUseId → inline disclosure state
     var progressMap = {}; // progressId → inline disclosure state
     var toolCallStackHasError = false;
@@ -3682,15 +4061,86 @@ export function getWebviewContent(
       return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
 
+    function updateActivitySummary(latestSummary, terminal) {
+      if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
+      var total = toolCallList.querySelectorAll('.tool-call').length;
+      var running = toolCallList.querySelectorAll('.tool-call--pending').length;
+      var errors = toolCallList.querySelectorAll('.tool-call--error').length;
+      var completed = Math.max(0, total - running - errors);
+      var parts = [total + (total === 1 ? ' action' : ' actions')];
+      if (terminal) {
+        parts.push(
+          errors > 0
+            ? errors + (errors === 1 ? ' error' : ' errors')
+            : toolCallStackHasError
+              ? 'Completed with errors'
+              : 'Done'
+        );
+      } else {
+        if (running > 0) parts.push(running + ' running');
+        if (completed > 0) parts.push(completed + ' done');
+        if (errors > 0) parts.push(errors + (errors === 1 ? ' error' : ' errors'));
+      }
+      if (latestSummary) parts.push(latestSummary);
+      activityMeta.textContent = parts.join(' · ');
+      var status = terminal ? (errors > 0 || toolCallStackHasError ? 'error' : 'done') : 'working';
+      toolCallStack.dataset.status = status;
+      activityIcon.className = 'activity-group__icon codicon codicon-' +
+        (status === 'error' ? 'error' : status === 'done' ? 'check' : 'loading');
+      activitySummaryButton.setAttribute(
+        'aria-label',
+        'Activity, ' + parts.join(', ') + '. ' +
+          (activitySummaryButton.getAttribute('aria-expanded') === 'true' ? 'Collapse details' : 'Expand details')
+      );
+    }
+
     function ensureToolCallStack() {
-      if (toolCallStack) return toolCallStack;
+      if (toolCallStack && toolCallList) return toolCallList;
       toolCallStackHasError = false;
-      var stackEl = document.createElement('div');
-      stackEl.className = 'tool-call-stack';
+      var stackEl = document.createElement('section');
+      stackEl.className = 'activity-group tool-call-stack';
+      stackEl.dataset.status = 'working';
+      stackEl.setAttribute('aria-label', 'Activity');
+
+      var summaryButton = document.createElement('button');
+      summaryButton.type = 'button';
+      summaryButton.className = 'activity-group__summary';
+      summaryButton.setAttribute('aria-expanded', 'true');
+      var iconEl = document.createElement('span');
+      iconEl.className = 'activity-group__icon codicon codicon-loading';
+      iconEl.setAttribute('aria-hidden', 'true');
+      var titleEl = document.createElement('span');
+      titleEl.className = 'activity-group__title';
+      titleEl.textContent = 'Activity';
+      var metaEl = document.createElement('span');
+      metaEl.className = 'activity-group__meta';
+      metaEl.textContent = 'Starting…';
+      var chevronEl = document.createElement('span');
+      chevronEl.className = 'activity-group__chevron';
+      chevronEl.textContent = '▼';
+      chevronEl.setAttribute('aria-hidden', 'true');
+      summaryButton.appendChild(iconEl);
+      summaryButton.appendChild(titleEl);
+      summaryButton.appendChild(metaEl);
+      summaryButton.appendChild(chevronEl);
+
+      var listEl = document.createElement('div');
+      listEl.className = 'activity-group__body';
+      summaryButton.addEventListener('click', function() {
+        var collapsed = stackEl.classList.toggle('activity-group--collapsed');
+        summaryButton.setAttribute('aria-expanded', String(!collapsed));
+        updateActivitySummary('', stackEl.dataset.status !== 'working');
+      });
+      stackEl.appendChild(summaryButton);
+      stackEl.appendChild(listEl);
       messagesEl.appendChild(stackEl);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       toolCallStack = stackEl;
-      return stackEl;
+      toolCallList = listEl;
+      activitySummaryButton = summaryButton;
+      activityIcon = iconEl;
+      activityMeta = metaEl;
+      return listEl;
     }
 
     function createToolCallEl(toolUseId, name, category, summary, input) {
@@ -3767,6 +4217,7 @@ export function getWebviewContent(
       });
 
       stack.appendChild(wrapper);
+      updateActivitySummary(summary || label, false);
       messagesEl.scrollTop = messagesEl.scrollHeight;
 
       toolCallMap[toolUseId] = {
@@ -3775,8 +4226,7 @@ export function getWebviewContent(
         summaryEl: summaryEl,
         requestEl: requestEl,
         responseEl: responseEl,
-        responseSection: responseSection,
-        inputBuf: ''
+        responseSection: responseSection
       };
       return toolCallMap[toolUseId];
     }
@@ -3848,19 +4298,21 @@ export function getWebviewContent(
         existing.el.classList.add('tool-call--done');
         existing.iconEl.classList.add('codicon-check');
       }
+      updateActivitySummary(summary, false);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       return existing;
     }
 
     function finalizeToolCallStack() {
       if (!toolCallStack) return;
-      var doneEl = document.createElement('div');
-      doneEl.className = 'tool-call-done' + (toolCallStackHasError ? ' tool-call-done--error' : '');
-      doneEl.innerHTML = toolCallStackHasError
-        ? '<span class="codicon codicon-error" aria-hidden="true"></span> Completed with errors'
-        : '<span class="codicon codicon-check" aria-hidden="true"></span> Done';
-      toolCallStack.appendChild(doneEl);
+      toolCallStack.classList.add('activity-group--collapsed');
+      if (activitySummaryButton) activitySummaryButton.setAttribute('aria-expanded', 'false');
+      updateActivitySummary('', true);
       toolCallStack = null;
+      toolCallList = null;
+      activitySummaryButton = null;
+      activityIcon = null;
+      activityMeta = null;
       toolCallMap = {};
       progressMap = {};
       toolCallStackHasError = false;

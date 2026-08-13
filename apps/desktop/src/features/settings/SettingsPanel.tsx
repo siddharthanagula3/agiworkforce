@@ -1,6 +1,7 @@
 import { isTauri, isCloudWeb, isDesktopUiDevLocal } from '@/lib/tauri-mock';
 import { notifications } from '@agiworkforce/desktop-command-client';
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
+import { notifyLocalModelCatalogChanged } from '@/lib/localModelCatalog';
 import { ollamaCheckStatus, ollamaListModels, ollamaPullModel } from '@/api/ollama';
 import { toast } from 'sonner';
 import { save } from '@tauri-apps/plugin-dialog';
@@ -163,20 +164,16 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const customModels = useSettingsStore(useShallow((state) => state.customModels));
   const features = useSettingsStore(useShallow((state) => state.features));
   const personalization = useSettingsStore(useShallow((state) => state.personalization));
+  const customKeybindings = useSettingsStore(useShallow((state) => state.customKeybindings));
   const setPersonalization = useSettingsStore((state) => state.setPersonalization);
   const setTheme = useSettingsStore((state) => state.setTheme);
   const setLanguage = useSettingsStore((state) => state.setLanguage);
-  const setAlwaysUseAgentMode = useSettingsStore((state) => state.setAlwaysUseAgentMode);
-  const setAutoApproveTools = useSettingsStore((state) => state.setAutoApproveTools);
-  const setCompactMode = useSettingsStore((state) => state.setCompactMode);
-  const setPromptCompletionEnabled = useSettingsStore((state) => state.setPromptCompletionEnabled);
   const globalHotkeyPreferences = useSettingsStore(
     useShallow((state) => state.globalHotkeyPreferences),
   );
   const setGlobalHotkeyEnabled = useSettingsStore((state) => state.setGlobalHotkeyEnabled);
   const setGlobalHotkeyCombo = useSettingsStore((state) => state.setGlobalHotkeyCombo);
   const setDefaultModel = useSettingsStore((state) => state.setDefaultModel);
-  const setProviderMode = useSettingsStore((state) => state.setProviderMode);
   const setOllamaUrl = useSettingsStore((state) => state.setOllamaUrl);
   const loadSettings = useSettingsStore((state) => state.loadSettings);
   const saveSettings = useSettingsStore((state) => state.saveSettings);
@@ -203,12 +200,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const { confirm, dialog: discardChangesDialog } = useConfirm();
   const baselineSnapshotRef = useRef<string | null>(null);
   const settingsContentRef = useRef<HTMLDivElement | null>(null);
-  // Baseline for personalization specifically (separate from baselineSnapshotRef's
-  // serialized string) so `handleCancel` can restore it directly via
-  // `setPersonalization`. Needed because `loadSettings()` — unlike every other
-  // field in the snapshot — never touches `personalization` (it isn't part of the
-  // disk-backed settings_load payload type), so discarding changes must restore
-  // it explicitly or a personalization edit would silently survive a "Cancel".
+  // Separate personalization baseline preserves correct Cancel behavior during
+  // migration from legacy settings files that do not yet contain the newly
+  // native-owned personalization field.
   const personalizationBaselineRef = useRef<PersonalizationPreferences | null>(null);
 
   const resolvedLLMConfig = llmConfig ?? createDefaultLLMConfig();
@@ -304,7 +298,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const handleOllamaEnabledChange = useCallback(
     (enabled: boolean) => {
       if (enabled) {
-        const modelToSet = selectedOllamaModel || ollamaModels[0] || '';
+        const modelToSet = selectedOllamaModel;
         setDefaultModel('ollama', modelToSet);
         setSelectedOllamaModel(modelToSet);
       } else {
@@ -312,7 +306,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       }
       setHasUnsavedChanges(true);
     },
-    [selectedOllamaModel, ollamaModels, setDefaultModel],
+    [selectedOllamaModel, setDefaultModel],
   );
 
   const handleOllamaModelChange = useCallback(
@@ -368,7 +362,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         const persistedModel = useSettingsStore.getState().llmConfig.defaultModels?.ollama;
         if (persistedModel && models.includes(persistedModel)) return persistedModel;
         if (currentModel && models.includes(currentModel)) return currentModel;
-        return models[0] || '';
+        return '';
       });
     } catch (err) {
       console.error('Failed to refresh Ollama settings:', err);
@@ -377,6 +371,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       setSelectedOllamaModel('');
     } finally {
       setCheckingOllama(false);
+      notifyLocalModelCatalogChanged('settings-refresh');
     }
   }, []);
 
@@ -410,16 +405,25 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
 
   const buildCurrentSnapshot = useCallback((notifs: NotificationSettings | null) => {
     const state = useSettingsStore.getState();
+    // These two safety fields are backend-authoritative and self-save at the
+    // moment of user confirmation. They must not make the global deferred
+    // Save/Cancel footer claim that the change can still be discarded.
+    const {
+      agentMode: _agentMode,
+      autoApproveTools: _autoApproveTools,
+      ...deferredChatPreferences
+    } = state.chatPreferences;
     return stableSerialize({
       llmConfig: state.llmConfig,
       windowPreferences: state.windowPreferences,
-      chatPreferences: state.chatPreferences,
+      chatPreferences: deferredChatPreferences,
       executionPreferences: state.executionPreferences,
       globalHotkeyPreferences: state.globalHotkeyPreferences,
       allowedDirectories: state.allowedDirectories,
       customModels: state.customModels,
       features: state.features,
       personalization: state.personalization,
+      customKeybindings: state.customKeybindings,
       notifications: notifs,
     });
   }, []);
@@ -433,10 +437,15 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             loadSettings(),
             loadNotificationSettings(),
           ]);
-          // loadSettings() never touches personalization (see ref comment above),
-          // so its baseline is just whatever is currently in the store at open time.
+          // Preserve a migration fallback for old native settings files that
+          // omit personalization until their first successful save.
           personalizationBaselineRef.current = useSettingsStore.getState().personalization;
           baselineSnapshotRef.current = buildCurrentSnapshot(loadedNotifications);
+          // Initialization is complete once the persisted settings baseline is
+          // captured. The Ollama refresh below is informational and can finish
+          // after the user starts editing; clearing the dirty flag after that
+          // await would silently erase a legitimate pending-edit state.
+          setHasUnsavedChanges(false);
         } catch (err) {
           console.error('Failed to load settings:', err);
           toast.error('Failed to load settings');
@@ -444,7 +453,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
           personalizationBaselineRef.current = null;
         }
         await refreshOllamaState();
-        setHasUnsavedChanges(false);
       })();
       return;
     }
@@ -457,7 +465,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [activeTab, setActiveTab] = useState<CanonicalTab>(() => resolveVisibleTab(initialTab));
 
-  const requiresDeferredSave = !SELF_SAVING_TABS.has(activeTab);
+  // A dirty deferred edit stays global even when the user navigates to a tab
+  // whose own controls self-save. Keep Save/Cancel visible until that edit is
+  // saved or discarded; otherwise the self-saving footer's Close button can
+  // bypass the confirmation ceremony and silently lose the earlier change.
+  const requiresDeferredSave = hasUnsavedChanges || !SELF_SAVING_TABS.has(activeTab);
 
   useEffect(() => {
     if (open) {
@@ -529,6 +541,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     customModels,
     features,
     personalization,
+    customKeybindings,
     notificationSettings,
     buildCurrentSnapshot,
   ]);
@@ -547,38 +560,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       setHasUnsavedChanges(true);
     },
     [setLanguage],
-  );
-
-  const handleAgentModeChange = useCallback(
-    (value: boolean) => {
-      setAlwaysUseAgentMode(value);
-      setHasUnsavedChanges(true);
-    },
-    [setAlwaysUseAgentMode],
-  );
-
-  const handleAutoApproveToolsChange = useCallback(
-    (value: boolean) => {
-      setAutoApproveTools(value);
-      setHasUnsavedChanges(true);
-    },
-    [setAutoApproveTools],
-  );
-
-  const handleCompactModeChange = useCallback(
-    (value: boolean) => {
-      setCompactMode(value);
-      setHasUnsavedChanges(true);
-    },
-    [setCompactMode],
-  );
-
-  const handlePromptCompletionChange = useCallback(
-    (value: boolean) => {
-      setPromptCompletionEnabled(value);
-      setHasUnsavedChanges(true);
-    },
-    [setPromptCompletionEnabled],
   );
 
   const handleGlobalHotkeyEnabledChange = useCallback(
@@ -617,6 +598,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
       personalizationBaselineRef.current = useSettingsStore.getState().personalization;
       baselineSnapshotRef.current = buildCurrentSnapshot(notificationSettings);
       setHasUnsavedChanges(false);
+      notifyLocalModelCatalogChanged('settings-save');
       onOpenChange(false);
     } catch (err) {
       console.error('Failed to save settings:', err);
@@ -632,11 +614,9 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         loadSettings(),
         loadNotificationSettings(),
       ]);
-      // loadSettings() does not revert personalization (it's not part of the
-      // disk-backed payload), so restore it from the open-time baseline
-      // explicitly — otherwise a discarded personalization edit would
-      // silently survive Cancel/Escape/click-outside while every other field
-      // correctly reverts.
+      // Legacy native files can omit personalization; in that migration case
+      // loadSettings intentionally preserves the hydrated renderer value, so
+      // restore the open-time baseline explicitly for an honest Cancel.
       if (personalizationBaselineRef.current) {
         setPersonalization(personalizationBaselineRef.current);
       }
@@ -704,14 +684,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
     [setOllamaUrl],
   );
 
-  const handleProviderModeChange = useCallback(
-    (mode: 'auto' | 'local' | 'cloud') => {
-      setProviderMode(mode);
-      setHasUnsavedChanges(true);
-    },
-    [setProviderMode],
-  );
-
   const renderTabContent = () => {
     switch (activeTab) {
       case 'general':
@@ -740,7 +712,6 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
         return (
           <ModelsKeysTab
             resolvedLLMConfig={resolvedLLMConfig}
-            chatPreferences={chatPreferences}
             ollamaModels={ollamaModels}
             selectedOllamaModel={selectedOllamaModel}
             checkingOllama={checkingOllama}
@@ -748,16 +719,11 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
             ollamaEnabled={ollamaEnabled}
             installingOllamaModel={installingOllamaModel}
             ollamaInstallError={ollamaInstallError}
-            onProviderModeChange={handleProviderModeChange}
             onOllamaUrlChange={handleOllamaUrlChange}
             onOllamaEnabledChange={handleOllamaEnabledChange}
             onOllamaModelChange={handleOllamaModelChange}
             onRefreshOllamaState={refreshOllamaState}
             onInstallOllamaModel={handleInstallOllamaModel}
-            onAgentModeChange={handleAgentModeChange}
-            onAutoApproveToolsChange={handleAutoApproveToolsChange}
-            onCompactModeChange={handleCompactModeChange}
-            onPromptCompletionChange={handlePromptCompletionChange}
             onExportSettings={() => void handleExportSettings()}
           />
         );

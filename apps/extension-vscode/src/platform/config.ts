@@ -11,7 +11,7 @@
  *      ONE file; new settings get a typed entry here
  *
  * Trust-restricted runtime accessors also live in `utils/api.ts`
- * (`getCloudApiEndpoint`, `getGatewayUrl`). The settings panel uses the
+ * (`getCloudApiEndpoint`). The settings panel uses the
  * user-scoped accessors here so an untrusted workspace can never supply or
  * receive a sensitive endpoint value through the webview.
  */
@@ -27,23 +27,11 @@ import {
 
 export type ExtensionAgentEffort = 'low' | 'medium' | 'high' | 'max';
 export type ComposerFollowUpBehavior = 'queue' | 'steer';
-export type ExtensionTier =
-  | 'local'
-  | 'byok'
-  | 'free'
-  | 'basic'
-  | 'pro'
-  | 'max'
-  | 'max_15x'
-  | 'team'
-  | 'enterprise';
-
 /** Mutable settings exposed by the branded settings panel. */
 export interface MutableConfigValues {
   apiEndpoint: string;
   model: string;
   cliPath: string;
-  streamingEnabled: boolean;
   'composer.followUpBehavior': ComposerFollowUpBehavior;
   contextLines: number;
   telemetryEnabled: boolean;
@@ -56,13 +44,9 @@ export interface MutableConfigValues {
   'agent.mode': ExtensionAgentMode;
   'agent.effort': ExtensionAgentEffort;
   'agent.thinking': boolean;
-  'mcp.enabled': boolean;
   'desktopBridge.enabled': boolean;
   'desktopBridge.port': number;
   telemetryEndpoint: string;
-  useProviderStream: boolean;
-  gatewayUrl: string;
-  tier: ExtensionTier;
 }
 
 export type MutableConfigKey = keyof MutableConfigValues;
@@ -85,7 +69,6 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'apiEndpoint',
   'model',
   'cliPath',
-  'streamingEnabled',
   'contextLines',
   'telemetryEnabled',
   'hoverEnabled',
@@ -98,13 +81,9 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'agent.effort',
   'agent.thinking',
   'composer.followUpBehavior',
-  'mcp.enabled',
   'desktopBridge.enabled',
   'desktopBridge.port',
   'telemetryEndpoint',
-  'useProviderStream',
-  'gatewayUrl',
-  'tier',
 ] as const satisfies readonly MutableConfigKey[];
 
 export interface ExtensionSettingsSnapshot {
@@ -129,20 +108,15 @@ const DEFAULTS = {
   inlineCompletionsEnabled: false,
   inlineCompletionsDebounceMs: 300,
   inlineCompletionsMaxLength: 500,
-  mcpEnabled: false,
   model: 'auto',
-  streamingEnabled: true,
   composerFollowUpBehavior: 'queue',
   contextLines: 50,
   telemetryEnabled: false,
   telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
-  useProviderStream: false,
   desktopBridgeEnabled: false,
   desktopBridgePort: 8787,
-  tier: 'byok',
   currentTier: 'unknown',
   cliPath: 'agi',
-  gatewayUrl: 'https://api.agiworkforce.com',
 } as const;
 
 function get<T>(key: string, fallback: T): T {
@@ -215,10 +189,10 @@ export const Config = {
 
   // ── Provider routing ────────────────────────────────────────────────────
   model(): string {
-    return get<string>('model', DEFAULTS.model);
-  },
-  streamingEnabled(): boolean {
-    return get<boolean>('streamingEnabled', DEFAULTS.streamingEnabled);
+    // Model selection determines whether a developer turn is Local, provider
+    // BYOK, or Managed Cloud. A checked-out repository must never be able to
+    // change that trust boundary through .vscode/settings.json.
+    return getUserScoped<string>('model', DEFAULTS.model);
   },
   composerFollowUpBehavior(): ComposerFollowUpBehavior {
     const raw = get<string>('composer.followUpBehavior', DEFAULTS.composerFollowUpBehavior);
@@ -227,25 +201,19 @@ export const Config = {
   contextLines(): number {
     return get<number>('contextLines', DEFAULTS.contextLines);
   },
-  useProviderStream(): boolean {
-    return get<boolean>('useProviderStream', DEFAULTS.useProviderStream);
-  },
   apiEndpoint(): string {
     return getUserScoped<string>('apiEndpoint', DEFAULTS.apiEndpoint);
   },
-  gatewayUrl(): string {
-    return getUserScoped<string>('gatewayUrl', DEFAULTS.gatewayUrl);
-  },
 
-  // ── MCP + desktop bridge ────────────────────────────────────────────────
-  mcpEnabled(): boolean {
-    return get<boolean>('mcp.enabled', DEFAULTS.mcpEnabled);
-  },
+  // ── Desktop bridge ─────────────────────────────────────────────────────
   desktopBridgeEnabled(): boolean {
-    return get<boolean>('desktopBridge.enabled', DEFAULTS.desktopBridgeEnabled);
+    // The bridge authenticates with Desktop's local IPC token. Keep both the
+    // opt-in and destination user-owned so workspace settings cannot redirect
+    // that credential to another localhost process.
+    return getUserScoped<boolean>('desktopBridge.enabled', DEFAULTS.desktopBridgeEnabled);
   },
   desktopBridgePort(): number {
-    return get<number>('desktopBridge.port', DEFAULTS.desktopBridgePort);
+    return getUserScoped<number>('desktopBridge.port', DEFAULTS.desktopBridgePort);
   },
 
   // ── Telemetry ───────────────────────────────────────────────────────────
@@ -254,30 +222,6 @@ export const Config = {
   },
   telemetryEndpoint(): string {
     return get<string>('telemetryEndpoint', DEFAULTS.telemetryEndpoint);
-  },
-
-  // ── Tier override ────────────────────────────────────────────────────────
-  /**
-   * Read the explicit tier override from settings.
-   * Returns 'byok' (the default) when not set by the user.
-   * The tierResolver uses this as priority-1 in its resolution chain.
-   */
-  tier(): ExtensionTier {
-    const raw = get<string>('tier', DEFAULTS.tier);
-    if (
-      raw === 'local' ||
-      raw === 'byok' ||
-      raw === 'free' ||
-      raw === 'basic' ||
-      raw === 'pro' ||
-      raw === 'max' ||
-      raw === 'max_15x' ||
-      raw === 'team' ||
-      raw === 'enterprise'
-    ) {
-      return raw;
-    }
-    return DEFAULTS.tier;
   },
 
   /**
@@ -309,7 +253,6 @@ export const Config = {
         apiEndpoint: this.apiEndpoint(),
         model: this.model(),
         cliPath: this.cliPath(),
-        streamingEnabled: this.streamingEnabled(),
         'composer.followUpBehavior': this.composerFollowUpBehavior(),
         contextLines: this.contextLines(),
         telemetryEnabled: this.telemetryEnabled(),
@@ -322,13 +265,9 @@ export const Config = {
         'agent.mode': this.agentMode(),
         'agent.effort': this.agentEffort(),
         'agent.thinking': this.agentThinking(),
-        'mcp.enabled': this.mcpEnabled(),
         'desktopBridge.enabled': this.desktopBridgeEnabled(),
         'desktopBridge.port': this.desktopBridgePort(),
         telemetryEndpoint: this.telemetryEndpoint(),
-        useProviderStream: this.useProviderStream(),
-        gatewayUrl: this.gatewayUrl(),
-        tier: this.tier(),
         currentTier: this.currentTier(),
         // Human label resolved from the shared billing catalog, NOT by
         // string-munging the tier id. The settings webview used to render

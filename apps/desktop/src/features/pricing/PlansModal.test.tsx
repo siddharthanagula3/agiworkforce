@@ -14,15 +14,25 @@ vi.mock('./PlanCard', () => ({
   PlanCard: ({
     tier,
     isCurrentPlan,
+    actionDisabled,
+    actionDisabledReason,
     onCtaClick,
   }: {
     tier: string;
     isCurrentPlan: boolean;
+    actionDisabled?: boolean;
+    actionDisabledReason?: string;
     onCtaClick: (tier: string) => void;
   }) => (
     <div data-testid={`plan-${tier}`}>
       {isCurrentPlan ? 'current' : 'not-current'}
-      <button type="button" data-testid={`cta-${tier}`} onClick={() => onCtaClick(tier)}>
+      <button
+        type="button"
+        data-testid={`cta-${tier}`}
+        disabled={actionDisabled}
+        title={actionDisabledReason}
+        onClick={() => onCtaClick(tier)}
+      >
         cta
       </button>
     </div>
@@ -57,6 +67,9 @@ describe('PlansModal account plan ownership', () => {
       isAuthenticated: true,
       plan: 'pro',
       planDisplayName: 'Pro',
+      subscriptionStatus: 'active',
+      subscriptionFetchStatus: 'succeeded',
+      subscriptionSource: 'stripe',
     });
   });
 
@@ -126,6 +139,9 @@ describe('PlansModal paid-plan CTA routing (public alpha — no waitlist)', () =
       isAuthenticated: true,
       plan: 'byok',
       planDisplayName: 'Local Mode + BYOK',
+      subscriptionStatus: 'none',
+      subscriptionFetchStatus: 'succeeded',
+      subscriptionSource: 'none',
     });
   });
 
@@ -186,5 +202,41 @@ describe('PlansModal paid-plan CTA routing (public alpha — no waitlist)', () =
     expect(screen.queryByText(/invite code/i)).toBeNull();
 
     dispatchSpy.mockRestore();
+  });
+
+  it('disables every paid Stripe action for an Apple-owned active subscription', () => {
+    useAuthStore.setState({
+      plan: 'pro',
+      planDisplayName: 'Pro',
+      subscriptionStatus: 'active',
+      subscriptionFetchStatus: 'succeeded',
+      subscriptionSource: 'apple',
+    });
+
+    render(<PlansModal open onOpenChange={vi.fn()} />);
+
+    expect(screen.getByText('Billing owner: Apple')).toBeInTheDocument();
+    expect(screen.getByTestId('cta-basic')).toBeDisabled();
+    expect(screen.getByTestId('cta-max')).toBeDisabled();
+    expect(screen.getByTestId('cta-max').getAttribute('title')).toMatch(/Apple/i);
+    fireEvent.click(screen.getByTestId('cta-max'));
+    expect(screen.queryByTestId('upgrade-confirm')).toBeNull();
+    expect(billingMocks.openBillingPortal).not.toHaveBeenCalled();
+  });
+
+  it('starts a new checkout flow instead of opening Stripe portal after an Apple plan ends', () => {
+    useAuthStore.setState({
+      plan: 'pro',
+      planDisplayName: 'Pro',
+      subscriptionStatus: 'canceled',
+      subscriptionFetchStatus: 'succeeded',
+      subscriptionSource: 'apple',
+    });
+
+    render(<PlansModal open onOpenChange={vi.fn()} />);
+
+    fireEvent.click(screen.getByTestId('cta-basic'));
+    expect(screen.getByTestId('upgrade-confirm')).toHaveTextContent('basic');
+    expect(billingMocks.openBillingPortal).not.toHaveBeenCalled();
   });
 });

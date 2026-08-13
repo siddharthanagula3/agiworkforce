@@ -45,10 +45,10 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
 
   const db = getNeonChatDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conversation] = await db.query<ChatConversationRow>(
     `
-      select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+      select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       from web_conversations
       where id = $1
         and user_id = $2
@@ -127,7 +127,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   }
   const body = validationResult.data;
   const db = getNeonChatDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   const updates: Record<string, unknown> = {};
   if (body['title']) updates['title'] = body['title'];
@@ -188,7 +188,7 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
         and user_id = $2
         and organization_id is not distinct from $15
         and deleted_at is null
-      returning id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+      returning id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
     `,
     [
       id,
@@ -228,10 +228,11 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
 
   const { id } = await context.params;
   const db = getNeonChatDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
+  let deletedConversation: { id: string } | undefined;
   try {
-    await db.execute(
+    [deletedConversation] = await db.query<{ id: string }>(
       `
         update web_conversations
         set deleted_at = now(), updated_at = now()
@@ -239,12 +240,20 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
           and user_id = $2
           and organization_id is not distinct from $3
           and deleted_at is null
+        returning id
       `,
       [id, userId, organizationId],
     );
   } catch (error) {
     logger.error({ error, conversationId: id }, 'Failed to delete conversation');
     throw createError.internal('Failed to delete conversation');
+  }
+
+  if (!deletedConversation) {
+    // Unknown, foreign, wrong-workspace, and already-deleted rows deliberately
+    // share one response. A client must never clear a durable tombstone for a
+    // no-op that the server previously reported as success.
+    throw createError.notFound('Conversation not found');
   }
 
   // Release any paused E2B sandbox bound to this conversation. Best-effort: the

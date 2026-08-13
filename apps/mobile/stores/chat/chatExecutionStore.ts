@@ -25,10 +25,12 @@ import {
   type StreamDelta,
   type ChatWireMessage,
 } from '@/services/streaming';
+import type { InteractiveCard } from '@agiworkforce/types';
 import {
+  parseInteractiveCardDelta,
   parseGeneratedFilesDelta,
+  readPersistedInteractiveCards,
   reconcileManagedCloudPublicText,
-  resolveGeneratedFileUri,
   ManagedCloudAgentRunReferenceSchema,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
@@ -60,7 +62,11 @@ import {
 import { resolveMobileCloudDispatch } from '@/src/features/chat/utils/cloudDispatchRouting';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
-import { useTierStore } from '@/src/features/billing/store';
+import {
+  useTierStore,
+  ensureCloudEntitlementsReadyForRequest,
+  isCapabilityRequestable,
+} from '@/src/features/billing/store';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
@@ -93,7 +99,6 @@ import {
   isAutoModeModelId,
 } from '@agiworkforce/types';
 import { isWebSearchAvailable } from '@agiworkforce/search';
-import type { GeneratedFile, GeneratedFileKind } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -104,6 +109,13 @@ import { useChatCloudMessageStore } from './chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
 import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
+import {
+  generatedFileArtifactsFromWire,
+  generatedFileMetadataFromWire,
+  generatedFileWireFromMetadata,
+  mergeDerivedAndGeneratedFileArtifacts,
+} from '@/src/features/chat/utils/generatedFileArtifacts';
+import { stripLeadingCurrentPromptEcho } from '@/src/features/chat/utils/assistantOutput';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -432,6 +444,23 @@ function stripPartialLocalReasoningTag(raw: string): string {
   return raw.replace(PARTIAL_LOCAL_REASONING_TAG_RE, '');
 }
 
+/**
+ * Split inline `<thinking>`/`<think>`/`<reasoning>` tag markers out of a raw
+ * assistant string into display content plus reasoning.
+ *
+ * Exported because parsing at STREAM time is not sufficient. The server emits
+ * these markers as literal content chunks (a `legacy-web` wire rendering of
+ * thinking-deltas), so any message that did not arrive through this device's
+ * live stream — pulled by cloud sync, produced by an agent run, or persisted
+ * before the streaming parser existed — is stored with the tags still inside
+ * `content`. Those rendered as raw `</thinking><thinking>` tag soup in the
+ * transcript (founder 2026-08-13). The renderer therefore parses on read as
+ * well, which covers every source rather than just the one path.
+ */
+export function parseAssistantThinking(raw: string): ParsedLocalThinking {
+  return parseLocalThinking(raw);
+}
+
 function parseLocalThinking(raw: string): ParsedLocalThinking {
   const safeRaw = stripPartialLocalReasoningTag(sanitizeLocalOutput(raw));
   LOCAL_REASONING_TAG_RE.lastIndex = 0;
@@ -472,6 +501,14 @@ function parseLocalThinking(raw: string): ParsedLocalThinking {
     content: sanitizeLocalOutput(content).replace(/^\s+/, ''),
     reasoning: reasoning.trim(),
     hasReasoning,
+  };
+}
+
+function parseCurrentTurnAssistantOutput(raw: string, prompt: string): ParsedLocalThinking {
+  const parsed = parseLocalThinking(raw);
+  return {
+    ...parsed,
+    content: stripLeadingCurrentPromptEcho(parsed.content, prompt),
   };
 }
 
@@ -675,20 +712,6 @@ function deriveChatMessageArtifacts(
   }
 }
 
-const GENERATED_FILE_KINDS: ReadonlySet<string> = new Set([
-  'pdf',
-  'docx',
-  'xlsx',
-  'pptx',
-  'csv',
-  'json',
-  'markdown',
-  'html',
-  'image',
-  'archive',
-  'other',
-]);
-
 /**
  * Map the server's x_generated_files wire descriptors (files the model
  * created in the E2B sandbox) onto generated-file artifacts so
@@ -701,41 +724,7 @@ const GENERATED_FILE_KINDS: ReadonlySet<string> = new Set([
  * a fetchable absolute URL. Auth (Bearer) is attached at fetch time by
  * `downloadGeneratedFile` in services/fileCreation.ts.
  */
-export function generatedFileArtifactsFromWire(
-  files: GeneratedFileWire[],
-  createdAt: string,
-): NonNullable<ChatMessage['artifacts']> {
-  return files.map((f) => {
-    const kind: GeneratedFileKind = GENERATED_FILE_KINDS.has(f.kind)
-      ? (f.kind as GeneratedFileKind)
-      : 'other';
-    const generatedFile: GeneratedFile = {
-      id: f.id,
-      // Sandbox sessions are server-internal; the card's presentation layer
-      // treats these as absent and falls back to file-level labels.
-      computeSessionId: '',
-      ownerUserId: '',
-      sourceSurface: 'web',
-      privacyMode: 'managed',
-      providerMode: 'ManagedGateway',
-      kind,
-      fileName: f.file_name,
-      mimeType: f.mime_type,
-      uri: resolveGeneratedFileUri(f.uri, API_URL),
-      byteCount: f.byte_count,
-      checksumSha256: f.checksum_sha256 ?? '',
-      previewDerivatives: [],
-      createdAt,
-    };
-    return {
-      id: f.id,
-      type: kind === 'image' ? ('image' as const) : ('document' as const),
-      title: f.file_name,
-      content: '',
-      generatedFile,
-    };
-  });
-}
+export { generatedFileArtifactsFromWire } from '@/src/features/chat/utils/generatedFileArtifacts';
 
 /**
  * Derive inline answer citations from the turn's accumulated web-search tool
@@ -953,6 +942,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       return false;
     }
     if (executionMode === 'cloud') {
+      // Join the Cloud-mode-entry `/api/me` refresh before resolving Auto and
+      // per-turn tools. Without this join, a fast first send used default Free
+      // metadata and could omit generic Web Search even though the deployment
+      // and account grant it. Local sends never call this helper or cross egress.
+      await ensureCloudEntitlementsReadyForRequest();
+      if (!isTurnAccountCurrent()) return false;
+
       const route = resolveMobileCloudDispatch({
         selection: requestedModel,
         message: content,
@@ -1459,7 +1455,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             lastDeltaTimes.set(conversationId, Date.now());
             localTokenCount += 1;
             localStreamingRaw += token;
-            updateLocalStream(parseLocalThinking(localStreamingRaw));
+            updateLocalStream(parseCurrentTurnAssistantOutput(localStreamingRaw, content));
           },
         });
         if (controller.signal.aborted || result.aborted) {
@@ -1468,7 +1464,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           set({ ...streamingFlags() });
           return true;
         }
-        const parsedFinal = parseLocalThinking(result.text.trim() || localStreamingRaw.trim());
+        const parsedFinal = parseCurrentTurnAssistantOutput(
+          result.text.trim() || localStreamingRaw.trim(),
+          content,
+        );
         const finalContent =
           parsedFinal.content.trim() ||
           'The local model returned an empty response. Try again with a shorter prompt.';
@@ -1584,14 +1583,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       const webSearchEnabled =
         FEATURES.webSearch &&
         useChatViewStore.getState().features.webSearch &&
-        entitlementState.grantedCapabilities.includes('canUseWebSearch') &&
+        isCapabilityRequestable('canUseWebSearch') &&
         isWebSearchAvailable({
           provider: executionModelMetadata?.provider,
           modelSupportsNativeSearch: executionModelMetadata?.capabilities.search,
           modelSupportsTools: executionModelMetadata?.capabilities.tools,
           genericBackendConfigured: entitlementState.genericWebSearchAvailable,
         });
-
       // Deep Research: multi-turn cited synthesis. Re-verified per-send (not just
       // at the AddToChatSheet UI) so the toggle is never cosmetic — the SELECTED
       // model must declare BOTH the `research` capability AND native `search`
@@ -1605,7 +1603,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         useChatViewStore.getState().features.research &&
         executionModelMetadata?.capabilities?.research === true &&
         executionModelMetadata?.capabilities?.search === true &&
-        entitlementState.grantedCapabilities.includes('canUseDeepResearch');
+        isCapabilityRequestable('canUseDeepResearch');
 
       // Per-turn code execution: mirrors webSearchEnabled above, with two extra
       // honesty checks so the toggle is never cosmetic — re-verified here (not
@@ -1618,7 +1616,28 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         FEATURES.codeExecution &&
         executionModelMetadata?.capabilities?.codeExecution === true &&
         entitlementState.codeExecutionAvailable &&
-        entitlementState.grantedCapabilities.includes('canUseCloudExecution') &&
+        isCapabilityRequestable('canUseCloudExecution') &&
+        useChatViewStore.getState().features.codeExecution;
+      /**
+       * Office/file creation — the same user switch as code execution.
+       *
+       * Mobile never sent this field at all (`office_creation` had zero
+       * occurrences in apps/mobile), which is why "create a CSV file" came back
+       * as "I do not have file creation tools available" no matter what the user
+       * enabled. Web sends it at useChatStream.ts:2175 gated on
+       * `isAutoSelected || caps.tools`.
+       *
+       * It is deliberately NOT a second toggle: the capability reference pairs
+       * them under one control — "Code execution and file creation … execute code
+       * and create and edit docs, spreadsheets, presentations, PDFs, and data
+       * reports" — and a separate switch would let a user enable file creation
+       * while the sandbox that produces the files is off.
+       */
+      const officeCreationEnabled =
+        FEATURES.codeExecution &&
+        executionModelMetadata?.capabilities?.tools === true &&
+        entitlementState.codeExecutionAvailable &&
+        isCapabilityRequestable('canUseCloudExecution') &&
         useChatViewStore.getState().features.codeExecution;
       const requestedWorkMode = useChatViewStore.getState().workMode;
       // The server is authoritative, but do not replay a persisted paid mode
@@ -1642,6 +1661,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       // onDone maps them to generated-file artifacts so GeneratedFileCard /
       // InlineArtifactCard render a downloadable file card.
       const turnGeneratedFiles: GeneratedFileWire[] = [];
+      // Interactive cards emitted by server tools this turn (map search today).
+      const turnInteractiveCards: InteractiveCard[] = [];
       // How this turn ended (OpenAI-wire finish_reason, last one seen) and
       // whether the provider failed mid-stream (additive `x_stream_error` —
       // finish_reason alone can't reliably say 'error', see
@@ -1697,6 +1718,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ...(webSearchEnabled ? { web_search: true } : {}),
           ...(researchEnabled ? { research: true } : {}),
           ...(codeExecutionEnabled ? { code_execution: true } : {}),
+          ...(officeCreationEnabled ? { office_creation: true } : {}),
+          // Advertise the card kinds this app can render. The server attaches a
+          // card-producing tool only when the caller proves it can display the
+          // result, so without this mobile never gets offered `search_maps` and
+          // the model falls back to pasting a link. `canRespond: false` because
+          // mobile renders cards but has no response affordance yet.
+          x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
           ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
           ...(options?.skillName ? { skill_name: options.skillName } : {}),
         },
@@ -1740,7 +1768,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const state = get();
             lastDeltaTimes.set(conversationId, Date.now());
 
-            const previousParsedTags = parseLocalThinking(cloudContentRaw);
+            const previousParsedTags = parseCurrentTurnAssistantOutput(cloudContentRaw, content);
             let contentChunk = delta.content;
             const canonicalText =
               delta.x_agent_event?.event.type === 'text-delta'
@@ -1762,7 +1790,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             const prevContentLength = cloudContentRaw.length;
             if (contentChunk) cloudContentRaw += contentChunk;
-            const parsedTags = parseLocalThinking(cloudContentRaw);
+            const parsedTags = parseCurrentTurnAssistantOutput(cloudContentRaw, content);
             const newContent = parsedTags.content;
 
             if (!delta.durableReplay && contentChunk) {
@@ -1819,6 +1847,21 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               // Validate against the shared cloud contract; malformed
               // descriptors are dropped per-file instead of trusted blindly.
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
+            }
+
+            if (delta.x_interactive_card) {
+              // `parseInteractiveCardDelta` NEVER throws: an unknown kind or a
+              // body that fails validation degrades to `recognized: false`,
+              // which the renderer shows as the card's authored fallback text.
+              // A card is therefore never silently dropped from the answer.
+              const card = parseInteractiveCardDelta(delta.x_interactive_card);
+              if (card) {
+                const existing = turnInteractiveCards.findIndex((c) => c.cardId === card.cardId);
+                // Cards restream on retry; replace by id rather than append so a
+                // resumed turn cannot show the same map twice.
+                if (existing >= 0) turnInteractiveCards[existing] = card;
+                else turnInteractiveCards.push(card);
+              }
             }
 
             // Keep the LAST finish_reason seen (server tool loops emit
@@ -1906,22 +1949,41 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             // global streamingContent — under concurrent streams the global
             // buffer holds whichever conversation last emitted a delta.
             const finalContent = msgs.find((m) => m.id === assistantMessageId)?.content ?? '';
+            // A provider stream can close cleanly without ever producing public
+            // text (for example a hosted-tool turn that never reaches answer
+            // synthesis). Never commit that as a successful blank bubble. The
+            // existing stream-error surface keeps the turn visible and retryable
+            // without inventing an answer or hiding the provider failure.
+            if (
+              !finalContent.trim() &&
+              finalToolCalls.length === 0 &&
+              turnGeneratedFiles.length === 0 &&
+              turnInteractiveCards.length === 0 &&
+              !turnStreamError
+            ) {
+              turnStreamError = {
+                message: 'AGI Cloud returned an empty response. Try again.',
+                code: 'empty_response',
+                retryable: true,
+              };
+            }
             const completedAt = new Date().toISOString();
             const convTitle =
               currentMsgStore.getState().conversations.find((c) => c.id === conversationId)
                 ?.title ?? '';
             // Attach fenced-code artifacts to the message so InlineArtifactCard
             // renders in cloud chat (was local-only), and feed the gallery.
-            const messageArtifacts = [
-              ...deriveChatMessageArtifacts(
+            const generatedFilesMetadata = generatedFileMetadataFromWire(turnGeneratedFiles);
+            const messageArtifacts = mergeDerivedAndGeneratedFileArtifacts(
+              deriveChatMessageArtifacts(
                 finalContent,
                 conversationId,
                 assistantMessageId,
                 completedAt,
               ),
               // E2B sandbox files (durable download URLs from x_generated_files).
-              ...generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
-            ];
+              generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
+            );
             // Inline answer citations from this turn's web-search results.
             const finalCitations = citationsFromToolCalls(finalToolCalls);
             captureArtifactsFromMessage(
@@ -1940,8 +2002,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
                     ...(messageArtifacts.length > 0 ? { artifacts: messageArtifacts } : {}),
                     ...(finalCitations.length > 0 ? { citations: finalCitations } : {}),
+                    ...(turnInteractiveCards.length > 0
+                      ? { interactiveCards: turnInteractiveCards }
+                      : {}),
                     metadata: {
                       ...m.metadata,
+                      ...(generatedFilesMetadata.length > 0
+                        ? { generatedFiles: generatedFilesMetadata }
+                        : {}),
+                      ...(turnInteractiveCards.length > 0
+                        ? { interactiveCards: turnInteractiveCards }
+                        : {}),
                       ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
                       ...(turnFinishReason !== undefined ? { finishReason: turnFinishReason } : {}),
                       // Mid-stream provider failure: the turn otherwise looks
@@ -2410,7 +2481,13 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     // resume delta lands, since every onDelta below replaces `reasoning`
     // wholesale rather than appending.
     const priorReasoning = currentMessage?.reasoning ?? '';
-    const turnGeneratedFiles: GeneratedFileWire[] = [];
+    const turnGeneratedFiles: GeneratedFileWire[] = [
+      ...generatedFileWireFromMetadata(currentMessage?.metadata?.generatedFiles),
+    ];
+    const turnInteractiveCards: InteractiveCard[] = [
+      ...(currentMessage?.interactiveCards ??
+        readPersistedInteractiveCards(currentMessage?.metadata)),
+    ];
     const turnPendingApprovals: PendingApprovalCall[] = [];
     // See the sendMessage onDelta/onDone pair above for why these are
     // captured and persisted (finish_reason previously parsed off the wire
@@ -2459,6 +2536,17 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             if (delta.x_generated_files) {
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
+            }
+
+            if (delta.x_interactive_card) {
+              const card = parseInteractiveCardDelta(delta.x_interactive_card);
+              if (card) {
+                const existing = turnInteractiveCards.findIndex(
+                  (entry) => entry.cardId === card.cardId,
+                );
+                if (existing >= 0) turnInteractiveCards[existing] = card;
+                else turnInteractiveCards.push(card);
+              }
             }
 
             if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
@@ -2517,15 +2605,16 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const convTitle =
               innerMsgStore.getState().conversations.find((c) => c.id === conversationId)?.title ??
               '';
-            const messageArtifacts = [
-              ...deriveChatMessageArtifacts(
+            const generatedFilesMetadata = generatedFileMetadataFromWire(turnGeneratedFiles);
+            const messageArtifacts = mergeDerivedAndGeneratedFileArtifacts(
+              deriveChatMessageArtifacts(
                 finalContent,
                 conversationId,
                 assistantMessageId,
                 completedAt,
               ),
-              ...generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
-            ];
+              generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
+            );
             const finalCitations = citationsFromToolCalls(finalToolCalls);
             captureArtifactsFromMessage(
               finalContent,
@@ -2539,7 +2628,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const hasTurnMetadata =
               turnFinishReason !== undefined ||
               turnStreamError !== undefined ||
-              agentActivity !== undefined;
+              agentActivity !== undefined ||
+              generatedFilesMetadata.length > 0 ||
+              turnInteractiveCards.length > 0;
             const updatedMsgs = msgs.map((m) =>
               m.id === assistantMessageId
                 ? {
@@ -2548,10 +2639,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...(finalToolCalls.length > 0 ? { toolCalls: finalToolCalls } : {}),
                     ...(messageArtifacts.length > 0 ? { artifacts: messageArtifacts } : {}),
                     ...(finalCitations.length > 0 ? { citations: finalCitations } : {}),
+                    ...(turnInteractiveCards.length > 0
+                      ? { interactiveCards: turnInteractiveCards }
+                      : {}),
                     ...(hasTurnMetadata
                       ? {
                           metadata: {
                             ...m.metadata,
+                            ...(generatedFilesMetadata.length > 0
+                              ? { generatedFiles: generatedFilesMetadata }
+                              : {}),
+                            ...(turnInteractiveCards.length > 0
+                              ? { interactiveCards: turnInteractiveCards }
+                              : {}),
                             ...(turnFinishReason !== undefined
                               ? { finishReason: turnFinishReason }
                               : {}),

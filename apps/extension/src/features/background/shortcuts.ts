@@ -5,6 +5,7 @@ import {
   generateRecordId,
   validateShortcutActions,
 } from '../../background/policy';
+import { normalizeShortcutStartUrl } from '../shortcuts/origin';
 
 const SHORTCUTS_STORAGE_KEY = 'agi_saved_shortcuts';
 const MAX_SHORTCUTS = 50;
@@ -66,6 +67,13 @@ export async function handleSaveShortcut(message: SaveShortcutMessage): Promise<
       error: 'Shortcut contains an unsupported action type.',
     } as ExtensionResponse;
   }
+  const startUrl = normalizeShortcutStartUrl(message.startUrl);
+  if (actions.length > 0 && !startUrl) {
+    return {
+      success: false,
+      error: 'Recorded shortcuts must be bound to the web site where recording started.',
+    } as ExtensionResponse;
+  }
   const shortcut: SavedShortcut = {
     id: generateRecordId('sc'),
     name: message.name.slice(0, 100),
@@ -74,7 +82,7 @@ export async function handleSaveShortcut(message: SaveShortcutMessage): Promise<
     createdByOrigin: ORIGIN_EXTENSION_PAGE,
     url: message.url,
     prompt: message.prompt,
-    startUrl: message.startUrl,
+    ...(startUrl ? { startUrl } : {}),
     scheduled: message.scheduled,
   };
   shortcuts.push(shortcut);

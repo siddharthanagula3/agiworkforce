@@ -69,9 +69,19 @@ describe('handlers with no content-script sender are extension-page-only', () =>
     for (const type of [
       'GET_QUICK_MODE',
       'SET_QUICK_MODE',
+      'GET_TAB_GROUP_STATE',
       'ADD_TAB_TO_GROUP',
       'REMOVE_TAB_FROM_GROUP',
     ]) {
+      expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(type)).toBe(true);
+    }
+  });
+
+  it('gates account-backed conversation mirroring (enqueue and delete)', () => {
+    // These enqueue an authenticated write or delete of the user's transcript
+    // to their account. An allowlisted page reaching either is a privacy
+    // failure, not a bug.
+    for (const type of ['SYNC_CONVERSATION', 'DELETE_CLOUD_CONVERSATION']) {
       expect(EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(type)).toBe(true);
     }
   });

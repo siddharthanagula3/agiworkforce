@@ -9,25 +9,21 @@ import type { AgentConfig } from '@agiworkforce/types';
 
 export type { AgentConfig };
 
+export interface AGIResourceLimits {
+  cpuPercent?: number;
+  memoryMb?: number;
+  networkMbps?: number;
+  storageMb?: number;
+}
+
 export interface AGIConfig {
-  /** Agent name for identification. */
-  name?: string;
-  /** LLM model identifier. */
-  model?: string;
-  /** LLM provider identifier. */
-  provider?: string;
-  /** System prompt for the agent. */
-  systemPrompt?: string;
-  /** Maximum agentic loop iterations. */
-  maxIterations?: number;
-  /** Tool names the agent is allowed to use. */
-  tools?: string[];
-  /** Whether tool calls are auto-approved. */
-  autoApprove?: boolean;
-  /** Sampling temperature. */
-  temperature?: number;
-  /** Arbitrary metadata. */
-  metadata?: Record<string, unknown>;
+  maxConcurrentTools?: number;
+  knowledgeMemoryMb?: number;
+  enableLearning?: boolean;
+  enableSelfImprovement?: boolean;
+  resourceLimits?: AGIResourceLimits;
+  maxPlanningDepth?: number;
+  enableMultimodal?: boolean;
 }
 export interface SubmitGoalRequest {
   goal: string;

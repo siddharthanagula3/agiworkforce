@@ -148,6 +148,35 @@ mod tests {
     }
 
     #[test]
+    fn test_config_accepts_empty_and_partial_camel_case_objects() {
+        let defaults = AGIConfig::default();
+        let empty: AGIConfig = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(empty.max_concurrent_tools, defaults.max_concurrent_tools);
+        assert_eq!(
+            empty.resource_limits.memory_mb,
+            defaults.resource_limits.memory_mb
+        );
+
+        let partial: AGIConfig = serde_json::from_value(serde_json::json!({
+            "maxConcurrentTools": 3,
+            "resourceLimits": { "memoryMb": 512 }
+        }))
+        .unwrap();
+        assert_eq!(partial.max_concurrent_tools, 3);
+        assert_eq!(partial.resource_limits.memory_mb, 512);
+        assert_eq!(
+            partial.resource_limits.cpu_percent,
+            defaults.resource_limits.cpu_percent
+        );
+
+        let legacy_snake_case: AGIConfig = serde_json::from_value(serde_json::json!({
+            "max_concurrent_tools": 4
+        }))
+        .unwrap();
+        assert_eq!(legacy_snake_case.max_concurrent_tools, 4);
+    }
+
+    #[test]
     fn test_capabilities_serialization() {
         let capabilities = AGICapabilities::default();
         let serialized = serde_json::to_string(&capabilities).unwrap();

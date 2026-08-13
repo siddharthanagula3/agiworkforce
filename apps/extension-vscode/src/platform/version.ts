@@ -17,3 +17,8 @@ const FALLBACK_VERSION = '0.3.0';
 export function getExtensionVersion(): string {
   return vscode.extensions.getExtension(EXTENSION_ID)?.packageJSON?.version ?? FALLBACK_VERSION;
 }
+
+/** User-Agent value shared by every VS Code cloud/account request. */
+export function getExtensionUserAgent(): string {
+  return `agi-workforce-vscode/${getExtensionVersion()}`;
+}

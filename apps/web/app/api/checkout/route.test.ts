@@ -121,7 +121,7 @@ describe('POST /api/checkout', () => {
     });
   });
 
-  it('marks a full-price replacement so existing usage can be carried forward', async () => {
+  it('refuses an active organization-managed entitlement before creating Stripe state', async () => {
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {
         return [
@@ -139,25 +139,9 @@ describe('POST /api/checkout', () => {
 
     const response = await POST(makeRequest());
 
-    expect(response.status).toBe(200);
-    expect(stripeMocks.createCheckoutSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          user_id: 'user_123',
-          plan_tier: 'max_15x',
-          upgrade_from: 'max',
-          replace_unlinked_entitlement: 'true',
-        }),
-        subscription_data: {
-          metadata: expect.objectContaining({
-            user_id: 'user_123',
-            plan_tier: 'max_15x',
-            upgrade_from: 'max',
-            replace_unlinked_entitlement: 'true',
-          }),
-        },
-      }),
-    );
+    expect(response.status).toBe(409);
+    expect(stripeMocks.createCustomer).not.toHaveBeenCalled();
+    expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -166,12 +150,9 @@ describe('POST /api/checkout', () => {
   ])(
     'refuses to sell over a subscription the store still bills (%s)',
     async (storeIdColumn, storeId) => {
-      // A store-billed row is paid, active and carries no Stripe subscription
-      // id, so it takes the "replaces unlinked entitlement" branch — which only
-      // rejects a downgrade. Buying an equal-or-higher tier on the web would
-      // leave the customer paying Apple/Google AND Stripe, because only the
-      // store can cancel the store subscription. Regression cover for this
-      // guard was deleted with the mobile IAP slice in 77169d3f1.
+      // Buying an equal-or-higher tier on the web would leave the customer
+      // paying Apple/Google AND Stripe, because only the store can cancel the
+      // active store subscription.
       dbMocks.query.mockImplementation(async (sql: string) => {
         if (sql.includes('from subscriptions')) {
           return [
@@ -194,6 +175,53 @@ describe('POST /api/checkout', () => {
       expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
     },
   );
+
+  it.each([
+    ['apple_original_transaction_id', 'apple-tx-ended'],
+    ['google_purchase_token', 'play-token-ended'],
+  ])('allows a fresh checkout after the %s subscription ended', async (storeIdColumn, storeId) => {
+    dbMocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        return [
+          {
+            status: 'expired',
+            plan_tier: 'pro',
+            stripe_customer_id: null,
+            stripe_subscription_id: null,
+            [storeIdColumn]: storeId,
+          },
+        ];
+      }
+      if (sql.includes('from profiles')) return [];
+      return [];
+    });
+
+    const response = await POST(makeRequest('max_15x'));
+
+    expect(response.status).toBe(200);
+    expect(stripeMocks.createCheckoutSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when the row contains contradictory billing owners', async () => {
+    dbMocks.query.mockImplementation(async (sql: string) =>
+      sql.includes('from subscriptions')
+        ? [
+            {
+              status: 'canceled',
+              plan_tier: 'pro',
+              stripe_customer_id: 'cus_123',
+              stripe_subscription_id: 'sub_live123',
+              apple_original_transaction_id: 'apple-tx-1',
+            },
+          ]
+        : [],
+    );
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(409);
+    expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+  });
 
   it('does not let an unlinked paid entitlement bypass downgrade controls', async () => {
     dbMocks.query.mockImplementation(async (sql: string) => {

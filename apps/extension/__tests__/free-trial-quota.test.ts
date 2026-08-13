@@ -12,7 +12,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getRoutingSlotModel } from '@agiworkforce/types';
+import { getRoutingSlotModel, INTERACTIVE_CARD_REQUEST_KEY } from '@agiworkforce/types';
 
 // ---------------------------------------------------------------------------
 // Chrome storage shim — hoisted before module imports
@@ -697,6 +697,68 @@ describe('streamFreeChat — SSE happy path', () => {
     expect(chunks).toEqual([{ type: 'text', text: 'hello' }, { type: 'done' }]);
   });
 
+  it('preserves validated generated-file and interactive-card deltas', async () => {
+    const card = {
+      schemaVersion: 1,
+      cardId: 'tool-call-1',
+      kind: 'clarify.v1',
+      createdAt: '2026-08-13T00:00:00.000Z',
+      fallback: { headline: 'One question', text: 'Which format do you prefer?' },
+      producedBy: { toolCallId: 'tool-call-1', toolName: 'ask_clarifying_questions' },
+      body: {
+        questions: [
+          {
+            id: 'q1',
+            header: 'Format',
+            question: 'Which format do you prefer?',
+            options: [{ id: 'csv', label: 'CSV', description: 'Spreadsheet-friendly' }],
+            multiSelect: false,
+            isOther: true,
+            isSecret: false,
+          },
+        ],
+        state: { status: 'pending' },
+      },
+    };
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({
+          choices: [
+            {
+              delta: {
+                x_generated_files: {
+                  files: [
+                    {
+                      id: 'file-1',
+                      file_name: 'result.csv',
+                      mime_type: 'text/csv',
+                      uri: '/api/files/file-1',
+                      byte_count: 12,
+                      kind: 'csv',
+                      surface: 'file',
+                      previewable: true,
+                    },
+                  ],
+                },
+                x_interactive_card: { card },
+              },
+              finish_reason: null,
+            },
+          ],
+        }),
+        '[DONE]',
+      ]),
+    );
+
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    expect(chunks).toEqual([
+      { type: 'generated-files', files: [expect.objectContaining({ id: 'file-1' })] },
+      { type: 'interactive-card', card: expect.objectContaining({ cardId: 'tool-call-1' }) },
+      { type: 'done' },
+    ]);
+  });
+
   it('rejects unknown JSON events instead of silently drifting to a later terminal', async () => {
     fetchMock.mockResolvedValueOnce(
       makeStreamResponse([JSON.stringify({ unexpected: true }), '[DONE]']),
@@ -738,6 +800,23 @@ describe('streamFreeChat — SSE happy path', () => {
     const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = fetchOpts.headers as Record<string, string>;
     expect(headers['Authorization']).toBe('Bearer my-clerk-token');
+  });
+
+  it('advertises exactly the display-only map card Chrome can render', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+
+    await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as Record<string, unknown>;
+    expect(body[INTERACTIVE_CARD_REQUEST_KEY]).toEqual({
+      supported: ['map-search.v1'],
+      canRespond: false,
+    });
   });
 
   it('sends the caller-owned retry-stable idempotency key', async () => {

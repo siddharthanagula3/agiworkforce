@@ -28,6 +28,7 @@ import {
   WORKSPACE_CUSTOM_INSTRUCTIONS_KEY,
 } from '../features/instructions';
 import { SYNTHETIC_LOCAL_MODEL_ID } from './catalogModelFixtures';
+import * as api from '../utils/api';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -185,7 +186,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.runtime.startThread).not.toHaveBeenCalled();
     expect(harness.posted).toContainEqual({
       type: 'error',
-      payload: { message: 'Trust this workspace before starting a local developer session.' },
+      payload: { message: 'Trust this workspace before starting a developer session.' },
     });
   });
 
@@ -265,6 +266,15 @@ describe('ChatStateManager local turn lifecycle', () => {
     await harness.manager.handleMessage({ type: 'completeOnboarding' });
 
     expect(harness.context.globalState.get<boolean>(ONBOARDING_SEEN_KEY)).toBe(true);
+  });
+
+  it('reconciles a stale first-run webview after durable onboarding completion', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update(ONBOARDING_SEEN_KEY, true);
+
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    expect(harness.posted).toContainEqual({ type: 'hideOnboarding' });
   });
 
   it('returns exact active-selection metadata in sidebar file search results', async () => {
@@ -1557,7 +1567,9 @@ describe('ChatStateManager local turn lifecycle', () => {
       payload: expect.objectContaining({
         groups: expect.arrayContaining([
           {
-            label: 'Local',
+            label: 'On this device',
+            description: 'Ollama and LM Studio stay inside the local runtime',
+            boundary: 'local',
             models: [
               {
                 id: SYNTHETIC_LOCAL_MODEL_ID,
@@ -1580,9 +1592,56 @@ describe('ChatStateManager local turn lifecycle', () => {
       type: 'runtimeStatus',
       payload: {
         status: 'unavailable',
-        message: 'Install or update the AGI CLI, then configure its path in Settings.',
+        message:
+          'The AGI CLI executable was not found. Choose its installed path in Runtime settings.',
       },
     });
+  });
+
+  it('preserves an actionable CLI protocol mismatch in the persistent runtime state', async () => {
+    const mismatch =
+      'Installed AGI CLI uses developer-session protocol 6; this extension requires exactly protocol 7. Install a compatible AGI CLI or update the extension.';
+    const harness = makeHarness({ localModelError: new Error(mismatch) });
+
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    expect(harness.posted).toContainEqual({
+      type: 'runtimeStatus',
+      payload: { status: 'unavailable', message: mismatch },
+    });
+  });
+
+  it('does not publish stale signed-in identity when account validation clears the token', async () => {
+    const authState = vi
+      .spyOn(api, 'getAccountAuthState')
+      .mockResolvedValueOnce({ status: 'signed-in' })
+      .mockResolvedValueOnce({ status: 'signed-out' });
+    const identity = vi.spyOn(api, 'fetchAccountIdentity').mockResolvedValue({
+      displayName: 'Expired account',
+      email: 'expired@example.test',
+      accountType: 'Personal account',
+      planName: 'Pro',
+      tier: 'pro',
+    });
+    const harness = makeHarness();
+
+    try {
+      await harness.manager.pushAccountStatus();
+
+      expect(harness.posted).toContainEqual({
+        type: 'accountStatus',
+        payload: { status: 'signed-out' },
+      });
+      expect(harness.posted).not.toContainEqual(
+        expect.objectContaining({
+          type: 'accountStatus',
+          payload: expect.objectContaining({ identity: expect.anything() }),
+        }),
+      );
+    } finally {
+      authState.mockRestore();
+      identity.mockRestore();
+    }
   });
 
   it('opens a workspace-file picker without claiming folder support', async () => {
@@ -1713,7 +1772,7 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('includes user-curated memory as untrusted turn data', async () => {
     const harness = makeHarness();
-    await harness.context.globalState.update(MEMORY_STORE_KEY, [
+    await harness.context.workspaceState.update(MEMORY_STORE_KEY, [
       {
         id: 'memory-1',
         text: 'Prefer Rust for command-line tools',
@@ -2007,7 +2066,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     const harness = makeHarness();
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
     const lockedModel = buildGroupedQuickPickItems('local').find(
-      (item) => item.modelId !== undefined && item.disabled === true,
+      (item) => item.modelId !== undefined && item.modelId !== 'auto' && item.disabled === true,
     );
     expect(lockedModel).toBeDefined();
 
@@ -2018,6 +2077,19 @@ describe('ChatStateManager local turn lifecycle', () => {
       payload: expect.objectContaining({
         groups: expect.arrayContaining([
           expect.objectContaining({
+            label: 'Recommended',
+            boundary: 'unavailable',
+            description: 'Sign in or add a provider key to use Auto',
+          }),
+          expect.objectContaining({
+            label: 'On this device',
+            boundary: 'local',
+            description: 'Ollama and LM Studio stay inside the local runtime',
+          }),
+          expect.objectContaining({
+            label: expect.stringMatching(/^Unavailable · /u),
+            boundary: 'unavailable',
+            description: 'Sign in or add a provider key to unlock these models',
             models: expect.arrayContaining([
               expect.objectContaining({ id: lockedModel!.modelId, disabled: true }),
             ]),
@@ -2025,6 +2097,86 @@ describe('ChatStateManager local turn lifecycle', () => {
         ]),
       }),
     });
+  });
+
+  it('labels BYOK picker groups as direct provider boundaries', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'byok');
+
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+
+    const pickerMessage = [...harness.posted]
+      .reverse()
+      .find((message) => message.type === 'modelPickerData') as
+      | Extract<ExtToWebviewMessage, { type: 'modelPickerData' }>
+      | undefined;
+    expect(pickerMessage).toBeDefined();
+    expect(pickerMessage?.payload.groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: 'Recommended',
+          boundary: 'byok',
+          description: 'Auto uses your configured providers; requests go directly to them',
+        }),
+        expect.objectContaining({
+          label: 'On this device',
+          boundary: 'local',
+        }),
+        expect.objectContaining({
+          label: expect.stringMatching(/^Your providers · /u),
+          boundary: 'byok',
+          description: 'Requests go directly to this provider using your key',
+        }),
+      ]),
+    );
+    expect(
+      pickerMessage?.payload.groups.filter((group) => group.label.startsWith('Your providers · ')),
+    ).not.toHaveLength(0);
+    expect(
+      pickerMessage?.payload.groups
+        .filter((group) => group.label.startsWith('Your providers · '))
+        .every((group) => group.boundary === 'byok'),
+    ).toBe(true);
+  });
+
+  it('labels paid picker groups as Managed Cloud boundaries', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'pro');
+
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+
+    const pickerMessage = [...harness.posted]
+      .reverse()
+      .find((message) => message.type === 'modelPickerData') as
+      | Extract<ExtToWebviewMessage, { type: 'modelPickerData' }>
+      | undefined;
+    expect(pickerMessage).toBeDefined();
+    expect(pickerMessage?.payload.groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: 'Recommended',
+          boundary: 'cloud',
+          description: 'Auto routes within your Managed Cloud plan',
+        }),
+        expect.objectContaining({
+          label: 'On this device',
+          boundary: 'local',
+        }),
+        expect.objectContaining({
+          label: expect.stringMatching(/^Managed Cloud · /u),
+          boundary: 'cloud',
+          description: 'Prompts are sent to AGI infrastructure under your plan',
+        }),
+      ]),
+    );
+    expect(
+      pickerMessage?.payload.groups.filter((group) => group.label.startsWith('Managed Cloud · ')),
+    ).not.toHaveLength(0);
+    expect(
+      pickerMessage?.payload.groups
+        .filter((group) => group.label.startsWith('Managed Cloud · '))
+        .every((group) => group.boundary === 'cloud'),
+    ).toBe(true);
   });
 
   it('rejects a forged selection of a tier-locked catalog model', async () => {

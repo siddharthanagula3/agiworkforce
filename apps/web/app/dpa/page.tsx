@@ -136,9 +136,9 @@ const ANNEX_II: { k: string; v: string; limit: string }[] = [
   },
   {
     k: 'Object storage access model',
-    v: 'Uploaded and generated files are stored in Cloudflare R2 and served from a public base URL as permanent, unguessable object URLs.',
+    v: 'Uploaded and generated files are catalogued in Neon and normally served through an authenticated same-origin file route scoped to the owning account and active workspace. Generated videos use a private R2 bucket. Images and other non-video files remain in a public R2 bucket.',
     limit:
-      'Anyone who obtains such a URL can retrieve the object without authenticating. Customers who cannot accept that model should not upload the affected files. This is disclosed rather than described as an access control.',
+      'A person who obtains the underlying public-bucket URL for an image or other non-video file can retrieve it without AGI authentication. Normal product responses do not return that raw URL, but this is not equivalent to private object storage. Customers who cannot accept that model should not upload affected files.',
   },
   {
     k: 'Sandboxed execution',

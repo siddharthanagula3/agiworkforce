@@ -233,12 +233,16 @@ pub(super) async fn prepare_send_message(
 
     let mut llm_messages = vec![ChatMessage {
         role: "system".to_string(),
-        content: PromptEngineer::default_system_prompt(),
+        // Start from the fail-closed prompt. Once the exact filtered tool set
+        // for this turn is known below, tool-capable turns opt into the action
+        // prompt. This prevents a no-tool Local request from naming privileged
+        // actions before capability filtering has run.
+        content: PromptEngineer::no_tools_system_prompt(),
         tool_calls: None,
         tool_call_id: None,
         multimodal_content: None,
     }];
-    debug!("[Chat] Added default AGI Workforce system prompt");
+    debug!("[Chat] Added fail-closed AGI Workforce system prompt");
 
     let mut memory_config = memory_state.injection_config.read().await.clone();
     // The persisted master setting is checked for every turn. The in-memory
@@ -265,7 +269,14 @@ pub(super) async fn prepare_send_message(
 
     // Connected servers' own usage guidance. Injected regardless of incognito:
     // it is the server describing its tools, not anything about this user.
-    inject_mcp_server_instructions(&mcp_state.client, &mut llm_messages);
+    if request.tool_scope == Some(ChatToolScope::AgiWork)
+        && request
+            .model_capabilities
+            .as_ref()
+            .is_some_and(|capabilities| capabilities.agentic)
+    {
+        inject_mcp_server_instructions(&mcp_state.client, &mut llm_messages);
+    }
 
     llm_messages.push(ChatMessage {
         role: "system".to_string(),
@@ -435,6 +446,7 @@ pub(super) async fn prepare_send_message(
 
     let (chat_tools, tool_choice, tool_registry) = build_tool_definitions(
         request.enable_tools,
+        request.tool_scope,
         mcp_state,
         request.model_capabilities.as_ref(),
         flags.is_web_focus,
@@ -442,6 +454,19 @@ pub(super) async fn prepare_send_message(
         skills_offered,
     );
 
+    // The prompt and API tool list are one capability contract. A model must
+    // never be told it can act when the exact filtered request advertises no
+    // tools (or vice versa).
+    llm_messages[0].content = if chat_tools.is_some() {
+        PromptEngineer::default_system_prompt()
+    } else {
+        PromptEngineer::no_tools_system_prompt()
+    };
+
+    let thinking_mode = match request.model_capabilities.as_ref() {
+        Some(capabilities) if !capabilities.thinking => None,
+        _ => request.thinking_mode,
+    };
     let llm_request = LLMRequest {
         messages: llm_messages,
         model: model.clone(),
@@ -450,11 +475,11 @@ pub(super) async fn prepare_send_message(
         stream: flags.stream_mode,
         tools: chat_tools.clone(),
         tool_choice: tool_choice.clone(),
-        thinking_mode: request.thinking_mode,
+        thinking_mode,
         cache_control: build_cache_control(&model),
         thinking: resolve_thinking_parameter(
             &model,
-            request.thinking_mode,
+            thinking_mode,
             request.thinking_budget,
             chat_tools.is_some(),
             &request.content,
@@ -974,7 +999,14 @@ fn maybe_inject_skill_catalog(
 ) -> bool {
     // Incognito keeps locally installed skill names out of the provider payload,
     // matching the egress choice the eager path already made.
-    if !request.auto_inject_skills.unwrap_or(true) || incognito {
+    if request.tool_scope != Some(ChatToolScope::AgiWork)
+        || !request
+            .model_capabilities
+            .as_ref()
+            .is_some_and(|capabilities| capabilities.agentic)
+        || !request.auto_inject_skills.unwrap_or(true)
+        || incognito
+    {
         return false;
     }
 
@@ -1180,6 +1212,7 @@ mod tests {
             strategy: None,
             stream: Some(false),
             enable_tools: None,
+            tool_scope: None,
             conversation_mode: None,
             workflow_hash: None,
             task_metadata: None,

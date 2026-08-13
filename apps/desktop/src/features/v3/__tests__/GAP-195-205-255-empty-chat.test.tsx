@@ -43,6 +43,34 @@ describe('GAP-195, GAP-205, and GAP-255 desktop empty chat', () => {
     expect(onOpenScheduled).toHaveBeenCalledOnce();
   });
 
+  it('replaces unusable starters with an explicit Local model setup path', () => {
+    const onSetUpLocalModel = vi.fn();
+
+    const { rerender } = render(
+      <EmptyChat
+        needsLocalModelSetup
+        onSetUpLocalModel={onSetUpLocalModel}
+        onOpenScheduled={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set up a local model' }));
+    expect(onSetUpLocalModel).toHaveBeenCalledOnce();
+    expect(screen.getByText(/Nothing is sent to AGI Cloud/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create a file or build a site' })).toBeNull();
+
+    rerender(
+      <EmptyChat
+        needsLocalModelSetup={false}
+        onSetUpLocalModel={onSetUpLocalModel}
+        onOpenScheduled={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Set up a local model' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Create a file or build a site' })).toBeEnabled();
+  });
+
   it('does not restore removed composer quick-action chips around the desktop empty state', () => {
     const runtime = {
       supportsCodeExecution: true,

@@ -1,6 +1,6 @@
 //! Discord messaging integration
 
-use reqwest::Client;
+use crate::sys::security::egress_policy::{ensure_public_http_destination, PublicHttpClient};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -46,7 +46,7 @@ pub struct DiscordUser {
 
 pub struct DiscordClient {
     config: DiscordConfig,
-    client: Client,
+    client: PublicHttpClient,
     connected: bool,
 }
 
@@ -54,7 +54,7 @@ impl DiscordClient {
     pub fn new(config: DiscordConfig) -> Self {
         Self {
             config,
-            client: Client::new(),
+            client: PublicHttpClient::new(),
             connected: false,
         }
     }
@@ -67,11 +67,15 @@ impl DiscordClient {
             return Err("Discord bot token or webhook URL required".into());
         }
 
+        if let Some(webhook_url) = &self.config.webhook_url {
+            ensure_public_http_destination(webhook_url)?;
+        }
+
         // Validate bot token by calling GET /users/@me
         if let Some(token) = &self.config.bot_token {
             let response = self
                 .client
-                .get("https://discord.com/api/v10/users/@me")
+                .get("https://discord.com/api/v10/users/@me")?
                 .header("Authorization", format!("Bot {}", token))
                 .send()
                 .await
@@ -109,7 +113,7 @@ impl DiscordClient {
 
         let response = self
             .client
-            .post(webhook_url)
+            .post(webhook_url)?
             .json(&payload)
             .send()
             .await
@@ -145,7 +149,7 @@ impl DiscordClient {
 
         let response = self
             .client
-            .post(&url)
+            .post(&url)?
             .header("Authorization", format!("Bot {}", token))
             .header("Content-Type", "application/json")
             .json(&payload)
@@ -178,7 +182,7 @@ impl DiscordClient {
 
         let response = self
             .client
-            .get(&url)
+            .get(&url)?
             .header("Authorization", format!("Bot {}", token))
             .send()
             .await
@@ -227,7 +231,7 @@ impl DiscordClient {
 
         let response = self
             .client
-            .get(&url)
+            .get(&url)?
             .header("Authorization", format!("Bot {}", token))
             .send()
             .await
@@ -261,7 +265,7 @@ impl DiscordClient {
 
         let response = self
             .client
-            .delete(&url)
+            .delete(&url)?
             .header("Authorization", format!("Bot {}", token))
             .send()
             .await
@@ -295,7 +299,7 @@ impl DiscordClient {
 
         let response = self
             .client
-            .patch(&url)
+            .patch(&url)?
             .header("Authorization", format!("Bot {}", token))
             .header("Content-Type", "application/json")
             .json(&payload)
@@ -334,7 +338,7 @@ impl DiscordClient {
 
         let response = self
             .client
-            .put(&url)
+            .put(&url)?
             .header("Authorization", format!("Bot {}", token))
             .header("Content-Length", "0")
             .send()
@@ -361,7 +365,7 @@ impl DiscordClient {
 
         let response = self
             .client
-            .get(&url)
+            .get(&url)?
             .header("Authorization", format!("Bot {}", token))
             .send()
             .await

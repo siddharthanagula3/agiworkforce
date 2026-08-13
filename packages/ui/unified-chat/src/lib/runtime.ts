@@ -234,6 +234,13 @@ export interface ChatRuntime {
   supportsManagedWebSearch?: boolean;
 
   /**
+   * True when this runtime can execute an explicitly user-selected Web-search
+   * turn outside Managed Cloud. Automatic search never crosses a Local
+   * boundary; hosts that set this render a one-shot composer control.
+   */
+  supportsExplicitLocalWebSearch?: boolean;
+
+  /**
    * True when `SendMessageOptions.agentMode` reaches an enforcement boundary
    * that honors Ask/Auto/Plan/Bypass. Managed Cloud owns approval policy on the
    * server and must leave this false so the composer never advertises a local
@@ -355,6 +362,8 @@ export interface SendMessageOptions {
   assistantMessageId?: string;
   thinkingEnabled?: boolean;
   webSearch?: boolean;
+  /** Explicit, one-turn Local/native tool scope. Never inferred from automatic search. */
+  localToolScope?: LocalToolScope;
   /** Request the managed Deep Research workflow (capability-gated by the runtime). */
   research?: boolean;
   /** Cloud product execution mode; independent from permission `agentMode`. */
@@ -413,11 +422,17 @@ export interface SendMessageParams {
    *  chat_send_message request so the toggles stop being inert facade. */
   thinkingEnabled?: boolean;
   webSearch?: boolean;
+  localToolScope?: LocalToolScope;
   workMode?: CloudWorkMode;
   systemPrompt?: string;
   agentMode?: string;
   effort?: string;
+  /** Host-confirmed tool lane. Ordinary chat leaves tools off so dynamic
+   * Local models are not flooded with every registered tool schema. */
+  enableTools?: boolean;
 }
+
+export type LocalToolScope = 'web_search' | 'agi_work';
 
 /**
  * A single chunk emitted by the streaming async generator in TauriRuntime.

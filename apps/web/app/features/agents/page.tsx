@@ -154,7 +154,7 @@ export default function FeaturesAgentsPage() {
         <FinalCta
           eyebrow="Start now"
           title="Put an agent on it."
-          body="Get notified for Local and BYOK agent work on Desktop and CLI. AGI managed cloud is in public alpha — open by default."
+          body="Follow current release availability for Local and BYOK agent work on Desktop, CLI, and VS Code. AGI managed cloud is in public alpha — open by default."
           ctas={[
             { href: '/download', label: 'Get notified' },
             { href: '/agi-code', label: 'Explore AGI Code' },

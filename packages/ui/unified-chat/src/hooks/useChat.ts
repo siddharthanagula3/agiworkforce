@@ -19,6 +19,7 @@ import type {
   ChatRuntime,
   CloudApprovalTurnProjection,
   CloudRunReattachment,
+  LocalToolScope,
 } from '../lib/runtime';
 import type { Attachment, ChatMessage, MessageRouting } from '../lib/types';
 import { syncPackageStoreFromHost } from './useHostBridgeSync';
@@ -897,6 +898,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       projectId?: string | null,
       replacement?: SendReplacement,
       skillName?: string,
+      localToolScope?: LocalToolScope,
     ) => {
       if (!runtime || isStreamingRef.current) return;
 
@@ -1052,10 +1054,13 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         id: userMessageId,
         role: 'user',
         content,
-        ...(skillName
+        ...(skillName || localToolScope
           ? {
               metadata: {
-                sendReplay: { hasSkillInstruction: true },
+                sendReplay: {
+                  ...(skillName ? { hasSkillInstruction: true } : {}),
+                  ...(localToolScope === 'web_search' ? { webSearchEnabled: true } : {}),
+                },
               },
             }
           : {}),
@@ -1115,22 +1120,29 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       resolvedProvider ??= modelState.models.find((m) => m.id === resolvedModelId)?.provider;
       const settingsState = useSettingsStore.getState();
 
-      // Re-check managed search at send time so a persisted toggle cannot
-      // survive a model/deployment change and become a cosmetic request. Local
-      // runtimes keep their native tool path and do not consult Cloud flags.
+      // Re-check search at send time so a persisted automatic intent cannot
+      // survive a model/deployment or trust-boundary change. `local_only`
+      // conversations are deliberately excluded: automatic search is network
+      // egress, and a Local session must not turn an ordinary prompt into a
+      // native tool/network turn without an explicit user-facing opt-in.
+      // Managed Cloud and BYOK already cross their named network boundary, so
+      // their existing capability gates remain authoritative.
       const selectedModelMetadata = getModelMetadataById(resolvedModelId);
       const webSearchEnabled =
-        requestedWebSearch &&
-        (!runtime.supportsManagedWebSearch ||
-          isWebSearchAvailable({
-            provider: resolvedProvider,
-            modelSupportsNativeSearch:
-              selectedModelMetadata?.capabilities.search ?? resolvedProvider === 'managed_cloud',
-            modelSupportsTools:
-              selectedModelMetadata?.capabilities.tools ??
-              modelState.models.find((model) => model.id === resolvedModelId)?.supportsTools,
-            genericBackendConfigured: settingsState.genericWebSearchDeploymentEnabled,
-          }));
+        executionMode === 'local_only'
+          ? localToolScope === 'web_search'
+          : requestedWebSearch &&
+            (!runtime.supportsManagedWebSearch ||
+              isWebSearchAvailable({
+                provider: resolvedProvider,
+                modelSupportsNativeSearch:
+                  selectedModelMetadata?.capabilities.search ??
+                  resolvedProvider === 'managed_cloud',
+                modelSupportsTools:
+                  selectedModelMetadata?.capabilities.tools ??
+                  modelState.models.find((model) => model.id === resolvedModelId)?.supportsTools,
+                genericBackendConfigured: settingsState.genericWebSearchDeploymentEnabled,
+              }));
 
       // Code execution: forward the persisted composer preference ONLY when
       // it is currently honest — the selected model's catalog capability,
@@ -1209,6 +1221,7 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           userMessageId,
           assistantMessageId,
           webSearch: webSearchEnabled,
+          ...(localToolScope ? { localToolScope } : {}),
           ...(research ? { research: true } : {}),
           ...(effectiveWorkMode ? { workMode: effectiveWorkMode } : {}),
           ...(skillName ? { skillName } : {}),
@@ -1533,6 +1546,8 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           snapshot,
           replay: decision.replay,
         },
+        undefined,
+        decision.replay?.webSearchEnabled ? 'web_search' : undefined,
       );
     },
     [runtime, sendMessage],

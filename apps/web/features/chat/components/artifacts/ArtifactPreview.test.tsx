@@ -291,3 +291,57 @@ describe('ArtifactPreview · generated image viewer', () => {
     expect(screen.getByText('Image preview unavailable')).toBeInTheDocument();
   });
 });
+
+describe('ArtifactPreview · Markdown documents', () => {
+  function markdownArtifact(overrides: Partial<ArtifactData> = {}): ArtifactData {
+    return {
+      id: 'md-1',
+      type: 'document',
+      language: 'md',
+      title: 'ExecutionPlan.md',
+      content: '# ExecutionPlan\n\nStatus: Current\n',
+      ...overrides,
+    };
+  }
+
+  it('renders the markdown instead of its source', () => {
+    render(<ArtifactPreview variant="panel" artifact={markdownArtifact()} />);
+
+    expect(screen.getByTestId('artifact-markdown-preview')).toBeInTheDocument();
+    // The heading is a real <h1>, not the literal "# ExecutionPlan" the panel
+    // used to print because `document` had no preview branch at all.
+    expect(screen.getByRole('heading', { name: 'ExecutionPlan' })).toBeInTheDocument();
+  });
+
+  it('still offers the source view behind the toggle', () => {
+    render(<ArtifactPreview variant="panel" artifact={markdownArtifact()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Source' }));
+    expect(screen.queryByTestId('artifact-markdown-preview')).toBeNull();
+  });
+
+  it('leaves PDF and DOCX documents on their own viewers', () => {
+    const { rerender } = render(
+      <ArtifactPreview
+        variant="panel"
+        artifact={pdfArtifact({ content: 'data:application/pdf;base64,JVBERi0=' })}
+      />,
+    );
+    expect(screen.queryByTestId('artifact-markdown-preview')).toBeNull();
+
+    rerender(
+      <ArtifactPreview
+        variant="panel"
+        artifact={markdownArtifact({
+          id: 'docx-1',
+          language: 'docx',
+          title: 'Brief.docx',
+          // This assertion is about renderer selection, not Mammoth's ZIP
+          // parser. Do not feed the Markdown fixture bytes to the DOCX path.
+          content: '',
+        })}
+      />,
+    );
+    expect(screen.queryByTestId('artifact-markdown-preview')).toBeNull();
+  });
+});

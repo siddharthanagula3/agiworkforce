@@ -20,7 +20,13 @@ import {
   Check,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { canUseBillingPlanCapability, getModelMetadataById } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  getImageAspectOptionsForModel,
+  getModelMetadataById,
+  getVideoAspectOptionsForModel,
+  getVideoQualityOptionsForModel,
+} from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
@@ -98,6 +104,13 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   // to it so a newly picked row receives its checkmark in the same render turn.
   const selectedMediaModel = useChatViewStore((s) => s.selectedMediaModel);
   const setMediaModel = useChatViewStore((s) => s.setMediaModel);
+  const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
+  const videoResolution = useChatViewStore((s) => s.videoResolution);
+  const setVideoAspectRatio = useChatViewStore((s) => s.setVideoAspectRatio);
+  const setVideoResolution = useChatViewStore((s) => s.setVideoResolution);
+  const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
+  const setImageAspectRatio = useChatViewStore((s) => s.setImageAspectRatio);
+
   const appMode = useChatAppModeStore((s) => s.appMode);
   const tier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
@@ -128,6 +141,36 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   // that would fail at send time.
   const imageModelId = resolveMediaModelId('image', selectedMediaModel);
   const videoModelId = resolveMediaModelId('video', selectedMediaModel);
+  // Derived during render, like the Web composer: a model switch must not leave
+  // an unsupported tuple staged for even one frame, because that frame is what
+  // the send would use.
+  const videoAspectOptions = useMemo(
+    () => getVideoAspectOptionsForModel(videoModelId ?? undefined),
+    [videoModelId],
+  );
+  const effectiveVideoAspectRatio =
+    videoAspectOptions.find((option) => option.id === videoAspectRatio)?.id ??
+    videoAspectOptions[0]?.id ??
+    '16:9';
+  // Image shapes come from the model's adapter, so switching Gemini -> GPT
+  // Image 2 narrows the list in the same render rather than leaving a ratio
+  // staged that the OpenAI adapter cannot map.
+  const imageAspectOptions = useMemo(
+    () => getImageAspectOptionsForModel(imageModelId ?? undefined),
+    [imageModelId],
+  );
+  const effectiveImageAspectRatio =
+    imageAspectOptions.find((option) => option.id === imageAspectRatio)?.id ??
+    imageAspectOptions[0]?.id ??
+    '1:1';
+  const videoQualityOptions = useMemo(
+    () => getVideoQualityOptionsForModel(videoModelId ?? undefined, effectiveVideoAspectRatio),
+    [videoModelId, effectiveVideoAspectRatio],
+  );
+  const effectiveVideoResolution =
+    videoQualityOptions.find((option) => option.id === videoResolution)?.id ??
+    videoQualityOptions[0]?.id ??
+    '720p';
   // Persisted choices can become invalid when the catalog changes. Reconcile
   // after render so the stale id is actually removed (and cannot reactivate if
   // its lifecycle later changes) without mutating Zustand during render.
@@ -294,8 +337,18 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     <BottomSheet
       ref={ref}
       index={-1}
+      // @gorhom/bottom-sheet defaults its content wrapper to an accessible
+      // `adjustable` element. On iOS that turns the wrapper into a leaf and
+      // hides every Camera/Model/Project control from VoiceOver. The handle
+      // remains adjustable; the content wrapper must expose its children.
+      accessible={false}
       snapPoints={SNAP_POINTS}
       enablePanDownToClose
+      // Explicit snap points and dynamic sizing are competing contracts: v5
+      // defaults `enableDynamicSizing` to true, which appends the measured
+      // content height to SNAP_POINTS and renumbers the indices, so
+      // `snapToIndex(0)` would stop meaning '75%'. Matches ModelPickerSheet.
+      enableDynamicSizing={false}
       // Belt-and-braces for the keyboard-over-sheet bug fixed at the tap site in
       // ChatInput: if anything ever raises the keyboard while this sheet is up,
       // the sheet resizes around it instead of being covered by it, and a blur
@@ -570,6 +623,118 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                       activeColor={themeColors.teal}
                     />
                   ))}
+
+                  {/* Image output shape. Same treatment as video: the managed
+                      image route has always accepted and validated
+                      `aspect_ratio`, but no surface offered one, so every
+                      generated image took the route's legacy square default. */}
+                  {mediaMode === 'image' && imageAspectOptions.length > 1 ? (
+                    <>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '600',
+                          color: themeColors.textMuted,
+                          textTransform: 'uppercase',
+                          paddingHorizontal: 4,
+                          marginTop: 10,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Aspect ratio
+                      </Text>
+                      {imageAspectOptions.map((option) => (
+                        <MediaOptionRow
+                          key={option.id}
+                          label={option.label}
+                          selected={option.id === effectiveImageAspectRatio}
+                          onPress={() => {
+                            haptic();
+                            setImageAspectRatio(option.id);
+                          }}
+                          textColor={themeColors.textPrimary}
+                          mutedColor={themeColors.textMuted}
+                          activeColor={themeColors.teal}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+
+                  {/* Video output shape. Options come from the shared model
+                      catalog, so a model without a published 4k tuple never
+                      offers 4k here, and quality is scoped BY aspect because
+                      the two are not independent — a resolution can exist in
+                      landscape and not in portrait. */}
+                  {mediaMode === 'video' && videoAspectOptions.length > 1 ? (
+                    <>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '600',
+                          color: themeColors.textMuted,
+                          textTransform: 'uppercase',
+                          paddingHorizontal: 4,
+                          marginTop: 10,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Aspect ratio
+                      </Text>
+                      {videoAspectOptions.map((option) => (
+                        <MediaOptionRow
+                          key={option.id}
+                          label={option.label}
+                          selected={option.id === effectiveVideoAspectRatio}
+                          onPress={() => {
+                            haptic();
+                            setVideoAspectRatio(option.id);
+                          }}
+                          textColor={themeColors.textPrimary}
+                          mutedColor={themeColors.textMuted}
+                          activeColor={themeColors.teal}
+                        />
+                      ))}
+                    </>
+                  ) : null}
+
+                  {mediaMode === 'video' && videoQualityOptions.length > 1 ? (
+                    <>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: '600',
+                          color: themeColors.textMuted,
+                          textTransform: 'uppercase',
+                          paddingHorizontal: 4,
+                          marginTop: 10,
+                          marginBottom: 2,
+                        }}
+                      >
+                        Quality
+                      </Text>
+                      {videoQualityOptions.map((option) => (
+                        <MediaOptionRow
+                          key={option.id}
+                          label={option.label}
+                          // Surface the duration restriction BEFORE a failed
+                          // send rather than after the route rejects it.
+                          hint={
+                            option.durationSecs
+                              ? `${option.durationSecs.join('/')}s only`
+                              : undefined
+                          }
+                          selected={option.id === effectiveVideoResolution}
+                          onPress={() => {
+                            haptic();
+                            setVideoResolution(option.id);
+                          }}
+                          textColor={themeColors.textPrimary}
+                          mutedColor={themeColors.textMuted}
+                          activeColor={themeColors.teal}
+                        />
+                      ))}
+                    </>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -991,6 +1156,56 @@ function ConfigLink({
           ))}
         <ChevronRight size={16} color={mutedColor} />
       </View>
+    </Pressable>
+  );
+}
+
+/**
+ * A plain selectable row for video aspect/quality. Mirrors `MediaModelRow`'s
+ * geometry so the two lists read as one control group, but carries a hint slot
+ * instead of a price.
+ */
+function MediaOptionRow({
+  label,
+  hint,
+  selected,
+  onPress,
+  textColor,
+  mutedColor,
+  activeColor,
+}: {
+  label: string;
+  hint?: string;
+  selected: boolean;
+  onPress: () => void;
+  textColor: string;
+  mutedColor: string;
+  activeColor: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessible
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${label}${hint ? `, ${hint}` : ''}${selected ? ', selected' : ''}`}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 8,
+        paddingHorizontal: 4,
+        paddingLeft: 28,
+        minHeight: 44,
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={{ fontSize: 14, color: selected ? activeColor : textColor }}>{label}</Text>
+        {hint ? (
+          <Text style={{ fontSize: 11, color: mutedColor, marginTop: 1 }}>{hint}</Text>
+        ) : null}
+      </View>
+      {selected ? <Check size={16} color={activeColor} /> : null}
     </Pressable>
   );
 }

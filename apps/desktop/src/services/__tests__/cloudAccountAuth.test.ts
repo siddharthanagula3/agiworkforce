@@ -74,6 +74,8 @@ function meResponse(
         display_name: tier === 'pro' ? 'Pro' : 'Free',
         status: tier === 'pro' ? 'active' : 'none',
         current_period_end: 1_752_278_400,
+        cancel_at_period_end: false,
+        subscription_source: tier === 'pro' ? 'stripe' : 'none',
       },
       feature_flags: {
         advanced_model_access: tier === 'pro',
@@ -118,6 +120,8 @@ describe('cloudAccountAuth', () => {
             display_name: 'Pro',
             status: 'active',
             current_period_end: 1752278400,
+            cancel_at_period_end: true,
+            subscription_source: 'apple',
           },
           feature_flags: {
             advanced_model_access: true,
@@ -256,6 +260,11 @@ describe('cloudAccountAuth', () => {
     expect(cloudAccountAuth.getSession()?.refresh_token).toBe('refresh-token');
     expect(cloudAccountAuth.getPlanTier()).toBe('pro');
     expect(cloudAccountAuth.hasFeature('cloud_managed')).toBe(true);
+    expect(cloudAccountAuth.getState().subscription).toMatchObject({
+      current_period_end: new Date(1752278400 * 1000).toISOString(),
+      cancel_at_period_end: true,
+      subscription_source: 'apple',
+    });
   });
 
   it('drops account A /api/me results that arrive after account B becomes current', async () => {

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { isMediaStorageConfigured } from '@/lib/server/media-storage';
+import { isGeneratedMediaStorageConfigured } from '@/lib/server/media-storage';
 import {
   persistGeneratedFileBytes,
   type GeneratedFileWire,
@@ -193,7 +193,7 @@ export async function persistGeneratedFile(params: {
   model?: string;
 }): Promise<PersistedGeneratedFile | null> {
   const { userId, organizationId, ref, prompt, model } = params;
-  if (!isMediaStorageConfigured()) return null;
+  if (!isGeneratedMediaStorageConfigured()) return null;
   if (!ref.fileId) return null;
 
   try {

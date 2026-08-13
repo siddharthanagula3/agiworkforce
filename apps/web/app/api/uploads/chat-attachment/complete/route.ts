@@ -8,10 +8,9 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import {
-  deleteObject,
-  getObject,
-  isObjectStorageConfigured,
-  publicUrlForKey,
+  deletePrivateObject,
+  getPrivateObject,
+  isPrivateObjectStorageConfigured,
 } from '@/lib/server/object-storage';
 import { scanUploadBytes } from '@/lib/security/upload-scan';
 import { matchDenylistedUpload, recordModerationEvent } from '@/lib/moderation';
@@ -35,20 +34,18 @@ const CompleteChatAttachmentSchema = z.object({
 });
 
 /**
- * A rejected upload is DELETED, not merely left unregistered: R2 is a public
- * bucket, so the bytes are already reachable at their storage URL and leaving
- * them there would keep them served forever. Deleting shrinks the exposure to
- * the seconds between the client's PUT and this handler. Closing it entirely is
- * the private-bucket decision recorded in known-flaws.md.
+ * A rejected upload is DELETED, not merely left unregistered. New attachment
+ * PUTs land in the private bucket, so scan-time bytes are never world-readable;
+ * deletion also prevents rejected or abandoned content from consuming storage.
  */
 async function purgeRejectedUpload(userId: string, storageKey: string): Promise<void> {
   try {
-    await deleteObject(storageKey);
+    await deletePrivateObject(storageKey);
   } catch (deleteError) {
-    // Loud: the file stays publicly reachable until it is removed by hand.
+    // Loud: rejected bytes remain stored until an operator removes them.
     logger.error(
       { err: deleteError, userId, storageKey },
-      '[uploads] CRITICAL: could not delete a rejected upload from public storage',
+      '[uploads] CRITICAL: could not delete a rejected upload from private storage',
     );
   }
 }
@@ -68,8 +65,8 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'uploads-presign');
   if (rateLimitResponse) return rateLimitResponse;
 
-  if (!isObjectStorageConfigured()) {
-    throw createError.internal('Object storage is not configured');
+  if (!isPrivateObjectStorageConfigured()) {
+    throw createError.internal('Private object storage is not configured');
   }
 
   // Capture workspace provenance once, before object inspection. Both the
@@ -111,7 +108,7 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     });
   }
 
-  const object = await getObject(storageKey);
+  const object = await getPrivateObject(storageKey);
   if (!object) throw createError.notFound('Uploaded file bytes were not found');
   if (object.data.byteLength !== byteCount) {
     throw createError.validation('Uploaded file size does not match the selected file.');
@@ -168,7 +165,8 @@ async function handleComplete(request: NextRequest): Promise<NextResponse> {
     kind: isChatImageMimeType(mimeType) ? 'image' : 'file',
     mimeType,
     byteSize: object.data.byteLength,
-    storageUrl: publicUrlForKey(storageKey),
+    // Internal locator only. Clients receive the authenticated /api/files URL.
+    storageUrl: storageKey,
     storagePathname: storageKey,
     sourceSurface,
     metadata: {

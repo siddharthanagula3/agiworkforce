@@ -25,7 +25,7 @@ export default function BusinessPage() {
         <FlagshipHero
           eyebrow="AGI for business"
           titleLines={['AI work your team can govern.']}
-          lede="AGI gives teams the working surface they expect: projects, files, artifacts, cited research, and coding agents. With routing policy on top. Local work stays on the device, BYOK routes to the provider you choose on Desktop and CLI, and AGI managed cloud is in public alpha — open by default."
+          lede="AGI gives teams the working surface they expect: projects, files, artifacts, cited research, and coding agents. With routing policy on top. Local work stays on the device, BYOK routes to the provider you choose on Desktop, CLI, and VS Code, and AGI managed cloud is in public alpha — open by default."
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             { href: '/download', label: 'Get AGI Desktop' },
@@ -86,7 +86,7 @@ export default function BusinessPage() {
               // The count is derived from models.json and dated by its own
               // lastUpdated stamp. A number a buyer can open and count beats a
               // padded floor they have to trust.
-              v: `One product routes across a dated, inspectable catalog — ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. Frontier cloud APIs through BYOK on Desktop and CLI, plus local models through Ollama, LM Studio, llama.cpp, and vLLM. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
+              v: `One product routes across a dated, inspectable catalog — ${MARKETING.models.count} models across ${MARKETING.providers.count} provider integrations as of ${CATALOG_AS_OF}. Frontier cloud APIs through BYOK on Desktop, CLI, and VS Code, plus local models through Ollama, LM Studio, llama.cpp, and vLLM. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
             },
             {
               k: 'Cost shape',
@@ -134,7 +134,7 @@ export default function BusinessPage() {
             {
               meta: 'Local + BYOK',
               title: 'BYOK mode',
-              body: 'Bring provider keys on Desktop and CLI and pay providers directly.',
+              body: 'Bring provider keys on Desktop, CLI, and VS Code and pay providers directly.',
               href: '/byok',
             },
             {

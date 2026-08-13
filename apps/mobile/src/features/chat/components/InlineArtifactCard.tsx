@@ -130,7 +130,6 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
   const colors = useThemeColors();
   const config = TYPE_CONFIG[artifact.type] ?? FALLBACK_CONFIG;
   const Icon = config.icon;
-  const preview = getPreview(artifact);
   const generatedFileSummary = summarizeGeneratedFileBundle({
     computeSession: artifact.computeSession,
     generatedFile: artifact.generatedFile,
@@ -139,11 +138,24 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
     fallbackKind: artifact.generatedFile?.kind ?? artifact.language ?? artifact.type,
     fallbackMimeType: artifact.generatedFile?.mimeType,
     fallbackUri: artifact.generatedFile?.uri,
-    fallbackStatus: artifact.computeSession?.status,
+    fallbackStatus:
+      (typeof artifact.metadata?.status === 'string' ? artifact.metadata.status : undefined) ??
+      artifact.computeSession?.status,
   });
   const hasGeneratedFileManifest = Boolean(
     artifact.computeSession || artifact.generatedFile || artifact.artifactManifest,
   );
+  const preview =
+    getPreview(artifact).trim() ||
+    (hasGeneratedFileManifest
+      ? [
+          generatedFileSummary.statusLabel,
+          generatedFileSummary.kindLabel,
+          generatedFileSummary.byteCountLabel,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : 'Open to view details');
 
   return (
     <Pressable
@@ -158,7 +170,9 @@ export function InlineArtifactCard({ artifact, onExpand }: InlineArtifactCardPro
       }}
       accessibilityLabel={`${config.label}: ${artifact.title}`}
       accessibilityRole="button"
-      accessibilityHint="Tap to expand"
+      accessibilityHint={
+        hasGeneratedFileManifest ? 'Tap for file details and download options' : 'Tap to expand'
+      }
     >
       {/* Header */}
       <View

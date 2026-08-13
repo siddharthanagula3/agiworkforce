@@ -58,6 +58,44 @@ const TIME_BANDS: Record<TimeBand, TimeBandConfig> = {
   },
 };
 
+/**
+ * Make a profile name presentable in a hero headline.
+ *
+ * The greeting is the largest text on the empty chat screen, so it inherits
+ * whatever casing the identity provider happens to store. A Clerk profile
+ * saved as "SIDDHARTHA" rendered "Good evening, SIDDHARTHA" — the headline
+ * shouts at the user, which reads as a bug in a product demo.
+ *
+ * Only the two unambiguously-wrong shapes are touched:
+ *   ALL CAPS  -> Title Case   ("SIDDHARTHA" -> "Siddhartha")
+ *   all lower -> Title Case   ("siddhartha" -> "Siddhartha")
+ *
+ * Anything with deliberate internal capitalisation is left exactly as written,
+ * so "McDonald", "d'Angelo", "DeShawn" and "van Dijk" survive. Two-letter
+ * all-caps names are also left alone because those are initials ("JT", "AJ"),
+ * and title-casing them would be the same class of error in reverse.
+ * Hyphens and apostrophes start new words, so "O'BRIEN" -> "O'Brien" and
+ * "MARY-JANE" -> "Mary-Jane".
+ */
+export function normalizeGreetingName(name: string): string {
+  const hasLower = name !== name.toLocaleUpperCase();
+  const hasUpper = name !== name.toLocaleLowerCase();
+
+  // Mixed case is intentional — never second-guess it.
+  if (hasLower && hasUpper) return name;
+  // Initials, not a shouted name.
+  if (!hasLower && name.length <= 2) return name;
+  // No cased characters at all (e.g. CJK, digits) — nothing to normalise.
+  if (!hasLower && !hasUpper) return name;
+
+  return name
+    .toLocaleLowerCase()
+    .replace(
+      /(^|[\s\-'’])(\p{L})/gu,
+      (_match, boundary: string, letter: string) => boundary + letter.toLocaleUpperCase(),
+    );
+}
+
 function getTimeBand(hour: number): TimeBand {
   if (hour >= 4 && hour <= 6) return 'earlyMorning';
   if (hour >= 7 && hour <= 11) return 'morning';
@@ -102,7 +140,8 @@ export function useGreeting(): GreetingResult {
   // range), which covers the previous explicit escape range and satisfies
   // `no-control-regex` without an inline suppression.
   const rawName = userName?.split(' ')[0]?.trim();
-  const firstName = rawName && rawName.length <= 50 ? rawName.replace(/\p{Cc}/gu, '') : undefined;
+  const cleanedName = rawName && rawName.length <= 50 ? rawName.replace(/\p{Cc}/gu, '') : undefined;
+  const firstName = cleanedName ? normalizeGreetingName(cleanedName) : undefined;
 
   let headline: string;
   if (firstName) {

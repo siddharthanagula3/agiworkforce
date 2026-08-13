@@ -225,6 +225,27 @@ export async function buildStreamResponse(
           try {
             const event = JSON.parse(jsonStr);
 
+            // Anthropic's message_start event is wire-silent, but it owns the
+            // authoritative input/cache usage for the request. Capture those
+            // counters before the provider-specific transform below filters
+            // message_start with `continue`; otherwise successful legacy
+            // Anthropic streams settle as if they consumed zero input tokens.
+            if (event.type === 'message_start' && event.message?.usage) {
+              inputTokens = Math.max(inputTokens, event.message.usage.input_tokens || 0);
+              if (event.message.usage.cache_read_input_tokens != null) {
+                cacheReadInputTokens = event.message.usage.cache_read_input_tokens;
+              }
+              if (event.message.usage.cache_creation_input_tokens != null) {
+                cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens;
+              }
+              // Only present when the request mixes 5m and 1h TTLs; absent
+              // means the entire cache_creation_input_tokens total is 5m-priced.
+              if (event.message.usage.cache_creation?.ephemeral_1h_input_tokens != null) {
+                cacheCreation1hInputTokens =
+                  event.message.usage.cache_creation.ephemeral_1h_input_tokens;
+              }
+            }
+
             let transformedEvent = event;
             if (providerUsed === 'anthropic') {
               if (event.type === 'content_block_delta' && event.delta?.text) {
@@ -434,22 +455,6 @@ export async function buildStreamResponse(
             if (event.type === 'message_delta' && event.usage) {
               outputTokens = Math.max(outputTokens, event.usage.output_tokens || 0);
             }
-            if (event.type === 'message_start' && event.message?.usage) {
-              inputTokens = Math.max(inputTokens, event.message.usage.input_tokens || 0);
-              // Anthropic streams cache token counts in message_start.message.usage
-              if (event.message.usage.cache_read_input_tokens != null) {
-                cacheReadInputTokens = event.message.usage.cache_read_input_tokens;
-              }
-              if (event.message.usage.cache_creation_input_tokens != null) {
-                cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens;
-              }
-              // Only present when the request mixes 5m and 1h TTLs; absent means
-              // the entire cache_creation_input_tokens total is 5m-priced.
-              if (event.message.usage.cache_creation?.ephemeral_1h_input_tokens != null) {
-                cacheCreation1hInputTokens =
-                  event.message.usage.cache_creation.ephemeral_1h_input_tokens;
-              }
-            }
             if (event.usage) {
               inputTokens = Math.max(inputTokens, event.usage.prompt_tokens || 0);
               outputTokens = Math.max(outputTokens, event.usage.completion_tokens || 0);
@@ -657,6 +662,13 @@ export async function buildStreamResponse(
     ...getCorsHeaders(request),
     ...getSecurityHeaders(),
   };
+  // The model that actually answered, after routing/fallback. The client
+  // otherwise labels the turn with what it REQUESTED — `auto` under Auto
+  // routing, which is not a catalog id, so the transcript rendered
+  // "Unavailable model" under every reply.
+  if (modelUsed) {
+    streamHeaders['X-AGI-Resolved-Model'] = modelUsed;
+  }
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
@@ -1061,6 +1073,13 @@ export async function buildAdapterStreamResponse(
     ...getCorsHeaders(request),
     ...getSecurityHeaders(),
   };
+  // The model that actually answered, after routing/fallback. The client
+  // otherwise labels the turn with what it REQUESTED — `auto` under Auto
+  // routing, which is not a catalog id, so the transcript rendered
+  // "Unavailable model" under every reply.
+  if (modelUsed) {
+    streamHeaders['X-AGI-Resolved-Model'] = modelUsed;
+  }
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }

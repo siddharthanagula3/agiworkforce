@@ -125,7 +125,7 @@ export default function AgiCodePage() {
         <DevBand
           eyebrow="Local-first"
           title="Works offline. Routes on your rules."
-          body="Point AGI Code at local models through Ollama or LM Studio and work entirely offline. Bring your own provider keys when you want frontier models. The provider label is visible on every request. Nothing moves between modes silently."
+          body="Point AGI Code at a supported local runtime and work entirely offline after setup. Bring your own provider keys when you want frontier models. The provider label is visible on every request. Nothing moves between modes silently."
           ctas={[
             { href: '/local', label: 'Run AGI Locally' },
             { href: '/byok', label: 'Set Up BYOK' },

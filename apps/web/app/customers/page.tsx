@@ -70,7 +70,7 @@ const SCENARIOS: {
         v: 'The provider bills the firm directly. AGI adds no markup and no metering.',
       },
       { k: 'Key handling', v: 'Keys are stored encrypted on the machine, not on our servers.' },
-      { k: 'Plan gate', v: 'None for BYOK on Desktop and CLI.' },
+      { k: 'Plan gate', v: 'None for BYOK on Desktop, CLI, and VS Code.' },
     ],
     caveat:
       'Per-client cost attribution comes from your provider’s own billing tooling — separate keys or projects per client. AGI does not currently produce a per-client spend report for you.',

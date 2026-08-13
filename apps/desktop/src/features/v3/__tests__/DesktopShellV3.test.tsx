@@ -147,8 +147,11 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     setDraftContent: unifiedChatMock.setDraftContent,
     appendDraftContent: unifiedChatMock.appendDraftContent,
   };
+  const modelStoreState = { models: [] };
   const useChatStore = (selector: (state: typeof sharedStoreState) => unknown) =>
     selector(sharedStoreState);
+  const useChatModelStore = (selector: (state: typeof modelStoreState) => unknown) =>
+    selector(modelStoreState);
   useChatStore.getState = () => ({
     setDraftContent: unifiedChatMock.setDraftContent,
     appendDraftContent: unifiedChatMock.appendDraftContent,
@@ -196,6 +199,7 @@ vi.mock('@agiworkforce/unified-chat', async () => {
         : null,
     useReducedMotion: () => false,
     useChatStore,
+    useChatModelStore,
     selectBudget: (state: typeof unifiedChatMock.budgetState) => state.budget,
     selectBudgetPercentage: (state: typeof unifiedChatMock.budgetState) => state.percentage,
     useBudgetStore: (selector: (state: typeof unifiedChatMock.budgetState) => unknown) =>
@@ -358,36 +362,7 @@ describe('DesktopShellV3 duplication ownership', () => {
     });
   });
 
-  it('approves or denies the live native MCP request from Return and Escape', async () => {
-    applyToolConfirmationRequired({
-      request_id: 'mcp-keyboard-approve-1',
-      tool_name: 'mcp__filesystem__write_file',
-      tool_display_name: 'Write file',
-      description: 'Write /tmp/report.txt',
-      parameters_summary: 'path: "/tmp/report.txt"',
-      args: { path: '/tmp/report.txt', content: 'ready' },
-      summary_hash: '5'.repeat(64),
-      risk_level: 'medium',
-      safety_tier: 'RequiresExplicitApproval',
-      reason: 'The connector wants to write a local file.',
-      reversible: true,
-    });
-
-    const { unmount } = render(<DesktopShellV3 runtime={null} hostBridge={null} />);
-    fireEvent.keyDown(window, { key: 'Enter' });
-
-    await waitFor(() => {
-      expect(nativeHandoffMock.invoke).toHaveBeenCalledWith(
-        'respond_tool_confirmation',
-        expect.objectContaining({
-          requestId: 'mcp-keyboard-approve-1',
-          approved: true,
-        }),
-      );
-    });
-    unmount();
-
-    nativeHandoffMock.invoke.mockClear();
+  it('focuses the safe MCP decision and denies the live native request on Escape', async () => {
     applyToolConfirmationRequired({
       request_id: 'mcp-keyboard-deny-1',
       tool_name: 'mcp__filesystem__delete_file',
@@ -403,7 +378,9 @@ describe('DesktopShellV3 duplication ownership', () => {
     });
 
     render(<DesktopShellV3 runtime={null} hostBridge={null} />);
-    fireEvent.keyDown(window, { key: 'Escape' });
+    const deny = screen.getByRole('button', { name: 'Deny' });
+    await waitFor(() => expect(deny).toHaveFocus());
+    fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => {
       expect(nativeHandoffMock.invoke).toHaveBeenCalledWith(
@@ -745,6 +722,10 @@ describe('DesktopShellV3 duplication ownership', () => {
     };
     expect(picker.projects).toEqual([{ id: 'p1', name: 'Apollo' }]);
     expect(picker.activeProjectId).toBeNull();
+    expect(props?.['canUseAgiWork']).toBe(false);
+    expect(props?.['agiWorkUnavailableReason']).toBe(
+      'Choose a model with verified agentic capability to use AGI Work. Project chat still works.',
+    );
   });
 
   it('opens the real terminal workspace from a persistent Local-mode bottom dock', async () => {
@@ -802,6 +783,22 @@ describe('DesktopShellV3 duplication ownership', () => {
     );
 
     expect(unifiedChatMock.chatInterfaceProps.at(-1)?.['onModelSelectorClick']).toBeUndefined();
+  });
+
+  it('forwards Local model setup through the existing desktop settings seam', () => {
+    const openLocalModelSettings = vi.fn();
+    useAppModeStore.setState({ mode: 'local' });
+
+    render(
+      <DesktopShellV3
+        runtime={null}
+        hostBridge={null}
+        onModelSelectorClick={openLocalModelSettings}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Set up a local model' }));
+    expect(openLocalModelSettings).toHaveBeenCalledOnce();
   });
 
   it('invalidates an open Cloud folder review when the signed-in account changes', async () => {

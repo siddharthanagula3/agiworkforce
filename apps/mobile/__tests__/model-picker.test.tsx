@@ -313,14 +313,14 @@ describe('ModelPickerSheet', () => {
   });
 
   it('renders on-device model names from the local catalog', () => {
-    const { getByText, queryByText } = renderPicker();
+    const { getByText } = renderPicker();
 
     expect(getByText('AGI Standard')).toBeTruthy();
     expect(getByText('AGI Lite')).toBeTruthy();
-    // OS-resident Apple and Google runtimes are hidden in v1 (stub native impl).
-    // They are preserved in the catalog (shipsInV1:true) but filtered from the
-    // picker in model-picker/service.ts until the native impl ships.
-    expect(queryByText('Apple Intelligence')).toBeNull();
+    // OS-resident runtimes stay visible so the picker can truthfully distinguish
+    // ready, unavailable, and unsupported devices instead of pretending the
+    // capability does not exist.
+    expect(getByText('Apple Intelligence')).toBeTruthy();
   });
 
   it('keeps the default picker scoped to local models', () => {

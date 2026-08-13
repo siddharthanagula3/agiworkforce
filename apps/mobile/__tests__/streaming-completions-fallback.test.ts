@@ -111,6 +111,7 @@ describe('completions stream fallback (RN null response.body)', () => {
         stream: true,
         operationId: '0190a000-0000-7000-8000-000000000001',
         thinking: true,
+        web_search: true,
       },
       callbacks,
     );
@@ -124,6 +125,10 @@ describe('completions stream fallback (RN null response.body)', () => {
       'agi.chat.mobile.send.0190a000-0000-7000-8000-000000000001',
     );
     expect((init.headers as Record<string, string>)['X-AGI-Surface']).toBe('mobile');
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      model: MODEL_ID,
+      web_search: true,
+    });
   });
 
   it('maps boolean thinking → thinking_mode (never sends a bare boolean `thinking`)', async () => {

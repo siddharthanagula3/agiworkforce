@@ -160,6 +160,7 @@ jest.mock('@agiworkforce/local-llm', () => {
     {
       ...defaultModelWithPreset,
       id: 'fixture-ios-system-model',
+      fileSizeBytes: 0,
       supportedRuntimes: ['apple-foundation-models'],
       role: 'system-multimodal',
       executorchPreset: undefined,
@@ -167,6 +168,7 @@ jest.mock('@agiworkforce/local-llm', () => {
     {
       ...defaultModelWithPreset,
       id: 'fixture-android-system-model',
+      fileSizeBytes: 0,
       supportedRuntimes: ['aicore'],
       role: 'system-multimodal',
       executorchPreset: undefined,
@@ -185,6 +187,15 @@ jest.mock('@agiworkforce/local-llm', () => {
     }),
     getDefaultModel: jest.fn().mockReturnValue(defaultModelWithPreset),
     getShippableModels: jest.fn().mockReturnValue([defaultModelWithPreset, ...systemModels]),
+    getSystemModelForTier1Runtime: jest.fn((runtime: string | null) =>
+      systemModels.find((model) =>
+        runtime === 'foundation_models'
+          ? model.supportedRuntimes.includes('apple-foundation-models')
+          : runtime === 'aicore'
+            ? model.supportedRuntimes.includes('aicore')
+            : false,
+      ),
+    ),
     tier2LoadModel: (...args: unknown[]) => mockTier2LoadModel(...args),
     tier2Generate: (...args: unknown[]) => mockTier2Generate(...args),
   };
@@ -386,19 +397,19 @@ describe('Onboarding → tier2 ExecuTorch download flow', () => {
   });
 });
 
-describe('Model picker — system-runtime-only models hidden', () => {
-  it('LOCAL_MODEL_LIST excludes the iOS system model fixture', () => {
+describe('Model picker — system-runtime-only models capability-gated', () => {
+  it('LOCAL_MODEL_LIST includes the iOS system model fixture', () => {
     const { LOCAL_MODEL_LIST } = require('../src/features/model-picker/service');
     expect(
       (LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === IOS_SYSTEM_MODEL_ID),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it('LOCAL_MODEL_LIST excludes the Android system model fixture', () => {
+  it('LOCAL_MODEL_LIST includes the Android system model fixture', () => {
     const { LOCAL_MODEL_LIST } = require('../src/features/model-picker/service');
     expect(
       (LOCAL_MODEL_LIST as Array<{ id: string }>).some((m) => m.id === ANDROID_SYSTEM_MODEL_ID),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('LOCAL_MODEL_LIST includes the default model fixture', () => {

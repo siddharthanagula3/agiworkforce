@@ -1,24 +1,26 @@
-import { getExtensionTokensCss } from '../../../tokens';
+import { getExtensionTokensCssAuto } from '../../../tokens';
 
 export function buildPanelStyles(): string {
   return `
-    /* ── AGI design tokens (light) injected into Shadow DOM ── */
-    ${getExtensionTokensCss('light').replace(':root', ':host')}
+    /* ── AGI design tokens follow the browser/OS colour scheme ── */
+    ${getExtensionTokensCssAuto(':host')}
 
     :host { display:block; }
 
     .agi-panel {
       position:fixed;
-      top:0; right:-400px;
-      width:380px; height:100vh;
+      top:8px; bottom:8px; right:-400px;
+      width:min(380px, 100vw); max-width:100vw; height:auto;
       background:var(--agi-ext-bg);
-      border-left:1px solid var(--agi-ext-border-strong);
-      box-shadow:-4px 0 32px rgba(0,0,0,0.12);
+      border:1px solid var(--agi-ext-border-strong);
+      border-right:0;
+      border-radius:18px 0 0 18px;
+      box-shadow:-12px 0 40px color-mix(in srgb, black 24%, transparent);
       z-index:2147483647;
       display:flex; flex-direction:column;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
       font-size:14px; color:var(--agi-ext-text);
-      transition:right 0.28s cubic-bezier(0.4,0,0.2,1);
+      transition:right 0.24s cubic-bezier(0.4,0,0.2,1);
       overflow:hidden;
       box-sizing:border-box;
     }
@@ -39,19 +41,20 @@ export function buildPanelStyles(): string {
       font-size:15px; font-weight:700;
       letter-spacing:0;
       flex:1;
+      min-width:28px;
       white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     }
 
     .agi-provider-pill {
       font-size:11px; font-weight:600;
-      background:rgba(33,128,141,0.12);
-      border:1px solid rgba(33,128,141,0.3);
+      background:color-mix(in srgb, var(--agi-ext-accent) 12%, transparent);
+      border:1px solid color-mix(in srgb, var(--agi-ext-accent) 34%, transparent);
       color:var(--agi-ext-accent);
       border-radius:12px;
-      padding:3px 10px;
-      margin-right:10px;
+      padding:3px 8px;
+      margin-right:8px;
       white-space:nowrap;
-      max-width:120px; overflow:hidden; text-overflow:ellipsis;
+      flex-shrink:0;
       cursor:default;
     }
 
@@ -85,8 +88,9 @@ export function buildPanelStyles(): string {
       white-space:nowrap;
     }
     .agi-action-chip:hover {
-      background:rgba(33,128,141,0.1); border-color:var(--agi-ext-accent); color:var(--agi-ext-accent);
+      background:var(--agi-ext-hover); border-color:var(--agi-ext-accent); color:var(--agi-ext-accent);
     }
+    .agi-action-chip:disabled { opacity:0.48; cursor:default; }
 
     /* ── Response area ───────────────────────────────────────────────────── */
     .agi-response-area {
@@ -115,18 +119,34 @@ export function buildPanelStyles(): string {
       0%,100% { opacity:1; } 50% { opacity:0; }
     }
 
-    .agi-error {
-      color:var(--agi-ext-danger); font-size:13px;
-      background:var(--agi-ext-danger-bg); border:1px solid var(--agi-ext-danger-border);
-      border-radius:8px; padding:10px 12px;
+    .agi-access-state {
+      color:var(--agi-ext-text); font-size:13px;
+      background:var(--agi-ext-surface); border:1px solid var(--agi-ext-border-strong);
+      border-radius:12px; padding:12px;
       margin-top:6px;
     }
+    .agi-access-state--retryable_error,
+    .agi-access-state--account_unavailable,
+    .agi-access-state--rate_limited,
+    .agi-access-state--request_rejected {
+      background:var(--agi-ext-danger-bg);
+      border-color:var(--agi-ext-danger-border);
+    }
+    .agi-access-state-title { font-weight:650; margin-bottom:4px; }
+    .agi-access-state-message { color:var(--agi-ext-text-muted); margin-bottom:9px; }
+    .agi-access-state--cancelled .agi-access-state-message { margin-bottom:0; }
+    .agi-state-action {
+      border:1px solid var(--agi-ext-border-strong); border-radius:999px;
+      padding:6px 11px; background:var(--agi-ext-surface); color:var(--agi-ext-text);
+      font:inherit; font-weight:600; cursor:pointer;
+    }
+    .agi-state-action:hover { background:var(--agi-ext-hover); }
 
     .agi-disclosure {
       color:var(--agi-ext-text-muted); font-size:11px;
-      background:var(--agi-ext-bg); border:1px solid var(--agi-ext-border-strong);
-      border-radius:6px; padding:7px 10px;
-      margin-bottom:8px; line-height:1.4;
+      background:var(--agi-ext-bg); border-top:1px solid var(--agi-ext-border);
+      padding:8px 14px 0;
+      line-height:1.4; flex-shrink:0;
     }
 
     /* ── Composer ────────────────────────────────────────────────────────── */
@@ -148,9 +168,9 @@ export function buildPanelStyles(): string {
       line-height:1.5;
       transition:border-color 0.15s,box-shadow 0.15s;
     }
-    .agi-textarea:focus {
+    .agi-textarea:focus-visible {
       border-color:var(--agi-ext-accent);
-      box-shadow:0 0 0 3px rgba(33,128,141,0.15);
+      box-shadow:0 0 0 3px color-mix(in srgb, var(--agi-ext-focus) 20%, transparent);
     }
 
     .agi-submit-btn {
@@ -184,6 +204,32 @@ export function buildPanelStyles(): string {
     }
     .agi-open-side-panel:hover {
       background:var(--agi-ext-hover); border-color:var(--agi-ext-text-muted); color:var(--agi-ext-text);
+    }
+
+    button:focus-visible {
+      outline:2px solid var(--agi-ext-focus);
+      outline-offset:2px;
+    }
+
+    @media (max-width:500px) {
+      .agi-panel { top:0; bottom:0; border-radius:0; }
+      .agi-actions-row { flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }
+      .agi-action-chip { flex:0 0 auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .agi-panel, .agi-close-btn, .agi-action-chip, .agi-textarea,
+      .agi-submit-btn, .agi-open-side-panel, .agi-state-action { transition:none; }
+      .agi-response-area .agi-thinking { animation:none; }
+    }
+
+    @media (forced-colors: active) {
+      .agi-panel, .agi-action-chip, .agi-composer, .agi-disclosure,
+      .agi-textarea, .agi-access-state, .agi-state-action,
+      .agi-open-side-panel { forced-color-adjust:auto; }
+      .agi-provider-pill { color:Highlight; border-color:Highlight; }
+      .agi-submit-btn { background:Highlight; color:HighlightText; }
+      .agi-response-area .agi-thinking { background:Highlight; }
     }
   `;
 }

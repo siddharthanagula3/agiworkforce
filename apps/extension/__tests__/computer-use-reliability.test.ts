@@ -1041,6 +1041,34 @@ describe('P2-7: screenshot discipline + usage tracking', () => {
     expect(tokensUsed).toBe(0);
   });
 
+  it('callCloud reassembles an SSE event split across arbitrary network reads', async () => {
+    const event = JSON.stringify({
+      choices: [{ finish_reason: 'stop', delta: { content: 'split response' } }],
+    });
+    const wire = `data: ${event}\r\n\r\ndata: [DONE]\r\n\r\n`;
+    const contentStart = wire.indexOf('split response');
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: makeSseStream([
+        wire.slice(0, 2),
+        wire.slice(2, contentStart + 4),
+        wire.slice(contentStart + 4, contentStart + 10),
+        wire.slice(contentStart + 10, wire.length - 3),
+        wire.slice(-3),
+      ]),
+    });
+
+    const result = await callCloud(
+      [{ role: 'user', content: 'hello' }],
+      'token',
+      DEFAULT_GATEWAY_BASE,
+    );
+
+    expect(result.message.content).toBe('split response');
+    expect(result.isDone).toBe(true);
+  });
+
   it('callCloud cancels a pending SSE reader and rejects with the owning Stop reason', async () => {
     const controller = new AbortController();
     const cancelled = vi.fn();

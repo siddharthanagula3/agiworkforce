@@ -3,6 +3,7 @@ import { modelsCatalogJson } from '@agiworkforce/types';
 import {
   CATALOG_AS_OF,
   COMING_SOON_LABEL,
+  DESKTOP_LOCAL_RUNTIMES,
   LAUNCH,
   MARKETING,
   MARKETING_FEATURE_MATRIX,
@@ -19,8 +20,8 @@ describe('marketing plan matrix', () => {
         expect.objectContaining({
           planId: 'team',
           label: 'Team',
-          price: 'Custom',
-          billingInterval: 'Sales-assisted contract',
+          price: '$25/seat/mo',
+          billingInterval: 'Self-serve monthly; annual only where checkout offers it',
         }),
       ]),
     );
@@ -81,6 +82,14 @@ describe('model and provider counts', () => {
   it('dates the catalog from its own lastUpdated stamp', () => {
     expect(CATALOG_AS_OF).toBe(modelsCatalogJson.lastUpdated);
     expect(CATALOG_AS_OF).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('derives the four verified Desktop local-runtime labels from the catalog', () => {
+    expect(DESKTOP_LOCAL_RUNTIMES.names).toEqual(['Ollama', 'LM Studio', 'llama.cpp', 'vLLM']);
+    expect(DESKTOP_LOCAL_RUNTIMES.label).toBe('Ollama, LM Studio, llama.cpp, and vLLM');
+    for (const providerId of ['ollama', 'lmstudio', 'llamacpp', 'vllm'] as const) {
+      expect(modelsCatalogJson.providers[providerId].label).toContain('(Local)');
+    }
   });
 });
 

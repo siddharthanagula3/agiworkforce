@@ -12,7 +12,11 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+// From `expo-router`, not `@react-navigation/native` — see the note in
+// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
+// navigation package, so the raw hook can land on a different context
+// instance than the one expo-router's navigator provides.
+import { useNavigation } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { Filter, FolderOpen, Plus, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';

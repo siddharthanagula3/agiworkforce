@@ -117,6 +117,9 @@ export interface PlanCardProps {
   isLowerPaidTier?: boolean;
   /** Called when the user clicks the CTA. */
   onCtaClick: (tier: UIPlanTier) => void;
+  /** Paid-plan action is unavailable because this subscription has another owner. */
+  actionDisabled?: boolean;
+  actionDisabledReason?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -128,6 +131,8 @@ export function PlanCard({
   isCurrentPlan,
   isLowerPaidTier = false,
   onCtaClick,
+  actionDisabled = false,
+  actionDisabledReason,
 }: PlanCardProps) {
   const content = TIER_CONTENT[tier];
   // Tiers without desktop card content are filtered out of VISIBLE_TIERS upstream; guard
@@ -192,14 +197,18 @@ export function PlanCard({
         label={
           isCurrentPlan
             ? 'Current plan'
-            : isLowerPaidTier
-              ? 'Manage plan'
-              : isFree
-                ? 'Included'
-                : content.ctaLabel
+            : actionDisabled
+              ? 'Managed elsewhere'
+              : isLowerPaidTier
+                ? 'Manage plan'
+                : isFree
+                  ? 'Included'
+                  : content.ctaLabel
         }
         isLowerPaidTier={isLowerPaidTier}
         onCtaClick={onCtaClick}
+        disabled={actionDisabled}
+        {...(actionDisabledReason ? { disabledReason: actionDisabledReason } : {})}
       />
     </div>
   );
@@ -215,9 +224,19 @@ interface PlanCardCtaProps {
   label: string;
   isLowerPaidTier: boolean;
   onCtaClick: (tier: UIPlanTier) => void;
+  disabled: boolean;
+  disabledReason?: string;
 }
 
-function PlanCardCta({ tier, variant, label, isLowerPaidTier, onCtaClick }: PlanCardCtaProps) {
+function PlanCardCta({
+  tier,
+  variant,
+  label,
+  isLowerPaidTier,
+  onCtaClick,
+  disabled,
+  disabledReason,
+}: PlanCardCtaProps) {
   const base =
     'flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring';
 
@@ -232,15 +251,18 @@ function PlanCardCta({ tier, variant, label, isLowerPaidTier, onCtaClick }: Plan
   return (
     <button
       type="button"
+      disabled={disabled}
+      title={disabled ? disabledReason : undefined}
       onClick={() => onCtaClick(tier)}
       className={cn(
         base,
+        disabled && 'cursor-not-allowed opacity-55',
         isLowerPaidTier
           ? 'border border-border bg-card text-foreground hover:bg-muted'
           : 'bg-blue-600 text-white hover:bg-blue-700',
       )}
     >
-      {!isLowerPaidTier ? <Zap size={12} aria-hidden="true" /> : null}
+      {!isLowerPaidTier && !disabled ? <Zap size={12} aria-hidden="true" /> : null}
       {label}
     </button>
   );

@@ -6,12 +6,11 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { AgiChatDemo } from '@shared/components/agi/AgiChatDemo';
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
-import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
+import { DESKTOP_LOCAL_RUNTIMES, LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: `Providers: ${MARKETING.providers.display} providers, one thread`,
-  description:
-    'Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, Ollama, LM Studio, plus any OpenAI-compatible endpoint. Switch providers mid-conversation and keep your history.',
+  description: `Cloud APIs, custom OpenAI-compatible endpoints, and Desktop Local mode through ${DESKTOP_LOCAL_RUNTIMES.label}. Switch models within a visible trust boundary.`,
   path: '/providers',
 });
 
@@ -85,6 +84,18 @@ const PROVIDERS: ProviderEntry[] = [
   },
   { name: 'LM Studio', models: 'Any local model', auth: formatProviderModeLabel('Local') },
   {
+    name: 'llama.cpp',
+    models: 'Models served by llama.cpp',
+    auth: formatProviderModeLabel('Local'),
+    providerKey: 'llamacpp',
+  },
+  {
+    name: 'vLLM',
+    models: 'Models served by vLLM',
+    auth: formatProviderModeLabel('Local'),
+    providerKey: 'vllm',
+  },
+  {
     name: 'Custom BYO',
     models: 'OpenAI-compatible URL',
     auth: formatProviderModeLabel('DirectByok'),
@@ -130,9 +141,11 @@ export default function ProvidersPage() {
           </h1>
           <p className="agi-fl-lede">
             Route work across {MARKETING.providers.display} providers and {MARKETING.models.display}{' '}
-            models. Frontier cloud APIs through your own keys on Desktop and CLI, plus Ollama and LM
-            Studio for fully local work. Switch providers mid-conversation and keep your history.
-            The provider label is visible on every route.
+            models. Frontier cloud APIs through your own keys on Desktop, CLI, and VS Code, plus
+            {DESKTOP_LOCAL_RUNTIMES.label} for fully local Desktop work. Within one trust boundary,
+            switch supported providers while retaining thread context. Moving between Local, BYOK,
+            and managed Cloud requires an explicit continuation with a preview and consent. The
+            provider label is visible on every route.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/byok" className="agi-fl-cta agi-fl-cta--primary">
@@ -147,7 +160,7 @@ export default function ProvidersPage() {
           </div>
           <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
             <li>Local · on-device</li>
-            <li>BYOK · Desktop &amp; CLI</li>
+            <li>BYOK · Desktop, CLI &amp; VS Code</li>
             <li>Cloud · public alpha</li>
           </ul>
           <div className="agi-fl-hero-console" aria-hidden="true">
@@ -166,9 +179,9 @@ export default function ProvidersPage() {
             Cloud APIs, local runtimes, and your own endpoints.
           </h2>
           <p className="agi-fl-section-lede">
-            Cloud providers run through BYOK on Desktop and CLI. Your keys, your billing, traffic
-            straight to the provider. Local runtimes are free and work offline. Prices shown are
-            base provider list rates per million tokens, read from the AGI model catalog.
+            Cloud providers run through BYOK on Desktop, CLI, and VS Code. Your keys, your billing,
+            traffic straight to the provider. Local runtimes are free and work offline. Prices shown
+            are base provider list rates per million tokens, read from the AGI model catalog.
             Model-specific and input-length tiers may differ.
           </p>
           <div className="agi-providers-grid">

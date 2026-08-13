@@ -154,6 +154,40 @@ describe('POST /api/upgrade — Team seat quantity', () => {
     );
   });
 
+  it('refuses an active store-owned plan before any Stripe lookup or mutation', async () => {
+    // Authentication reads profiles before the route reads subscriptions; the
+    // fixture must follow the SQL owner or it is consumed by the auth lookup.
+    dbMocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from subscriptions')) {
+        return [
+          {
+            status: 'active',
+            plan_tier: 'team',
+            stripe_subscription_id: null,
+            stripe_customer_id: 'cus_old',
+            google_purchase_token: 'play-token-1',
+          },
+        ];
+      }
+      if (sql.includes('from profiles')) return [{ stripe_customer_id: 'cus_old' }];
+      return [];
+    });
+
+    const response = await POST(
+      request({
+        plan: 'team',
+        billingInterval: 'monthly',
+        seats: 20,
+        previewToken: tokenFor(20),
+      }),
+    );
+
+    expect(response.status).toBe(409);
+    expect(stripeMocks.retrieveSubscription).not.toHaveBeenCalled();
+    expect(stripeMocks.listSubscriptions).not.toHaveBeenCalled();
+    expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
+  });
+
   it('puts the seat count in the Stripe idempotency key', async () => {
     // Same subscription, same prices, same proration second, different seat
     // count: without quantity in the key Stripe replays the first result and the

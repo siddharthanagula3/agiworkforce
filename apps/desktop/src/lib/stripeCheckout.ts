@@ -9,6 +9,25 @@ import {
   captureManagedCloudBoundary,
 } from '../services/managedCloudBoundary';
 import { createManagedCloudRequestContext } from '../services/managedCloudRequestContext';
+import { useAuthStore } from '../stores/auth';
+import { getDesktopSubscriptionOwnerPolicy } from './subscriptionOwnership';
+
+type StripeBillingAction = 'portal' | 'plan-change';
+
+function stripeBillingActionBlockReason(action: StripeBillingAction): string | null {
+  const auth = useAuthStore.getState();
+  const policy = getDesktopSubscriptionOwnerPolicy(
+    auth.subscriptionSource,
+    auth.subscriptionStatus,
+    auth.subscriptionFetchStatus === 'succeeded',
+  );
+
+  if (action === 'portal') {
+    if (policy.canOpenStripePortal) return null;
+    return policy.stripeActionBlockedReason ?? 'This account has no Stripe-managed subscription.';
+  }
+  return policy.canStartStripePlanChange ? null : policy.stripeActionBlockedReason;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -76,6 +95,8 @@ export async function openCheckout(
   } catch {
     return 'Please sign in to upgrade your plan.';
   }
+  const ownershipBlock = stripeBillingActionBlockReason('plan-change');
+  if (ownershipBlock) return ownershipBlock;
 
   let url: string;
   try {
@@ -125,6 +146,8 @@ export async function openBillingPortal(
   } catch {
     return 'Please sign in to manage your subscription.';
   }
+  const ownershipBlock = stripeBillingActionBlockReason('portal');
+  if (ownershipBlock) return ownershipBlock;
 
   let url: string;
   try {
@@ -180,6 +203,8 @@ export async function previewPlanUpgrade(
   interval: BillingInterval = 'monthly',
 ): Promise<UpgradePreview> {
   const request = createManagedCloudRequestContext('Cloud plan upgrade preview');
+  const ownershipBlock = stripeBillingActionBlockReason('plan-change');
+  if (ownershipBlock) throw new Error(ownershipBlock);
 
   const response = await request.fetch(`${WEB_APP_URL}/api/upgrade/preview`, {
     method: 'POST',
@@ -245,6 +270,8 @@ export async function applyPlanUpgrade(
   interval: BillingInterval = 'monthly',
 ): Promise<{ kind: 'webhook-pending' } | { kind: 'payment-action-required'; paymentUrl: string }> {
   const request = createManagedCloudRequestContext('Cloud plan upgrade');
+  const ownershipBlock = stripeBillingActionBlockReason('plan-change');
+  if (ownershipBlock) throw new Error(ownershipBlock);
 
   const response = await request.fetch(`${WEB_APP_URL}/api/upgrade`, {
     method: 'POST',
@@ -286,6 +313,8 @@ export async function openUpgradePayment(
   onClosed?: () => void | Promise<void>,
 ): Promise<void> {
   captureManagedCloudBoundary('Cloud upgrade payment');
+  const ownershipBlock = stripeBillingActionBlockReason('plan-change');
+  if (ownershipBlock) throw new Error(ownershipBlock);
   await openBillingUrl(paymentUrl, 'Complete your AGI upgrade payment', onClosed);
 }
 

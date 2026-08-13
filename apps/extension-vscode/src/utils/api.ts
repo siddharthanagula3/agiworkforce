@@ -4,7 +4,6 @@
  * Handles:
  * - Auth token storage via VS Code SecretStorage (never plaintext)
  * - OpenAI-compatible /chat/completions endpoint with SSE streaming
- * - Non-streaming fallback
  * - Proper error classification
  */
 
@@ -15,15 +14,13 @@ import * as https from 'https';
 import { URL } from 'url';
 // AUDIT-FIX: vscode-reorg
 import { getModelMetrics } from '../features/model-picker/modelMetrics';
-import {
-  getModelProviderInfo,
-  normalizeConfiguredModelId,
-} from '../features/model-picker/modelConstants';
+import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getTokenCounter } from '../data/tokenCounter';
 import { TierInfoSchema } from '../protocol/apiResponses';
 import { effectivePlanTier, type AccountAuthState } from '@agiworkforce/types';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
 import { Config } from '../platform/config';
+import { getExtensionUserAgent } from '../platform/version';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,14 +36,12 @@ export interface LlmChatMessage {
   content: string;
 }
 
-interface ChatCompletionRequest {
+export interface CloudUtilityChatCompletionRequest {
   model: string;
   messages: LlmChatMessage[];
-  stream?: boolean;
-  temperature?: number;
-  max_tokens?: number;
-  thinking?: boolean;
-  metadata?: Record<string, string | number | boolean>;
+  stream: true;
+  thinking_mode: boolean;
+  effort: 'low' | 'medium' | 'high' | 'max';
 }
 
 interface ChatCompletionChunk {
@@ -62,23 +57,6 @@ interface ChatCompletionChunk {
     };
     finish_reason: string | null;
   }>;
-}
-
-interface ChatCompletionResponse {
-  id: string;
-  object: 'chat.completion';
-  created: number;
-  model: string;
-  choices: Array<{
-    index: number;
-    message: LlmChatMessage;
-    finish_reason: string;
-  }>;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
 }
 
 export class AgiWorkforceApiError extends Error {
@@ -101,14 +79,17 @@ export class AgiWorkforceApiError extends Error {
  */
 export class AgiWorkforcePaywallError extends Error {
   public readonly kind = 'paywall' as const;
+  public readonly recoveryAction: 'upgrade' | 'manage_billing';
 
   constructor(
     public readonly feature: string,
     public readonly requiredTier: string,
     public readonly reason: string,
+    public readonly code?: string,
   ) {
     super(`Upgrade to ${requiredTier} required for ${feature}: ${reason}`);
     this.name = 'AgiWorkforcePaywallError';
+    this.recoveryAction = code === 'subscription_inactive' ? 'manage_billing' : 'upgrade';
   }
 }
 
@@ -135,6 +116,7 @@ const SECRET_KEY = 'agiWorkforce.apiKey';
 /** Revocable AGI developer token obtained through browser-approved device sign-in. */
 const ACCOUNT_TOKEN_KEY = 'agiWorkforce.accountToken';
 const ACCOUNT_TOKEN_EXPIRES_AT_KEY = 'agiWorkforce.accountTokenExpiresAt';
+const ACCOUNT_TOKEN_EXPIRED_KEY = 'agiWorkforce.accountTokenExpired';
 const DEFAULT_ENDPOINT = 'https://agiworkforce.com/api/llm/v1';
 const DEFAULT_GATEWAY_ORIGIN = 'https://api.agiworkforce.com';
 
@@ -181,6 +163,7 @@ export async function setAccountToken(
   expiresAt?: number,
 ): Promise<void> {
   await secrets.store(ACCOUNT_TOKEN_KEY, token);
+  await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
   if (expiresAt !== undefined) {
     await secrets.store(ACCOUNT_TOKEN_EXPIRES_AT_KEY, String(expiresAt));
   } else {
@@ -191,13 +174,35 @@ export async function setAccountToken(
 export async function clearAccountToken(secrets: vscode.SecretStorage): Promise<void> {
   await secrets.delete(ACCOUNT_TOKEN_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
+  await secrets.delete(ACCOUNT_TOKEN_EXPIRED_KEY);
+}
+
+/**
+ * Invalidate one observed account credential without racing a newer sign-in.
+ * The marker keeps the UI in an actionable "session expired" state until the
+ * user signs in again or explicitly signs out; deleting the token alone made
+ * the next refresh incorrectly render an ordinary signed-out account.
+ */
+async function invalidateAccountToken(
+  secrets: vscode.SecretStorage,
+  observedToken: string,
+): Promise<void> {
+  const currentToken = await secrets.get(ACCOUNT_TOKEN_KEY);
+  if (currentToken !== observedToken) return;
+  await secrets.delete(ACCOUNT_TOKEN_KEY);
+  await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
+  await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');
 }
 
 export async function getAccountAuthState(
   secrets: vscode.SecretStorage,
 ): Promise<AccountAuthState> {
   const token = await secrets.get(ACCOUNT_TOKEN_KEY);
-  if (token === undefined || token === '') return { status: 'signed-out' };
+  if (token === undefined || token === '') {
+    return (await secrets.get(ACCOUNT_TOKEN_EXPIRED_KEY)) === '1'
+      ? { status: 'expired' }
+      : { status: 'signed-out' };
+  }
 
   const rawExpiresAt = await secrets.get(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   if (rawExpiresAt === undefined || rawExpiresAt === '') {
@@ -207,22 +212,31 @@ export async function getAccountAuthState(
   }
   const expiresAt = Number(rawExpiresAt);
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
-    await clearAccountToken(secrets);
+    await invalidateAccountToken(secrets, token);
     return { status: 'expired' };
   }
   return { status: 'signed-in', expiresAt };
 }
 
-/**
- * Resolve the auth token for cloud calls: prefer the AGI Cloud account token;
- * fall back to an AGI-issued API key (an `sk-agi-…` first-party key, NOT a
- * third-party provider BYOK key) if stored. That key IS still settable via the
- * `agi-workforce.setApiKey` command (commandSetup.ts). NOTE: true provider BYOK
- * (your own Anthropic/OpenAI/… key) is handled by the `agi` app-server this
- * extension delegates local chat to — configure it with `agi login <provider>`.
- */
-async function getAuthToken(secrets: vscode.SecretStorage): Promise<string | undefined> {
-  return (await getAccountToken(secrets)) ?? (await getApiKey(secrets));
+type CloudCredential =
+  | { kind: 'account'; token: string }
+  | { kind: 'api-key'; token: string }
+  | { kind: 'none'; accountStatus: 'signed-out' | 'expired' };
+
+async function getCloudCredential(secrets: vscode.SecretStorage): Promise<CloudCredential> {
+  const accountState = await getAccountAuthState(secrets);
+  if (accountState.status === 'signed-in') {
+    const accountToken = await secrets.get(ACCOUNT_TOKEN_KEY);
+    if (accountToken !== undefined && accountToken !== '') {
+      return { kind: 'account', token: accountToken };
+    }
+  }
+  const apiKey = await getApiKey(secrets);
+  if (apiKey !== undefined && apiKey !== '') return { kind: 'api-key', token: apiKey };
+  return {
+    kind: 'none',
+    accountStatus: accountState.status === 'expired' ? 'expired' : 'signed-out',
+  };
 }
 
 // ─── Trusted-config helper (VSCODE-01 fix) ────────────────────────────────────
@@ -275,48 +289,6 @@ export function validateEndpointUrl(raw: string): string | undefined {
 }
 
 /**
- * Origins the extension may send gateway requests to. EXACT origin match,
- * https only: every gateway call carries the AGI Cloud account token as a
- * Bearer, so the localhost/http escape `validateEndpointUrl` grants the LLM
- * endpoint (where a local `agi` app-server is a legitimate dev target) would
- * put a live account token on the wire in plaintext.
- *
- * Mirrors `GATEWAY_URL_ALLOWLIST_EXACT` in
- * `apps/extension/src/background/policy.ts` — the two lists are asserted equal
- * in `src/__tests__/api.test.ts`, so add new origins to both.
- */
-const GATEWAY_ALLOWED_ORIGINS = new Set([
-  'https://api.agiworkforce.com',
-  'https://gateway.agiworkforce.com',
-  'https://staging-api.agiworkforce.com',
-  // Web app origin: hosts the Next.js /api/llm/v1/chat/completions route that
-  // supports free-tier users. The Express gateway at api.agiworkforce.com
-  // blocks free-tier users; this origin does not.
-  'https://agiworkforce.com',
-]);
-
-/**
- * Validate a URL for use as the token-bearing gateway origin.
- * Returns the normalised `https://host` origin, or undefined when the value is
- * unparseable, not https, or off the allowlist.
- */
-export function validateGatewayUrl(raw: string): string | undefined {
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return undefined;
-  }
-
-  if (parsed.protocol !== 'https:') {
-    return undefined;
-  }
-
-  const origin = `https://${parsed.host}`;
-  return GATEWAY_ALLOWED_ORIGINS.has(origin) ? origin : undefined;
-}
-
-/**
  * Read a setting that must never be overridden by workspace settings.
  * Returns the global value (user settings) → fallback to default.
  * Workspace-scoped values are intentionally ignored.
@@ -355,10 +327,9 @@ export function getCloudWebOrigin(): string {
   }
 }
 
-/** Trusted gateway origin used for provider streaming and token revocation. */
+/** Fixed trusted gateway origin used only for account-token revocation. */
 export function getCloudGatewayOrigin(): string {
-  const raw = getGlobalConfig<string>('agiWorkforce', 'gatewayUrl', DEFAULT_GATEWAY_ORIGIN);
-  return validateGatewayUrl(raw) ?? DEFAULT_GATEWAY_ORIGIN;
+  return DEFAULT_GATEWAY_ORIGIN;
 }
 
 function getModel(): string {
@@ -370,112 +341,106 @@ function getModel(): string {
   );
 }
 
-function isStreamingEnabled(): boolean {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
-  return config.get<boolean>('streamingEnabled') ?? true;
-}
-
-function isThinkingEnabled(): boolean {
-  return vscode.workspace.getConfiguration('agiWorkforce').get<boolean>('agent.thinking') ?? false;
-}
-
 /**
- * Map the user-selected effort level to model request parameters.
- * Effort controls reasoning depth via max_tokens and temperature.
- *
- *   low    → 2048 tokens,  temp 0.3  (fast, cheap)
- *   medium → 4096 tokens,  temp 0.2  (default balanced)
- *   high   → 8192 tokens,  temp 0.15 (deeper reasoning)
- *   max    → 16384 tokens, temp 0.1  (maximum budget)
+ * Build the exact public Web completion contract used by cloud-backed editor
+ * utilities. The canonical endpoint owns output budgets and translates the
+ * explicit effort/thinking fields per provider; extension-only metadata is not
+ * part of that contract.
  */
-function getEffortParams(): { max_tokens: number; temperature: number } {
-  const effort =
-    vscode.workspace.getConfiguration('agiWorkforce').get<string>('agent.effort') ?? 'medium';
-  switch (effort) {
-    case 'low':
-      return { max_tokens: 2048, temperature: 0.3 };
-    case 'high':
-      return { max_tokens: 8192, temperature: 0.15 };
-    case 'max':
-      return { max_tokens: 16384, temperature: 0.1 };
-    case 'medium':
-    default:
-      return { max_tokens: 4096, temperature: 0.2 };
-  }
-}
-
-function getFeatureFlags(): {
-  mcpEnabled: boolean;
-  desktopBridgeEnabled: boolean;
-  desktopBridgePort: number;
-} {
-  const config = vscode.workspace.getConfiguration('agiWorkforce');
+export function buildCloudUtilityChatCompletionRequest(
+  messages: LlmChatMessage[],
+  overrideModel?: string,
+): CloudUtilityChatCompletionRequest {
   return {
-    mcpEnabled: config.get<boolean>('mcp.enabled') ?? false,
-    desktopBridgeEnabled: config.get<boolean>('desktopBridge.enabled') ?? false,
-    desktopBridgePort: config.get<number>('desktopBridge.port') ?? 8787,
+    model: overrideModel ?? getModel(),
+    messages,
+    // Utility callers currently consume one final string. Streaming remains an
+    // internal transport choice so users are not offered a false "live output"
+    // control that none of these callers render incrementally.
+    stream: true,
+    thinking_mode: Config.agentThinking(),
+    effort: Config.agentEffort(),
   };
 }
 
 // ─── HTTP helpers ─────────────────────────────────────────────────────────────
 
-/**
- * Low-level HTTPS POST that returns the full response body as a string.
- */
-function httpsPost(
-  urlString: string,
-  headers: Record<string, string>,
-  body: string,
-  token: vscode.CancellationToken,
-): Promise<{ statusCode: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(urlString);
-    const isHttps = parsed.protocol === 'https:';
-    const lib = isHttps ? https : http;
+const PLAN_GATE_CODES = new Set([
+  'developer_surface_plan_required',
+  'managed_api_plan_required',
+  'managed_chat_plan_required',
+  'model_not_available',
+  'plan_upgrade_required',
+  'subscription_required',
+  'subscription_inactive',
+]);
 
-    const options: https.RequestOptions = {
-      hostname: parsed.hostname,
-      port: parsed.port !== '' ? parseInt(parsed.port, 10) : isHttps ? 443 : 80,
-      path: parsed.pathname + parsed.search,
-      method: 'POST',
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body),
-      },
-    };
+/** Convert the Web API's bounded error envelopes into actionable client errors. */
+export function parseCloudCompletionError(statusCode: number, body: string): Error {
+  let parsed: Record<string, unknown> | undefined;
+  try {
+    const candidate = JSON.parse(body) as unknown;
+    if (candidate !== null && typeof candidate === 'object' && !Array.isArray(candidate)) {
+      parsed = candidate as Record<string, unknown>;
+    }
+  } catch {
+    // HTML/proxy responses fall through to a bounded generic message.
+  }
 
-    const req = lib.request(options, (res) => {
-      const chunks: Buffer[] = [];
-      res.on('data', (chunk: Buffer) => chunks.push(chunk));
-      res.on('end', () => {
-        cancelListener.dispose();
-        resolve({
-          statusCode: res.statusCode ?? 0,
-          body: Buffer.concat(chunks).toString('utf8'),
-        });
-      });
-      res.on('error', (err) => {
-        cancelListener.dispose();
-        reject(err);
-      });
-    });
+  if (
+    statusCode === 429 &&
+    parsed?.['kind'] === 'paywall' &&
+    typeof parsed['feature'] === 'string' &&
+    typeof parsed['requiredTier'] === 'string' &&
+    typeof parsed['reason'] === 'string'
+  ) {
+    return new AgiWorkforcePaywallError(
+      parsed['feature'],
+      parsed['requiredTier'],
+      parsed['reason'],
+    );
+  }
 
-    req.on('error', (err) => {
-      cancelListener.dispose();
-      reject(err);
-    });
+  const nested =
+    parsed?.['error'] !== null &&
+    typeof parsed?.['error'] === 'object' &&
+    !Array.isArray(parsed?.['error'])
+      ? (parsed['error'] as Record<string, unknown>)
+      : undefined;
+  const code = typeof nested?.['code'] === 'string' ? nested['code'] : undefined;
+  const message =
+    typeof nested?.['message'] === 'string' && nested['message'].trim() !== ''
+      ? nested['message'].trim()
+      : typeof parsed?.['message'] === 'string' && parsed['message'].trim() !== ''
+        ? parsed['message'].trim()
+        : undefined;
+  const requiredTier =
+    typeof nested?.['requiredTier'] === 'string'
+      ? nested['requiredTier']
+      : typeof nested?.['required_tier'] === 'string'
+        ? nested['required_tier']
+        : undefined;
 
-    // Handle cancellation — dispose the listener when request completes
-    const cancelListener = token.onCancellationRequested(() => {
-      cancelListener.dispose();
-      req.destroy(new Error('Request cancelled'));
-      reject(new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED'));
-    });
+  if (statusCode === 403 && code !== undefined && PLAN_GATE_CODES.has(code)) {
+    return new AgiWorkforcePaywallError(
+      code.replace(/_(?:plan_)?required$/u, '') || 'managed_cloud',
+      requiredTier ?? 'pro',
+      message ??
+        (code === 'subscription_inactive'
+          ? 'Your AGI Cloud subscription needs billing attention.'
+          : 'This AGI Cloud capability is unavailable on your current plan.'),
+      code,
+    );
+  }
 
-    req.write(body);
-    req.end();
-  });
+  return new AgiWorkforceApiError(
+    message ??
+      (statusCode === 429
+        ? 'Too many requests right now. Please wait a moment and try again.'
+        : `AGI Cloud request failed (HTTP ${statusCode}).`),
+    statusCode,
+    code ?? (statusCode === 429 ? 'RATE_LIMITED' : 'HTTP_ERROR'),
+  );
 }
 
 /**
@@ -515,36 +480,7 @@ function httpsPostStream(
         res.on('end', () => {
           cancelListener.dispose();
           const errBody = Buffer.concat(errorChunks).toString('utf8');
-          // Detect structured paywall payload: 429 + { kind: 'paywall', ... }
-          if (res.statusCode === 429) {
-            try {
-              const parsed = JSON.parse(errBody) as Record<string, unknown>;
-              if (
-                parsed['kind'] === 'paywall' &&
-                typeof parsed['feature'] === 'string' &&
-                typeof parsed['requiredTier'] === 'string' &&
-                typeof parsed['reason'] === 'string'
-              ) {
-                reject(
-                  new AgiWorkforcePaywallError(
-                    parsed['feature'],
-                    parsed['requiredTier'],
-                    parsed['reason'],
-                  ),
-                );
-                return;
-              }
-            } catch {
-              // Not JSON — fall through to generic error
-            }
-          }
-          reject(
-            new AgiWorkforceApiError(
-              `API error ${res.statusCode}: ${errBody}`,
-              res.statusCode,
-              'HTTP_ERROR',
-            ),
-          );
+          reject(parseCloudCompletionError(res.statusCode ?? 500, errBody));
         });
         return;
       }
@@ -619,10 +555,6 @@ function httpsPostStream(
 interface StreamCallbacks {
   onToken: (token: string) => void;
   onDone: () => void;
-  onError: (err: Error) => void;
-  onToolUseStart?: (toolUseId: string, name: string) => void;
-  onToolUseDelta?: (toolUseId: string, deltaJson: string) => void;
-  onToolUseEnd?: (toolUseId: string) => void;
 }
 
 /**
@@ -636,40 +568,20 @@ export async function streamChatCompletion(
   cancellationToken: vscode.CancellationToken,
   overrideModel?: string,
 ): Promise<void> {
-  const apiKey = await getAuthToken(secrets);
-  if (apiKey === undefined || apiKey === '') {
+  const credential = await getCloudCredential(secrets);
+  if (credential.kind === 'none') {
     throw new AgiWorkforceApiError(
-      'Not signed in. Run "AGI: Sign in to AGI Cloud" to start chatting.',
+      credential.accountStatus === 'expired'
+        ? 'Your AGI Cloud session expired. Sign in again to continue.'
+        : 'Sign in to AGI Cloud to use cloud-backed editor utilities.',
       401,
-      'NOT_SIGNED_IN',
+      'ACCOUNT_AUTH_REQUIRED',
     );
   }
 
   const endpoint = getCloudApiEndpoint();
-  const model = overrideModel ?? getModel();
-  const streaming = isStreamingEnabled();
-  const features = getFeatureFlags();
-  const thinking = isThinkingEnabled();
-  const { max_tokens, temperature } = getEffortParams();
-
-  // Resolve the effective agent mode for metadata (ask/auto/plan/bypass).
-  const agentMode =
-    vscode.workspace.getConfiguration('agiWorkforce').get<string>('agent.mode') ?? 'auto';
-
-  const requestBody: ChatCompletionRequest = {
-    model,
-    messages,
-    stream: streaming,
-    temperature,
-    max_tokens,
-    ...(thinking ? { thinking: true } : {}),
-    metadata: {
-      mcp_enabled: features.mcpEnabled,
-      desktop_bridge_enabled: features.desktopBridgeEnabled,
-      desktop_bridge_port: features.desktopBridgePort,
-      agent_mode: agentMode,
-    },
-  };
+  const requestBody = buildCloudUtilityChatCompletionRequest(messages, overrideModel);
+  const model = requestBody.model;
 
   const bodyStr = JSON.stringify(requestBody);
 
@@ -692,8 +604,8 @@ export async function streamChatCompletion(
   const idempotencyKey = `agi.vscode.chat.${randomUUID()}`;
 
   const authHeaders: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    'User-Agent': 'agi-workforce-vscode/0.1.0',
+    Authorization: `Bearer ${credential.token}`,
+    'User-Agent': getExtensionUserAgent(),
     'X-Client': 'vscode-extension',
     'X-AGI-Surface': 'vscode',
     'Idempotency-Key': idempotencyKey,
@@ -701,106 +613,48 @@ export async function streamChatCompletion(
 
   const requestStartTime = Date.now();
 
-  if (streaming) {
-    if (cancellationToken.isCancellationRequested) {
-      throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
-    }
-    let responseChars = 0;
+  if (cancellationToken.isCancellationRequested) {
+    throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
+  }
+  let responseChars = 0;
+  try {
     await withRetry(() =>
       httpsPostStream(
         `${endpoint}/chat/completions`,
         authHeaders,
         bodyStr,
         (chunk) => {
-          const delta = chunk.choices[0]?.delta;
-          const content = delta?.content;
+          const content = chunk.choices[0]?.delta?.content;
           if (content !== undefined && content !== '') {
             responseChars += content.length;
             callbacks.onToken(content);
-          }
-          // Forward tool-call streaming events when the caller subscribes
-          if (callbacks.onToolUseStart ?? callbacks.onToolUseDelta ?? callbacks.onToolUseEnd) {
-            const tc = (delta as Record<string, unknown> | undefined)?.['tool_calls'];
-            if (Array.isArray(tc)) {
-              for (const entry of tc as Array<Record<string, unknown>>) {
-                const id =
-                  typeof entry['id'] === 'string' ? entry['id'] : String(entry['index'] ?? '');
-                const fn = entry['function'] as Record<string, unknown> | undefined;
-                if (fn?.['name'] && typeof fn['name'] === 'string') {
-                  callbacks.onToolUseStart?.(id, fn['name']);
-                }
-                if (fn?.['arguments'] && typeof fn['arguments'] === 'string') {
-                  callbacks.onToolUseDelta?.(id, fn['arguments']);
-                }
-                if (entry['finish_reason'] === 'tool_calls') {
-                  callbacks.onToolUseEnd?.(id);
-                }
-              }
-            }
           }
         },
         cancellationToken,
       ),
     );
-    // Only fire onDone and record metrics if the request wasn't cancelled
-    if (!cancellationToken.isCancellationRequested) {
-      callbacks.onDone();
-      getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
-      getTokenCounter().addUsage(undefined, undefined, bodyStr.length, responseChars);
-    }
-  } else {
-    // Non-streaming fallback
-    const response = await httpsPost(
-      `${endpoint}/chat/completions`,
-      authHeaders,
-      bodyStr,
-      cancellationToken,
-    );
-
-    if (response.statusCode >= 400) {
-      // Detect structured paywall payload: 429 + { kind: 'paywall', ... }
-      if (response.statusCode === 429) {
-        try {
-          const parsed = JSON.parse(response.body) as Record<string, unknown>;
-          if (
-            parsed['kind'] === 'paywall' &&
-            typeof parsed['feature'] === 'string' &&
-            typeof parsed['requiredTier'] === 'string' &&
-            typeof parsed['reason'] === 'string'
-          ) {
-            throw new AgiWorkforcePaywallError(
-              parsed['feature'],
-              parsed['requiredTier'],
-              parsed['reason'],
-            );
-          }
-        } catch (parseErr) {
-          if (parseErr instanceof AgiWorkforcePaywallError) throw parseErr;
-          // Not JSON — fall through to generic error
-        }
+  } catch (error) {
+    if (error instanceof AgiWorkforceApiError && error.statusCode === 401) {
+      if (credential.kind === 'account') {
+        await invalidateAccountToken(secrets, credential.token);
+        throw new AgiWorkforceApiError(
+          'Your AGI Cloud session expired or was revoked. Sign in again to continue.',
+          401,
+          'ACCOUNT_AUTH_REQUIRED',
+        );
       }
       throw new AgiWorkforceApiError(
-        `API error ${response.statusCode}: ${response.body}`,
-        response.statusCode,
-        'HTTP_ERROR',
+        'The saved AGI API key was rejected. Check or replace the key.',
+        401,
+        'INVALID_API_KEY',
       );
     }
-
-    const parsed = JSON.parse(response.body) as ChatCompletionResponse;
-    const content = parsed.choices?.[0]?.message?.content ?? '';
-    callbacks.onToken(content);
+    throw error;
+  }
+  if (!cancellationToken.isCancellationRequested) {
     callbacks.onDone();
-    getModelMetrics().recordRequest(
-      model,
-      Date.now() - requestStartTime,
-      parsed.usage?.total_tokens,
-    );
-    getTokenCounter().addUsage(
-      parsed.usage?.prompt_tokens,
-      parsed.usage?.completion_tokens,
-      bodyStr.length,
-      content.length,
-    );
+    getModelMetrics().recordRequest(model, Date.now() - requestStartTime);
+    getTokenCounter().addUsage(undefined, undefined, bodyStr.length, responseChars);
   }
 }
 
@@ -829,16 +683,12 @@ export async function chatCompletion(
     };
 
     const tokens: string[] = [];
-    const streamCompletion = Config.useProviderStream()
-      ? streamChatCompletionViaProvider
-      : streamChatCompletion;
-    streamCompletion(
+    streamChatCompletion(
       secrets,
       messages,
       {
         onToken: (t) => tokens.push(t),
         onDone: () => safeResolve(tokens.join('')),
-        onError: safeReject,
       },
       cancellationToken,
       overrideModel,
@@ -866,6 +716,20 @@ export interface AccountIdentity {
   accountType: 'Personal account' | 'Organization account';
   planName: string;
   tier: string;
+  /** Server-owned subscription state from the canonical /api/me plan. */
+  subscriptionStatus?: string;
+  /** ISO period end when the subscription has a bounded current period. */
+  currentPeriodEnd?: string;
+  /** True when access remains entitled until currentPeriodEnd, then ends. */
+  cancelAtPeriodEnd?: boolean;
+  /** Billing owner used to direct users to the correct management surface. */
+  subscriptionSource?: 'none' | 'stripe' | 'apple' | 'google' | 'manual';
+}
+
+function unixSecondsToIso(value: number | null): string | undefined {
+  if (value === null || !Number.isFinite(value)) return undefined;
+  const date = new Date(value * 1_000);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
 }
 
 /** Validate and project the canonical `/api/me` response into editor-safe identity copy. */
@@ -884,6 +748,7 @@ export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | un
     parsed.data.plan.display_name.trim() ||
     (tier ? `${tier.charAt(0).toUpperCase()}${tier.slice(1)}` : 'Unknown');
 
+  const currentPeriodEnd = unixSecondsToIso(parsed.data.plan.current_period_end);
   return {
     displayName,
     email,
@@ -891,6 +756,10 @@ export function parseAccountIdentityResponse(raw: unknown): AccountIdentity | un
       tier === 'team' || tier === 'enterprise' ? 'Organization account' : 'Personal account',
     planName,
     tier,
+    subscriptionStatus: parsed.data.plan.status,
+    ...(currentPeriodEnd === undefined ? {} : { currentPeriodEnd }),
+    cancelAtPeriodEnd: parsed.data.plan.cancel_at_period_end === true,
+    subscriptionSource: parsed.data.plan.subscription_source ?? 'none',
   };
 }
 
@@ -939,7 +808,7 @@ export async function fetchAccountIdentity(
       method: 'GET',
       headers: {
         Authorization: `Bearer ${accountToken}`,
-        'User-Agent': 'agi-workforce-vscode/0.1.0',
+        'User-Agent': getExtensionUserAgent(),
         'X-Client': 'vscode-extension',
         'X-AGI-Surface': 'vscode',
       },
@@ -950,7 +819,7 @@ export async function fetchAccountIdentity(
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
       res.on('end', () => {
         if ((res.statusCode ?? 0) >= 400) {
-          if (res.statusCode === 401) void clearAccountToken(secrets);
+          if (res.statusCode === 401) void invalidateAccountToken(secrets, accountToken);
           resolve(undefined);
           return;
         }
@@ -979,8 +848,8 @@ export async function fetchAccountIdentity(
  * error) — callers should treat undefined as "unknown tier".
  */
 export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<TierInfo | undefined> {
-  const apiKey = await getAuthToken(secrets);
-  if (apiKey === undefined || apiKey === '') {
+  const credential = await getCloudCredential(secrets);
+  if (credential.kind === 'none') {
     return undefined;
   }
 
@@ -1000,8 +869,8 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
       path: parsed.pathname + parsed.search,
       method: 'GET',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'User-Agent': 'agi-workforce-vscode/0.1.0',
+        Authorization: `Bearer ${credential.token}`,
+        'User-Agent': getExtensionUserAgent(),
         'X-Client': 'vscode-extension',
         'X-AGI-Surface': 'vscode',
       },
@@ -1012,6 +881,9 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
       res.on('end', () => {
         if ((res.statusCode ?? 0) >= 400) {
+          if (res.statusCode === 401 && credential.kind === 'account') {
+            void invalidateAccountToken(secrets, credential.token);
+          }
           resolve(undefined);
           return;
         }
@@ -1035,110 +907,10 @@ export async function fetchTierInfo(secrets: vscode.SecretStorage): Promise<Tier
     });
 
     req.on('error', () => resolve(undefined));
+    req.setTimeout(5_000, () => {
+      req.destroy();
+      resolve(undefined);
+    });
     req.end();
   });
-}
-
-// ─── Provider-stream path ─────────────────────────────────────────────────────
-//
-// AGI Cloud account sign-in IS wired (features/account-auth/deviceAuth.ts,
-// command agi-workforce.signIn, token stored via setAccountToken/getAccountToken)
-// and the SSE client for /api/v1/providers/:id/stream IS implemented
-// (integrations/providerStreamClient.ts) — this function's job is just to
-// glue those two already-working pieces together.
-
-const PROVIDER_STREAM_SUPPORTED = new Set(['anthropic', 'openai', 'ollama', 'google']);
-
-function getGatewayUrl(): string {
-  return getCloudGatewayOrigin();
-}
-
-/**
- * Stream a chat completion through the /api/v1/providers/:id/stream gateway,
- * authenticated with the AGI Cloud account token from `signInToAgiCloud`.
- * Same `StreamCallbacks` shape as `streamChatCompletion`, so chat participant
- * call sites can branch on the `agiWorkforce.useProviderStream` feature flag
- * without restructuring.
- */
-export async function streamChatCompletionViaProvider(
-  secrets: vscode.SecretStorage,
-  messages: LlmChatMessage[],
-  callbacks: StreamCallbacks,
-  cancellationToken: vscode.CancellationToken,
-  overrideModel?: string,
-): Promise<void> {
-  const accountToken = await getAccountToken(secrets);
-  if (accountToken === undefined || accountToken === '') {
-    throw new AgiWorkforceApiError(
-      'Sign in to AGI Cloud to use provider-stream routing (agi-workforce.signIn), or disable agiWorkforce.useProviderStream to use the default AGI Workforce proxy instead.',
-      401,
-      'AGI_ACCOUNT_TOKEN_MISSING',
-    );
-  }
-
-  const model = overrideModel ?? getModel();
-  const { providerId } = getModelProviderInfo(model);
-  if (providerId === null || !PROVIDER_STREAM_SUPPORTED.has(providerId)) {
-    throw new AgiWorkforceApiError(
-      `The provider-stream gateway does not yet support '${providerId ?? 'unknown'}' models. Disable agiWorkforce.useProviderStream to route this model through the default AGI Workforce proxy instead.`,
-      400,
-      'AGI_PROVIDER_STREAM_UNSUPPORTED_PROVIDER',
-    );
-  }
-
-  const { streamFromProvider } = await import('../integrations/providerStreamClient');
-  const abortController = new AbortController();
-  const cancelListener = cancellationToken.onCancellationRequested(() => abortController.abort());
-
-  try {
-    if (cancellationToken.isCancellationRequested) {
-      throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
-    }
-    for await (const chunk of streamFromProvider({
-      gatewayUrl: getGatewayUrl(),
-      providerId: providerId as 'anthropic' | 'openai' | 'ollama' | 'google',
-      authToken: accountToken,
-      request: { model, messages },
-      signal: abortController.signal,
-    })) {
-      if (cancellationToken.isCancellationRequested) {
-        throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
-      }
-      switch (chunk.type) {
-        case 'text-delta':
-          callbacks.onToken(chunk.delta);
-          break;
-        case 'tool-use-start':
-          callbacks.onToolUseStart?.(chunk.toolUseId, chunk.name);
-          break;
-        case 'tool-use-delta':
-          callbacks.onToolUseDelta?.(chunk.toolUseId, chunk.deltaJson);
-          break;
-        case 'tool-use-end':
-          callbacks.onToolUseEnd?.(chunk.toolUseId);
-          break;
-        case 'thinking-delta':
-        case 'usage':
-          // No StreamCallbacks hook for extended-thinking text or usage
-          // accounting yet — ignored rather than mis-routed as a token.
-          break;
-        case 'error':
-          callbacks.onError(new AgiWorkforceApiError(chunk.message, chunk.retryable ? 503 : 500));
-          return;
-        case 'stop':
-          break;
-      }
-    }
-    if (cancellationToken.isCancellationRequested) {
-      throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
-    }
-    callbacks.onDone();
-  } catch (error) {
-    if (cancellationToken.isCancellationRequested) {
-      throw new AgiWorkforceApiError('Request was cancelled', undefined, 'CANCELLED');
-    }
-    throw error;
-  } finally {
-    cancelListener.dispose();
-  }
 }

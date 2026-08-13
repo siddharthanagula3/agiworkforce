@@ -10,6 +10,7 @@ import {
 import {
   getModelMetadataById,
   getModels,
+  getVideoQualityOptionsForModel,
   isExecutableVideoModel,
   isModelLive,
 } from '@agiworkforce/types';
@@ -1341,9 +1342,13 @@ describe('ChatComposerNew', () => {
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {
-        // The picked video model rides along; see the picker tests below.
+        // The complete catalog-backed tuple rides along. Omitting either
+        // visible picker value would make the composer look wired while the
+        // route silently fell back to its defaults.
         expect(onGenerateVideo).toHaveBeenCalledWith('a cat surfing', {
           modelId: VIDEO_MODELS[0]!.id,
+          aspectRatio: '16:9',
+          resolution: '720p',
         });
       });
       // The prompt goes to the media harness, never to the chat turn.
@@ -1445,6 +1450,73 @@ describe('ChatComposerNew', () => {
       await waitFor(() => {
         expect(onGenerateVideo).toHaveBeenCalledWith('a cat surfing', {
           modelId: VIDEO_MODELS[0]!.id,
+          aspectRatio: '16:9',
+          resolution: '720p',
+        });
+      });
+    });
+
+    it('sends the visible video aspect and quality selections to the generation handler', async () => {
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      const onGenerateVideo = vi.fn();
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={onGenerateVideo} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create video'));
+
+      // Type first, then change the options. This catches a stale submit
+      // callback that was memoized from the draft change but omitted the media
+      // selectors from its dependency list.
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'a portrait travel clip');
+      fireEvent.click(screen.getByRole('button', { name: 'Select video aspect ratio' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Portrait 9:16' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select video quality' }));
+      fireEvent.click(screen.getByRole('button', { name: '480p' }));
+
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(onGenerateVideo).toHaveBeenCalledWith('a portrait travel clip', {
+          modelId: VIDEO_MODELS[0]!.id,
+          aspectRatio: '9:16',
+          resolution: '480p',
+        });
+      });
+    });
+
+    it('carries a catalog-required duration for a restricted video quality', async () => {
+      useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
+      const restricted = VIDEO_MODELS.map((model) => ({
+        model,
+        quality: getVideoQualityOptionsForModel(model.id, '16:9').find(
+          (option) => option.durationSecs?.length === 1,
+        ),
+      })).find((candidate) => candidate.quality);
+      expect(restricted).toBeDefined();
+
+      const onGenerateVideo = vi.fn();
+      render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={onGenerateVideo} />);
+      fireEvent.click(screen.getByRole('button', { name: /more options/i }));
+      fireEvent.click(screen.getByText('Create video'));
+
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'a high resolution mountain clip');
+      fireEvent.click(screen.getByRole('button', { name: /select video model/i }));
+      fireEvent.click(screen.getByRole('button', { name: restricted!.model.label }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select video quality' }));
+      // The option's accessible name also includes its visible "8s only"
+      // qualifier; click the quality label itself so the assertion remains
+      // catalog-derived.
+      fireEvent.click(screen.getByText(restricted!.quality!.label));
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(onGenerateVideo).toHaveBeenCalledWith('a high resolution mountain clip', {
+          modelId: restricted!.model.id,
+          aspectRatio: '16:9',
+          resolution: restricted!.quality!.id,
+          durationSecs: restricted!.quality!.durationSecs![0],
         });
       });
     });

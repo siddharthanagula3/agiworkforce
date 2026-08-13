@@ -112,8 +112,16 @@ export class SignalingClient {
     this.connect();
   }
 
-  sendSignal(kind: SignalKind, payload: unknown) {
-    this.send({
+  /**
+   * Hand a signal to the currently-open websocket.
+   *
+   * `true` means the browser/native websocket accepted the frame locally; it
+   * is not a peer acknowledgement. Callers that surface delivery state must
+   * still wait for their domain-level response (for example a Dispatch status
+   * event).
+   */
+  sendSignal(kind: SignalKind, payload: unknown): boolean {
+    return this.send({
       type: 'signal',
       kind,
       payload,
@@ -180,17 +188,19 @@ export class SignalingClient {
     };
   }
 
-  private send(payload: Record<string, unknown>) {
+  private send(payload: Record<string, unknown>): boolean {
     if (!this.socket) {
-      return;
+      return false;
     }
     if (this.socket.readyState !== WebSocket.OPEN) {
-      return;
+      return false;
     }
     try {
       this.socket.send(JSON.stringify(payload));
+      return true;
     } catch (error) {
       console.warn('[signaling] failed to send payload', error);
+      return false;
     }
   }
 

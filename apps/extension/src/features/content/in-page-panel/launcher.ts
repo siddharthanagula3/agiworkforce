@@ -12,6 +12,8 @@
  * @module inPagePanel/launcher
  */
 
+import { getExtensionTokensCssAuto } from '../../../tokens';
+
 /** Bottom and right offsets in px. */
 export interface LauncherPosition {
   bottom: number;
@@ -20,6 +22,55 @@ export interface LauncherPosition {
 
 const STORAGE_KEY = 'agi_panel_launcher_pos';
 const DEFAULT_POS: LauncherPosition = { bottom: 24, right: 24 };
+
+export function buildLauncherStyles(): string {
+  return `
+    ${getExtensionTokensCssAuto(':host')}
+    :host { display:block; }
+    .agi-launcher-btn {
+      width:48px; height:48px;
+      background:var(--agi-ext-accent);
+      border-radius:50%;
+      border:1px solid color-mix(in srgb, var(--agi-ext-on-accent) 18%, transparent);
+      cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow:0 8px 24px color-mix(in srgb, var(--agi-ext-accent) 34%, transparent);
+      pointer-events:all;
+      transition:transform 0.18s,box-shadow 0.18s;
+      color:var(--agi-ext-on-accent);
+      font-size:20px;
+      line-height:1;
+      user-select:none;
+      -webkit-user-select:none;
+    }
+    .agi-launcher-btn:hover {
+      transform:scale(1.08);
+      box-shadow:0 10px 30px color-mix(in srgb, var(--agi-ext-accent) 44%, transparent);
+    }
+    .agi-launcher-btn:active { transform:scale(0.95); }
+    .agi-launcher-btn:focus-visible {
+      outline:2px solid var(--agi-ext-focus);
+      outline-offset:3px;
+    }
+    .agi-tooltip {
+      position:absolute;
+      right:56px; bottom:10px;
+      background:var(--agi-ext-surface); color:var(--agi-ext-text);
+      border:1px solid var(--agi-ext-border);
+      box-shadow:0 8px 24px color-mix(in srgb, black 20%, transparent);
+      font-size:12px;
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      padding:6px 10px; border-radius:10px;
+      white-space:nowrap; pointer-events:none;
+      opacity:0; transition:opacity 0.18s;
+    }
+    .agi-launcher-btn:hover ~ .agi-tooltip,
+    .agi-launcher-btn:focus-visible ~ .agi-tooltip { opacity:1; }
+    @media (prefers-reduced-motion: reduce) {
+      .agi-launcher-btn, .agi-tooltip { transition:none; }
+    }
+  `;
+}
 
 /**
  * Persist position to chrome.storage.local.
@@ -93,43 +144,7 @@ export function createLauncher(onOpen: () => void): {
 
   // ── Styles ─────────────────────────────────────────────────────────────────
   const style = document.createElement('style');
-  style.textContent = `
-    :host { display:block; }
-    .agi-launcher-btn {
-      width:48px; height:48px;
-      background:#21808d;
-      border-radius:50%;
-      border:none;
-      cursor:pointer;
-      display:flex; align-items:center; justify-content:center;
-      box-shadow:0 4px 16px rgba(33,128,141,0.32);
-      pointer-events:all;
-      transition:transform 0.18s,box-shadow 0.18s;
-      color:#fff;
-      font-size:20px;
-      line-height:1;
-      user-select:none;
-      -webkit-user-select:none;
-    }
-    .agi-launcher-btn:hover {
-      transform:scale(1.1);
-      box-shadow:0 6px 24px rgba(33,128,141,0.42);
-    }
-    .agi-launcher-btn:active {
-      transform:scale(0.95);
-    }
-    .agi-tooltip {
-      position:absolute;
-      right:56px; bottom:10px;
-      background:#1f2937; color:#f9fafb;
-      font-size:12px;
-      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-      padding:5px 10px; border-radius:6px;
-      white-space:nowrap; pointer-events:none;
-      opacity:0; transition:opacity 0.18s;
-    }
-    .agi-launcher-btn:hover ~ .agi-tooltip { opacity:1; }
-  `;
+  style.textContent = buildLauncherStyles();
 
   // ── Button ─────────────────────────────────────────────────────────────────
   const button = document.createElement('button');

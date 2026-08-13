@@ -2,7 +2,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { View, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useNavigation } from '@react-navigation/native';
+// From `expo-router`, not `@react-navigation/native` — see the note in
+// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
+// navigation package, so the raw hook can land on a different context
+// instance than the one expo-router's navigator provides.
+import { useNavigation } from 'expo-router';
 import { ArrowLeft, Menu } from 'lucide-react-native';
 import { summarizeProjectHeader } from '@agiworkforce/types';
 import type { ProjectRecord } from '@agiworkforce/types';

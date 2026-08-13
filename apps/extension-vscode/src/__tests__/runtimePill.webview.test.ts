@@ -7,9 +7,10 @@
  * indicator a user would check to see whether their prompts leave the machine
  * asserted "local" no matter where they actually went.
  *
- * Local, BYOK and Managed Cloud are separate trust boundaries, so these tests
- * drive the real webview script with each `usageMeter.source` and assert the
- * pill names the live one.
+ * Local, BYOK and Managed Cloud are separate trust boundaries. Account usage
+ * is not routing authority, so these tests assert that the pill stays neutral
+ * until the CLI's session boundary arrives and cannot be overwritten by a
+ * later account refresh.
  *
  * @vitest-environment jsdom
  */
@@ -95,10 +96,33 @@ function postSignedInAccount(): void {
   );
 }
 
+function postProvider(providerLabel: string): void {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        type: 'providerBadge',
+        payload: { providerLabel, brandColor: '#abcdef' },
+      },
+    }),
+  );
+}
+
+function postSessionBoundary(trustMode: 'local' | 'byok' | 'managed', provider?: string): void {
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      data: {
+        type: 'sessionBoundary',
+        payload: { trustMode, ...(provider === undefined ? {} : { provider }) },
+      },
+    }),
+  );
+}
+
 function pill() {
   return {
-    root: document.getElementById('runtimePill'),
-    label: document.getElementById('runtimePillLabel'),
+    root: document.getElementById('sessionIdentity'),
+    label: document.getElementById('sessionBoundaryLabel'),
+    provider: document.getElementById('sessionProviderLabel'),
   };
 }
 
@@ -127,60 +151,96 @@ describe('header trust-boundary pill', () => {
   });
 
   it.each([
-    ['unbounded', 'Local', 'local', 'nothing leaves this machine'],
-    ['user-api-key', 'BYOK', 'byok', 'straight to the provider'],
-    ['managed-plan', 'Cloud', 'cloud', 'sent to AGI infrastructure'],
-  ])('reports %s as "%s"', (source, label, boundary, titleFragment) => {
-    executeWebviewScript();
-    postUsageMeter(source);
+    ['unbounded', 'local', 'Local', 'local', 'nothing leaves this machine'],
+    ['user-api-key', 'byok', 'BYOK', 'byok', 'straight to the provider'],
+    ['managed-plan', 'managed', 'Managed Cloud', 'cloud', 'sent to AGI infrastructure'],
+  ] as const)(
+    'waits for the CLI before reporting %s as "%s"',
+    (source, trustMode, label, boundary, titleFragment) => {
+      executeWebviewScript();
+      postUsageMeter(source);
 
-    const { root, label: labelEl } = pill();
-    expect(labelEl?.textContent).toBe(label);
-    expect(root?.style.display).toBe('inline-flex');
-    expect(root?.dataset.boundary).toBe(boundary);
-    expect(root?.title).toContain(titleFragment);
-  });
+      expect(pill().label?.textContent).toBe('Route pending');
+      expect(pill().root?.dataset.boundary).toBe('none');
+
+      postSessionBoundary(trustMode);
+
+      const { root, label: labelEl } = pill();
+      expect(labelEl?.textContent).toBe(label);
+      expect(root?.style.display).toBe('inline-flex');
+      expect(root?.dataset.boundary).toBe(boundary);
+      expect(root?.title).toContain(titleFragment);
+    },
+  );
 
   it('switches away from Local when the session moves to managed cloud', () => {
     executeWebviewScript();
 
     postUsageMeter('unbounded');
+    postSessionBoundary('local');
     expect(pill().label?.textContent).toBe('Local');
 
-    // The exact silent-reroute the old hardcoded pill could not represent.
-    postUsageMeter('managed-plan');
-    expect(pill().label?.textContent).toBe('Cloud');
+    // The exact silent-reroute the old hardcoded pill could not represent. A
+    // usage/account refresh is not authority; the next CLI boundary is.
+    postSessionBoundary('managed');
+    expect(pill().label?.textContent).toBe('Managed Cloud');
     expect(pill().root?.dataset.boundary).toBe('cloud');
   });
 
-  it('falls back to the cloud (most cautious) label for an unknown source', () => {
+  it('keeps an unknown account usage source neutral until the CLI confirms the route', () => {
     executeWebviewScript();
     postUsageMeter('something-new-from-the-host');
 
-    // Never silently claim "Local" for a source this webview does not know.
-    expect(pill().label?.textContent).toBe('Cloud');
-    expect(pill().root?.dataset.boundary).toBe('cloud');
+    expect(pill().label?.textContent).toBe('Route pending');
+    expect(pill().root?.dataset.boundary).toBe('none');
   });
 
-  it('shows the Managed Cloud plan owner in the boundary and account tooltips', () => {
+  it('shows the Managed Cloud plan owner in the stable identity', () => {
     executeWebviewScript();
     postUsageMeter('managed-plan');
+    postSessionBoundary('managed');
     postSignedInAccount();
 
     expect(pill().root?.title).toContain('Account: Ada Lovelace (ada@example.com)');
     expect(pill().root?.title).toContain('Pro plan');
-    const accountButton = document.getElementById('accountBtn');
-    expect(accountButton?.title).toContain('Ada Lovelace (ada@example.com)');
-    expect(accountButton?.title).toContain('Personal account · Pro plan');
-    expect(accountButton?.getAttribute('aria-label')).toBe(accountButton?.title);
+    expect(pill().root?.getAttribute('aria-label')).toContain('Managed Cloud');
   });
 
   it('identifies the signed-in account in BYOK without claiming it pays the provider', () => {
     executeWebviewScript();
     postUsageMeter('user-api-key');
+    postSessionBoundary('byok');
     postSignedInAccount();
 
     expect(pill().root?.title).toContain('AGI Cloud sign-in: Ada Lovelace');
     expect(pill().root?.title).toContain('not used for provider billing');
+  });
+
+  it('combines provider and boundary regardless of host message order', () => {
+    executeWebviewScript();
+    postProvider('Ollama');
+    expect(pill().root?.style.display).toBe('none');
+
+    postUsageMeter('unbounded');
+    expect(pill().label?.textContent).toBe('Route pending');
+    expect(pill().provider?.textContent).toBe('');
+
+    postSessionBoundary('local', 'ollama');
+    expect(pill().label?.textContent).toBe('Local');
+    expect(pill().provider?.textContent).toBe('ollama');
+    expect(pill().root?.textContent).toContain('Local · ollama');
+    expect(pill().root?.title).toContain('Provider: ollama');
+  });
+
+  it('does not let a later account usage refresh overwrite the CLI boundary', () => {
+    executeWebviewScript();
+    postUsageMeter('managed-plan');
+    postSessionBoundary('local', 'ollama');
+
+    postSignedInAccount();
+    postUsageMeter('managed-plan');
+
+    expect(pill().label?.textContent).toBe('Local');
+    expect(pill().root?.dataset.boundary).toBe('local');
   });
 });

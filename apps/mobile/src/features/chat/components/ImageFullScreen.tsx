@@ -21,6 +21,18 @@ interface ImageFullScreenProps {
 }
 
 /**
+ * Chrome colours for the viewer, fixed light-on-dark rather than theme-relative.
+ *
+ * This surface pins its backdrop to black in BOTH themes, so palette tokens are
+ * the wrong source for anything drawn on top of it. In the light palette
+ * `neutralSurface` is `rgba(17,17,17,0.08)` and `textSecondary` is
+ * `rgba(17,17,17,0.72)` — dark ink — so the close and share buttons were painted
+ * black-on-black and the viewer looked like it had no way out (founder
+ * 2026-08-13). The bug was invisible in dark mode, where the same tokens are
+ * already light. A viewer whose ground is always dark needs chrome that is
+ * always light.
+ */
+/**
  * URIs the image view can render as-is, with no Cloud round trip.
  *
  * `useGeneratedImageSource` speaks exactly one dialect: the durable
@@ -211,12 +223,12 @@ export function ImageFullScreen({
               style={{
                 padding: 10,
                 borderRadius: 8,
-                backgroundColor: colors.neutralSurface,
+                backgroundColor: colors.voiceControlSurface,
               }}
               accessibilityLabel="Share image"
               accessibilityRole="button"
             >
-              <Share2 size={18} color={colors.textSecondary} />
+              <Share2 size={18} color={colors.cameraOverlayText} />
             </Pressable>
 
             {/* Close button */}
@@ -225,12 +237,12 @@ export function ImageFullScreen({
               style={{
                 padding: 10,
                 borderRadius: 8,
-                backgroundColor: colors.neutralSurface,
+                backgroundColor: colors.voiceControlSurface,
               }}
               accessibilityLabel="Close"
               accessibilityRole="button"
             >
-              <X size={18} color={colors.textSecondary} />
+              <X size={18} color={colors.cameraOverlayText} />
             </Pressable>
           </View>
 
@@ -265,7 +277,7 @@ export function ImageFullScreen({
                       justifyContent: 'center',
                     }}
                   >
-                    <Text style={{ color: colors.textMuted, textAlign: 'center' }}>
+                    <Text style={{ color: colors.cameraOverlayTextMuted, textAlign: 'center' }}>
                       {sourceStatus === 'signed-out'
                         ? 'Sign in to view this generated image'
                         : sourceStatus === 'authorizing'
@@ -291,7 +303,7 @@ export function ImageFullScreen({
                 style={{
                   fontSize: 13,
                   lineHeight: 19,
-                  color: colors.textMuted,
+                  color: colors.cameraOverlayTextMuted,
                   textAlign: 'center',
                 }}
                 numberOfLines={4}

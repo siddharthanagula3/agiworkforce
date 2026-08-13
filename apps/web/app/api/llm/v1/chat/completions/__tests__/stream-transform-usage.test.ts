@@ -112,6 +112,56 @@ beforeEach(() => {
 });
 
 describe('buildStreamResponse · final OpenAI usage event capture', () => {
+  it('captures Anthropic message_start usage before filtering the wire-silent event', async () => {
+    const events = [
+      JSON.stringify({
+        type: 'message_start',
+        message: {
+          usage: {
+            input_tokens: 500,
+            cache_read_input_tokens: 100,
+            cache_creation_input_tokens: 400,
+            cache_creation: { ephemeral_1h_input_tokens: 300 },
+          },
+        },
+      }),
+      JSON.stringify({
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'Hello' },
+      }),
+      JSON.stringify({
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn' },
+        usage: { output_tokens: 80 },
+      }),
+      JSON.stringify({ type: 'message_stop' }),
+    ];
+
+    const response = await buildStreamResponse(
+      makeRequest() as any,
+      makeStream(events),
+      makeProcessed({ provider: 'anthropic' }),
+      'user-anthropic-usage',
+      'token-anthropic-usage',
+    );
+
+    await drainStream(response as any);
+
+    expect(mockRecordModelUsage).toHaveBeenCalledWith(
+      'user-anthropic-usage',
+      'fixture-model',
+      expect.objectContaining({
+        inputTokens: 500,
+        outputTokens: 80,
+        cacheReadInputTokens: 100,
+        cacheCreationInputTokens: 400,
+        cacheCreation1hInputTokens: 300,
+      }),
+      expect.any(Date),
+    );
+  });
+
   it('captures prompt_tokens and completion_tokens from final usage event', async () => {
     const events = [
       JSON.stringify({

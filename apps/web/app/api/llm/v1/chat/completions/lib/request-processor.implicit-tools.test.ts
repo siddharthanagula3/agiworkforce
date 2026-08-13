@@ -239,3 +239,46 @@ describe('managed code tool choice', () => {
     ).toBeUndefined();
   });
 });
+
+describe('managed web-search tool choice', () => {
+  it('requires one initial search for a live research request with an attached search tool', () => {
+    expect(
+      requestProcessor.resolveInitialWebSearchToolChoice({
+        requestedToolChoice: undefined,
+        webSearch: true,
+        researchTask: true,
+        stream: true,
+        provider: 'openai',
+        webSearchToolAttached: true,
+      }),
+    ).toBe('required');
+  });
+
+  it('preserves caller choice and does not force unsupported or unavailable search', () => {
+    const base = {
+      requestedToolChoice: undefined,
+      webSearch: true,
+      researchTask: true,
+      stream: true,
+      webSearchToolAttached: true,
+    } as const;
+
+    expect(
+      requestProcessor.resolveInitialWebSearchToolChoice({
+        ...base,
+        requestedToolChoice: 'none',
+        provider: 'openai',
+      }),
+    ).toBe('none');
+    expect(
+      requestProcessor.resolveInitialWebSearchToolChoice({ ...base, provider: 'anthropic' }),
+    ).toBeUndefined();
+    expect(
+      requestProcessor.resolveInitialWebSearchToolChoice({
+        ...base,
+        provider: 'openai',
+        webSearchToolAttached: false,
+      }),
+    ).toBeUndefined();
+  });
+});

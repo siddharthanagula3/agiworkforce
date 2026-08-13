@@ -656,6 +656,8 @@ interface ChatState {
     updates: Partial<ComposerToggleState>,
     conversationId?: string | null,
   ) => void;
+  /** Move the new-chat toggles onto the conversation the first send created. */
+  adoptPendingComposerToggles: (conversationId: string | null | undefined) => void;
 
   // Actions - Sidebar
   toggleSidebar: () => void;
@@ -1243,6 +1245,45 @@ export const useChatStore = create<ChatState>()(
             },
             undefined,
             'chat/setComposerToggles',
+          ),
+
+        /**
+         * Carry the new-chat composer's toggles onto the conversation the first
+         * send just created.
+         *
+         * Toggles are keyed by conversation so they cannot leak between chats,
+         * and the new-chat surface writes into `PENDING_CONVERSATION_KEY`. But
+         * the first send creates a real conversation and navigates to it, and
+         * nothing moved the pending bucket across — so a chat started in Video
+         * (or Image, or AGI Work) reverted to a plain text composer the instant
+         * its own conversation existed, mid-generation (founder 2026-08-13).
+         * Drafts were already migrated this way; toggles were simply forgotten.
+         *
+         * Deliberately keyed to conversation CREATION rather than to any
+         * activation: doing this on every `setActiveConversation` would let the
+         * pending toggles bleed onto an existing chat opened from the sidebar.
+         * Existing toggles on the target win, and the pending bucket is cleared
+         * so the next new chat starts clean.
+         */
+        adoptPendingComposerToggles: (conversationId) =>
+          set(
+            (state) => {
+              const pending = state.composerTogglesByConversation[PENDING_CONVERSATION_KEY];
+              if (!pending || !conversationId) return {};
+              const { [PENDING_CONVERSATION_KEY]: _pending, ...rest } =
+                state.composerTogglesByConversation;
+              return {
+                composerTogglesByConversation: {
+                  ...rest,
+                  [conversationKey(conversationId)]: {
+                    ...pending,
+                    ...(state.composerTogglesByConversation[conversationKey(conversationId)] ?? {}),
+                  },
+                },
+              };
+            },
+            undefined,
+            'chat/adoptPendingComposerToggles',
           ),
 
         // Sidebar

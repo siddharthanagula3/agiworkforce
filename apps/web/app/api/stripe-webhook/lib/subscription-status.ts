@@ -42,7 +42,7 @@ export type StoredSubscriptionStatus =
  * This is a projection, not a substitute for storing the truth: widening the
  * CHECK constraint to accept `paused` turns this entry into the identity
  * mapping and makes the "Paused" label the billing UI already renders
- * (features/billing/components/Billing/Subscription.tsx) reachable.
+ * visible in the authoritative Settings billing surface.
  *
  * Keyed by Stripe's own union so a status introduced by a future SDK or API
  * version fails this file's build instead of failing in Postgres at 2am.

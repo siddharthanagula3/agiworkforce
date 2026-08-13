@@ -60,7 +60,7 @@ describe('Chrome side-panel demo surface', () => {
 
   it('keeps Quick as a per-turn overlay without erasing durable route state on toggle', () => {
     const start = source.indexOf("quickModeToggle.addEventListener('click'");
-    const end = source.indexOf('composerBar.appendChild(quickModeToggle)', start);
+    const end = source.indexOf('effortPopover.appendChild(quickModeToggle)', start);
     const toggleBody = source.slice(start, end);
 
     expect(toggleBody).toContain('_ctx.quickMode = next');
@@ -70,6 +70,29 @@ describe('Chrome side-panel demo surface', () => {
     expect(toggleBody).not.toContain('saveMessages()');
     expect(source).toContain('quickModeByStreamId.set(streamId, quickMode)');
     expect(source).toContain('!streamUsedQuick && applyRoutingContinuation(chunk.routing)');
+  });
+
+  it('keeps the polished composer hierarchy stable without hiding trust state', () => {
+    expect(source).toContain("class: 'sp-composer-controls-start'");
+    expect(source).toContain("class: 'sp-composer-controls-end'");
+    expect(source).toContain('composerBarStart.appendChild(attachWrapper)');
+    expect(source).toContain('composerBarStart.appendChild(contextBtn)');
+    expect(source).toContain('trustStrip.appendChild(autonomyControl)');
+    expect(source).toContain('composerBarEnd.appendChild(effortControl)');
+    expect(source).toContain('composerBarEnd.appendChild(micBtn)');
+    expect(source).toContain('composerBarEnd.appendChild(sendBtn)');
+    expect(source).toContain('composerShell.appendChild(trustStrip)');
+    expect(source).toContain("label: 'Syncing to your account'");
+    expect(source).toContain("label: 'Saved to your account'");
+    expect(source).toContain("'Saved on this device'");
+  });
+
+  it('supports keyboard navigation for modal and menu surfaces', () => {
+    expect(source).toContain("if (event.key !== 'Tab') return");
+    expect(source).toContain('drawer.querySelectorAll<HTMLElement>');
+    expect(source).toContain("modelDropdownEl.addEventListener('keydown'");
+    expect(source).toContain("attachMenu.addEventListener('keydown'");
+    expect(source).toContain("['ArrowDown', 'ArrowUp', 'Home', 'End']");
   });
 
   it('labels the navigation drawer as an AGI menu instead of settings', () => {
@@ -83,29 +106,43 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).not.toContain('chatActionsRow.appendChild(drawerOpenDesktopBtn)');
   });
 
-  it('attributes WebMCP tools to the exact active tab and refreshes them on tab changes', () => {
-    expect(source).toContain('selectWebMCPToolsForActivePage(message, activeWebMCPPage)');
-    expect(source).toContain("type: 'WEBMCP_DISCOVER_TOOLS'");
-    expect(source).toContain('pageGeneration: identity.pageGeneration');
-    expect(source).toContain('isWebMCPUpdateHintForActivePage(msg, activeWebMCPPage)');
-    expect(source).toContain('chrome.tabs.onActivated?.addListener');
-    expect(source).toContain('chrome.tabs.onUpdated?.addListener');
+  it('does not present native WebMCP declarations as managed chat tools', () => {
+    expect(source).not.toContain("id: 'sp-tools-btn'");
+    expect(source).not.toContain("type: 'WEBMCP_DISCOVER_TOOLS'");
+    expect(source).not.toContain('Use the ${tool.name} tool to');
+  });
 
-    const navigationListenerStart = source.indexOf('chrome.tabs.onUpdated?.addListener');
-    const navigationListenerEnd = source.indexOf(
-      '// Populate hostname chip',
-      navigationListenerStart,
-    );
-    const navigationListener = source.slice(navigationListenerStart, navigationListenerEnd);
-    expect(navigationListener).toContain('if (!activeWebMCPPage)');
-    expect(navigationListener).toContain('refreshPageHostname()');
-    expect(navigationListener).toContain('updateActivePageIdentity(tabId, changeInfo.url, true)');
-    const identityStart = source.indexOf('function updateActivePageIdentity');
-    const identityEnd = source.indexOf('function refreshWebMCPToolsForActivePage', identityStart);
-    const identityBody = source.slice(identityStart, identityEnd);
-    expect(identityBody).toContain('if (forceInvalidate || identityChanged)');
-    expect(identityBody).toContain('webMCPPageGeneration += 1');
-    expect(identityBody).toContain('clearDiscoveredTools()');
+  it('disables conversation restore while busy and closes history only after success', () => {
+    expect(source).toContain('[data-conversation-restore="true"]');
+    expect(source).toContain('const disabled = _ctx.isStreaming || historyRestoreInProgress');
+    expect(source).toContain("'data-conversation-restore': 'true'");
+    const start = source.indexOf("openButton.addEventListener('click'");
+    const end = source.indexOf('drawerHistoryList.appendChild(item)', start);
+    const body = source.slice(start, end);
+    expect(body).toContain('if (opened)');
+    expect(body).toContain('closeDrawer()');
+    expect(body).toContain("t('spHistoryStopBeforeOpen')");
+  });
+
+  it('keeps New chat as the single reset affordance', () => {
+    expect(source).toContain("id: 'sp-new-chat-btn'");
+    expect(source).not.toContain("id: 'sp-drawer-clear-chat-btn'");
+    expect(source).not.toContain("document.createTextNode(' Clear')");
+  });
+
+  it('announces workflow mutation progress, success, and errors', () => {
+    expect(source).toContain("id: 'sp-wf-mutation-status'");
+    expect(source).toContain("'aria-live': 'polite'");
+    expect(source).toContain("announceWorkflowMutation(t('spWorkflowRunning', [sc.name]))");
+    expect(source).toContain("announceWorkflowMutation(t('spWorkflowDeleting', [task.name]))");
+    expect(source).toContain("t('spTaskEnabled', [task.name])");
+  });
+
+  it('gates sends on attachment intake and states the history limitation', () => {
+    expect(source).toContain('composerAttachmentIntakeCount === 0');
+    expect(source).toContain("t('spAttachmentAdding')");
+    expect(source).toContain("t('spAttachmentHistoryLimitation')");
+    expect(source).toContain("t('spAttachmentCaptureFailed')");
   });
 
   it('uses an honest signed-out model picker label', () => {
@@ -125,11 +162,12 @@ describe('Chrome side-panel demo surface', () => {
     expect(source).not.toContain("id: 'sp-action-mode-toggle'");
   });
 
-  it('uses the canonical Pro developer-surface gate before enabling the composer', () => {
+  it('uses the shared Managed Cloud account capability before enabling the composer', () => {
     expect(source).toContain(
-      "canUseBillingPlanCapability(access.subscriptionTier, 'developer_surfaces')",
+      "canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')",
     );
-    expect(source).toContain("t('spQuotaProRequired')");
+    expect(source).toContain('access.hasUsageRemaining === false');
+    expect(source).toContain("t('spGateUsageLimit')");
   });
 
   it('shows canonical account usage and truthful Web handoffs for cloud connectors and teams', () => {
@@ -181,5 +219,39 @@ describe('Chrome side-panel slash commands', () => {
     expect(source).toContain("role: 'listbox'");
     expect(source).toContain("role: 'option'");
     expect(source).toContain("inputEl.setAttribute('aria-activedescendant'");
+  });
+});
+
+describe('Chrome side-panel composer input state', () => {
+  it('recomputes the visible Send control when the textarea changes', () => {
+    expect(source).toMatch(
+      /inputEl\.addEventListener\('input', \(\) => \{[\s\S]*autoResizeInput\(inputEl\);[\s\S]*updateSendButton\(\);[\s\S]*\}\);/,
+    );
+  });
+
+  it('routes voice transcription through the textarea input path', () => {
+    const voiceSource = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), '../src/features/side-panel/voice.ts'),
+      'utf8',
+    );
+    expect(voiceSource).toContain("inputEl.dispatchEvent(new Event('input', { bubbles: true }))");
+  });
+});
+
+describe('Chrome side-panel tab-group state', () => {
+  it('renders every group control from one active-tab state', () => {
+    expect(source).toContain('const tabGroupStateRenderers = new Set<TabGroupStateRenderer>()');
+    expect(source.match(/registerTabGroupStateRenderer\(/g)?.length).toBe(4);
+    expect(source).toContain("{ type: 'GET_TAB_GROUP_STATE' }");
+    expect(source).toContain('refreshTabGroupUI();');
+    expect(source).toContain("id: 'sp-tab-group-notice'");
+    expect(source).toContain("t('spTabGroupUpdateFailed')");
+  });
+
+  it('routes all group changes through the shared mutation path', () => {
+    expect(source).toContain('function requestTabGroupChange(grouped: boolean)');
+    expect(source.match(/requestTabGroupChange\(/g)?.length).toBe(5);
+    expect(source).not.toContain('let drawerGrouped = false');
+    expect(source).not.toContain('let isGrouped = false');
   });
 });

@@ -11,6 +11,7 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { eraseUserAccountData, eraseUserMedia } from '@/lib/server/account-erasure';
 import { GET as exportUserDataGet } from '@/app/api/user/export/route';
+import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
 /**
  * GET /api/user/data
@@ -159,7 +160,7 @@ async function handleDeleteUserData(request: NextRequest) {
           'Stored media could not be fully deleted during GDPR erasure',
         );
         throw createError.internal(
-          'Your database records were deleted but some stored files could not be removed. Please contact support@agiworkforce.com.',
+          `Your database records were deleted but some stored files could not be removed. Please contact ${CONTACT_EMAIL}.`,
         );
       }
 
@@ -199,8 +200,7 @@ async function handleDeleteUserData(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          message:
-            'Your data deletion request was only partially completed. Please contact support@agiworkforce.com so the remainder can be erased.',
+          message: `Your data deletion request was only partially completed. Please contact ${CONTACT_EMAIL} so the remainder can be erased.`,
           user_id: userId,
           deletion_timestamp: new Date().toISOString(),
           details: erasure,

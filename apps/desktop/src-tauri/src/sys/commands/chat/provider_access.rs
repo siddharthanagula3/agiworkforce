@@ -54,8 +54,7 @@ pub(super) fn check_billing_and_budget(
                 if current_usage >= budget_limit {
                     return Err(format!(
                         "Monthly budget exceeded. Usage: ${:.2}, Limit: ${:.2}. Please update settings.",
-                        current_usage,
-                        budget_limit
+                        current_usage, budget_limit
                     ));
                 }
             }
@@ -70,7 +69,7 @@ pub(super) fn check_billing_and_budget(
 /// If the user has a valid access token but ManagedCloud is not yet set up, this
 /// function initializes and registers it. Does nothing if already present or the
 /// user is not authenticated.
-pub(super) async fn ensure_managed_cloud_provider(
+pub(crate) async fn ensure_managed_cloud_provider(
     router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
 ) {
     use crate::core::llm::providers::managed_cloud_provider::ManagedCloudProvider;
@@ -115,7 +114,7 @@ pub(super) async fn ensure_managed_cloud_provider(
 /// inference independent of that callback. Cheap: no network until first use,
 /// and a no-op when Ollama is already registered. Mirrors
 /// `ensure_managed_cloud_provider`.
-pub(super) async fn ensure_ollama_provider(
+pub(crate) async fn ensure_ollama_provider(
     router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
 ) {
     use crate::core::llm::providers::ollama::OllamaProvider;
@@ -161,7 +160,7 @@ pub(super) async fn ensure_ollama_provider(
 /// is a no-op once registered and safe to call unconditionally in Local mode. No
 /// network call happens until first use (`is_available()` pre-filters the router's
 /// candidate list when the local server isn't running).
-pub(super) async fn ensure_lmstudio_provider(
+pub(crate) async fn ensure_lmstudio_provider(
     router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
 ) {
     use crate::core::llm::providers::direct_api_provider::DirectApiProvider;
@@ -188,7 +187,7 @@ pub(super) async fn ensure_lmstudio_provider(
 /// Ensure the llama.cpp provider is registered on the router before a Local-mode
 /// chat is routed. Mirrors `ensure_ollama_provider`/`ensure_lmstudio_provider`:
 /// llama.cpp's built-in `llama-server` exposes an OpenAI-compatible HTTP API.
-pub(super) async fn ensure_llamacpp_provider(
+pub(crate) async fn ensure_llamacpp_provider(
     router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
 ) {
     use crate::core::llm::providers::direct_api_provider::DirectApiProvider;
@@ -216,7 +215,7 @@ pub(super) async fn ensure_llamacpp_provider(
 /// is routed. Mirrors `ensure_ollama_provider`/`ensure_lmstudio_provider`/
 /// `ensure_llamacpp_provider`: vLLM's OpenAI-compatible server (default
 /// `http://localhost:8000/v1`) is served via `DirectApiProvider`.
-pub(super) async fn ensure_vllm_provider(
+pub(crate) async fn ensure_vllm_provider(
     router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
 ) {
     use crate::core::llm::providers::direct_api_provider::DirectApiProvider;
@@ -237,6 +236,24 @@ pub(super) async fn ensure_vllm_provider(
                 warn!("[Chat] Failed to create vLLM provider: {}", error);
             }
         }
+    }
+}
+
+/// Reuse the chat runtime-registration seam for non-chat local work. This does
+/// not select a model or broaden the trust boundary; it only makes the exact
+/// provider already admitted by the Task submission reachable in the shared
+/// router. BYOK providers remain startup/keyring-owned.
+pub(crate) async fn ensure_task_provider(
+    router: &Arc<tokio::sync::RwLock<crate::core::llm::llm_router::LLMRouter>>,
+    provider: Provider,
+) {
+    match provider {
+        Provider::Ollama => ensure_ollama_provider(router).await,
+        Provider::LmStudio => ensure_lmstudio_provider(router).await,
+        Provider::LlamaCpp => ensure_llamacpp_provider(router).await,
+        Provider::Vllm => ensure_vllm_provider(router).await,
+        Provider::ManagedCloud => ensure_managed_cloud_provider(router).await,
+        _ => {}
     }
 }
 

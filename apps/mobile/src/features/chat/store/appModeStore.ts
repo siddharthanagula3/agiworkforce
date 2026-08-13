@@ -27,3 +27,11 @@ export const useChatAppModeStore = create<ChatAppModeState>()(
 );
 
 rehydrateWhenMmkvReady(useChatAppModeStore, 'chat-app-mode-store');
+
+/** Dev-only inspection handle — see the note in src/features/billing/store.ts. */
+if (__DEV__) {
+  (globalThis as unknown as { __AGI_DEBUG__?: Record<string, unknown> }).__AGI_DEBUG__ = {
+    ...((globalThis as unknown as { __AGI_DEBUG__?: Record<string, unknown> }).__AGI_DEBUG__ ?? {}),
+    appModeStore: useChatAppModeStore,
+  };
+}

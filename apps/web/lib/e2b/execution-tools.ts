@@ -35,8 +35,11 @@ export function e2bExecutionToolDefs(): Array<{
       function: {
         name: EXECUTE_CODE_TOOL,
         description:
+          // Vendor-neutral on purpose: this description is sent to the MODEL,
+          // and models quote their tool descriptions back to users. Naming the
+          // sandbox provider here put "E2B" into user-facing answers.
           'Execute code in a secure sandbox and return its stdout/stderr. Use for ' +
-          'computation, data processing, and running scripts. Runs in an isolated E2B ' +
+          'computation, data processing, and running scripts. Runs in an isolated ' +
           'environment with resource limits.',
         parameters: {
           type: 'object',
@@ -134,6 +137,27 @@ export function resolveCodeExecutionTools(provider: string): unknown[] {
  * result paths (generic MCP tool output in tool-loop.ts) can share the same bound —
  * see design doc §4.3 (MCP tool output is unbounded, a memory-exhaustion risk).
  */
+/**
+ * Strip the sandbox vendor's identifiers out of anything heading for the
+ * transcript.
+ *
+ * Sandbox SDK failures surface verbatim — a dropped connection or a timeout
+ * arrives as a message naming the provider, its `*.e2b.dev` hosts, its
+ * sandbox ids and its env var. That is an implementation detail of OUR
+ * "Run code" feature, and users were seeing it in the chat whenever an
+ * execution failed. Scrub the vendor, keep the diagnosis: a Python traceback
+ * or "execution timed out" is still exactly as useful afterwards.
+ *
+ * Deliberately NOT applied to logs — operators need the raw text to debug.
+ */
+export function redactSandboxVendor(text: string): string {
+  return text
+    .replace(/\bE2B_API_KEY\b/gi, 'the sandbox credential')
+    .replace(/\b[\w.-]*\.e2b\.(?:dev|app|io)\b/gi, 'the sandbox host')
+    .replace(/\be2b[\w-]*\b/gi, 'sandbox')
+    .replace(/\bsandbox(?:\s+sandbox)+\b/gi, 'sandbox');
+}
+
 export function capOutput(output: string): string {
   if (Buffer.byteLength(output, 'utf8') <= MAX_EXECUTION_OUTPUT_BYTES) return output;
   // Slice by bytes, not chars, to honor the byte cap with multibyte content.
@@ -158,7 +182,9 @@ export async function routeExecutionTool(
     return {
       ok: false,
       output: '',
-      error: 'Execution environment unavailable (E2B is not configured for this request).',
+      // This string reaches the transcript as tool-error text, so it names the
+      // capability, not the vendor behind it.
+      error: 'Code execution is unavailable for this request.',
     };
   }
   if (!isExecutionTool(name)) {
@@ -189,14 +215,18 @@ export async function routeExecutionTool(
     }
     return {
       ...result,
-      output: capOutput(result.output),
-      error: result.error ? capOutput(result.error) : result.error,
+      output: capOutput(redactSandboxVendor(result.output)),
+      error: result.error ? capOutput(redactSandboxVendor(result.error)) : result.error,
     };
   } catch (err) {
     return {
       ok: false,
       output: '',
-      error: capOutput(`Execution failed: ${err instanceof Error ? err.message : String(err)}`),
+      error: capOutput(
+        redactSandboxVendor(
+          `Execution failed: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      ),
     };
   }
 }

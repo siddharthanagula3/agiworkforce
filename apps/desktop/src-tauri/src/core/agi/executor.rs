@@ -720,54 +720,17 @@ impl AGIExecutor {
                         }
                     };
 
-                    let process_reasoning = match ProcessReasoning::new(router.clone()) {
-                        Ok(pr) => pr,
-                        Err(e) => {
-                            tracing::error!("[Executor] Failed to create ProcessReasoning: {}", e);
-                            return crate::core::agi::ExecutionResult {
-                                plan_id,
-                                sandbox_id,
-                                success: false,
-                                steps_completed: 0,
-                                steps_failed: 1,
-                                output: serde_json::json!({}),
-                                error: Some(format!("Failed to create ProcessReasoning: {}", e)),
-                                execution_time_ms: start_time.elapsed().as_millis() as u64,
-                                cost: None,
-                            };
-                        }
-                    };
-
-                    let outcome_tracker =
-                        match OutcomeTracker::new("outcome_tracker_parallel.db".to_string()) {
-                            Ok(ot) => ot,
-                            Err(e) => {
-                                tracing::error!(
-                                    "[Executor] Failed to create OutcomeTracker: {}",
-                                    e
-                                );
-                                return crate::core::agi::ExecutionResult {
-                                    plan_id,
-                                    sandbox_id,
-                                    success: false,
-                                    steps_completed: 0,
-                                    steps_failed: 1,
-                                    output: serde_json::json!({}),
-                                    error: Some(format!("Failed to create OutcomeTracker: {}", e)),
-                                    execution_time_ms: start_time.elapsed().as_millis() as u64,
-                                    cost: None,
-                                };
-                            }
-                        };
-
-                    let mut executor = match AGIExecutor::with_process_reasoning(
+                    // Parallel workers call `execute_step` directly. Process
+                    // reasoning and outcome tracking are only consumed by
+                    // `execute_goal_with_outcomes`; constructing them here
+                    // created an unmigrated relative SQLite database and could
+                    // fail the plan before a single step ran.
+                    let mut executor = match AGIExecutor::new(
                         tool_registry,
                         Arc::new(resource_manager),
                         automation,
                         router.clone(),
                         app_handle,
-                        Arc::new(process_reasoning),
-                        Arc::new(outcome_tracker),
                         None, // No reflection engine for parallel sub-tasks for now
                         None, // No change tracker for parallel execution
                     ) {

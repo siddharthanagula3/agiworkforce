@@ -13,6 +13,10 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { STRIPE_API_VERSION } from '@/lib/stripe-config';
 import { recordAuditEvent } from '@/lib/security-audit';
+import {
+  getSubscriptionBillingOwnerPolicy,
+  stripeBillingOwnershipMessage,
+} from '@/lib/server/subscription-billing-owner';
 
 const STRIPE_SECRET_KEY = process.env['STRIPE_SECRET_KEY'];
 
@@ -127,11 +131,22 @@ async function handlePortal(request: NextRequest) {
 
   const db = getNeonDb();
 
-  type SubRow = Pick<SubscriptionRow, 'stripe_customer_id' | 'stripe_subscription_id' | 'status'>;
+  type SubRow = Pick<
+    SubscriptionRow,
+    | 'plan_tier'
+    | 'stripe_customer_id'
+    | 'stripe_subscription_id'
+    | 'apple_original_transaction_id'
+    | 'google_purchase_token'
+    | 'current_period_end'
+    | 'status'
+  >;
   let subRows: SubRow[];
   try {
     subRows = await db.query<SubRow>(
-      'select stripe_customer_id, stripe_subscription_id, status from subscriptions where user_id = $1 limit 1',
+      `select plan_tier, stripe_customer_id, stripe_subscription_id,
+              apple_original_transaction_id, google_purchase_token, current_period_end, status
+       from subscriptions where user_id = $1 limit 1`,
       [userId],
     );
   } catch (error) {
@@ -141,6 +156,14 @@ async function handlePortal(request: NextRequest) {
     );
   }
   const subscription = subRows[0] ?? null;
+  const ownerPolicy = getSubscriptionBillingOwnerPolicy(subscription);
+
+  // A Stripe customer id left on a store- or organization-owned row is not
+  // permission to open that customer's Stripe portal. The canonical
+  // subscription owner must be Stripe; contradictory identifiers fail closed.
+  if (subscription && !ownerPolicy.canOpenStripePortal) {
+    throw createError.conflict(stripeBillingOwnershipMessage(ownerPolicy, 'portal'));
+  }
 
   // Self-healing: If no local subscription, try to find in Stripe by customer_id (BEST PRACTICE)
   if (!subscription) {

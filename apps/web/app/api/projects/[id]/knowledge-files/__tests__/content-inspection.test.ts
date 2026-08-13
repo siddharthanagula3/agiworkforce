@@ -17,10 +17,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { NextRequest } from 'next/server';
 
-const { mockGetClerkAuthUser, mockNeonQuery, mockGetObject, mockDeleteObject } = vi.hoisted(() => ({
+const {
+  mockGetClerkAuthUser,
+  mockNeonQuery,
+  mockGetPrivateObject,
+  mockDeletePrivateObject,
+  mockDeleteObject,
+} = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
   mockNeonQuery: vi.fn(),
-  mockGetObject: vi.fn(),
+  mockGetPrivateObject: vi.fn(),
+  mockDeletePrivateObject: vi.fn(),
   mockDeleteObject: vi.fn(),
 }));
 
@@ -45,9 +52,12 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
 // The only storage boundary. `objectKeyFromStorageUri` stays faithful to the
 // real one for the opaque-key form the presign route hands out.
 vi.mock('@/lib/server/object-storage', () => ({
-  getObject: mockGetObject,
+  getObject: vi.fn(),
+  getPrivateObject: mockGetPrivateObject,
   deleteObject: mockDeleteObject,
+  deletePrivateObject: mockDeletePrivateObject,
   isObjectStorageConfigured: () => true,
+  isPrivateObjectStorageConfigured: () => true,
   objectKeyFromStorageUri: (value: string) => value,
 }));
 
@@ -89,7 +99,7 @@ function wireDatabase(): void {
 }
 
 function post(bytes: Buffer, mimeType: string, fileName: string): Promise<Response> {
-  mockGetObject.mockResolvedValue({ data: bytes, contentType: mimeType });
+  mockGetPrivateObject.mockResolvedValue({ data: bytes, contentType: mimeType });
   const request = new NextRequest(`http://localhost/api/projects/${PROJECT_ID}/knowledge-files`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -113,6 +123,7 @@ describe('POST /api/projects/[id]/knowledge-files — content inspection', () =>
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
+    mockDeletePrivateObject.mockResolvedValue(undefined);
     mockDeleteObject.mockResolvedValue(undefined);
     wireDatabase();
   });
@@ -122,7 +133,7 @@ describe('POST /api/projects/[id]/knowledge-files — content inspection', () =>
 
     expect(res.status).toBe(201);
     expect(insertWasAttempted()).toBe(true);
-    expect(mockDeleteObject).not.toHaveBeenCalled();
+    expect(mockDeletePrivateObject).not.toHaveBeenCalled();
   });
 
   it('rejects an ELF executable disguised as a text source and purges the object', async () => {
@@ -139,7 +150,7 @@ describe('POST /api/projects/[id]/knowledge-files — content inspection', () =>
     );
     // Nothing registered, and the bytes are gone from storage.
     expect(insertWasAttempted()).toBe(false);
-    expect(mockDeleteObject).toHaveBeenCalledWith(STORAGE_URI);
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_URI);
   });
 
   it('rejects a ZIP polyglot declared as a PNG image', async () => {
@@ -149,7 +160,7 @@ describe('POST /api/projects/[id]/knowledge-files — content inspection', () =>
 
     expect(res.status).toBe(400);
     expect(insertWasAttempted()).toBe(false);
-    expect(mockDeleteObject).toHaveBeenCalledWith(STORAGE_URI);
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_URI);
   });
 
   it('rejects a PDF that embeds JavaScript', async () => {
@@ -162,7 +173,7 @@ describe('POST /api/projects/[id]/knowledge-files — content inspection', () =>
 
     expect(res.status).toBe(400);
     expect(insertWasAttempted()).toBe(false);
-    expect(mockDeleteObject).toHaveBeenCalledWith(STORAGE_URI);
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_URI);
   });
 
   it('never leaks which detector fired', async () => {

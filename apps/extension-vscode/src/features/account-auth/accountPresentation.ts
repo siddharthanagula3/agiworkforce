@@ -3,6 +3,42 @@ import { AGENT_MODE_LABEL, type AgentMode } from '@agiworkforce/types';
 
 import type { AccountIdentity } from '../../utils/api';
 
+function formatDate(iso: string | undefined): string | undefined {
+  if (iso === undefined) return undefined;
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+}
+
+function billingOwnerLabel(source: AccountIdentity['subscriptionSource']): string | undefined {
+  switch (source) {
+    case 'stripe':
+      return 'Web billing';
+    case 'apple':
+      return 'Apple App Store';
+    case 'google':
+      return 'Google Play';
+    case 'manual':
+      return 'Organization-managed';
+    case 'none':
+    case undefined:
+      return undefined;
+  }
+}
+
+export function describeAccountPlan(identity: AccountIdentity): string {
+  const periodEnd = formatDate(identity.currentPeriodEnd);
+  if (identity.cancelAtPeriodEnd === true && periodEnd !== undefined) {
+    return `${identity.planName} plan · ends ${periodEnd}`;
+  }
+  const owner = billingOwnerLabel(identity.subscriptionSource);
+  return owner === undefined ? `${identity.planName} plan` : `${identity.planName} plan · ${owner}`;
+}
+
 /**
  * Informational account rows shown before usage and actions. These rows carry
  * no command/action field, so selecting them cannot mutate account state.
@@ -28,8 +64,11 @@ export function buildAccountIdentityItems(
     identity
       ? {
           label: `$(organization) ${identity.accountType}`,
-          description: `${identity.planName} plan`,
-          detail: 'Plan owner and account boundary',
+          description: describeAccountPlan(identity),
+          detail:
+            identity.cancelAtPeriodEnd === true
+              ? 'Access remains active through the shown period end'
+              : 'Plan owner and account boundary',
         }
       : {
           label: '$(organization) Plan owner unavailable',
@@ -45,9 +84,9 @@ export function buildTrustReviewItems(
   mode: AgentMode,
   identity: AccountIdentity | undefined,
 ): TrustReviewItem[] {
-  const localBoundaryDescription = identity
-    ? `${identity.displayName}'s Cloud plan is not used for this local developer session`
-    : 'Workspace-scoped local app-server; no AGI Cloud account is required';
+  const boundaryDescription = identity
+    ? `Each chat labels whether ${identity.displayName}'s plan, a provider key, or a local model owns the request`
+    : 'Each chat labels Local, provider BYOK, or Managed Cloud before a request is sent';
 
   return [
     { label: 'Trust & review', kind: vscode.QuickPickItemKind.Separator },
@@ -61,8 +100,8 @@ export function buildTrustReviewItems(
       description: 'AI output can be wrong; inspect changes before accepting them',
     },
     {
-      label: '$(lock) Developer session boundary: Local',
-      description: localBoundaryDescription,
+      label: '$(lock) Developer-session boundary: shown in chat',
+      description: boundaryDescription,
     },
     {
       // Named for what /settings/privacy actually offers: a telemetry-sharing

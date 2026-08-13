@@ -35,6 +35,10 @@ vi.mock('@/lib/server/object-storage', () => ({
   objectKeyFromPublicUrl: () => null,
   objectKeyFromStorageUri: (value: string) => value,
 }));
+vi.mock('@/lib/server/project-knowledge-object-storage', () => ({
+  deleteProjectKnowledgeObject: vi.fn(),
+  isProjectKnowledgeObjectStorageConfigured: () => true,
+}));
 vi.mock('@clerk/nextjs/server', () => ({
   clerkClient: async () => ({ users: { deleteUser: mocks.deleteUser } }),
 }));

@@ -2,7 +2,11 @@ import 'server-only';
 
 import { createHash } from 'crypto';
 import type { GeneratedFileSurface } from '@agiworkforce/cloud-contracts';
-import { storeMedia, isMediaStorageConfigured } from '@/lib/server/media-storage';
+import {
+  deleteStoredMedia,
+  isGeneratedMediaStorageConfigured,
+  storeMedia,
+} from '@/lib/server/media-storage';
 import { insertMediaAsset, type MediaKind } from '@/lib/server/media-assets';
 import { logger } from '@/lib/logger';
 
@@ -209,7 +213,7 @@ export async function persistGeneratedFileBytes(params: {
   const { userId, organizationId, data, mimeType, filename, provider, origin, model, prompt } =
     params;
 
-  if (!isMediaStorageConfigured()) return { ok: false, reason: 'not_configured' };
+  if (!isGeneratedMediaStorageConfigured()) return { ok: false, reason: 'not_configured' };
   if (data.byteLength > MAX_GENERATED_FILE_BYTES) {
     logger.warn(
       { filename, size: data.byteLength, cap: MAX_GENERATED_FILE_BYTES, provider },
@@ -218,11 +222,13 @@ export async function persistGeneratedFileBytes(params: {
     return { ok: false, reason: 'too_large' };
   }
 
+  let storedPathname: string | null = null;
   try {
     const kind = mediaKindFor(mimeType);
     const classification = classifyGeneratedFile(filename, mimeType);
     const checksum = createHash('sha256').update(data).digest('hex');
     const stored = await storeMedia({ userId, kind, data, contentType: mimeType });
+    storedPathname = stored.pathname;
     const assetId = await insertMediaAsset({
       userId,
       organizationId,
@@ -247,17 +253,25 @@ export async function persistGeneratedFileBytes(params: {
         ...(params.extraMetadata ?? {}),
       },
     });
+    if (!assetId) {
+      await deleteStoredMedia(stored.pathname);
+      storedPathname = null;
+      logger.error(
+        { filename, provider, userId, storagePathname: stored.pathname },
+        'Generated file catalog was unavailable; removed uncataloged private bytes',
+      );
+      return { ok: false, reason: 'storage_error' };
+    }
 
     return {
       ok: true,
       file: {
-        id: assetId ?? crypto.randomUUID(),
+        id: assetId,
         file_name: filename,
         mime_type: mimeType,
-        // Same-origin serve path when cataloged (renderer gates accept it);
-        // the raw R2 public URL is only a download-fallback when the catalog
-        // row could not be written (pre-migration deploys).
-        uri: assetId ? `/api/files/${assetId}` : stored.url,
+        // The catalog row is load-bearing: it is the owner check and the only
+        // client-facing address for private bytes.
+        uri: `/api/files/${assetId}`,
         byte_count: stored.byteSize,
         kind: generatedFileKind(filename, mimeType),
         checksum_sha256: checksum,
@@ -266,6 +280,16 @@ export async function persistGeneratedFileBytes(params: {
       },
     };
   } catch (err) {
+    if (storedPathname) {
+      try {
+        await deleteStoredMedia(storedPathname);
+      } catch (cleanupError) {
+        logger.error(
+          { cleanupError, filename, provider, userId, storagePathname: storedPathname },
+          'Failed to remove uncataloged generated-file bytes',
+        );
+      }
+    }
     logger.warn(
       { err: err instanceof Error ? err.message : String(err), filename, provider, userId },
       'Failed to persist generated file bytes; skipping',

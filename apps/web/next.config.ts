@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 import bundleAnalyzer from '@next/bundle-analyzer';
 import { withWorkflow } from 'workflow/next';
+import { API_HOST_REWRITE_ROUTES } from './lib/api-host-route-contract';
 
 // Workspace dependency fix: Vercel build will now resolve packages directory
 // This ensures @agiworkforce/types and @agiworkforce/utils are available
@@ -96,38 +97,21 @@ const nextConfig: NextConfig = {
   // for Next.js projects, which left the api host serving /_not-found for
   // every /v1 path in production (verified via x-matched-path, 2026-07-17).
   //
-  // Necessary but not sufficient. Rewrites are step 6 of Next's routing order
-  // and proxy.ts is step 3, so the api-host bounce there still sees the raw
-  // `/v1/...` path — not the rewritten `/api/llm/v1/...` its `/api/` guard
-  // assumes — and 307s the request to the app host, where the `has` host
-  // condition below can no longer match. That bounce must exempt `/v1/*` and
-  // `/health` for any of this to fire. Redirecting instead of rewriting is not
-  // an option: the hop is cross-origin, so clients drop the Authorization
-  // header and a caller's API key never reaches the handler.
+  // Proxy is step 3 of Next's routing order and these rewrites run later, so
+  // proxy.ts imports the same route contract and passes these exact raw paths
+  // through. Do not copy either list independently: a Proxy redirect loses the
+  // Host condition below, and a cross-origin hop can drop Authorization before
+  // the request reaches its handler.
   //
   // Live as of 2026-08-09: api.agiworkforce.com/v1/chat/completions answers
   // 307 → agiworkforce.com/v1/chat/completions → 404 /_not-found.
   async rewrites() {
     const apiHost = [{ type: 'host' as const, value: 'api.agiworkforce.com' }];
-    return [
-      {
-        source: '/v1/chat/completions',
-        destination: '/api/llm/v1/chat/completions',
-        has: apiHost,
-      },
-      { source: '/v1/models', destination: '/api/llm/v1/models', has: apiHost },
-      {
-        source: '/v1/credits/balance',
-        destination: '/api/llm/v1/credits/balance',
-        has: apiHost,
-      },
-      {
-        source: '/v1/audio/transcriptions',
-        destination: '/api/llm/v1/audio/transcriptions',
-        has: apiHost,
-      },
-      { source: '/health', destination: '/api/health', has: apiHost },
-    ];
+    return API_HOST_REWRITE_ROUTES.map(({ source, destination }) => ({
+      source,
+      destination,
+      has: apiHost,
+    }));
   },
 
   // /chat is a native Next.js route (app/chat). The old static-SPA-from-public/chat

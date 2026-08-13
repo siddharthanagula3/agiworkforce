@@ -1,5 +1,9 @@
 import { applyAgentActivityEvent, type AgentActivityState } from '@agiworkforce/client-runtime';
-import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import type {
+  GeneratedFileWire,
+  ManagedCloudAgentRunReference,
+} from '@agiworkforce/cloud-contracts';
+import type { InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
 export interface SidePanelChatMessage {
@@ -18,6 +22,18 @@ export interface SidePanelChatMessage {
   cloudApprovalError?: string;
   /** True when the turn used the request-only Quick overlay. */
   managedQuickMode?: boolean;
+  /** Exact concrete route that produced this assistant turn. */
+  model?: string;
+  provider?: string;
+  /** Durable rich-result descriptors; request-scoped attachment bytes are never stored here. */
+  generatedFiles?: GeneratedFileWire[];
+  interactiveCards?: InteractiveCard[];
+  /**
+   * Runtime that produced this turn, stamped at dispatch. Drives the visible
+   * "saved to your account" vs "saved on this device" label, and gates
+   * account-backed persistence. Absent = unknown = never mirrored.
+   */
+  runtime?: 'managed-cloud' | 'local';
   /**
    * Why the stream failed, kept out of `content`.
    *
@@ -40,6 +56,11 @@ export interface StoredSidePanelChatMessage {
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
   cloudApprovalError?: string;
   managedQuickMode?: boolean;
+  model?: string;
+  provider?: string;
+  generatedFiles?: GeneratedFileWire[];
+  interactiveCards?: InteractiveCard[];
+  runtime?: 'managed-cloud' | 'local';
 }
 
 const MAX_PERSISTED_ACTIVITY_EVENTS = 1_000;
@@ -112,6 +133,17 @@ export function hydrateStoredChatMessage(
       : {}),
     ...(message.cloudApprovalError ? { cloudApprovalError: message.cloudApprovalError } : {}),
     ...(message.managedQuickMode ? { managedQuickMode: true } : {}),
+    ...(message.model ? { model: message.model } : {}),
+    ...(message.provider ? { provider: message.provider } : {}),
+    ...(message.generatedFiles
+      ? { generatedFiles: message.generatedFiles.map((file) => ({ ...file })) }
+      : {}),
+    ...(message.interactiveCards
+      ? { interactiveCards: message.interactiveCards.map((card) => ({ ...card })) }
+      : {}),
+    // Carried through so a restored conversation keeps its provenance badge
+    // instead of silently reading as unknown.
+    ...(message.runtime ? { runtime: message.runtime } : {}),
   };
 }
 

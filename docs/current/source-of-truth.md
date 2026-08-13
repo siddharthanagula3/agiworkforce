@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-08-09
+Last updated: 2026-08-13
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -89,18 +89,18 @@ The original Local thread remains Local forever. A BYOK continuation is a new re
 
 ## Surface Roles
 
-| Surface | Role                                                                                                                                                                                                     | Sync boundary                                                                                                                                                                                                               |
-| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Web     | Account, projects, synced app chats, artifacts, billing, admin, web routes, and capacity-specific access requests. Web chat is subscription-backed through Neon/account state; Web does not expose BYOK. | Normal app chat sync allowed.                                                                                                                                                                                               |
-| Desktop | Local-private compute host, rich app shell, local files, MCP/connectors, artifacts, computer/browser use, native host for Chrome/Mobile/CLI bridges.                                                     | Normal app chat sync allowed for app chats; local files stay local unless explicitly transferred.                                                                                                                           |
-| Mobile  | Small on-device Local LLM chat, continuity, approvals, preview/share, and public-alpha Cloud chat for signed-in users (no invite/waitlist). Mobile v1 does not expose BYOK.                              | Signed-in Cloud chats, projects, memory, settings, and personalization share the app continuity contract with Web and Desktop. Local Mode data and files stay local unless the user explicitly chooses a reviewed transfer. |
-| CLI     | Developer agent, terminal engine, and canonical local developer-session host used by VS Code.                                                                                                            | Workspace/session scoped; no automatic sync into app chats.                                                                                                                                                                 |
-| VS Code | IDE-native thin client and presentation adapter over the CLI-hosted Rust developer session.                                                                                                              | One local-runtime process per trusted workspace; handoff to app chat must be explicit and redacted.                                                                                                                         |
-| Chrome  | Browser context, page capture/action approvals, native messaging, and browser-local conversations.                                                                                                       | Conversations persist in extension-local storage and never join consumer app-chat sync implicitly; transfer requires explicit selected/redacted handoff.                                                                    |
+| Surface | Role                                                                                                                                                                                                     | Sync boundary                                                                                                                                                                                                                             |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Web     | Account, projects, synced app chats, artifacts, billing, admin, web routes, and capacity-specific access requests. Web chat is subscription-backed through Neon/account state; Web does not expose BYOK. | Normal app chat sync allowed.                                                                                                                                                                                                             |
+| Desktop | Local-private compute host, rich app shell, local files, MCP/connectors, artifacts, computer/browser use, native host for Chrome/Mobile/CLI bridges.                                                     | Normal app chat sync allowed for app chats; local files stay local unless explicitly transferred.                                                                                                                                         |
+| Mobile  | Small on-device Local LLM chat, continuity, approvals, preview/share, and public-alpha Cloud chat for signed-in users (no invite/waitlist). Mobile v1 does not expose BYOK.                              | Signed-in Cloud chats, projects, memory, settings, and personalization share the app continuity contract with Web and Desktop. Local Mode data and files stay local unless the user explicitly chooses a reviewed transfer.               |
+| CLI     | Developer agent, terminal engine, and canonical local developer-session host used by VS Code.                                                                                                            | Workspace/session scoped; no automatic sync into app chats.                                                                                                                                                                               |
+| VS Code | IDE-native thin client and presentation adapter over the CLI-hosted Rust developer session.                                                                                                              | One local-runtime process per trusted workspace; handoff to app chat must be explicit and redacted.                                                                                                                                       |
+| Chrome  | Cloud-only browser assistant with page context, capture/action approvals, native messaging, and a browser-local authoritative conversation cache.                                                        | Every signed-in conversation whose turns all ran in Managed Cloud automatically mirrors to the shared account store and appears in Web, Mobile Cloud, Tauri Cloud, and Electron Cloud. Unknown/Local/BYOK provenance stays browser-local. |
 
 ## Continuity And Reuse Lock
 
-- Web, Mobile, and Desktop are adapters over one signed-in Cloud continuity domain for app chats, projects, Cloud memory, profile instructions/personalization, and synchronized settings. Surface-specific stores may cache or render that data, but they must not define competing schemas, merge policies, or server routes. Local Desktop/Mobile state remains inside the Local trust boundary.
+- Web, Mobile Cloud, both Desktop Cloud shells, and provenance-eligible Chrome Managed Cloud chats participate in one signed-in Cloud continuity domain for app chats. Chrome writes an append-only account replica while its browser-local store remains authoritative; the other Cloud surfaces hydrate that shared account copy. Projects, Cloud memory, profile instructions/personalization, and synchronized settings remain shared only where their surface contracts support them. Local Desktop/Mobile state remains inside the Local trust boundary.
 - CLI is the canonical local developer-session host and VS Code is a thin client over the same workspace runtime, transcript/session store, permission pipeline, and extension discovery service. Resuming a session appends to the same session ID; forking creates a new ID. Neither surface silently joins consumer app-chat history.
 - Developer extension discovery is folder-aware. `.agi` is the canonical AGI project configuration; compatibility loaders may read supported `.agents`, `.claude`, `AGENTS.md`, `CLAUDE.md`, skills, plugins, connectors/MCP, hooks, and agent definitions through one precedence-aware loader. CLI and VS Code must show the same discovered inventory for the same trusted workspace. Compatibility does not authorize moving, deleting, or rewriting another tool&rsquo;s files.
 - Managed usage UI is one percentage/reset-time contract. Web, Mobile, Desktop, CLI, and VS Code render percentage progress bars without exposing private plan-allowance units, token-to-credit conversion, or provider cost. The explicit top-up checkout is the narrow exception: it displays the founder-set public purchase denomination (50 top-up units per $1), not the private plan allowance. Chrome has no usage dashboard; it still receives honest limit/upgrade errors from the shared server policy.
@@ -343,11 +343,13 @@ Chrome:
 - `apps/extension/src/features/background/conversation-history.ts` owns the
   browser conversation store in `chrome.storage.local`, including migration,
   active-conversation selection, bounded retention, mutation serialization,
-  and CRUD used by the side panel. This is intentionally separate from
-  Web/Mobile/Desktop app-chat sync.
+  and CRUD used by the side panel. It stays authoritative. Conversations whose
+  every turn carries Managed Cloud provenance automatically mirror to the
+  shared account conversation store for Web, Mobile Cloud, Tauri Cloud, and
+  Electron Cloud; unknown/Local/BYOK provenance fails closed.
 - Remaining parity gaps are polished side panel UX, permissions UX,
-  Chrome-to-Desktop bridge hardening, and the explicit selected/redacted handoff
-  flow.
+  Chrome-to-Desktop bridge hardening, and explicit selected/redacted handoff for
+  data that is not already inside a Managed Cloud conversation.
 
 VS Code:
 

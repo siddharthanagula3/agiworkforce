@@ -76,6 +76,15 @@ const mockLibraryImages = [
 ];
 
 jest.mock('expo-router', () => ({
+  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
+  // @react-navigation/native: the monorepo resolves several copies of that
+  // package and importing from it crashed the app at launch. The mock has to
+  // follow the production import or every screen using them throws here.
+  useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    const React = require('react');
+    React.useEffect(() => cb(), []);
+  },
   useRouter: () => ({ push: mockPush }),
   // The drawer's icon-only search button hands off here with `focusSearch=1`.
   useLocalSearchParams: () => mockSearchParams,

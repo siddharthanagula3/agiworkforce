@@ -24,6 +24,7 @@ import {
   getCloudWebOrigin,
   setAccountToken,
 } from '../../utils/api';
+import { getExtensionUserAgent } from '../../platform/version';
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const MIN_POLL_INTERVAL_MS = 3_000;
@@ -70,7 +71,7 @@ const postJson: DeviceAuthPost = (urlString, payload, headers) =>
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': Buffer.byteLength(data),
-          'User-Agent': 'agi-workforce-vscode/0.3.0',
+          'User-Agent': getExtensionUserAgent(),
           ...headers,
         },
         timeout: REQUEST_TIMEOUT_MS,

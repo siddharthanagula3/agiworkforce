@@ -7,6 +7,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
+const stripeMocks = vi.hoisted(() => ({
+  retrievePrice: vi.fn(),
+}));
+
 // Store original env vars
 const originalEnv = { ...process.env };
 
@@ -24,11 +28,18 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
+vi.mock('@/lib/price-tier-mapping', () => ({
+  getConfiguredStripePriceIds: vi.fn(() => ['price_configured']),
+}));
+
 // Mock Stripe - must be a class for 'new Stripe()' to work
 vi.mock('stripe', () => ({
   default: class MockStripe {
     products = {
       list: vi.fn().mockResolvedValue({ data: [] }),
+    };
+    prices = {
+      retrieve: stripeMocks.retrievePrice,
     };
   },
 }));
@@ -54,6 +65,11 @@ describe('Health Check API', () => {
     // Set required env vars — health route checks DATABASE_URL (Neon)
     process.env['DATABASE_URL'] = 'postgresql://test:test@localhost/test';
     process.env['STRIPE_SECRET_KEY'] = 'sk_test_123';
+    stripeMocks.retrievePrice.mockResolvedValue({
+      active: true,
+      type: 'recurring',
+      recurring: { interval: 'month' },
+    });
     // Re-apply mockNeonQuery default after clearAllMocks
     mockNeonQuery.mockResolvedValue([{ '?column?': 1 }]);
   });
@@ -111,6 +127,22 @@ describe('Health Check API', () => {
       const data = await response.json();
       expect(data.checks.stripe.status).toBe('unhealthy');
       expect(data.checks.stripe.message).toBe('unavailable');
+    });
+
+    it('reports Stripe degraded when a configured Price is unreachable under the key', async () => {
+      stripeMocks.retrievePrice.mockRejectedValueOnce(
+        new Error('Configured Price is not available to this Stripe account or mode'),
+      );
+
+      const request = new NextRequest('http://localhost/api/health', {
+        method: 'GET',
+      });
+      const response = await GET(request);
+      const data = await response.json();
+
+      expect(response.status).toBe(200);
+      expect(data.status).toBe('degraded');
+      expect(data.checks.stripe).toEqual({ status: 'unhealthy', message: 'unavailable' });
     });
 
     it('should return unhealthy status when environment variables are missing', async () => {

@@ -13,6 +13,7 @@
 
 import { ollamaCheckStatus, ollamaListModels, type OllamaModel } from '../api/ollama';
 import { useModelStore } from '../stores/modelStore';
+import { notifyLocalModelCatalogChanged } from '../lib/localModelCatalog';
 
 // Configuration
 const HEALTH_CHECK_INTERVAL_MS = 30_000; // 30 seconds when healthy
@@ -79,9 +80,11 @@ async function performHealthCheck(): Promise<boolean> {
  */
 function handleUnavailable(reason: string): void {
   const wasRunning = healthState.isRunning;
+  const hadModels = healthState.modelsCount > 0;
   healthState.isRunning = false;
   healthState.lastCheck = Date.now();
   healthState.consecutiveFailures++;
+  healthState.modelsCount = 0;
 
   // Only log the first few failures to avoid log spam
   if (healthState.consecutiveFailures <= MAX_CONSECUTIVE_FAILURES) {
@@ -98,6 +101,9 @@ function handleUnavailable(reason: string): void {
     ollamaError: getGracefulErrorMessage(),
     ollamaModels: [],
   });
+  if (wasRunning || hadModels) {
+    notifyLocalModelCatalogChanged('background-health');
+  }
 
   // Adjust check interval (backoff when unavailable)
   adjustCheckInterval();
@@ -133,6 +139,9 @@ async function fetchModelsAsync(): Promise<void> {
       ollamaModels: models,
       ollamaLoading: false,
     });
+    if (models.length !== previousCount) {
+      notifyLocalModelCatalogChanged('background-health');
+    }
   } catch (error) {
     console.warn('[OllamaHealth] Failed to fetch models:', error);
   }

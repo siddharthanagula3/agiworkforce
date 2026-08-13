@@ -41,6 +41,7 @@ import {
 // Exported so runtimes can resolve relative wire uris (e.g. the
 // `x_generated_files` `/api/files/{id}` paths) against the same base.
 export const CLOUD_API_BASE_URL = isTauri || isElectronHost ? WEB_APP_URL : '';
+const usesNativeCloudSession = isTauri || isElectronHost;
 
 /** Maximum size of one not-yet-dispatched Managed Cloud SSE event. */
 export const CLOUD_SSE_MAX_EVENT_CHARS = 1_048_576;
@@ -108,7 +109,7 @@ export type CloudChatMessageContent =
  * automatically. We fetch a CSRF token for state-changing requests.
  */
 function captureDesktopCloudAccountId(): string | undefined {
-  return isTauri ? cloudAccountAuth.getSession()?.user?.id : undefined;
+  return usesNativeCloudSession ? cloudAccountAuth.getSession()?.user?.id : undefined;
 }
 
 async function readAccountBoundSession(expectedAccountId?: string) {
@@ -134,7 +135,7 @@ export async function getAuthHeaders(
     headers['Authorization'] = `Bearer ${session.access_token}`;
   }
 
-  if (isTauri && !session?.access_token) {
+  if (usesNativeCloudSession && !session?.access_token) {
     throw new Error('AGI Cloud requires a connected Desktop session.');
   }
 
@@ -175,7 +176,7 @@ export async function cloudFetch(
   if (expectedAccountId && cloudAccountAuth.getSession()?.user?.id !== expectedAccountId) {
     throw new Error('The Managed Cloud account changed while this request was in progress.');
   }
-  if (isTauri && response.status === 401) {
+  if (usesNativeCloudSession && response.status === 401) {
     // A request may have left with T1 immediately before a same-account refresh
     // installed T2. A late T1 rejection must not revoke the newer valid
     // credential. Only the exact bearer that the server rejected may invalidate

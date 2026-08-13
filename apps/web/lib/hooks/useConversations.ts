@@ -8,6 +8,7 @@ import { addCsrfHeaders } from '@/lib/client/csrf';
 import { readPersistedAttachments } from '@/features/chat/lib/persisted-attachments';
 import {
   MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE,
+  MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE,
   MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE,
   ManagedCloudConversationListResponseSchema,
   ManagedCloudConversationResponseSchema,
@@ -20,6 +21,8 @@ import {
   ManagedCloudUpdateConversationResponseSchema,
   managedCloudConversationPath,
   normalizeManagedCloudConversation,
+  type ManagedCloudConversationWire,
+  type ManagedCloudMessageWire,
 } from '@agiworkforce/cloud-contracts';
 
 /**
@@ -348,24 +351,58 @@ export function useConversations(): UseConversationsReturn {
 
       try {
         const headers = await getAuthHeaders();
-        const response = await fetch(managedCloudConversationPath(id), { headers });
-        if (cancelled()) return true;
+        let offset = 0;
+        let loadedConversationWire: ManagedCloudConversationWire | undefined;
+        const loadedMessageWires: ManagedCloudMessageWire[] = [];
+        const loadedMessageIds = new Set<string>();
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error?.message || 'Failed to load conversation');
+        for (;;) {
+          const response = await fetch(
+            `${managedCloudConversationPath(id)}?limit=${MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE}&offset=${offset}`,
+            { headers },
+          );
+          if (cancelled()) return true;
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.error?.message || 'Failed to load conversation');
+          }
+
+          const page = ManagedCloudConversationResponseSchema.parse(await response.json());
+          if (cancelled()) return true;
+          if (page.conversation.id !== id) {
+            throw new Error('Conversation response did not match the requested chat');
+          }
+          loadedConversationWire ??= page.conversation;
+          for (const message of page.messages) {
+            if (loadedMessageIds.has(message.id)) {
+              throw new Error('Conversation pagination repeated a message');
+            }
+            loadedMessageIds.add(message.id);
+          }
+          loadedMessageWires.push(...page.messages);
+          if (!page.hasMore) break;
+          if (page.messages.length === 0) {
+            throw new Error('Conversation pagination did not advance');
+          }
+          const nextOffset = offset + page.messages.length;
+          if (nextOffset >= page.total) {
+            throw new Error('Conversation pagination exceeded its reported total');
+          }
+          offset = nextOffset;
         }
 
-        const data = ManagedCloudConversationResponseSchema.parse(await response.json());
-        if (cancelled()) return true;
-        const loadedConversation = toWebConversation(data.conversation);
+        if (!loadedConversationWire) {
+          throw new Error('Conversation response was empty');
+        }
+        const loadedConversation = toWebConversation(loadedConversationWire);
         // Detail routes are the source of truth for deep-linked conversations,
         // including rows older than the first sidebar page. A map-only update
         // silently dropped those rows and therefore their saved model.
         upsertConversation(loadedConversation);
 
         // Convert API messages to store format
-        const messages: Message[] = data.messages.map((m) => {
+        const messages: Message[] = loadedMessageWires.map((m) => {
           // PER-33: validated, not asserted.
           const metadata = readLoadedMessageMetadata(m.metadata);
           const resumesVideo =

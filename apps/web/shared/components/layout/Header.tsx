@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUser, useClerk } from '@clerk/nextjs';
 import { useTheme } from 'next-themes';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, X } from 'lucide-react';
 import { AgiMark } from '../agi/AgiMark';
 import { SURFACE_STATUS } from '@/lib/marketing-constants';
 
@@ -78,8 +78,18 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProductsOpen, setIsProductsOpen] = useState(false);
   const productsRef = useRef<HTMLDivElement | null>(null);
+  const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
+  const mobileMenuCloseRef = useRef<HTMLButtonElement | null>(null);
 
   const userEmail = isLoaded ? (user?.primaryEmailAddress?.emailAddress ?? null) : null;
+
+  const closeMobileMenu = useCallback((restoreFocus = false) => {
+    setIsMenuOpen(false);
+    if (restoreFocus) {
+      window.setTimeout(() => mobileMenuButtonRef.current?.focus(), 0);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isProductsOpen) return;
@@ -100,27 +110,52 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
     };
   }, [isProductsOpen]);
 
-  // Lock body scroll + allow Escape to close while the mobile drawer is open.
+  // Lock body scroll, keep keyboard focus inside the modal drawer, and return
+  // focus to the control that opened it when the user dismisses the drawer.
   useEffect(() => {
     if (!isMenuOpen) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    mobileMenuCloseRef.current?.focus();
+
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsMenuOpen(false);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeMobileMenu(true);
+        return;
+      }
+      if (e.key !== 'Tab' || !mobileMenuRef.current) return;
+
+      const focusable = Array.from(
+        mobileMenuRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => !element.hasAttribute('hidden'));
+      if (focusable.length === 0) return;
+
+      const first = focusable[0]!;
+      const last = focusable.at(-1)!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', onKeyDown);
     };
-  }, [isMenuOpen]);
+  }, [closeMobileMenu, isMenuOpen]);
 
   const handleSignOut = async () => {
     await signOut({ redirectUrl: '/' });
   };
 
   const handleMobileSignOut = async () => {
-    setIsMenuOpen(false);
+    closeMobileMenu();
     await handleSignOut();
   };
 
@@ -213,6 +248,7 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
           <span className="agi-top-mobile-controls">
             <ThemeToggle className="agi-top-theme-toggle--mobile" />
             <button
+              ref={mobileMenuButtonRef}
               type="button"
               className="agi-top-link agi-top-mobile-toggle"
               aria-label={isMenuOpen ? t('menuClose') : t('menuOpen')}
@@ -238,24 +274,37 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
           <button
             type="button"
             className="agi-top-mobile-backdrop"
-            aria-label={t('menuClose')}
-            onClick={() => setIsMenuOpen(false)}
+            aria-label="Dismiss navigation"
+            tabIndex={-1}
+            onClick={() => closeMobileMenu(true)}
           />
           <div
+            ref={mobileMenuRef}
             id="agi-mobile-menu"
             className="agi-top-mobile-menu"
             role="dialog"
             aria-modal="true"
             aria-label={t('navProducts', 'Navigation')}
           >
-            <span className="agi-top-mobile-group">{t('navProducts', 'Products')}</span>
+            <div className="agi-top-mobile-header">
+              <span className="agi-top-mobile-group">{t('navProducts', 'Products')}</span>
+              <button
+                ref={mobileMenuCloseRef}
+                type="button"
+                className="agi-top-mobile-close"
+                aria-label={t('menuClose')}
+                onClick={() => closeMobileMenu(true)}
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
             <div className="agi-top-mobile-products">
               {PRODUCT_ITEMS.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
                   className="agi-top-mobile-product"
-                  onClick={() => setIsMenuOpen(false)}
+                  onClick={() => closeMobileMenu()}
                 >
                   <span className="agi-top-products-label">{item.label}</span>
                   <span className="agi-top-products-hint">{item.hint}</span>
@@ -268,7 +317,7 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
                 key={item.href}
                 href={item.href}
                 className="agi-top-link agi-top-mobile-link"
-                onClick={() => setIsMenuOpen(false)}
+                onClick={() => closeMobileMenu()}
               >
                 {t(item.key, item.fallback)}
               </Link>
@@ -279,7 +328,7 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
                   <Link
                     href="/chat"
                     className="agi-top-cta agi-top-cta--block"
-                    onClick={() => setIsMenuOpen(false)}
+                    onClick={() => closeMobileMenu()}
                   >
                     {t('navChat')}
                   </Link>
@@ -296,14 +345,14 @@ export function Header({ minimal = false }: { minimal?: boolean } = {}) {
                   <Link
                     href="/login?redirectTo=%2F"
                     className="agi-top-cta agi-top-cta--block"
-                    onClick={() => setIsMenuOpen(false)}
+                    onClick={() => closeMobileMenu()}
                   >
                     {t('navChat', 'Open AGI')}
                   </Link>
                   <Link
                     href="/login"
                     className="agi-top-link agi-top-mobile-link"
-                    onClick={() => setIsMenuOpen(false)}
+                    onClick={() => closeMobileMenu()}
                   >
                     {t('navSignIn')}
                   </Link>

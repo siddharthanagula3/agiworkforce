@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-11
+Last updated: 2026-08-13
 
 Built by extracting all 211 findings from the five audit artifacts, verifying
 96 of them against the repository as it stands, and ordering the survivors by
@@ -22,6 +22,377 @@ synthesis was a single pass over both.
   Open the file before you believe the finding.
 - Record dismissals as explicitly as fixes, with the evidence that dismissed
   them, in `docs/agent-context/known-flaws.md`.
+
+## Demo-readiness cycle — Website first (opened 2026-08-12)
+
+Priority order set by the founder: working frontend UI/UX -> real functionality
+-> integrations -> shared architecture -> cleanup -> release readiness. The bar
+is a Screen Studio recording that moves through the product without exposing
+broken UI, placeholders, fake responses, or dead controls.
+
+Verification is REAL BROWSER USE, not test cases. Drive `localhost:3000` as a
+demo would. A passing unit test is not evidence for this cycle; a screenshot of
+the working flow is.
+
+Model policy while testing: catalog-selected cost-efficient Google models for
+general, image and video checks. Use an OpenAI model only when provider-specific
+behaviour is under test.
+
+### Website — demo walkthrough
+
+- `DONE` Greeting shouted the profile name. Clerk stored "SIDDHARTHA", and the
+  hero headline rendered it verbatim as "Good evening, SIDDHARTHA".
+  `normalizeGreetingName` in
+  `apps/web/features/chat/components/GreetingBanner/useGreeting.ts` now
+  title-cases all-caps and all-lower names while leaving deliberate casing
+  ("McDonald", "d'Angelo") and two-letter initials ("JT") untouched.
+  Verified in-browser: "Good evening, Siddhartha".
+- `DONE` Video generation in-flight state was a blank card. The only label,
+  "Generating your video…", sat behind `motion-safe:opacity-0`, so it rendered
+  ONLY for prefers-reduced-motion readers — every normal viewer got an
+  unexplained grey rectangle for the 1-3 minutes Veo takes, which reads as a
+  hung product. Founder hit this live and reported "it did not work" while the
+  backend was in fact succeeding. Extracted to
+  `apps/web/features/chat/components/messages/VideoGenerationPlaceholder.tsx`
+  with an unconditional label, an icon chip, and a live elapsed counter seeded
+  from the message timestamp so a remount does not restart it.
+- `DONE` Map card geocoded to the wrong continent. Verified live: a Dallas ->
+  Las Vegas route pinned a road called "Las Vegas" in Limbé, CAMEROON.
+  `map-geocoding-service.ts` took Nominatim's `limit=1` on faith; it now
+  requests 5 candidates and ranks settlements (`place`/`boundary`) above
+  streets (`highway`), then by `importance`. Spot-checked: Las Vegas -> Nevada,
+  Dallas -> Texas, Paris -> Île-de-France, Springfield -> Illinois.
+- `DONE` Video generation verified end to end in the browser on the selected
+  cost-efficient Google video model —
+  prompt -> generation -> R2 private bucket -> inline player with real output.
+  This also proves the rotated account-scoped R2 token works against the
+  private bucket from application code, not just from a probe script.
+- `DONE` Image and video mode dropped on every send. The after-send clear in
+  `ChatComposerNew.tsx` reset `imageMode`/`videoMode` plus the chosen media
+  model and aspect ratio, on the stated assumption that these are "one-shot
+  composer modes". They are not: generating a second image meant reopening the
+  menu and re-picking mode and model, and the composer appeared to snap back to
+  a text model the instant you pressed send. Founder hit this on both modes.
+  Mode, media model and aspect ratio now persist; the mode pill's × remains the
+  single explicit way out and already clears all three. `selectedSkillName`
+  still clears per send — a skill genuinely is a one-shot choice.
+- `DONE` Every assistant reply was labelled "Unavailable model". The client
+  stamps the in-memory message with the model it REQUESTED, before the fetch —
+  under Auto routing that is the literal `auto`, which is not a catalog id, so
+  `getManagedModelPresentationLabel` fell through to the unavailable string on
+  every turn. Servers now report the routed id via `X-AGI-Resolved-Model` from
+  all three response builders (agent/tool-loop in `route.ts`, plus both
+  builders in `stream-transform.ts`), and all three client stream consumers
+  adopt it — including a `updateMessage` write-back, without which the header
+  changed only what was persisted and never what rendered. Verified live:
+  the resolved catalog model label. Also corrects the case where a credit fallback
+  swapped the model and the footer named one that never ran.
+- `DONE` "E2B" reached users. Three paths: the tool DESCRIPTION sent to the
+  model ("Runs in an isolated E2B environment" — models quote their tool
+  descriptions), the unavailable-executor error, and — the real one — the
+  catch block passing raw SDK errors into the transcript, where a dropped
+  connection arrives as `ECONNREFUSED 49982-abc.e2b.dev:443`. Added
+  `redactSandboxVendor()` on every path out of `routeExecutionTool`; hostnames,
+  sandbox ids and the env var name are scrubbed while Python tracebacks pass
+  through intact. Logs keep the raw text. The `/security` page still names the
+  subprocessor — that is a disclosure, not a leak.
+- `DONE` Run code was silently failing: `[e2b] per-user sandbox quota reached;
+refusing new sandbox (fail-closed)`. Cause is an operational leak — the quota
+  counts `['running','paused']` and PAUSED sandboxes are never reaped, so they
+  occupy the quota permanently and keep costing money. Found 12 paused
+  sandboxes on the account, the oldest from 11 July. Reaped them; Run code then
+  executed correctly end to end ("Running code" activity, Fibonacci sum 986).
+- `DONE` Durable sandbox reaper: `lib/e2b/reclaim.ts` lists running/paused
+  sandboxes, kills expired or orphaned sessions, settles any open compute
+  interval, and removes the stale mapping. The authenticated
+  `/api/cron/reclaim-sandboxes` route is scheduled daily in `vercel.json`, so a
+  24-hour Redis mapping expiry can no longer strand paused capacity forever.
+- `DONE` `Plugins` in the + menu was the only row styled
+  `text-muted-foreground`, so a fully-wired entry rendered greyed-out beside
+  Skills and Connectors and read as disabled.
+- `DONE` Web capability sweep, driven through the real browser 2026-08-12:
+  - Web search + citations: WORKS. Inline "Searched the web" activity, real
+    answer, `Sources:` links and a numbered citation chip, follow-up chips.
+  - Inline tool-loop UI: WORKS and is at benchmark quality — collapsible
+    header, per-step rows with duration ("Preparing map 310ms"), copy affordance
+    and a "Done" checkmark, matching the claude.ai reference the founder shared.
+  - Sandbox / Run code: WORKS after the paused-sandbox quota was reaped.
+  - Image + video generation: confirmed working by the founder; video also
+    verified end to end here on the selected catalog video model.
+  - Maps: WORKS (built and corrected this cycle).
+  - Library: renders, and degrades CORRECTLY for a missing object — `FAILED`
+    badge plus "Stored file bytes are no longer available. You can remove this
+    stale Library entry" and a Delete action. The one stale row is fallout from
+    the R2 credential/bucket rotation, not a UI defect.
+  - Code mode: WORKS. The sidebar entry is an in-app mode switch, not a route,
+    so a direct `/code` URL 404s by design; it routes to `/chat/code`.
+  - Settings modal: opens from the + menu on the right pane, with General,
+    Account, Team, Privacy, Billing, Usage, Capabilities, Security, Safety,
+    Notifications, Reflect, Time and focus, Skills, Connectors, Plugins, Help.
+  - `/chat`, `/chat/projects`, `/chat/schedules`, `/chat/library` all 200 with
+    no console errors.
+- `TODO` Still unverified through the UI: Deep Research end to end, file/image
+  ATTACHMENT upload, Projects detail, AGI Work, custom instructions, memory,
+  and a connector actually connecting.
+- `DONE` Video aspect, quality, and duration are catalog-derived and wired
+  through the Web composer to the media request. 1080p/4K constraints send the
+  required duration rather than falling through to the route's 4-second
+  default, and leaving video mode resets the whole selector tuple.
+- `DONE` Core Web chat flow: prompt, streaming response, resolved-model label,
+  model switch, and tool calls were exercised through the real browser.
+- `DONE` Inline tool activity/progress/rich results: expandable per-step rows,
+  elapsed time, completion state, source links, map cards, generated files,
+  and explicit failures are mounted in the production transcript.
+- `DONE` Image and video generation UI end to end. Both persist their selected
+  mode/options across sends; real image output and a Veo video were rendered
+  inline from the durable media path.
+- `DONE` Maps card exercised through the live model path and reworked against
+  the claude.ai reference the founder supplied. Numbered pins now tie to a
+  numbered place list carrying the geocoder's own classification ("Locality ·
+  Clark County, Nevada"); the list floats over the map as a right-hand panel on
+  desktop and a horizontal carousel on mobile, with the title as a chip and
+  "Open route" promoted to the primary action. Zoom controls moved to
+  bottom-left to clear both. The view centre shifts right by half the panel
+  footprint on desktop because centring on the CARD hid the eastern pin of a
+  route behind the panel — observed with Dallas occluded.
+- `BLOCKED_BY_HUMAN` Route polyline and place photos. Both need a credential
+  the environment does not have; `GOOGLE_API_KEY` is Gemini-only (verified) and
+  OSRM's public server is development-only. Drawing a straight line between
+  endpoints was rejected as fake functionality. See `FoundersAssistance.md` #16.
+- `TODO` Tool-progress timeline for map/tool calls — the reference shows
+  "Searching for places -> Done" as an expandable step list; ours shows a
+  single "Preparing map" line.
+- `TODO` Dark map tiles. OSM standard tiles are light-only, so a dark card
+  needs CARTO basemaps — a licensing decision for a commercial product rather
+  than a technical one.
+- `DONE` Sandbox/code execution UI was exercised through the live model path,
+  including activity and generated output after the leaked quota was reaped.
+- `TODO` File/image attachment upload remains unverified through the real
+  browser; generated-file rendering is complete and is a separate path.
+- `DONE` Web search and citations were exercised live with inline activity,
+  numbered source chips, and follow-up actions.
+- `TODO` Projects, AGI Work, Connectors, Skills, Plugins, Settings, Custom
+  instructions.
+- `TODO` Loading / progress / error / retry / cancel states.
+- `TODO` Dark-light consistency sweep across every screen touched.
+- `DONE` Responsive public/chat layout sweep covered desktop and 390px mobile,
+  including the focus-contained mobile drawer and narrow Billing/Pricing UI.
+- `DONE` Marketing/public copy now derives runtime and pricing claims from
+  canonical sources, routes self-serve Team to Pricing, keeps Enterprise
+  contract-scoped, and avoids unreleased Mobile/BYOK/continuity claims.
+
+### Ecosystem — account-scoped conversations across every surface
+
+Founder framing (2026-08-12): this is an ecosystem, not a website. Reference is
+Claude in Chrome — "sessions live with your account, not on any single device,
+so you can start in a tab and pick it up later somewhere else."
+
+Investigated the Chrome extension. The gap is precise and the shared layer for
+fixing it already exists:
+
+- `createManagedCloudChatClient` in
+  `packages/contracts/cloud-contracts/src/managed-cloud-chat-client.ts` already
+  owns list/create/get/update/delete conversation and saveMessage. **Web
+  (`apps/web/lib/hooks/useChatStream.ts`) and Desktop
+  (`apps/desktop/src/api/cloudApi.ts`) both consume it. The extension does
+  not.**
+- `conversation_id` appears NOWHERE in `apps/extension/src`. The extension
+  posts to the chat endpoint without one, so the server has no conversation to
+  attach the turn to and nothing is persisted account-side.
+- The extension instead keeps everything in `chrome.storage.local` via
+  `src/features/background/conversation-history.ts`: key
+  `agi_browser_conversations_v2`, 4 MB cap, 100-conversation cap, 30-day TTL.
+  Device-local by construction — a chat started in the side panel can never
+  appear on web, mobile or desktop, and is silently evicted after 30 days.
+
+**Design constraint, not negotiable.** Root `AGENTS.md` states Local, BYOK and
+Managed Cloud are separate trust boundaries and that Local chats must never be
+silently routed to managed cloud. Extension conversations can contain captured
+PAGE CONTENT, so "sync everything to the account" would violate that rule.
+`apps/extension/AGENTS.md` additionally lists browser storage and any flow
+sending page data to a runtime as high-risk, requiring a `THREAT_MODEL.md`
+update.
+
+The only design consistent with those rules: **persistence follows the runtime
+that already handled the content.** A turn inferred in managed cloud may be
+persisted to the account — the content already left the device for inference,
+so no new boundary is crossed. A Local or BYOK turn stays in
+`chrome.storage.local`. The side panel must show which is in effect.
+
+Founder amendment, 2026-08-13: every eligible signed-in Chrome Managed Cloud
+conversation must mirror automatically into the shared account store and be
+available in Web, Mobile Cloud, Tauri Cloud, and Electron Cloud. The prior
+default-off opt-in concept is superseded. Chrome remains locally authoritative;
+unknown provenance or any Local/BYOK turn fails closed and is never mirrored.
+
+- `DONE` Extension now constructs the shared `createManagedCloudChatClient`
+  inside the audited cloud-bridge gate with a fresh Clerk token and exact
+  account/session owner fence at every transport attempt.
+- `DONE` Eligible conversations and messages mirror automatically after local
+  persistence. Client-minted UUIDs, `skipLlm: true`, debouncing, a one-minute
+  MV3 catch-up sweep, retry/backoff, and per-message acceptance markers make
+  the replica idempotent without coupling inference success to persistence.
+- `DONE` The side panel labels the current policy (`Syncs to your account`) and
+  marks account-bound versus browser-local history rows. It intentionally does
+  not hydrate account history back into Chrome because `chrome.storage.local`
+  remains authoritative; the account copy is consumed by the other Cloud
+  surfaces.
+- `DONE` Explicit deletion queues a durable account-side tombstone before the
+  local row is removed. Local TTL/quota eviction never deletes the account
+  copy. The history row uses sibling Open/Delete buttons and exposes a visible,
+  localized retry error instead of invalid nested controls or console-only
+  failure.
+- `DONE` `apps/extension/THREAT_MODEL.md`, the current decision ledger, source
+  of truth, trust matrix, product suite, frontend contract, launch posture,
+  technical architecture, and root agent rule all record the 2026-08-13
+  automatic-sync decision.
+- `DONE` Consumer verification by source: Web, Mobile Cloud, Tauri Cloud, and
+  the cloud-only Electron shell all list the same
+  `/api/chat/conversations` account store. No Web/Mobile/Desktop edit was
+  required.
+- `DONE` Chrome presentation pass against the 2026-08-13 ChatGPT/Claude
+  references: the side panel now uses AGI's warm-neutral/terra token ramp, a
+  compact header, visible branded empty state, 20px composer, rounded 14px
+  menus, calmer message geometry, a readable Cloud/local trust strip, and an
+  explicit Ask first/Full access menu. The options page shares the same visual
+  system with responsive section navigation, semantic headings, focus rings,
+  reduced-motion-safe scrolling, and 16px settings cards.
+- `DONE` Parallel read-only UX/accessibility review closed the 320–390px
+  composer/header overflow risks, modal focus containment, menu keyboard
+  navigation, and low-contrast persistence-state finding before the final
+  build. Chrome-specific token consumers were confirmed not to recolor Web,
+  Mobile, Desktop, or VS Code.
+- `DONE` Chrome correctness follow-through: Options now rejects non-web
+  allowlist labels; recorded workflows bind to their source origin and reject
+  cross-origin or legacy-unbound replay; Drawer Capture adds its image to the
+  composer; recording failures are visible. The injected in-page panel now
+  follows the same automatic warm dark/light tokens, narrow responsive
+  geometry, Managed Cloud label, request locking, retry, and focus behavior.
+- `DONE` Real Chromium unpacked-extension smoke now executes the visual
+  contract at 320/390/500px in dark and light mode, checks horizontal overflow
+  and popup containment, drives model/approval keyboard dismissal, and can
+  capture named exact-package screenshots. The 2026-08-13 rendered review also
+  caught and closed two issues that layout assertions alone missed: the 320px
+  Options rail now shows all five destinations without a hidden horizontal
+  overflow, and the injected panel keeps the complete `Managed Cloud · Auto`
+  boundary label visible at its shipped 380px width. The unpacked build passed
+  the complete real-UI smoke again after both fixes.
+- `BLOCKED_BY_HUMAN` Final signed-in cross-surface continuity/deletion and exact
+  packaged-store proof. Exact steps are in `FoundersAssistance.md` #14.
+  Current local evidence is green: focused extension/Web policy tests,
+  extension typecheck and lint, no-hex color policy, `check:no-cloud-ipc`, two
+  full real-Chromium E2E passes, rendered dark/light captures, production
+  build, and diff checks. Release packaging correctly remains fail-closed while
+  `CHROME_EXTENSION_PUBLIC_KEY` is absent.
+
+### Mobile parity audit vs the Website (2026-08-12, Metro-verified)
+
+Bundler health: `typecheck` clean; Metro (Expo 57.0.12 / RN 0.86.2) serves BOTH
+platforms with zero warnings — iOS 28.9 MB, Android 29.3 MB, HTTP 200. In this
+monorepo the bundle URL is `/apps/mobile/index.bundle?platform=ios`; the bare
+`/index.bundle` 404s with an `UnableToResolveError` that reads like a real
+breakage and is not one.
+
+Capability parity, by evidence rather than by feature-folder name:
+
+- `DONE` Inline tool-call UI: PRESENT. `ToolCallTimeline.tsx`,
+  `AgentActivityTimeline.tsx`, `toolCallAccumulator.ts`, wired into
+  `MessageBubble.tsx`.
+- `DONE` Web search: PRESENT (`web_search` handled in the tool accumulator and
+  gated by the billing store).
+- `DONE` Image + video generation: PRESENT and reachable —
+  `runImageGenerationTurn` / `runVideoGenerationTurn` are called from
+  `app/(app)/(tabs)/chat.tsx` and `app/(app)/chat/[id].tsx`, and `AddToChatSheet`
+  exposes an image/video mode with a model picker.
+- `DONE` Mobile video aspect/quality. The option builders moved OUT of
+  `apps/web/features/chat/lib/videoGenerationOptions.ts` (deleted) into the
+  shared catalog at `packages/contracts/types/src/model-catalog.ts`, so Web,
+  Mobile and Desktop read one implementation — a model publishing no 4k size
+  cannot offer it on one surface and hide it on another. Mobile chain wired end
+  to end: `chatViewStore` (persisted) -> `AddToChatSheet` aspect/quality rows
+  (catalog-derived, quality scoped BY aspect, duration limits shown inline) ->
+  both chat screens -> `resolveMobileVideoGenerationRequest` (narrows catalog
+  strings to the wire contract's literal unions, falling back to route defaults
+  rather than sending a value the route would reject) -> `runVideoGenerationTurn`
+  -> `aspect_ratio`/`resolution` in the POST body.
+  Verified in the SHIPPED Metro bundle, not just typecheck: `videoAspectRatio`
+  x9, the "Aspect ratio" label, `aspect_ratio` x5, and the shared helper x3.
+  iOS bundle rebuilt 200 / 28.9 MB.
+- `DONE` Maps card on mobile. The gap was larger than "one renderer": mobile
+  had NO interactive-card path at all, so all six links were built —
+  (1) `x_interactive_cards: { supported: ['map-search.v1'] }` on the chat
+  request, without which the server never attaches `search_maps` and the model
+  falls back to pasting a link; (2) `x_interactive_card` on `StreamDelta`, typed
+  `unknown` so `parseInteractiveCardDelta` stays the only validator;
+  (3) accumulation in `chatExecutionStore`, replacing by `cardId` so a resumed
+  turn cannot show the same map twice; (4) `ChatMessage.interactiveCards`;
+  (5) a React Native `InteractiveCardBlock` with the same Web Mercator tile
+  maths, numbered pins, place list and Open-route action, degrading to the
+  card's authored fallback for any unrecognised kind; (6) mounted in
+  `MessageBubble` before citations, matching the web transcript's ordering.
+  Verified in the SHIPPED bundle: `x_interactive_cards` x3, `map-search.v1` x5,
+  `parseInteractiveCardDelta` x5, `api/maps/tile` x1, "Open route" x2.
+- `DONE` Mobile map follow-through (2026-08-13). The request processor now
+  offers `search_maps` to both `web` and `mobile` surfaces, but only when the
+  client advertises the exact card kind and the prompt has map intent. Native
+  tiles use one authenticated Bearer-header lookup per card; Local mode neither
+  requests an auth header nor touches the Managed Cloud tile route. Signed-out,
+  auth-error, and all-tile-failure states retain an honest external Maps action.
+  Validated cards are deduplicated and persisted in message metadata so they
+  survive Cloud sync and reopen instead of existing only for the live turn.
+- `DONE` Mobile generated-file and activity follow-through (2026-08-13).
+  Message-owned generated-file descriptors now merge with same-scope artifact
+  store rows, preserve the richer descriptor on duplicates, round-trip through
+  bounded message metadata, and render as durable inline cards. Canonical
+  activity opens while work is running or needs approval, collapses on terminal
+  completion, keeps failures explicit, and caps source previews at five.
+- `TODO` Weather result widget. Current official/current-reference research and
+  the repository prove no typed Web/Mobile weather card producer or contract;
+  the only weather path is a generic tool timeline. Do not fabricate a weather
+  card from prose. Add one only with a validated result schema, real producer,
+  persistence, Local/Cloud boundary behavior, fallback, and Web/Mobile renderers.
+- `DONE` Mobile has no local Code surface by design (founder, 2026-08-12) — it
+  gets Remote (cloud code) instead, which already exists as the `companion`
+  feature: `AgentDashboard`, `DispatchTaskComposer`, `ExecutionStream`,
+  `PairingStatus`, `QRScanner`, plus pairing-risk and workspace-boundary
+  notices, surfaced through the `agents` tab.
+- `DONE` Remote naming/prominence (2026-08-13). The drawer now exposes Remote as
+  a first-class destination with the existing pairing, dispatch, approval, and
+  workspace-boundary flows behind it; the duplicate compact companion entry was
+  removed.
+- `DONE` Mobile empty-state actions (2026-08-13). The quiet suggestion rows are
+  wired to real composer modes and send context, including capability-gated
+  image/video and Web search actions rather than decorative shortcuts.
+- `DONE` Sandbox / code execution: PRESENT. CORRECTION to the earlier audit —
+  it grepped the TOOL name (`execute_code`) when execution is server-side and
+  the client only sends a request FLAG. `chatExecutionStore.ts:1699` sends
+  `code_execution: true`, alongside `web_search`, `research`, `work_mode` and
+  `skill_name`, and `toolCallAccumulator.ts:151` renders the result blocks.
+  Gated by the settings capability toggle plus deployment availability.
+- `TODO` Mobile hand-rolls its cloud calls instead of using
+  `createManagedCloudChatClient`, unlike Web and Desktop. It hits the same
+  `/api/chat/conversations` base path with the same schemas, so conversations DO
+  sync — but retry/backoff, error mapping and save idempotency are duplicated or
+  absent and will drift.
+- `TODO` Remote control delivery receipts across Platform contracts, Desktop,
+  and Mobile. Mobile currently treats its fire-and-forget signed control send as
+  acceptance: a lost task dispatch can remain `sending`, and an approval choice
+  can disappear before Desktop accepts it. Add a versioned signed
+  `control.receipt` carrying a stable `controlId`; keep a bounded Mobile pending
+  map with timeout/error/retry; make retries reuse the same semantic request ID;
+  and make Desktop reserve and replay receipt outcomes idempotently, including
+  while task submission is still in flight. A receipt proves Desktop accepted
+  the control; existing task-status and approval-closed events remain the
+  authoritative completion signals. This is an engineering ownership boundary,
+  not a founder credential blocker, and must land end to end rather than as a
+  Mobile-only timeout veneer.
+
+### Known blockers for this cycle
+
+- Sign-in: the agent cannot create accounts or enter passwords. The founder
+  signed the Playwright browser in manually on 2026-08-12. If that session
+  expires, the walkthrough stalls until a session is re-established. Recorded in
+  `FoundersAssistance.md`.
 
 ## Gold Goal — current execution cycle
 
@@ -692,6 +1063,29 @@ conversation unavailable` state covering expiry, revocation, and mistyped
   permission remains documented in `FoundersAssistance.md`; the signed-out CTA
   stopped at authentication, so no checkout session, provider call, Vercel
   command, or remote build was created.
+- Local public-Web and billing evidence (2026-08-13): the signed-in Max 15x
+  account rendered the canonical Billing pane with its real renewal date,
+  Stripe-owned payment method, two paid invoices, portal/plan controls, and
+  top-up presets; no purchase control was activated. A forged
+  `/billing?success=true` URL no longer produced a payment-success claim, and
+  checkout return copy is now gated by a Stripe Session that belongs to the
+  signed-in user and reports a paid state. Pricing no longer flashes purchasable
+  Free/Basic/Pro/Max actions while account policy is loading, and active
+  Apple/Google/manual/unverified subscriptions route to their billing owner
+  instead of opening a Stripe proration dialog. Every link in the `/legal`
+  document index reached a real page (Terms, Privacy, AUP, agent permissions,
+  DPA, SLA, subprocessors, cookies, copyright, model licenses, refunds,
+  accessibility, trust, security, EU representative, and Mobile legal); FAQ,
+  Help, Support, and Download were also inspected. At 390x844, pricing and the
+  mobile navigation remain within the viewport in light and dark themes. The
+  drawer's formerly occluded header close control was replaced with a visible
+  in-drawer control, keyboard focus containment, Escape dismissal, and focus
+  restoration. Focused billing/pricing/header regressions pass 34 tests; Web
+  typecheck, scoped ESLint, and repository diff checks pass. The local runtime
+  also proved that its Stripe secret and recurring Price IDs belong to
+  different modes, so checkout correctly stayed closed; the exact founder
+  configuration and authorized-payment proof is recorded in
+  `FoundersAssistance.md` item 18.
 - Local media-failure recovery evidence (2026-08-11): the signed-in browser
   reopened a persisted five-attempt video incident, including provider
   rejections and an outcome-unknown charge warning. Terminal media rows still
@@ -1771,7 +2165,16 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 
 ### 89. Uploaded and generated files live at permanent unauthenticated URLs
 
-- Status: BLOCKED (2026-08-09) — BLOCKED — the app-layer half is already fixed; the remaining half is outside the Writes set. Exposure is real.
+- Status: PARTIALLY REMEDIATED IN SOURCE (2026-08-13) — chat attachments and
+  project knowledge now presign into the existing private R2 bucket, expose
+  opaque keys only, scan before registration, and read/delete through their
+  owner/workspace API gates. New generated images, videos, and files write
+  owner-hashed private keys and leave only through `/api/files/{id}`; an
+  uncataloged generated-file object is compensated instead of exposed as a
+  fallback. Legacy public rows retain an explicit read/delete fallback. Runtime
+  verification is deferred until Web owns the one-app slot. Public avatars,
+  legacy public generated objects, and unregistered abandoned-presign retention
+  remain blocked on the policy in `FoundersAssistance.md` item 20.
 - Area: data
 - Severity: critical
 - Writes: apps/web/lib/server/blob.ts (as reported by the audit; no such file in this tree), `apps/web/app/api/files/[id]/route.ts`, `apps/web/app/api/uploads/presign/route.ts`
@@ -1939,3 +2342,377 @@ These block or gate code items but cannot be closed by a commit.
 | `priorart-mobile-connectors-route-theater-resolved` | Fixed 2026-07-11 and verified no regression: `apps/mobile/src/features/settings/cloud-connectors/index.tsx` calls `fetchConnectorDirectory()` against `GET /api/connectors`; no hardcoded catalog remains.                                                                      |
 
 Corrections carried into the items above, so they are not re-litigated: the decimal-IP SSRF bypass in #14 is not real (the `url` crate canonicalizes first); the "enforced ceiling of 25" in #48 does not exist; the Rust Auto-router in #63 is **not** shadow-gated (it is the live CLI path, so the drift is worse than reported); `WebChatPage.tsx` has 9 real `t()` calls, not 54; `mock-data.ts` has 3 nonexistent model IDs, not 2; `LOCAL_PROVIDER_IDS` is derived, not a literal array — the bug is an incomplete harness registry.
+
+---
+
+## Mobile media generation — 2026-08-13 session
+
+### DONE (verified by driving the iOS Simulator, not by typecheck)
+
+- **`[+]` sheet was a dead control — every bottom sheet in the app was.**
+  `@gorhom/bottom-sheet@5.2.8` renders nothing under RN 0.86.2 / Fabric. Proved
+  by reducing to a minimal sheet (`index={0}`, fixed snap point, plain `View`)
+  that also painted nothing while a plain `View` and a Reanimated-driven `View`
+  beside it painted fine. Upgraded to `5.2.14`. This unblocked Add-to-Chat,
+  model picker, style, voice, paywall, compare, export and schedules sheets.
+- **Image aspect ratio: picker + full wire path.** The managed image route has
+  always accepted and validated `aspect_ratio` per adapter; no surface ever sent
+  one, so every generated image took the route's legacy square default. Added
+  `getImageAspectOptionsForModel` / `isImageAspectSupported` to the shared
+  catalog (keyed by `imageApi`), the picker in `AddToChatSheet`, `imageAspectRatio`
+  in `chatViewStore`, validation in `resolveMobileImageGenerationRequest`, and the
+  field through `runImageGenerationTurn`. Verified end to end: selecting
+  Portrait 9:16 produced a portrait image.
+- **Generated media rendered ABOVE the prompt that asked for it.**
+  `beginImageGeneration`/`beginVideoGeneration` gave both rows one `createdAt`;
+  the cloud comparator broke the tie on `id`, and the assistant's uuidv7 is
+  minted first, so the reply sorted before the user. Reply is now timestamped
+  strictly after the prompt. Verified on device.
+- **Every reply was read aloud in typed chats.** `chat/[id].tsx` gated auto-TTS
+  on `settings.voiceEnabled` — which is the "Voice Input / use the microphone"
+  preference and defaults to ON. Removed the auto-speak effect; reading aloud now
+  has exactly two deliberate entry points (voice mode, per-message play control).
+- **Raw internal errors shown to users.** A cancelled generation printed
+  "FetchRequestCanceledException ... (at Expo/NativeResponse.swift:63)" into the
+  transcript. Added `presentableMediaError`.
+
+### TODO
+
+- **Reference images for image/video generation (founder 2026-08-13).** The
+  composer must accept a source image for image-to-image and image-to-video. The
+  wire already models this — `managed-media.ts` carries an edit/source-image
+  contract — so this is a client + route-adapter task, not a contract change.
+- **Verify video aspect + quality on device.** Both lists are implemented and
+  catalog-driven (all 4 video models publish `outputSizes`), but only the image
+  path has been driven through a real generation this session.
+- **File rendering after generation** — not yet re-verified post-upgrade.
+- **UI/UX parity pass vs ChatGPT/Claude** using the 87 reference screenshots.
+  The earlier empty-state suggestion, cold-start mode, and Settings-exit gaps
+  are now source-patched: both chat entry points mount catalog-aware suggestion
+  chips, auth hydration preserves an eligible Cloud preference, and Settings
+  has a visible Close control. They remain in the next one-app Mobile device
+  pass until the rendered behavior is rechecked against the references.
+- **Audit the other newly-reachable sheets.** They were unreachable until the
+  bottom-sheet upgrade, so none of their contents have ever been exercised.
+
+### Web composer — 2026-08-13 (founder-reported)
+
+- **DONE: video/image mode reverted to text on first send.** Composer toggles are
+  keyed by conversation and the new-chat surface writes them under
+  `PENDING_CONVERSATION_KEY`. The first send creates a real conversation and
+  navigates to it, but only drafts and messages were migrated across — toggles
+  were forgotten, so a chat started in Video reverted to a plain text composer
+  the moment it got an id, mid-generation. Added
+  `adoptPendingComposerToggles(conversationId)` to `web-chat-store`, called at
+  the creation site in `WebChatPage` (keyed to creation, NOT to activation, so
+  pending toggles cannot bleed onto an existing chat opened from the sidebar).
+
+- **TODO: no way to stop a video generation (half-wired capability).**
+  `apps/web/app/api/media/video/cancel/route.ts` is fully implemented AND has a
+  test suite (`__tests__/api/media-video-cancel.test.ts`) — it tracks
+  `cancelRequestedAt`, provider cancel attempts, and a `requested`/`unconfirmed`
+  state machine. **No client anywhere calls it**: grep for `media/video/cancel`
+  across `apps/` and `packages/` returns only the route, its generated route
+  types, and its own test. Neither Web nor Mobile has a control.
+  `ChatComposerNew.tsx:2234` actively suppresses the Stop button whenever
+  `videoMode` is set, and `:2245` disables the textarea, so a 1–2 minute
+  generation is completely uninterruptible. Wire the Stop button in video mode to
+  POST the job id, reflect `cancel_requested` in `VideoGenerationPlaceholder`,
+  and settle the billing reservation. Mirror on Mobile.
+
+### Mobile test pass — 2026-08-13 (manual finding, corrected and re-verified)
+
+Driven manually in the iOS Simulator, Cloud mode, Google models only.
+
+**DONE — first Cloud send now waits for the capability handshake.**
+
+- The original manual failure was real: Mobile treated "the `/api/me`
+  capability handshake has not arrived yet" as a denial, so Web Search and file
+  creation could disappear on the first Cloud turn even though the catalog and
+  server allowed them.
+- `ensureCloudEntitlementsReadyForRequest()` now safely joins an in-flight tier
+  refresh or performs the first Cloud refresh before deriving the request flags.
+  It does not run in Local mode, is account-epoch guarded, and an actual server
+  denial still wins. The streaming contract now carries the explicit
+  `office_creation` flag instead of silently dropping it.
+- Regression coverage observes the real network body after a delayed
+  entitlement response and proves `web_search: true` reaches the HTTP request.
+
+**SOURCE-PATCHED; DEVICE RECHECK PENDING — prompt echoed into the reply.**
+`stripLeadingCurrentPromptEcho` now removes only an exact, turn-scoped echo of
+the current prompt (including the observed standalone-period separator), and
+the streaming accumulator applies it before rendering/persisting assistant
+content. This source-only reconciliation did not run Metro or the Simulator, so
+the prior visual reproduction remains the acceptance case.
+
+**P1 — no reasoning / status / streaming feedback (founder-reported).** After
+send, the transcript sits completely blank for up to 60s: no thinking block, no
+status steps, no streaming indicator. `ThinkingChip`, `StatusStep`,
+`AgentActivityTimeline`, `StreamingIndicator` all exist but nothing renders.
+
+**SOURCE-PATCHED; DEVICE RECHECK PENDING — markdown table clipping.**
+`MessageContentRenderer` now places tables in an explicit horizontal
+`ScrollView`, keeps the indicator visible, and gives cells readable bounded
+widths instead of flex-collapsing them into the phone viewport.
+
+**SOURCE-PATCHED; DEVICE RECHECK PENDING — generated CSV card title.** Durable
+generated-file descriptors now win over a duplicate fenced-data artifact,
+retain the server filename, and are deduplicated into synchronized message
+metadata. Unrelated fenced code remains visible.
+
+**SOURCE-PATCHED; COLD-START RECHECK PENDING — Cloud mode reset.** Auth
+hydration now publishes Clerk-loaded only after owner/sign-in/Cloud state is
+coherent, and the chat screen waits for definitive auth before downgrading a
+persisted Cloud preference. A loaded signed-out session still fails closed to
+Local.
+
+**P3 — model chip briefly shows the wrong model** right after selection (showed
+the prior Google model immediately after tapping another catalog model, then
+corrected later). Needs confirmation; may be my synthetic scroll.
+
+**WORKING (verified):** `[+]` sheet, model picker sheet, image generation with
+aspect ratio (portrait 9:16 confirmed), markdown headings/lists/blockquote/
+inline code/fenced code with syntax highlighting + language label + copy button,
+artifact card detection, message ordering (user before assistant), no auto
+read-aloud. Markdown-table horizontal scrolling is now source-patched but has
+not yet joined this device-verified list.
+
+#### Second sweep — navigation, library, artifacts, theme
+
+- **SOURCE-PATCHED; DEVICE RECHECK PENDING — Artifacts image thumbnails.** The
+  grid now resolves the same authenticated image source as Library/detail and
+  renders explicit loading, signed-out, and unavailable fallbacks.
+- **SOURCE-PATCHED; DEVICE RECHECK PENDING — Settings root exit.** The top-level
+  header now has a visible **Close settings** control that returns through real
+  navigation history, with the chat tab only as a no-history fallback.
+- **SOURCE-PATCHED; DEVICE RECHECK PENDING — Markdown table last column.** The
+  same horizontal-table owner above covers both themes.
+- **P3 Library `IMAGE` badge is clipped** at the tile's top-left corner.
+- **SOURCE-PATCHED; DEVICE RECHECK PENDING — Links.** Markdown links now use the
+  active teal/accent token as well as underline styling.
+- **P3 Scroll-to-bottom FAB overlaps the message action row.**
+- **SOURCE-PATCHED; DEVICE RECHECK PENDING — drawer naming.** The destination is
+  now labeled **Remote** and continues to route to the companion surface.
+- **Tasks screen carries no timestamps** while Chats does — four identical rows
+  are indistinguishable. Also no way to dismiss a finished run.
+
+**Verified healthy:** drawer + all destinations, Chats list (date grouping,
+relative timestamps, search, New chat), Library (thumbnails, filter chips,
+search), artifact detail (image, copy, share, close), Appearance switching,
+dark mode across chat/code/tables/artifact cards with syntax highlighting
+intact, Settings account section (tier shows Max 15x).
+
+### Phase 1 — mobile tool capabilities — DONE 2026-08-13
+
+Root cause was not the catalog and not the model: it was that Mobile treated
+**"no capability handshake yet" as "denied"**.
+
+- `grantedCapabilities` starts `[]`; `refreshTier()` early-returns when
+  `appMode !== 'cloud'` (`billing/store.ts:122`) and the app always launches in
+  Local (`app/_layout.tsx:375-381`); every failure path is swallowed. So the
+  array stayed empty and `chatExecutionStore.ts:1606` failed closed forever.
+  Web never hit this because it does not consult `capability_handshake` at all.
+- Added `capabilityHandshakeReceived` + `isCapabilityRequestable(cap)`: absence
+  of a handshake no longer denies, an actual handshake is still obeyed exactly.
+  The route re-checks entitlement, so the client cannot grant itself anything.
+- **File creation was impossible by construction** — `office_creation` had zero
+  occurrences in apps/mobile. Now sent, gated on the same switch as code
+  execution (the capability reference pairs them under one control).
+- `features.codeExecution` defaulted **false** with its only control buried in
+  Settings > Capabilities, so in practice it was never on. Now defaults true;
+  every capability gate still applies.
+- Renamed "AGI Code" → "Code execution and file creation" with a description
+  that says what it actually enables.
+
+Test fallout, all resolved deliberately:
+
+- 12 suites failed on `useFocusEffect`/`useNavigation` "is not a function" —
+  fallout from the earlier launch-crash fix that moved those imports to
+  `expo-router`. The jest mocks still put them on `@react-navigation/native`.
+  Mocks realigned to follow the production import.
+- `chatStore.test.ts` asserted denial from an empty array alone. Updated to set
+  `capabilityHandshakeReceived: true` so it tests a REAL denial, and added a
+  regression guard asserting web search is still requested when no handshake has
+  been received — the exact bug.
+- Image tests updated to assert `aspect_ratio` reaches the wire.
+
+Result after the first-turn capability correction: 320 suites / 2865 tests
+passing, typecheck clean.
+
+### Phase 2 — mobile typed results, durable files, and activity — DONE locally 2026-08-13
+
+- Server capability negotiation now admits `surface: mobile` for the canonical
+  `map-search.v1` tool while preserving the exact advertised-card, streaming,
+  tools-capable-model, and map-intent gates.
+- The native map renderer sends the signed-in Bearer header with each tile,
+  never loads Managed Cloud tiles in Local, and retains a useful provider link
+  through loading/auth/tile failures.
+- Interactive cards and generated-file descriptors are deduplicated and stored
+  in synchronized metadata as well as the live message shape, so transcript
+  reload and another Cloud client do not erase them.
+- Activity UI now uses progressive disclosure: active work/approval opens,
+  terminal work collapses, failures remain first-class, and source previews are
+  bounded. Legacy tool rows expose a supplied duration and failed state without
+  requiring expansion.
+- Verification: Mobile focused 8 suites / 134 tests; full Mobile 321 suites /
+  2878 tests / 33 snapshots; Mobile typecheck and scoped ESLint; Web typecheck;
+  request-processor map tests 7/7; `git diff --check`.
+- Rendered iPhone 17 Pro / iOS 26.5 proof: the current native bundle loaded,
+  the Local/Cloud boundary and composer rendered, and a real deployed-Cloud map
+  prompt completed. The deployed `agiworkforce.com` backend still returned
+  prose saying it could not display a map because these server changes are not
+  deployed yet. A local-API attempt correctly failed closed on the mismatched
+  local Clerk environment rather than bypassing auth. Production map acceptance
+  therefore remains the explicit deployment/sign-in gate in
+  `FoundersAssistance.md` #15; local code and regression coverage are complete.
+
+### Desktop Local Tasks capability honesty — 2026-08-13
+
+- `DONE` Dynamic Ollama rows no longer inherit synthetic `Balanced`,
+  `standard`, or `premium` quality claims. They display only provider-reported
+  capabilities and the reported context window.
+- `DONE` DesktopShell and Tasks use one catalog-authoritative eligibility
+  helper: an exact model must declare both `agentic` and `tools`.
+- `DONE` The native Task submission boundary independently requires an exact
+  verified catalog model and trust-compatible provider; missing or dynamic
+  targets fail closed.
+- `DONE` One-app WDIO manual pass selected the real installed model named by
+  `AGI_WDIO_OLLAMA_MODEL_ID`, clicked Sequential and Parallel, observed the
+  visible disabled Launch state, and observed the native rejection. Screenshots:
+  `apps/desktop/wdio/screenshots/local-agent-tasks-review/00-local-model-picker.png`
+  and `01-local-task-capability-gate.png`.
+- `BLOCKED_BY_HUMAN` No installed model is currently verified for Local Tasks.
+  Founder/model-resource certification steps are recorded in
+  `FoundersAssistance.md` #17. Project Chat remains available.
+
+### Desktop Settings transaction and native persistence — 2026-08-13
+
+- `DONE` The one-app Tauri WDIO discard journey passed all three live dialog
+  flows in `settings-discard-confirm.spec.ts`: X-close surfaced the discard
+  confirmation, **Keep editing** retained the draft, Personalization edits
+  enabled **Save Changes**, explicit discard restored the opening value, and a
+  dirty deferred edit kept the global Save/Cancel footer after navigating to a
+  self-saving section.
+- `DONE` The native persistence journey in
+  `settings-persistence-restart.spec.ts` committed the visible Ollama URL,
+  Personalization name, theme, UI scale, reduced-motion preference, approval
+  timeout, and timeout policy through **Save Changes**; read the same values
+  from the native settings file; reloaded the renderer; and observed every
+  value rehydrate in Settings. Its `finally` path restored the exact original
+  native snapshot and reloaded it, so the evidence did not leave a probe value
+  in the developer profile.
+- `DONE` These are native WDIO interaction results, not build-only claims. No
+  additional founder action is required for the Settings discard/persistence
+  slice; broader Desktop release/runtime blockers remain tracked separately.
+
+### Desktop Local connector approval boundary — 2026-08-13
+
+- `DONE` The one-app Tauri WDIO journey selected the installed model named by
+  `AGI_WDIO_OLLAMA_MODEL_ID`, confirmed Project Chat remains available while
+  Tasks is labeled unverified, created a uniquely named loopback custom MCP connector,
+  and observed it remain disconnected pending native approval.
+- `DONE` The real native approval window received focus above Desktop. Choosing
+  **Deny** left the connector disconnected and emitted no false successful
+  `mcp_connect_server` state. The journey removed its fixture and restored the
+  original connector snapshot in `finally`.
+- `DONE` This closes the tested denial/focus/state-integrity slice. It does not
+  certify a third-party OAuth connector or an approved remote MCP session;
+  those still require provider registrations and an intentionally authorized
+  live endpoint.
+
+### Electron Cloud shell source reconciliation — 2026-08-13
+
+- `SOURCE_PATCHED` The packaged macOS callback scheme is registered as
+  `agiworkforce-cloud`, the renderer hook listens in Electron as well as Tauri,
+  and the release workflow verifies the scheme inside each signed app bundle.
+- `SOURCE_PATCHED` The shell no longer claims an unavailable in-place
+  `electron-updater` feed. Settings/tray check the canonical published-release
+  endpoint and explicitly open the architecture-specific signed DMG in the
+  browser. Release jobs build from the exact tag and clean orphaned drafts when
+  downstream publication does not succeed.
+- `SOURCE_PATCHED` Native permission checks are now origin-scoped. Media grants
+  accept microphone audio only, camera is denied, and display capture requires
+  a user gesture plus a trusted renderer and an explicit system/app source
+  choice instead of silently sharing the first screen.
+- `RUNTIME_PENDING` No Electron app, packaged DMG, signing/notarization job, or
+  installed callback/update journey was run in this source-only reconciliation.
+  These changes must not be described as release-verified until the signed
+  artifact is installed and clicked through.
+
+### VS Code extension manual release loop — 2026-08-13
+
+- `DONE` Packaged `agi-workforce-0.3.0.vsix` was installed into an isolated
+  VS Code 1.131 profile and exercised as the only running app. The four-step
+  onboarding, new-session reset, More actions, runtime setup handoff, Context,
+  workspace-scoped Memory, and every Settings destination were clicked.
+- `DONE` The sidebar and Settings were inspected at normal and narrow widths.
+  Settings switched to its compact horizontal navigation with working previous/
+  next controls; the sidebar retained the runtime block, composer, history,
+  Context, and Memory without clipping or horizontal overflow.
+- `DONE` The fresh-session header now says `Route pending` until the CLI returns
+  an authoritative Local, BYOK, or Managed Cloud trust mode. Account usage and
+  sign-in state cannot pre-label or overwrite that runtime boundary.
+- `DONE` The installed CLI failed honestly because it does not implement
+  developer-session protocol 7. The UI disabled model/composer/send, explained
+  the exact version/path problem, and `Open setup` opened Runtime Settings.
+  No prompt or workspace content was sent.
+- `DONE` The isolated Extension Host log contained no AGI error or warning.
+  The two renderer diagnostics were VS Code-owned (bundled Mermaid proposed API
+  and a generic Node `url.parse` deprecation), not emitted by this extension.
+- `DONE` TypeScript, 13 webview files / 79 checks, production packaging, and
+  VSIX verification pass. The verified archive contains 17 entries and is
+  397.42 KB.
+- `BLOCKED_BY_HUMAN` A real Local/BYOK/Managed turn, activity stream, approval,
+  Stop, and post-thread boundary transition require a released protocol-7 AGI
+  CLI/runtime plus the corresponding provider/account environment. The current
+  public recovery UI is complete and fails closed; it does not fabricate a
+  usable runtime.
+
+### Chrome extension source release loop — 2026-08-13
+
+- `DONE` Chrome typecheck, lint, 113 test files / 1,554 checks, no-direct-cloud-
+  IPC guard, no-hardcoded-colour guard, and the production Vite build pass.
+- `DONE` The suite caught one stale static security-test matcher after the send
+  callback contract changed. The test now inspects both current
+  `CHAT_MESSAGE` payloads through their canonical routing spread and still
+  proves no `apiKey` field can be sent.
+- `DONE` Production packaging fails closed before ZIP creation when
+  `CHROME_EXTENSION_PUBLIC_KEY` is missing. The build did not mint an unstable
+  extension identity or describe an incomplete package as release-ready.
+- `DONE` Options now renders actual Chrome shortcut bindings and gives approved-
+  site/profile mutations honest loading, failure, rollback, and announced
+  success states. Computer-use approval preference writes are mutation-fenced;
+  approval dialogs receive focus and restore it after decision/expiry.
+- `BLOCKED_BY_HUMAN` The exact Web Store package and stable-ID installation
+  remain Founders Assistance #9. No real Google Chrome profile was available
+  to this run, so the live side-panel and Options click-through remains
+  separate from the Chromium harness and
+  source/build proof above. Exact acceptance steps are in Founders Assistance
+  #14.
+
+### Late release-integration verification — 2026-08-13
+
+- `DONE` Web checkout return verification now binds the authenticated user to a
+  canonical Checkout Session target tier and waits for that exact tier before
+  presenting upgrade success. Public Team/Enterprise/BYOK copy and legal/refund
+  links were reconciled. Web typecheck and 7 focused files / 72 checks pass.
+- `DONE` Desktop task refresh retains execution mode, swarm metrics, and pause
+  reason. A full Desktop typecheck exposed and then closed an undefined billing
+  plan selector plus stale subscription-owner fixtures. Desktop and Electron
+  typechecks pass; 2 focused files / 43 checks pass.
+- `DONE` Desktop task recovery now distinguishes a renderer reload from a
+  native-process restart. Native AGI initialization is process-idempotent, a
+  state-only lifecycle query recovers swarm/auto tasks that have no sequential
+  execution context, and persisted active rows with no native owner terminate
+  as failed with explicit review-before-retry copy instead of polling forever.
+- `DONE IN SOURCE; RUST CHECK PENDING` The source-proven arbitrary-public Rust
+  transports (Discord/generic/scheduler webhooks, API call/upload/download,
+  and physical scrape) now use one fail-closed initial-URL plus every-redirect
+  boundary. Intentional loopback Ollama/CDP/local-API and BYOK transports remain
+  separate. The public-then-private DNS rebinding race still needs connect-time
+  address pinning or a network firewall.
+- `OPEN` Normal Desktop task execution still does not call OutcomeTracker, the
+  outcomes UI is unmounted, and native Rust egress lacks a mandatory global
+  type across every fixed-provider/account/integration transport. These are
+  explicit ownership/design gates, not UI controls that can be safely exposed
+  as finished.

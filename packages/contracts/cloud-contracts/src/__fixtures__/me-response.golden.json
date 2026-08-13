@@ -10,6 +10,7 @@
     "display_name": "Pro",
     "status": "active",
     "current_period_end": 1754390400,
+    "cancel_at_period_end": false,
     "subscription_source": "stripe"
   },
   "feature_flags": {

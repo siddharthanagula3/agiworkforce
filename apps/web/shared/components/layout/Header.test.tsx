@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Header } from './Header';
 
@@ -71,5 +71,24 @@ describe('Header', () => {
       expect(clerkState.signOut).toHaveBeenCalledWith({ redirectUrl: '/' });
     });
     expect(container.querySelector('button[aria-label="Close menu"]')).toBeNull();
+  });
+
+  it('provides an in-drawer close control and restores focus to the opener', async () => {
+    render(<Header />);
+
+    const openMenuButton = screen.getByRole('button', { name: 'Open menu' });
+    fireEvent.click(openMenuButton);
+
+    const navigationDialog = screen.getByRole('dialog', { name: 'navProducts' });
+    expect(navigationDialog).toBeInTheDocument();
+    const closeMenuButton = within(navigationDialog).getByRole('button', { name: 'Close menu' });
+    expect(closeMenuButton).toHaveFocus();
+
+    fireEvent.click(closeMenuButton);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'navProducts' })).not.toBeInTheDocument();
+      expect(openMenuButton).toHaveFocus();
+    });
   });
 });

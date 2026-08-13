@@ -3,7 +3,14 @@ import 'server-only';
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { deleteObject, getObject, isObjectStorageConfigured } from './object-storage';
+import {
+  deleteObject,
+  deletePrivateObject,
+  getObject,
+  getPrivateObject,
+  isObjectStorageConfigured,
+  isPrivateObjectStorageConfigured,
+} from './object-storage';
 
 const LOCAL_UPLOAD_TTL_MS = 5 * 60 * 1000;
 const LOCAL_TOKEN_VERSION = 1;
@@ -19,7 +26,7 @@ interface LocalUploadClaims {
 }
 
 function localStorageEnabled(): boolean {
-  return process.env['NODE_ENV'] === 'development' && !isObjectStorageConfigured();
+  return process.env['NODE_ENV'] === 'development' && !isPrivateObjectStorageConfigured();
 }
 
 function localStorageRoot(): string {
@@ -102,7 +109,7 @@ async function signPayload(payload: string): Promise<string> {
 }
 
 export function isProjectKnowledgeObjectStorageConfigured(): boolean {
-  return isObjectStorageConfigured() || localStorageEnabled();
+  return isPrivateObjectStorageConfigured() || localStorageEnabled();
 }
 
 export async function createLocalProjectKnowledgeUploadUrl(input: {
@@ -203,7 +210,13 @@ export async function storeLocalProjectKnowledgeUpload(input: {
 export async function getProjectKnowledgeObject(
   key: string,
 ): Promise<{ data: Buffer; contentType: string | undefined } | null> {
-  if (isObjectStorageConfigured()) return getObject(key);
+  if (isPrivateObjectStorageConfigured()) {
+    const privateObject = await getPrivateObject(key);
+    if (privateObject) return privateObject;
+    // Compatibility for rows registered before project knowledge moved to the
+    // private bucket. New uploads never write this public location.
+    return isObjectStorageConfigured() ? getObject(key) : null;
+  }
   const resolved = localPathForKey(key);
   if (!resolved) return null;
   try {
@@ -223,8 +236,10 @@ export async function getProjectKnowledgeObject(
 }
 
 export async function deleteProjectKnowledgeObject(key: string): Promise<void> {
-  if (isObjectStorageConfigured()) {
-    await deleteObject(key);
+  if (isPrivateObjectStorageConfigured()) {
+    await deletePrivateObject(key);
+    // Remove a possible legacy twin while both buckets remain configured.
+    if (isObjectStorageConfigured()) await deleteObject(key);
     return;
   }
   const resolved = localPathForKey(key);

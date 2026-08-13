@@ -512,10 +512,11 @@ function normalizeVideoGeneration(modelKey, video) {
   const tuples = new Set();
   for (const [index, output] of video.outputSizes.entries()) {
     const outputLabel = `${label}.outputSizes[${index}]`;
-    assert.deepEqual(
-      Object.keys(output).sort(),
-      ['aspectRatio', 'height', 'resolution', 'width'],
-      `${outputLabel} must carry only the canonical output tuple fields`,
+    const allowedOutputKeys = ['aspectRatio', 'durationSecs', 'height', 'resolution', 'width'];
+    assert.equal(
+      Object.keys(output).filter((key) => !allowedOutputKeys.includes(key)).length,
+      0,
+      `${outputLabel} has unsupported keys`,
     );
     assert.ok(
       typeof output.resolution === 'string' && output.resolution.length > 0,
@@ -533,6 +534,27 @@ function normalizeVideoGeneration(modelKey, video) {
       Number.isInteger(output.height) && output.height > 0,
       `${outputLabel}.height must be a positive integer`,
     );
+    if (output.durationSecs !== undefined) {
+      assert.ok(
+        Array.isArray(output.durationSecs) && output.durationSecs.length > 0,
+        `${outputLabel}.durationSecs must be non-empty when present`,
+      );
+      assert.equal(
+        new Set(output.durationSecs).size,
+        output.durationSecs.length,
+        `${outputLabel}.durationSecs must be unique`,
+      );
+      for (const duration of output.durationSecs) {
+        assert.ok(
+          Number.isInteger(duration) && duration > 0,
+          `${outputLabel}.durationSecs must contain positive integers`,
+        );
+        assert.ok(
+          video.durationSecs.includes(duration),
+          `${outputLabel}.durationSecs must be a subset of ${label}.durationSecs`,
+        );
+      }
+    }
     const tuple = `${output.resolution}\u0000${output.aspectRatio}`;
     assert.ok(
       !tuples.has(tuple),

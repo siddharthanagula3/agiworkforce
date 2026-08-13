@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Extension lead
-Last updated: 2026-05-21
+Last updated: 2026-08-12
 
 Read root `AGENTS.md`, then this file.
 
@@ -28,4 +28,8 @@ Read root `AGENTS.md`, then this file.
 - Small change: `pnpm --filter @agiworkforce/extension typecheck`
 - Behavior change: `pnpm --filter @agiworkforce/extension test`
 - Required for extension changes: `pnpm lint:extension`
-- Manifest/permission change: manually verify install and update `THREAT_MODEL.md`.
+- Required for extension changes: `pnpm --filter @agiworkforce/extension check:no-cloud-ipc`
+- Manifest/permission, storage, capture, or context-handoff change: manually
+  verify install and update `THREAT_MODEL.md`. A persistence or egress flow that
+  touches no manifest field is NOT exempt — `THREAT_MODEL.md` triggers on
+  "storage/sync" and "Managed Cloud endpoints" too.

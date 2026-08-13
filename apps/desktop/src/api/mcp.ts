@@ -135,7 +135,10 @@ export async function mcpListServers(): Promise<McpServerInfo[]> {
 export async function mcpConnectServer(name: string): Promise<string> {
   try {
     validateNonEmpty(name, 'server name');
-    return await invokeWithRetry<string>('mcp_connect_server', { name });
+    // Connection owns an explicit native approval. Retrying the IPC command
+    // would re-prompt after a denial and could start a server more than once
+    // after an ambiguous timeout.
+    return await invokeWithTimeout<string>('mcp_connect_server', { name }, MCP_INIT_TIMEOUT_MS);
   } catch (error) {
     throw new Error(`Failed to connect to MCP server '${name}': ${error}`);
   }
@@ -194,7 +197,9 @@ export async function mcpCallTool(
     if (!arguments_ || typeof arguments_ !== 'object') {
       throw new Error('arguments must be a valid object');
     }
-    return await invokeWithRetry<unknown>(
+    // MCP tools can be destructive or externally visible. Retry belongs in a
+    // tool-specific idempotency contract, never in this generic IPC wrapper.
+    return await invokeWithTimeout<unknown>(
       'mcp_call_tool',
       { toolId, arguments: arguments_ },
       MCP_TOOL_CALL_TIMEOUT_MS,

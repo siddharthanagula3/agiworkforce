@@ -127,8 +127,12 @@
       "typecheck": "pnpm --filter @agiworkforce/extension typecheck",
       "test": "pnpm --filter @agiworkforce/extension test",
       "testSingle": "pnpm --filter @agiworkforce/extension test <file-or-pattern>",
+      "noHex": "pnpm --filter @agiworkforce/extension check:no-hex",
       "noCloudIpc": "pnpm --filter @agiworkforce/extension check:no-cloud-ipc",
-      "build": "pnpm --filter @agiworkforce/extension build"
+      "build": "pnpm --filter @agiworkforce/extension build",
+      "testE2E": "pnpm --filter @agiworkforce/extension test:e2e",
+      "package": "pnpm --filter @agiworkforce/extension package",
+      "verifyPackage": "pnpm --filter @agiworkforce/extension verify:package"
     },
     "vscodeExtension": {
       "typecheck": "pnpm --filter agi-workforce typecheck",

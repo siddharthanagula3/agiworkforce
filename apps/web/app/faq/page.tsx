@@ -2,7 +2,12 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { MARKETING, POSITIONING } from '../../lib/marketing-constants';
+import {
+  BYOK_SURFACES,
+  DESKTOP_LOCAL_RUNTIMES,
+  MARKETING,
+  POSITIONING,
+} from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'FAQ',
@@ -14,23 +19,27 @@ export const metadata = buildMetadata({
 const QA: { q: string; a: string }[] = [
   {
     q: 'How many providers do you support?',
-    a: `${MARKETING.providers.display} providers: nine first-party cloud APIs (Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu), custom OpenAI-compatible endpoints, and two local runtimes (Ollama and LM Studio).`,
+    a: `${MARKETING.providers.display} provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and custom OpenAI-compatible endpoints. Desktop Local mode also supports four verified runtimes: ${DESKTOP_LOCAL_RUNTIMES.label}. The in-product catalog is the current source of truth.`,
   },
   {
     q: 'What does BYOK mean here?',
-    a: 'You bring your own API key on Desktop and CLI. Keys are encrypted at rest on your machine. Traffic goes directly to your provider. Usage is billed by the provider, not by AGI. No markup.',
+    a: `You bring your own API key on ${BYOK_SURFACES.label}. Keys stay in the local developer or desktop runtime and requests go directly to your provider. Usage is billed by the provider, not by AGI. ${BYOK_SURFACES.exclusion}`,
   },
   {
     q: 'Can I run AGI fully offline?',
-    a: 'Yes. Local mode on Desktop and the CLI runs models through Ollama or LM Studio. No API keys, no quotas, no internet. AGI Mobile launches with an on-device Local Mode. Local mode is free.',
+    a: 'Yes on Desktop and CLI after a supported local runtime and model are installed. Those Local conversations are not sent to AGI, and Local mode is free; downloading a model may require internet first. Mobile has no published release, so its Local mode is not offered publicly yet.',
   },
   {
     q: 'Can I switch models mid-conversation?',
-    a: 'Yes. Pick a different model and the thread continues with the new one. The provider label updates with the switch, so you always know where the next request goes before it leaves your machine.',
+    a: 'Within the active trust boundary, yes: pick another supported model and the provider label updates before the next request leaves your machine. Moving between Local, BYOK, and managed Cloud is not an ordinary model switch. It requires an explicit fork or continuation with context selection, secret scanning, a payload preview, consent, and a visible destination label. Local content is never silently sent elsewhere.',
   },
   {
     q: 'What does AGI Cloud cost?',
-    a: 'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Team is a real self-serve per-seat tier on the pricing page; only Enterprise (custom governance, SSO, custom retention) is sales-assisted, with an early-access interest list.',
+    a: 'AGI managed cloud is in public alpha and open by default — sign in and start, no waitlist. Usage is metered and current plan details live on the pricing page. Local and BYOK remain free. Pricing is also the source of truth for which self-serve checkouts are configured for your region and billing cadence; Team is priced per seat when its checkout is available. Only Enterprise (custom governance, SSO, custom retention) is sales-assisted, with an early-access interest list.',
+  },
+  {
+    q: 'How do I upgrade, downgrade, cancel, or get an invoice?',
+    a: 'Start an available self-serve upgrade from Pricing. For a Stripe-billed plan, open Settings → Billing and choose Manage billing to use the Stripe Customer Portal for plan changes, cancellation, payment methods, and invoices; a scheduled cancellation date is shown in Billing after it is recorded. App Store and Google Play subscriptions must be managed in the store that bills them. Operator-provisioned Enterprise plans are handled through your organization. Refund eligibility is described in the Refund Policy.',
   },
   {
     q: 'Do you train on my data?',
@@ -81,11 +90,11 @@ export default function FaqPage() {
         <section className="agi-fl-section" aria-labelledby="agi-faq-qa-title">
           <p className="agi-fl-eyebrow">Q &amp; A</p>
           <h2 id="agi-faq-qa-title" className="agi-fl-h2">
-            Nine questions, nine straight answers.
+            Ten questions, ten straight answers.
           </h2>
           <p className="agi-fl-section-lede">
-            Providers, trust modes, managed cloud, and what happens to your data. The short version
-            of everything the rest of the site covers at length.
+            Providers, trust modes, managed cloud, billing, and what happens to your data. The short
+            version of everything the rest of the site covers at length.
           </p>
           <ul className="agi-reasons" style={{ marginTop: 40 }}>
             {QA.map((item) => (
@@ -111,6 +120,12 @@ export default function FaqPage() {
             </Link>
             <Link href="/pricing" className="agi-fl-cta agi-fl-cta--secondary">
               See Pricing
+            </Link>
+            <Link href="/refund-policy" className="agi-fl-cta agi-fl-cta--ghost">
+              Refund Policy
+            </Link>
+            <Link href="/legal" className="agi-fl-cta agi-fl-cta--ghost">
+              Legal Index
             </Link>
             <a href="mailto:contact@agiworkforce.com" className="agi-fl-cta agi-fl-cta--ghost">
               Email Us

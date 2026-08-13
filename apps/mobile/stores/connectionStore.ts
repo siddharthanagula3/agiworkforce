@@ -99,7 +99,12 @@ interface ConnectionState {
   // --- Actions ---
   connect: (code: string) => void;
   disconnect: () => void;
-  sendControl: (action: string, payload?: unknown) => void;
+  /**
+   * Resolve true once the signed frame is accepted by an open local transport.
+   * This is transport acceptance, not a Desktop acknowledgement; workflows
+   * must still wait for their domain status event.
+   */
+  sendControl: (action: string, payload?: unknown) => Promise<boolean>;
   /** Queue a control message to send once reconnected */
   queueControl: (action: string, payload?: unknown) => void;
   clearError: () => void;
@@ -190,14 +195,18 @@ let hmacState: HmacSessionState | null = null;
 const pendingControlQueue: Array<{ action: string; payload: unknown }> = [];
 const MAX_PENDING_QUEUE = 200;
 
-/** Drain and send all queued control messages */
-function flushPendingControlQueue(): void {
+/** Drain queued controls in order, retaining the first frame a transport rejects. */
+async function flushPendingControlQueue(): Promise<void> {
   if (pendingControlQueue.length === 0) return;
   const store = useConnectionStore.getState();
   while (pendingControlQueue.length > 0) {
     const msg = pendingControlQueue.shift();
     if (msg) {
-      store.sendControl(msg.action, msg.payload);
+      const accepted = await store.sendControl(msg.action, msg.payload);
+      if (!accepted) {
+        pendingControlQueue.unshift(msg);
+        return;
+      }
     }
   }
 }
@@ -755,7 +764,9 @@ function setupDataChannel(channel: RTCDataChannelType): void {
   const ch = channel as unknown as Record<string, unknown>;
 
   ch.onopen = () => {
-    // DataChannel open — low-latency control active
+    // Retry anything the signaling fallback could not accept while WebRTC was
+    // negotiating. The ordered drain retains the first rejected frame.
+    void flushPendingControlQueue();
   };
 
   ch.onmessage = (event: { data: string }) => {
@@ -1055,7 +1066,7 @@ export const useConnectionStore = create<ConnectionState>()(
                   }));
 
                   // Flush any queued control messages now that we're reconnected
-                  flushPendingControlQueue();
+                  void flushPendingControlQueue();
                   // Request a fresh agent state from desktop (don't assume stale state is current)
                   useAgentStore.getState().setAgents([]);
                   break;
@@ -1144,7 +1155,7 @@ export const useConnectionStore = create<ConnectionState>()(
         if (currentStatus === 'stale' || currentStatus === 'reconnecting') {
           set({ status: 'connected' });
           // Flush queued control messages that piled up during disconnect
-          flushPendingControlQueue();
+          void flushPendingControlQueue();
           // Re-sync agent state from desktop
           useAgentStore.getState().setAgents([]);
         }
@@ -1238,23 +1249,22 @@ export const useConnectionStore = create<ConnectionState>()(
         useDispatchTaskStore.getState().reset();
       },
 
-      sendControl: (action: string, payload?: unknown) => {
-        if (!isDispatchCompanionEnabled()) return;
+      sendControl: async (action: string, payload?: unknown): Promise<boolean> => {
+        if (!isDispatchCompanionEnabled()) return false;
 
         const { status } = get();
         const controlMessage = buildRelayControlMessage(action, payload);
 
-        // If disconnecting or reconnecting, queue for later delivery instead of dropping
+        // During a transient stale/reconnecting state, retain the control for
+        // ordered delivery instead of dropping it.
         if (status === 'reconnecting' || status === 'stale') {
-          if (pendingControlQueue.length < MAX_PENDING_QUEUE) {
-            pendingControlQueue.push({ action, payload: payload ?? {} });
-          }
-          return;
+          get().queueControl(action, payload);
+          return true;
         }
 
-        // Cannot send when fully disconnected or session expired — silently no-op
+        // There is no transport to accept the frame in terminal states.
         if (status === 'disconnected' || status === 'error' || status === 'session_expired') {
-          return;
+          return false;
         }
 
         // HIGH-MOB-05 fix (v2 nonce scheme 2026-05-05): sign the outgoing
@@ -1262,34 +1272,57 @@ export const useConnectionStore = create<ConnectionState>()(
         // missing; Dispatch must fail closed.
         if (!hmacState) {
           console.warn('[dispatch] Refusing to send unsigned control message');
-          return;
+          return false;
         }
 
-        const sendRaw = (envelope: unknown) => {
+        const attemptId = connectionAttemptId;
+        const sessionHmacState = hmacState;
+        const sessionDataChannel = dataChannel;
+        const sessionSignalingClient = signalingClient;
+
+        const sendRaw = (envelope: unknown): boolean => {
+          if (
+            !isCurrentConnectionAttempt(attemptId) ||
+            hmacState !== sessionHmacState ||
+            get().status !== 'connected'
+          ) {
+            return false;
+          }
           const serialised = JSON.stringify(envelope);
           // Prefer data channel for low latency
-          if (dataChannel && dataChannel.readyState === 'open') {
+          if (
+            sessionDataChannel &&
+            dataChannel === sessionDataChannel &&
+            sessionDataChannel.readyState === 'open'
+          ) {
             try {
-              dataChannel.send(serialised);
-              return;
+              sessionDataChannel.send(serialised);
+              return true;
             } catch {
               // Fall through to signaling relay
             }
           }
-          if (signalingClient) {
+          if (sessionSignalingClient && signalingClient === sessionSignalingClient) {
             const relay =
               isSignedEnvelopeLike(envelope) || isObject(envelope)
                 ? { ...controlMessage.relay, data: envelope as Record<string, unknown> }
                 : controlMessage.relay;
-            signalingClient.sendSignal('control', relay);
+            return sessionSignalingClient.sendSignal('control', relay);
           }
+          return false;
         };
 
-        signMessage(hmacState, controlMessage.relay.action, controlMessage.innerPayload)
-          .then(sendRaw)
-          .catch((err) => {
-            console.warn('[dispatch] Failed to sign control message:', err);
-          });
+        try {
+          const envelope = await signMessage(
+            sessionHmacState,
+            controlMessage.relay.action,
+            controlMessage.innerPayload,
+          );
+          return sendRaw(envelope);
+        } catch (err) {
+          console.warn('[dispatch] Failed to sign control message:', err);
+          return false;
+        }
       },
 
       clearError: () => {

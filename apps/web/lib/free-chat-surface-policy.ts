@@ -21,8 +21,12 @@ const KNOWN_SURFACES = new Set<CloudChatSurface>([
   'api',
 ]);
 
-/** Surfaces whose capability is the Pro-only `developer_surfaces` class. */
-const DEVELOPER_SURFACES = new Set<CloudChatSurface>(['chrome', 'vscode', 'cli']);
+/**
+ * Device-token developer surfaces. The Chrome consumer extension authenticates
+ * with the same Clerk account as Web/Mobile/Desktop, so it belongs to managed
+ * chat rather than this Pro-only developer class.
+ */
+const DEVELOPER_SURFACES = new Set<CloudChatSurface>(['vscode', 'cli']);
 
 /**
  * A surface class the SERVER proved from the credential itself, as opposed to
@@ -97,8 +101,8 @@ export function getCloudChatSurfaceCapability(
     case 'web':
     case 'mobile':
     case 'desktop':
-      return 'managed_chat';
     case 'chrome':
+      return 'managed_chat';
     case 'vscode':
     case 'cli':
       return 'developer_surfaces';

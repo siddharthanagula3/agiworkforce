@@ -5,13 +5,17 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { FinalCta } from '@/features/marketing/components/FlagshipSections';
 import { WaitlistTrigger } from '@/features/marketing/components/WaitlistModal';
-import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
+import {
+  BYOK_SURFACES,
+  DESKTOP_LOCAL_RUNTIMES,
+  LAUNCH,
+  MARKETING,
+} from '../../lib/marketing-constants';
 import { byokProviderLabels } from './byok-providers';
-import { WaitlistForm } from './WaitlistForm';
 
 export const metadata = buildMetadata({
-  title: 'BYOK: Bring Your Own Keys to Desktop & CLI',
-  description: `Bring your own provider API keys to AGI Desktop and the CLI. Keys encrypted at rest on your machine, traffic direct to your provider, and a visible provider label on every route. ${LAUNCH.publicLabel}.`,
+  title: 'BYOK: Bring Your Own Keys to Desktop, CLI & VS Code',
+  description: `Bring your own provider API keys to AGI ${BYOK_SURFACES.label}. Keys remain in the local runtime, traffic goes direct to your provider, and the route stays visible. ${LAUNCH.publicLabel}.`,
   path: '/byok',
 });
 
@@ -36,13 +40,13 @@ export default function ByokPage() {
             </span>
           </h1>
           <p className="agi-fl-lede">
-            Bring your own API keys to AGI Desktop and the CLI. Keys are stored encrypted at rest on
-            your machine, requests go directly to your provider, and the provider label stays
-            visible on every route.
+            Bring your own API keys to AGI {BYOK_SURFACES.label}. The local desktop or developer
+            runtime owns the key, requests go directly to your provider, and the provider label
+            stays visible on every route.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">
-              Get notified
+              Check surface availability
             </Link>
             <Link href="/cli" className="agi-fl-cta agi-fl-cta--secondary">
               Set Up the CLI
@@ -52,7 +56,7 @@ export default function ByokPage() {
             </Link>
           </div>
           <ul className="agi-fl-mode-ribbon" aria-label="BYOK guarantees">
-            <li>Desktop + CLI only</li>
+            <li>{BYOK_SURFACES.compact}</li>
             <li>Keys encrypted at rest</li>
             <li>Billed by your provider</li>
           </ul>
@@ -62,12 +66,14 @@ export default function ByokPage() {
               variant="desktop"
               title="AGI Desktop"
               badge="BYOK"
+              routeMode="byok"
               className="agi-fl-hero-frame agi-fl-hero-frame--main"
             />
             <ProductFrame
               variant="terminal"
               title="agi · zsh"
               badge="BYOK"
+              routeMode="byok"
               className="agi-fl-hero-frame agi-fl-hero-frame--terminal"
             />
           </div>
@@ -83,9 +89,8 @@ export default function ByokPage() {
               <span className="agi-step-n">01 / Add a key</span>
               <h3 className="agi-step-h">Add a provider key once</h3>
               <p className="agi-step-body">
-                Add a key on Desktop or in the CLI. It&rsquo;s stored encrypted at rest on your
-                machine. BYOK lives on Desktop and the CLI. Web and Mobile don&rsquo;t take provider
-                keys.
+                Add a key in the Desktop, CLI, or VS Code developer runtime. It stays with that
+                local runtime. {BYOK_SURFACES.exclusion}
               </p>
             </li>
             <li className="agi-step">
@@ -118,9 +123,9 @@ export default function ByokPage() {
             BYOK providers, straight from the catalog.
           </h2>
           <p className="agi-fl-section-lede">
-            BYOK on Desktop and the CLI covers the providers below, the same catalog that powers
-            AGI&rsquo;s {MARKETING.models.display} models. Ollama and LM Studio run alongside them
-            for offline work.
+            BYOK on {BYOK_SURFACES.label} covers the providers below, the same catalog that powers
+            AGI&rsquo;s {MARKETING.models.display} models. Desktop Local mode runs alongside them
+            through {DESKTOP_LOCAL_RUNTIMES.label}.
           </p>
           <div className="agi-chip-row" aria-label="Supported BYOK providers">
             {BYOK_PROVIDERS.map((provider) => (
@@ -128,8 +133,13 @@ export default function ByokPage() {
                 {provider}
               </span>
             ))}
-            <span className="agi-chip">Ollama (local)</span>
-            <span className="agi-chip">LM Studio (local)</span>
+          </div>
+          <div className="agi-chip-row" aria-label="Supported Desktop Local runtimes">
+            {DESKTOP_LOCAL_RUNTIMES.names.map((runtime) => (
+              <span key={runtime} className="agi-chip">
+                {runtime} (local)
+              </span>
+            ))}
           </div>
           <div className="agi-fl-cta-row">
             <Link href="/providers" className="agi-fl-cta agi-fl-cta--ghost">
@@ -160,14 +170,13 @@ export default function ByokPage() {
             </h2>
             <p className="agi-callout-p">
               AGI managed cloud is in public alpha and open by default — sign in to start, no
-              waitlist. Team &amp; Enterprise (org seats, SSO, admin controls) are rolling out;
-              leave an email and we&rsquo;ll reach out as those land.
+              waitlist. Pricing shows Team’s per-seat offer and current checkout availability.
+              Enterprise governance, SSO, and custom controls remain contract-scoped.
             </p>
-            <WaitlistForm source="byok" ctaLabel="Request Team &amp; Enterprise access" />
           </div>
           <div className="agi-fl-cta-row">
             <WaitlistTrigger
-              label="Request Team &amp; Enterprise Access"
+              label="Discuss Enterprise Requirements"
               source="byok"
               className="agi-fl-cta agi-fl-cta--ghost"
             />
@@ -177,12 +186,12 @@ export default function ByokPage() {
         <FinalCta
           eyebrow="BYOK"
           title="Your keys are ready when you are."
-          body="Follow the Desktop and CLI pages for current install routes, add a provider key, and route work on your own account. Local Mode stays available the whole time."
+          body={`Follow the product pages for current ${BYOK_SURFACES.label} availability, add a provider key, and route work on your own account. Local Mode stays available the whole time.`}
           ctas={[
-            { href: '/download', label: 'Get notified' },
+            { href: '/download', label: 'Check surface availability' },
             { href: '/cli', label: 'Explore the CLI' },
           ]}
-          stamp={LAUNCH.publicLabel}
+          stamp="Availability varies by surface"
         />
 
         <MarketingFooter />

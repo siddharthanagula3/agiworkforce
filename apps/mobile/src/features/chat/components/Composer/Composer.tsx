@@ -2,9 +2,15 @@ import { useState, useCallback } from 'react';
 import { View } from 'react-native';
 import type { SendPreviewInput } from '@agiworkforce/types';
 import { ChatInput, type ChatInputHandle } from '@/src/features/chat/components/ChatInput';
-import { type TaskChipType } from '@/src/features/chat/components/TaskChips';
+import {
+  TaskChips,
+  type TaskChipType,
+  type TaskSuggestionType,
+} from '@/src/features/chat/components/TaskChips';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import type { DraftProvenance } from '@/src/features/chat/draftStore';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 interface ComposerProps {
   /** May return (a promise of) a boolean — `false` means the send was
@@ -68,23 +74,48 @@ export function Composer({
   attachmentPrivacyShortLabel,
 }: ComposerProps) {
   const [activeChip, setActiveChip] = useState<TaskChipType | null>(null);
+  const appMode = useChatAppModeStore((state) => state.appMode);
+  const setMediaMode = useChatViewStore((state) => state.setMediaMode);
 
-  const handleChipPress = useCallback((chip: TaskChipType) => {
-    setActiveChip((prev) => (prev === chip ? null : chip));
-  }, []);
+  const handleChipPress = useCallback(
+    (chip: TaskSuggestionType) => {
+      if (chip === 'image') {
+        setActiveChip(null);
+        setMediaMode('image');
+        attachRef?.current?.focus?.();
+        return;
+      }
+      setMediaMode('text');
+      setActiveChip((prev) => (prev === chip ? null : chip));
+      attachRef?.current?.focus?.();
+    },
+    [attachRef, setMediaMode],
+  );
 
   const handleSend = useCallback(
     (text: string, attachments?: Attachment[]) => {
       // Forward the acceptance signal so ChatInput's draft-safe clearing works.
-      const result = onSend(text, attachments, activeChip ?? undefined);
-      setActiveChip(null);
-      return result;
+      return Promise.resolve(onSend(text, attachments, activeChip ?? undefined)).then(
+        (accepted) => {
+          if (accepted !== false) setActiveChip(null);
+          return accepted;
+        },
+      );
     },
     [onSend, activeChip],
   );
 
   return (
     <View style={{ gap: 8 }}>
+      {showChips ? (
+        <View style={{ paddingHorizontal: 16 }}>
+          <TaskChips
+            activeChip={activeChip}
+            onChipPress={handleChipPress}
+            showCloudSuggestions={appMode === 'cloud'}
+          />
+        </View>
+      ) : null}
       <ChatInput
         onSend={handleSend}
         isStreaming={isStreaming}

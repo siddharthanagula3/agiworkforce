@@ -60,17 +60,17 @@ describe('runAuthGate managed cloud surface entitlements', () => {
     mocks.getSubscription.mockResolvedValue(subscription('free'));
   });
 
-  it.each(['free', 'basic'])('admits %s chat on Web, Mobile, and Desktop', async (plan) => {
+  it.each(['free', 'basic'])('admits %s chat on Web, Mobile, Desktop, and Chrome', async (plan) => {
     mocks.getSubscription.mockResolvedValue(subscription(plan));
 
-    for (const surface of ['web', 'mobile', 'desktop']) {
+    for (const surface of ['web', 'mobile', 'desktop', 'chrome']) {
       const result = await runAuthGate(request(surface));
 
       expect(result.ok).toBe(true);
     }
   });
 
-  it.each(['chrome', 'vscode', 'cli'])('requires Pro for %s', async (surface) => {
+  it.each(['vscode', 'cli'])('requires Pro for %s', async (surface) => {
     for (const plan of ['free', 'basic']) {
       mocks.getSubscription.mockResolvedValue(subscription(plan));
       const result = await runAuthGate(request(surface));

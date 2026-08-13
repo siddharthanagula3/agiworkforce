@@ -3,13 +3,7 @@ import { AlertCircle, Check, Download, Info, Loader2, RefreshCw, Settings2 } fro
 import { Button } from '@/ui/Button';
 import { Switch } from '@/ui/Switch';
 import { Label } from '@/ui/Label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/ui/Select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/Select';
 import { useUpdater } from '../../features/updates/useUpdater';
 import { useUpdaterStore } from '../../stores/updaterStore';
 import { UpdateDialog } from '../../features/updates';
@@ -21,6 +15,7 @@ export function UpdateSettings() {
     downloadProgress,
     error,
     isChecking,
+    isManualInstallerUpdate,
     currentVersion,
     checkForUpdates,
     downloadAndInstall,
@@ -63,7 +58,9 @@ export function UpdateSettings() {
       case 'available':
         return {
           title: 'Update Available',
-          description: `Version ${updateInfo?.version} is available for download.`,
+          description: isManualInstallerUpdate
+            ? `Version ${updateInfo?.version} is available as a signed macOS installer.`
+            : `Version ${updateInfo?.version} is available for download.`,
           icon: <Download className="h-6 w-6 text-muted-foreground" />,
         };
       case 'downloading':
@@ -107,7 +104,9 @@ export function UpdateSettings() {
       <div>
         <h3 className="text-lg font-semibold mb-4">Software Update</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          Check for updates to the AGI Workforce desktop application
+          {isManualInstallerUpdate
+            ? 'Check for signed AGI Cloud installers. Downloads open in your browser; installation stays under your control.'
+            : 'Check for updates to the AGI Workforce desktop application'}
         </p>
       </div>
 
@@ -166,7 +165,7 @@ export function UpdateSettings() {
                 <>
                   <Button onClick={() => void downloadAndInstall()} size="sm">
                     <Download className="mr-2 h-4 w-4" />
-                    Download & Install
+                    {isManualInstallerUpdate ? 'Download Installer' : 'Download & Install'}
                   </Button>
                   <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
                     View Details

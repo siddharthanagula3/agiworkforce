@@ -22,7 +22,7 @@ const PRINCIPLES: { title: string; body: string }[] = [
   },
   {
     title: 'Your keys, your bill, no markup.',
-    body: 'Bring your own provider keys on Desktop and the CLI. Traffic goes straight to your provider; the keys stay encrypted on your machine. We do not sit in the middle of your spend.',
+    body: 'Bring your own provider keys on Desktop, CLI, and VS Code. Traffic goes straight to your provider; the keys stay encrypted on your machine. We do not sit in the middle of your spend.',
   },
   {
     title: 'One workspace, six surfaces.',

@@ -121,7 +121,9 @@ describe('Capabilities settings screen', () => {
     expect(getByLabelText('Local Mode. Private chat runs on this device. Active')).toBeTruthy();
     expect(getByLabelText(WEB_SEARCH_LABEL)).toBeTruthy();
     expect(
-      getByLabelText('AGI Code. Allow supported Cloud models to execute code in a secure sandbox.'),
+      getByLabelText(
+        'Code execution and file creation. Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.',
+      ),
     ).toBeTruthy();
     expect(
       getByLabelText(
@@ -138,7 +140,9 @@ describe('Capabilities settings screen', () => {
     ).toBeTruthy();
     expect(queryAllByRole('switch')).toHaveLength(4);
     expect(
-      getByLabelText('AGI Code. Allow supported Cloud models to execute code in a secure sandbox.'),
+      getByLabelText(
+        'Code execution and file creation. Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.',
+      ),
     ).toBeDisabled();
     expect(getByLabelText(WEB_SEARCH_LABEL)).toBeDisabled();
     expect(queryByText(/Claude/i)).toBeNull();
@@ -258,7 +262,7 @@ describe('Capabilities settings screen', () => {
 
     const { getByLabelText } = render(<CapabilitiesScreen />);
     const codeSwitch = getByLabelText(
-      'AGI Code. Allow supported Cloud models to execute code in a secure sandbox.',
+      'Code execution and file creation. Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.',
     );
     const researchSwitch = getByLabelText(
       'Deep research. Allow supported Cloud models to run multi-step research with citations.',

@@ -11,6 +11,7 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { eraseUserAccountData } from '@/lib/server/account-erasure';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
+import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
 /**
  * DELETE /api/user/delete-account
@@ -132,8 +133,7 @@ export async function DELETE(request: NextRequest) {
         logger.error({ userId }, 'Account deletion matched no profiles row; nothing was scheduled');
         return NextResponse.json(
           {
-            error:
-              'Account deletion could not be scheduled because your profile record was not found. Nothing was deleted. Please contact support@agiworkforce.com.',
+            error: `Account deletion could not be scheduled because your profile record was not found. Nothing was deleted. Please contact ${CONTACT_EMAIL}.`,
           },
           { status: 500, headers: SECURITY_HEADERS },
         );
@@ -145,8 +145,7 @@ export async function DELETE(request: NextRequest) {
         logger.error({ userId, error: updateErrMsg }, 'Account deletion scheduling failed');
         return NextResponse.json(
           {
-            error:
-              'Account deletion could not be scheduled. Nothing was deleted. Please try again, or contact support@agiworkforce.com if this persists.',
+            error: `Account deletion could not be scheduled. Nothing was deleted. Please try again, or contact ${CONTACT_EMAIL} if this persists.`,
           },
           { status: 500, headers: SECURITY_HEADERS },
         );
@@ -173,8 +172,7 @@ export async function DELETE(request: NextRequest) {
           logger.error({ userId, erasure }, 'Immediate account erasure was incomplete');
           return NextResponse.json(
             {
-              error:
-                'Account deletion did not finish. Some of your data has already been removed and the rest is still stored; your sign-in still works. Please contact support@agiworkforce.com so the erasure can be completed.',
+              error: `Account deletion did not finish. Some of your data has already been removed and the rest is still stored; your sign-in still works. Please contact ${CONTACT_EMAIL} so the erasure can be completed.`,
             },
             { status: 500, headers: SECURITY_HEADERS },
           );
@@ -185,7 +183,7 @@ export async function DELETE(request: NextRequest) {
         const errMsg = clerkErr instanceof Error ? clerkErr.message : String(clerkErr);
         logger.error({ userId, error: errMsg }, 'Account deletion failed');
         return NextResponse.json(
-          { error: 'Account deletion failed. Please contact support@agiworkforce.com.' },
+          { error: `Account deletion failed. Please contact ${CONTACT_EMAIL}.` },
           { status: 500, headers: SECURITY_HEADERS },
         );
       }
@@ -218,8 +216,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json(
       {
-        message:
-          'Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. To stop this, email support@agiworkforce.com before then.',
+        message: `Account deletion scheduled. Your account and all data will be permanently deleted within 24 hours. To stop this, email ${CONTACT_EMAIL} before then.`,
         scheduledFor: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       },
       { status: 200, headers: { ...getCorsHeaders(request), ...SECURITY_HEADERS } },
@@ -227,7 +224,7 @@ export async function DELETE(request: NextRequest) {
   } catch (err) {
     logger.error({ userId, err }, 'Unexpected error during account deletion');
     return NextResponse.json(
-      { error: 'An unexpected error occurred. Please contact support@agiworkforce.com.' },
+      { error: `An unexpected error occurred. Please contact ${CONTACT_EMAIL}.` },
       { status: 500, headers: SECURITY_HEADERS },
     );
   }

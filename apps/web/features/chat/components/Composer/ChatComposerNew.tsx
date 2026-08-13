@@ -80,6 +80,10 @@ import {
   isImageAspectRatioSupported,
   type ImageAspectRatio,
 } from '../../lib/imageGenerationOptions';
+// Video aspect/quality options come from the shared model catalog, not a
+// web-local copy — Mobile and Desktop read the same source, so a model that
+// publishes no 4k size cannot offer it on one surface and hide it on another.
+import { getVideoAspectOptionsForModel, getVideoQualityOptionsForModel } from '@agiworkforce/types';
 
 export {
   getImageAspectOptionsForModel,
@@ -202,7 +206,15 @@ interface ChatComposerProps {
    * `onGenerateImage`: the composer clears its state, the parent owns the async
    * task (POST + status polling) and the message injection.
    */
-  onGenerateVideo?: (prompt: string, options?: { modelId?: string }) => void;
+  onGenerateVideo?: (
+    prompt: string,
+    options?: {
+      modelId?: string;
+      aspectRatio?: string;
+      resolution?: string;
+      durationSecs?: number;
+    },
+  ) => void;
   /** Website free-plan state. The server owns the unpublished usage ceiling. */
   freeTrial?: {
     enabled: boolean;
@@ -595,6 +607,41 @@ const ChatComposerNewComponent = ({
   // Video generation mode state (videoMode itself is per-conversation, above).
   const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODEL_DEFAULT);
   const [showVideoModelMenu, setShowVideoModelMenu] = useState(false);
+  const [videoAspectRatio, setVideoAspectRatio] = useState<string>('16:9');
+  const [videoResolution, setVideoResolution] = useState<string>('720p');
+  const [showVideoAspectMenu, setShowVideoAspectMenu] = useState(false);
+  const [showVideoQualityMenu, setShowVideoQualityMenu] = useState(false);
+
+  /**
+   * Aspect/quality choices come from the model registry, so the picker is
+   * truthful per model: a model that publishes no 4k size never offers it,
+   * while models with broader envelopes expose their catalog-owned ratios.
+   *
+   * Like the image ratio above, the effective values are DERIVED during render
+   * rather than corrected by an effect — a model switch must not leave an
+   * unsupported tuple staged for even one frame, because that frame is what
+   * the send would use.
+   */
+  const videoAspectOptions = useMemo(
+    () => getVideoAspectOptionsForModel(videoModelId),
+    [videoModelId],
+  );
+  const effectiveVideoAspectRatio =
+    videoAspectOptions.find((option) => option.id === videoAspectRatio)?.id ??
+    videoAspectOptions[0]?.id ??
+    '16:9';
+  const videoQualityOptions = useMemo(
+    () => getVideoQualityOptionsForModel(videoModelId, effectiveVideoAspectRatio),
+    [videoModelId, effectiveVideoAspectRatio],
+  );
+  const effectiveVideoQuality =
+    videoQualityOptions.find((option) => option.id === videoResolution) ?? videoQualityOptions[0];
+  const effectiveVideoResolution = effectiveVideoQuality?.id ?? '720p';
+  // Some output tuples narrow the model-wide duration list. The composer has
+  // no independent duration picker, so selecting one of those tuples must
+  // carry its required duration; otherwise the route applies its 4s default
+  // and rejects the visible 1080p/4K selection as an impossible combination.
+  const effectiveVideoDurationSecs = effectiveVideoQuality?.durationSecs?.[0];
 
   // Catalog entries are candidates, not proof of this deployment's keys and
   // durable storage. Once the server handshake resolves, keep each selection
@@ -898,10 +945,17 @@ const ChatComposerNewComponent = ({
     //
     // AUDIT-FIX CMP-1/CMP-2: that intent is now actually honoured — the toggles
     // live in the chat store keyed by conversation, so the empty→non-empty
-    // remount that used to wipe them no longer touches them. The per-send
-    // resets below are the ones that genuinely belong to a single send: the
-    // skill selection and image mode are one-shot composer modes.
-    setComposerToggles({ selectedSkillName: null, imageMode: false, videoMode: false });
+    // remount that used to wipe them no longer touches them.
+    //
+    // A skill genuinely IS a one-shot choice, so it still clears here. Image and
+    // video mode are NOT: this used to drop them on every send, so generating a
+    // second image meant reopening the menu and re-picking the mode and model
+    // each time, and the composer appeared to snap back to a text model the
+    // instant you pressed send. Observed by the founder on both modes. Every
+    // comparable product keeps you in the mode until you leave it, and there is
+    // already an explicit way out — the × on the mode pill, which clears the
+    // mode and its model together.
+    setComposerToggles({ selectedSkillName: null });
     setLocalNotice(null);
     // A new draft gets its own secret warning.
     secretWarningAcknowledgedRef.current = false;
@@ -909,22 +963,19 @@ const ChatComposerNewComponent = ({
     setAgiWorkConstraints('');
     setAgiWorkDeliverable('');
     setAgiWorkFieldsOpen(false);
-    setImageAspectRatio('auto');
-    setImageModelId(availableImageModels[0]?.id ?? '');
-    setVideoModelId(availableVideoModels[0]?.id ?? '');
+    // Aspect ratio and the chosen media model ride with the mode above: a user
+    // shooting a sequence at 16:9 on a catalog-selected video model should stay
+    // there, not have both snap back to defaults between sends. The mode pill's
+    // × restores them.
     setShowCompatibleModels(false);
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [
-    availableImageModels,
-    availableVideoModels,
-    clearAttachments,
-    clearDraftContent,
-    conversationId,
-    setComposerToggles,
-  ]);
+    // `availableImageModels`/`availableVideoModels` are gone from these deps
+    // because the clear no longer reads them — the media model now survives a
+    // send, so there is nothing here to reset it to.
+  }, [clearAttachments, clearDraftContent, conversationId, setComposerToggles]);
 
   useEffect(() => {
     if (!isFreeTrial || !researchEnabled) return;
@@ -1590,7 +1641,17 @@ const ChatComposerNewComponent = ({
       // /api/media/video/generate already validates a caller-supplied model
       // (modelType must be 'video', must be live, provider must be executable)
       // and falls back to the catalog's video_generation slot when omitted.
-      onGenerateVideo(prompt, videoModelId ? { modelId: videoModelId } : undefined);
+      // Send the DERIVED tuple, not the raw state: a model switch can leave an
+      // unsupported ratio/quality staged, and the derived values are the ones
+      // the pills are showing.
+      onGenerateVideo(prompt, {
+        ...(videoModelId ? { modelId: videoModelId } : {}),
+        aspectRatio: effectiveVideoAspectRatio,
+        resolution: effectiveVideoResolution,
+        ...(effectiveVideoDurationSecs !== undefined
+          ? { durationSecs: effectiveVideoDurationSecs }
+          : {}),
+      });
       clearComposerState();
       return;
     }
@@ -1668,6 +1729,9 @@ const ChatComposerNewComponent = ({
     onGenerateImage,
     videoMode,
     videoModelId,
+    effectiveVideoAspectRatio,
+    effectiveVideoResolution,
+    effectiveVideoDurationSecs,
     onGenerateVideo,
     conversationId,
     workMode,
@@ -2692,7 +2756,11 @@ const ChatComposerNewComponent = ({
                           closeMenu();
                           openSettings('plugins');
                         }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+                        // Was the ONLY row in this menu carrying
+                        // `text-muted-foreground`, so a fully-wired entry
+                        // rendered greyed-out beside Skills and Connectors and
+                        // read as disabled. Matches its siblings now.
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
                       >
                         <svg
                           className="h-4 w-4"
@@ -2900,10 +2968,9 @@ const ChatComposerNewComponent = ({
               </div>
             )}
 
-            {/* Video-mode pill. Video has no ASPECT picker — the route defaults
-              duration/resolution — but it does have a model picker (below), and
-              the route accepts the selection. Exit works like the image pill and
-              resets the model the same way. */}
+            {/* Video-mode controls. Aspect/quality come from the selected
+              model's catalog output tuples; restricted qualities carry their
+              required duration on send. Exit resets the whole media choice. */}
             {videoMode && (
               <div className={cn('flex shrink-0 items-center gap-1')}>
                 <button
@@ -2911,6 +2978,10 @@ const ChatComposerNewComponent = ({
                   onClick={() => {
                     setVideoMode(false);
                     setVideoModelId(availableVideoModels[0]?.id ?? '');
+                    setVideoAspectRatio('16:9');
+                    setVideoResolution('720p');
+                    setShowVideoAspectMenu(false);
+                    setShowVideoQualityMenu(false);
                   }}
                   className="flex h-8 items-center gap-1.5 rounded-full bg-primary/15 px-2.5 text-xs font-medium text-primary ring-1 ring-primary/30 transition-all hover:bg-primary/25"
                   aria-label="Exit video generation mode"
@@ -2920,6 +2991,105 @@ const ChatComposerNewComponent = ({
                   <span>Video</span>
                   <X className="h-3 w-3 opacity-60" />
                 </button>
+
+                {/* Aspect ratio. Options come from the model's published
+                    `videoGeneration.outputSizes`, so a model that offers only
+                    landscape shows one entry rather than a lie. */}
+                {videoAspectOptions.length > 1 && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVideoAspectMenu((p) => !p);
+                        setShowVideoQualityMenu(false);
+                        setShowVideoModelMenu(false);
+                      }}
+                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                      aria-label="Select video aspect ratio"
+                    >
+                      {effectiveVideoAspectRatio}
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                    {showVideoAspectMenu && (
+                      <div className="absolute bottom-full left-0 z-50 mb-1 w-44 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                        {videoAspectOptions.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setVideoAspectRatio(opt.id);
+                              setShowVideoAspectMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              effectiveVideoAspectRatio === opt.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{opt.label}</span>
+                            {effectiveVideoAspectRatio === opt.id && (
+                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Quality. Scoped to the chosen aspect because the two are not
+                    independent — a resolution can exist in landscape and not in
+                    portrait. Durations a quality restricts are surfaced inline
+                    so the 8s-only rule is visible BEFORE a failed send. */}
+                {videoQualityOptions.length > 1 && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVideoQualityMenu((p) => !p);
+                        setShowVideoAspectMenu(false);
+                        setShowVideoModelMenu(false);
+                      }}
+                      className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                      aria-label="Select video quality"
+                    >
+                      {videoQualityOptions.find((o) => o.id === effectiveVideoResolution)?.label ??
+                        effectiveVideoResolution}
+                      <ChevronDown className="h-3 w-3" />
+                    </button>
+                    {showVideoQualityMenu && (
+                      <div className="absolute bottom-full left-0 z-50 mb-1 w-52 rounded-xl border border-border/60 bg-popover/95 p-1 shadow-xl backdrop-blur-xl">
+                        {videoQualityOptions.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => {
+                              setVideoResolution(opt.id);
+                              setShowVideoQualityMenu(false);
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                              effectiveVideoResolution === opt.id
+                                ? 'bg-primary/10 text-primary'
+                                : 'hover:bg-muted/60',
+                            )}
+                          >
+                            <span className="flex-1 text-left">{opt.label}</span>
+                            {opt.durationSecs && (
+                              <span className="shrink-0 text-[10px] text-muted-foreground">
+                                {opt.durationSecs.join('/')}s only
+                              </span>
+                            )}
+                            {effectiveVideoResolution === opt.id && (
+                              <Check className="h-3 w-3 shrink-0 text-primary" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

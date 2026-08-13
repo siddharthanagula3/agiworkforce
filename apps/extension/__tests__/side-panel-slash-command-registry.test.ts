@@ -1,12 +1,10 @@
 /**
- * One command list, three surfaces.
+ * One command list, two surfaces.
  *
- * The side panel exposes its page commands three ways: the `/` autocomplete
- * menu (`matchSlashCommands`), the submit-time expander (`expandSlashCommand`),
- * and the one-tap chips under the composer. The chip row used to carry its own
- * literal array of names. A command renamed in `SLASH_COMMANDS` left a chip
- * that still sent the old string, which `expandSlashCommand` no longer matched,
- * so the panel silently posted "/extract" to the model as ordinary chat text.
+ * The side panel exposes its page commands through the `/` autocomplete menu
+ * (`matchSlashCommands`) and the submit-time expander (`expandSlashCommand`).
+ * Both must continue to read the same registry; the retired prompt-chip row
+ * must not reintroduce a second literal command list.
  *
  * These tests parse the real side_panel.ts source because the module has
  * build-time side effects that prevent importing it under vitest/jsdom (same
@@ -39,20 +37,6 @@ function registryNames(): string[] {
   );
 }
 
-/** Registry entries flagged to also render as a composer chip. */
-function chipNames(): string[] {
-  return Array.from(
-    registryBlock().matchAll(/^ {2}'(\/[a-z]+)': \{(?:(?!^ {2}'\/)[\s\S])*?\n {4}chip: true,/gm),
-  ).map((m) => m[1] as string);
-}
-
-/** The body of the loop that builds the chip row. */
-function chipRowBlock(): string {
-  const start = source.indexOf("const promptChipsRow = el('div', { id: 'sp-prompt-chips' });");
-  expect(start).toBeGreaterThan(-1);
-  return source.slice(start, source.indexOf('\n  }', start));
-}
-
 describe('Chrome side-panel command list drives every command surface', () => {
   it('declares the commands once', () => {
     expect(registryNames()).toEqual([
@@ -65,25 +49,14 @@ describe('Chrome side-panel command list drives every command surface', () => {
     ]);
   });
 
-  it('every chip names a command the expander can execute', () => {
-    const names = registryNames();
-    const chips = chipNames();
-    expect(chips.length).toBeGreaterThan(0);
-    for (const chip of chips) {
-      expect(names).toContain(chip);
-    }
+  it('builds autocomplete matches directly from the registry', () => {
+    expect(source).toContain('return Object.entries(SLASH_COMMANDS).filter(');
+    expect(source).toContain('slashMatches = matchSlashCommands(inputEl.value)');
   });
 
-  it('builds the chip row from the registry instead of a second literal list', () => {
-    const block = chipRowBlock();
-    // The regression: a hand-maintained array of command names next to the
-    // registry that declares them.
-    expect(block).not.toMatch(/for \(const \w+ of \[/);
-    expect(block).toContain('for (const meta of PROMPT_CHIP_COMMANDS)');
-    expect(block).toContain('const cmd = meta.display;');
-    expect(source).toContain(
-      'const PROMPT_CHIP_COMMANDS: SlashCommandMeta[] = Object.values(SLASH_COMMANDS).filter(',
-    );
+  it('does not restore a second prompt-chip command registry', () => {
+    expect(source).not.toContain("id: 'sp-prompt-chips'");
+    expect(source).not.toContain('PROMPT_CHIP_COMMANDS');
   });
 
   it('keeps each command discoverable under the name the expander matches', () => {

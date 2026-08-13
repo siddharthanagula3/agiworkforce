@@ -1,11 +1,12 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
 
 export const MANAGED_COMPUTE_PRIVATE_BETA_ENV = 'AGI_MANAGED_COMPUTE_PRIVATE_BETA';
 export const MANAGED_COMPUTE_BETA_HEADER = 'x-agi-managed-compute-beta';
-export const MANAGED_COMPUTE_ORG_HEADER = 'x-agi-organization-id';
+export const MANAGED_COMPUTE_ORG_HEADER = MANAGED_CLOUD_ORGANIZATION_HEADER;
 
 export interface ManagedComputeDescriptor {
   provider: string;

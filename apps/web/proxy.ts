@@ -2,6 +2,7 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import type { NextMiddleware, NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { withCorsAndSecurityHeaders } from './lib/cors';
+import { apiHostRewriteUsesClerk, isApiHostRewriteSource } from './lib/api-host-route-contract';
 
 /**
  * Build a per-request Content-Security-Policy string with a nonce.
@@ -70,13 +71,15 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
   // an attacker-controlled host.
   const r2AccountId = process.env['CLOUDFLARE_R2_ACCOUNT_ID']?.trim();
   const r2BucketName = process.env['CLOUDFLARE_R2_BUCKET_NAME']?.trim();
-  const r2UploadOrigin =
+  const r2PrivateBucketName = process.env['CLOUDFLARE_R2_PRIVATE_BUCKET_NAME']?.trim();
+  const r2BucketOrigin = (bucketName: string | undefined): string =>
     r2AccountId &&
     /^[a-f0-9]{32}$/iu.test(r2AccountId) &&
-    r2BucketName &&
-    /^(?!-)[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/u.test(r2BucketName)
-      ? ` https://${r2BucketName}.${r2AccountId}.r2.cloudflarestorage.com`
+    bucketName &&
+    /^(?!-)[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?$/u.test(bucketName)
+      ? ` https://${bucketName}.${r2AccountId}.r2.cloudflarestorage.com`
       : '';
+  const r2UploadOrigins = `${r2BucketOrigin(r2BucketName)}${r2BucketOrigin(r2PrivateBucketName)}`;
   const devUnsafeEval = process.env['NODE_ENV'] === 'production' ? '' : " 'unsafe-eval'";
   const clerkFapi = clerkFapiOrigin();
   return `
@@ -85,7 +88,7 @@ function buildCspWithNonce(nonce: string, frameAncestors: "'none'" | "'self'" = 
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://js.stripe.com;
     img-src 'self' data: blob: https:;
     font-src 'self' https://fonts.gstatic.com https://js.stripe.com data:;
-    connect-src 'self'${r2UploadOrigin}${clerkFapi} https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
+    connect-src 'self'${r2UploadOrigins}${clerkFapi} https://*.clerk.accounts.dev https://*.clerk.com https://clerk-telemetry.com https://api.stripe.com https://vitals.vercel-insights.com https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com;
     worker-src 'self' blob:;
     frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://challenges.cloudflare.com${sandboxFrameSrc};
     frame-ancestors ${frameAncestors};
@@ -181,9 +184,9 @@ function attachApiCors(request: NextRequest, response: Response): Response {
 /**
  * Send browsers that land on the API host back to the app host.
  *
- * `api.agiworkforce.com` exists only to expose the OpenAI-compatible endpoints
- * via the host rewrites in `vercel.json` (`/v1/chat/completions`, `/v1/models`,
- * `/health`, …). Everything else on that host fell through to the same Next
+ * `api.agiworkforce.com` serves first-party `/api/*` routes directly and exposes
+ * a narrow OpenAI-compatible alias set through the host rewrites in
+ * `next.config.ts`. Everything else on that host fell through to the same Next
  * app, so it happily served the marketing site and the signed-in chat UI on a
  * hostname that was never meant to render either.
  *
@@ -197,8 +200,9 @@ function attachApiCors(request: NextRequest, response: Response): Response {
  * normally, so a looser check — "not the app host" — would take the whole
  * preview environment down.
  *
- * Paths already rewritten to `/api/*` are left alone: that is the API traffic
- * this host is for, and by the time middleware runs the rewrite has happened.
+ * Proxy runs before next.config.ts rewrites. Direct `/api/*` requests and the
+ * exact raw rewrite sources are therefore left alone. Unknown `/v1/*` paths
+ * still bounce instead of widening the public compatibility surface.
  */
 function apiHostRedirect(request: NextRequest): NextResponse | null {
   const host = request.headers.get('host');
@@ -211,6 +215,7 @@ function apiHostRedirect(request: NextRequest): NextResponse | null {
   }
   if (host !== `api.${appHost}`) return null;
   if (request.nextUrl.pathname.startsWith('/api/')) return null;
+  if (isApiHostRewriteSource(request.nextUrl.pathname)) return null;
   const target = new URL(
     `${request.nextUrl.pathname}${request.nextUrl.search}`,
     `https://${appHost}`,
@@ -239,7 +244,11 @@ export const proxy: NextMiddleware = async (request, event) => {
   // matcher about a non-auth path. When `/` bypasses clerkMiddleware(), the
   // signed-in RSC render throws "auth() was called but Clerk can't detect usage
   // of clerkMiddleware()".
-  if (request.nextUrl.pathname === '/' || isClerkSessionRoute(request)) {
+  if (
+    request.nextUrl.pathname === '/' ||
+    isClerkSessionRoute(request) ||
+    apiHostRewriteUsesClerk(request.nextUrl.pathname)
+  ) {
     const response = await clerkAwareProxy(request, event);
     return response ? attachApiCors(request, response) : response;
   }

@@ -25,7 +25,7 @@ import {
   MAX_GENERATED_FILE_BYTES,
   type GeneratedFileWire,
 } from '@/lib/server/generated-file-persist';
-import { isMediaStorageConfigured } from '@/lib/server/media-storage';
+import { isGeneratedMediaStorageConfigured } from '@/lib/server/media-storage';
 import type { E2BExecutor, SandboxFileEntry } from './types';
 
 export type { GeneratedFileWire };
@@ -136,7 +136,7 @@ export async function harvestGeneratedFiles(params: {
   conversationId?: string;
 }): Promise<HarvestResult> {
   const { executor, baseline, userId, organizationId, model, prompt, conversationId } = params;
-  const canPersist = Boolean(executor.readFileBytes) && isMediaStorageConfigured();
+  const canPersist = Boolean(executor.readFileBytes) && isGeneratedMediaStorageConfigured();
 
   let files: SandboxFileEntry[];
   try {
@@ -153,7 +153,7 @@ export async function harvestGeneratedFiles(params: {
     // turn claim success with nothing delivered. Count them so the caller emits
     // its honest "could not be retrieved" note.
     logger.warn(
-      { changed: changed.length, storageConfigured: isMediaStorageConfigured() },
+      { changed: changed.length, storageConfigured: isGeneratedMediaStorageConfigured() },
       '[e2b] generated files present but persistence unavailable; surfacing honest failure note',
     );
     return { files: [], failedCount: changed.length };

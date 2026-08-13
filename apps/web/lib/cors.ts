@@ -119,7 +119,7 @@ export function getCorsHeaders(request: NextRequest): Record<string, string> {
   const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers':
-      'Content-Type, Authorization, X-Request-ID, x-csrf-token, X-Requested-With, Idempotency-Key, X-AGI-Surface, X-Client',
+      'Content-Type, Authorization, X-Request-ID, x-csrf-token, X-Requested-With, Idempotency-Key, X-AGI-Surface, X-AGI-Organization-Id, X-Client',
     'Access-Control-Expose-Headers':
       'X-AGI-Agent-Run-Id, X-AGI-Agent-Run-URL, X-AGI-Tool-Loop, X-AGI-Research-Loop, X-Quota-Warning',
     'Access-Control-Max-Age': '86400', // 24 hours

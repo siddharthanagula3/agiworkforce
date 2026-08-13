@@ -62,6 +62,7 @@ interface FakeAuthState {
     current_period_start?: string | null;
     current_period_end?: string | null;
     cancel_at_period_end?: boolean;
+    subscription_source?: 'none' | 'stripe' | 'apple' | 'google' | 'manual' | 'unknown';
     canceled_at?: string | null;
     created_at?: string;
     updated_at?: string;
@@ -128,6 +129,8 @@ const accountASubscription = {
   stripe_price_id: 'price_account_a',
   current_period_start: '2026-08-01T00:00:00.000Z',
   current_period_end: '2026-09-01T00:00:00.000Z',
+  cancel_at_period_end: false,
+  subscription_source: 'stripe' as const,
   created_at: '2026-08-01T00:00:00.000Z',
   updated_at: '2026-08-01T00:00:00.000Z',
 };
@@ -169,6 +172,32 @@ describe('Managed Cloud auth account transitions', () => {
     disposeOrchestrator = null;
     resetAuthOrchestrator();
     localStorage.clear();
+  });
+
+  it('preserves billing owner, period, and scheduled cancellation in the unified store', async () => {
+    mocks.fetchUserProfile.mockResolvedValueOnce({ credits: null });
+    emit(
+      authState('account-apple', 'token-apple', {
+        subscription: {
+          ...accountASubscription,
+          stripe_customer_id: null,
+          stripe_subscription_id: null,
+          subscription_source: 'apple',
+          cancel_at_period_end: true,
+        },
+      }),
+    );
+
+    await waitFor(() => useUnifiedAuthStore.getState().subscriptionSource === 'apple');
+    const state = useUnifiedAuthStore.getState();
+    expect(state.subscriptionCancelAtPeriodEnd).toBe(true);
+    expect(state.currentPeriodEnd).toBe(Date.parse('2026-09-01T00:00:00.000Z'));
+    expect(state.account.subscriptionSource).toBe('apple');
+    expect(state.account.subscriptionCancelAtPeriodEnd).toBe(true);
+    expect(state.stripeSubscription).toMatchObject({
+      subscription_source: 'apple',
+      cancel_at_period_end: true,
+    });
   });
 
   it('clears account A capabilities synchronously while account B refresh is hung', async () => {

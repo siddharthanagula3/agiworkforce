@@ -9,6 +9,16 @@ import {
 export const MANAGED_CLOUD_DEFAULT_MODEL_SELECTION = getDefaultAutoRoutingProfile().id;
 
 export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
+/**
+ * Explicit Managed Cloud workspace selector.
+ *
+ * This is a scope selector, never an authorization grant: servers must prove
+ * organization membership before using it. `personal` is required because an
+ * omitted header means "use the account's current workspace", which is not a
+ * stable binding for background sync.
+ */
+export const MANAGED_CLOUD_ORGANIZATION_HEADER = 'x-agi-organization-id';
+export const MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE = 'personal';
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
 /**
  * PER-5 — hard cap on a message's serialized `metadata`.
@@ -80,6 +90,12 @@ export type ManagedCloudReflectRange = z.infer<typeof ManagedCloudReflectRangeSc
 
 export const ManagedCloudConversationWireSchema = z.object({
   id: z.string().min(1),
+  /**
+   * The server-confirmed workspace owning this row. Optional only for rolling
+   * compatibility with older deployments; persistence clients that require a
+   * stable cross-workspace binding must fail closed when it is absent.
+   */
+  organization_id: z.string().uuid().nullable().optional(),
   title: z.string().nullable(),
   model: z.string().nullable(),
   project_id: z.string().nullable(),
@@ -320,6 +336,8 @@ export type ManagedCloudReflectRecap = z.infer<typeof ManagedCloudReflectRecapSc
 
 export interface ManagedCloudConversation {
   id: string;
+  /** Missing only when an older server omitted the scope from its wire row. */
+  organizationId?: string | null;
   title: string;
   model?: string;
   projectId: string | null;
@@ -349,6 +367,7 @@ export function normalizeManagedCloudConversation(
 ): ManagedCloudConversation {
   return {
     id: wire.id,
+    ...(wire.organization_id !== undefined ? { organizationId: wire.organization_id } : {}),
     title: wire.title ?? 'Untitled',
     ...(wire.model ? { model: wire.model } : {}),
     projectId: wire.project_id,

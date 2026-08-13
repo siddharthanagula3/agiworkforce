@@ -18,6 +18,16 @@ These rules must stay mirrored in `CLAUDE.md` and guarded by `pnpm check:agent-c
 - Local to BYOK must be an explicit fork/continuation with context selection, secret scan, payload preview, user consent, and visible provider label.
 - Managed cloud is in public alpha and open by default — the private-beta/waitlist launch gate has been removed (founder decision, 2026-06-27). The `AGI_MANAGED_COMPUTE_PRIVATE_BETA` env remains ONLY as an incident-response kill-switch (set to `0`/`false`/`off` to re-gate). Billing, metering, abuse, fraud, refunds, chargebacks, provider terms, retention, and deletion controls must keep pace with public usage, but they no longer gate access.
 - Do not invent APIs, routes, env vars, schemas, prompts, docs, or release status. If the repo does not prove it, mark it unknown or add a tracked gap.
+- Finish what you start. Do not ship a capability in half: if a control is
+  added, it must be wired through every layer to the thing it claims to do —
+  UI state, client options type, request contract, network body, and server
+  handler — and verified by observing the real request or result, not by a
+  passing typecheck. A picker that renders but never reaches the API, a model
+  added to the registry with no way to select it, or a validated parameter no
+  caller can send are all failures, not progress. If the full path genuinely
+  cannot be completed, stop and record the exact remaining step in
+  `ExecutionPlan.md` as `TODO` or in `FoundersAssistance.md` as
+  `BLOCKED_BY_HUMAN` — never leave a half-wired surface and describe it as done.
 - Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
 - Treat unusual product behavior as a bug, not as background noise: unreadable UI, dead or duplicate controls, unexpected redirects, visible console/network errors, stale provider/model labels, fake availability badges, and confusing auth or upgrade gates must be fixed immediately when reproducible, or recorded as a concrete blocker with evidence.
 - Do not treat generated audit/report markdown as remediation. Audit files are triage queues: open the cited source files, confirm the issue in implementation, patch production paths when safe, and only summarize after code changes or explicit blocked risks are recorded.
@@ -82,8 +92,20 @@ Machine-readable version: `docs/agent-context/repo-map.json`.
 - User-facing CLI examples use `agi`; `agiworkforce` remains only as a compatibility alias or internal repo/package/crate identifier.
 - Never silently route Local chats or developer sessions to BYOK or managed cloud.
 - Local to BYOK is an explicit fork/continuation with context selection, secret scan, payload preview, and visible provider label.
-- Normal chat sync is only for Web, Mobile, and Desktop.
-- CLI, VS Code, and Chrome stay local/workspace/task scoped unless the user explicitly hands off a redacted preview.
+- Normal app chat sync is shared by Web, Mobile, and Desktop. Eligible signed-in
+  Chrome Managed Cloud chats automatically mirror into that same account store
+  under the Chrome-specific boundary below.
+- CLI and VS Code stay local/workspace/task scoped unless the user explicitly hands off a redacted preview.
+- Chrome must automatically mirror a conversation to the signed-in account ONLY
+  when every turn in it was inferred in Managed Cloud, and the mirror is
+  append-only — `chrome.storage.local` stays authoritative (founder decision,
+  2026-08-13). The account copy must be available in Web, Mobile Cloud, Tauri
+  Cloud, and Electron Cloud. A
+  Local or BYOK turn permanently disqualifies that conversation from cloud
+  persistence, and a turn with unknown provenance is treated as disqualified.
+  This is a carve-out from the line above, not a general relaxation: the
+  content already left the device for inference, so persisting it crosses no
+  new trust boundary.
 - Do not hardcode model IDs; use model catalogs and provider capability metadata.
 - Do not copy proprietary code. Open-source reuse needs compatible license handling and `THIRD_PARTY_LICENSES.md`.
 - Do not combine file moves with behavior changes.

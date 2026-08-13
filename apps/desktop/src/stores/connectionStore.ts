@@ -258,8 +258,7 @@ export async function sendCompanionControl(
 
     const signedPayload = parseJsonObject(signedJson);
     if (signedPayload && sessionSignalingClient && signalingClient === sessionSignalingClient) {
-      sessionSignalingClient.sendSignal('control', signedPayload);
-      return true;
+      return sessionSignalingClient.sendSignal('control', signedPayload);
     }
   } catch (error) {
     console.warn('[mobile-companion] failed to send signed control response:', error);

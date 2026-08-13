@@ -1953,6 +1953,53 @@
         "1080p": 0.4,
         "4k": 0.6
       },
+      "videoGeneration": {
+        "durationSecs": [4, 6, 8],
+        "outputSizes": [
+          {
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "9:16",
+            "width": 720,
+            "height": 1280
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "16:9",
+            "width": 1920,
+            "height": 1080,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "9:16",
+            "width": 1080,
+            "height": 1920,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "4k",
+            "aspectRatio": "16:9",
+            "width": 3840,
+            "height": 2160,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "4k",
+            "aspectRatio": "9:16",
+            "width": 2160,
+            "height": 3840,
+            "durationSecs": [8]
+          }
+        ],
+        "supportsAudio": true,
+        "supportsSeed": true
+      },
       "pricingNote": "Veo 3.1 Standard with audio: $0.40/second at 720p or 1080p; $0.60/second at 4k. 1080p and 4k require 8-second generations.",
       "reasoning": {
         "capable": false,
@@ -1979,6 +2026,97 @@
         "caching": false
       },
       "speedOverride": "slow",
+      "releasedOverride": "January 2026"
+    },
+    "veo-3.1-fast": {
+      "id": "veo-3.1-fast",
+      "apiModelId": "veo-3.1-fast-generate-preview",
+      "name": "Veo 3.1 Fast",
+      "provider": "google",
+      "modelType": "video",
+      "quality": "excellent",
+      "qualityTier": "balanced",
+      "bestFor": ["Fast High-Quality Video", "Rapid Iteration"],
+      "deprecation_date": null,
+      "videoPerSecondCost": 0.1,
+      "videoPerSecondCostByResolution": {
+        "720p": 0.1,
+        "1080p": 0.12,
+        "4k": 0.3
+      },
+      "videoGeneration": {
+        "durationSecs": [4, 6, 8],
+        "outputSizes": [
+          {
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "9:16",
+            "width": 720,
+            "height": 1280
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "16:9",
+            "width": 1920,
+            "height": 1080,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "9:16",
+            "width": 1080,
+            "height": 1920,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "4k",
+            "aspectRatio": "16:9",
+            "width": 3840,
+            "height": 2160,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "4k",
+            "aspectRatio": "9:16",
+            "width": 2160,
+            "height": 3840,
+            "durationSecs": [8]
+          }
+        ],
+        "supportsAudio": true,
+        "supportsSeed": true
+      },
+      "pricingNote": "Veo 3.1 Fast with audio: $0.10/second at 720p, $0.12/second at 1080p, $0.30/second at 4k. 1080p and 4k require 8-second generations. Verified against ai.google.dev/gemini-api/docs/pricing on 2026-08-12.",
+      "reasoning": {
+        "capable": false,
+        "control": "none"
+      },
+      "costOverride": {
+        "inputCost": 0,
+        "outputCost": 0
+      },
+      "contextOverride": 4000,
+      "capabilitiesOverride": {
+        "streaming": false,
+        "tools": false,
+        "vision": false,
+        "json": false,
+        "thinking": false,
+        "computerUse": false,
+        "agentic": false,
+        "imageGen": false,
+        "videoGen": true,
+        "search": false,
+        "research": false,
+        "codeExecution": false,
+        "caching": false
+      },
+      "speedOverride": "fast",
       "releasedOverride": "January 2026"
     },
     "gpt-4o-transcribe": {
@@ -2107,6 +2245,39 @@
       "videoPerSecondCostByResolution": {
         "720p": 0.05,
         "1080p": 0.08
+      },
+      "videoGeneration": {
+        "durationSecs": [4, 6, 8],
+        "outputSizes": [
+          {
+            "resolution": "720p",
+            "aspectRatio": "16:9",
+            "width": 1280,
+            "height": 720
+          },
+          {
+            "resolution": "720p",
+            "aspectRatio": "9:16",
+            "width": 720,
+            "height": 1280
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "16:9",
+            "width": 1920,
+            "height": 1080,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "9:16",
+            "width": 1080,
+            "height": 1920,
+            "durationSecs": [8]
+          }
+        ],
+        "supportsAudio": true,
+        "supportsSeed": true
       },
       "pricingNote": "Veo 3.1 Lite with audio: $0.05/second at 720p, $0.08/second at 1080p. 4k output is NOT supported on Lite. Paid tier only. Verified end to end against veo-3.1-lite-generate-preview on 2026-08-06 (200 + completed operation).",
       "reasoning": {

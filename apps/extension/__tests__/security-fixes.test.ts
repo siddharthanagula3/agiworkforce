@@ -549,7 +549,7 @@ describe('H-10 side panel does not send apiKey on CHAT_MESSAGE', () => {
     // comments so we're only asserting against real code (the SECURITY
     // explanation comment mentions `apiKey:` legitimately).
     const chatMessageBlocks = sidePanelSource.match(
-      /type:\s*'CHAT_MESSAGE'[\s\S]*?\}\s*,\s*\(\s*\)\s*=>/g,
+      /type:\s*'CHAT_MESSAGE'[\s\S]*?\.\.\.managedOutboundRoutingPayload\(\)/g,
     );
     expect(chatMessageBlocks?.length).toBeGreaterThan(0);
     for (const block of chatMessageBlocks ?? []) {

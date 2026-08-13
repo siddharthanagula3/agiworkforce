@@ -1,5 +1,5 @@
 /**
- * memoryStore.test.ts — Unit tests for the shared cross-conversation memory store.
+ * memoryStore.test.ts — Unit tests for the workspace-scoped developer memory store.
  *
  * Verifies CRUD operations, backward-compat schema, duplicate detection contract,
  * and the onMemoryDidChange event.
@@ -19,7 +19,7 @@ import {
   type MemoryFact,
 } from '../memory/memoryStore';
 
-// ---------- minimal globalState stub ----------
+// ---------- minimal workspaceState stub ----------
 
 function makeGlobalState(initial?: MemoryFact[]) {
   const _store = new Map<string, unknown>();

@@ -204,6 +204,9 @@ export const VoiceSelector = forwardRef<
     <BottomSheet
       ref={ref}
       index={index}
+      // Preserve the adjustable drag handle, but let assistive technology
+      // reach the language and voice rows inside the sheet.
+      accessible={false}
       onChange={onChange}
       snapPoints={['50%', '85%']}
       enablePanDownToClose

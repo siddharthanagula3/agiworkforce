@@ -154,6 +154,7 @@ import {
 } from '../test-utils/modelFixtures';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useProjectStore } from '../src/features/projects/store';
 import { useCloudProjectStore } from '../stores/projects/cloudProjectStore';
 import {
@@ -180,6 +181,7 @@ const mockCancelMobileCloudAgentRun = cancelMobileCloudAgentRun as jest.MockedFu
   typeof cancelMobileCloudAgentRun
 >;
 const mockApiDelete = api.delete as jest.MockedFunction<typeof api.delete>;
+const mockApiGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockApiUploadFile = api.uploadFile as jest.MockedFunction<typeof api.uploadFile>;
 const mockRemoteDisabledReason = getRemoteChatDisabledReason as jest.MockedFunction<
   typeof getRemoteChatDisabledReason
@@ -252,6 +254,7 @@ function resetStore() {
     billingTier: 'free',
     billingStatus: 'none',
     grantedCapabilities: ['canUseWebSearch', 'canUseConnectors'],
+    capabilityHandshakeReceived: true,
     capabilityHandshakeVersion: 'test-mobile-capabilities',
     codeExecutionAvailable: false,
     genericWebSearchAvailable: false,
@@ -405,6 +408,34 @@ describe('chatStore — streaming state', () => {
       });
 
       expect(capturedBody?.web_search).toBe(true);
+      expect(capturedBody?.tool_choice).toBeUndefined();
+    });
+
+    it('keeps ambient web search optional for an ordinary Cloud turn', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+      useChatStore.setState({
+        features: { webSearch: true, imageGen: true, health: false, codeExecution: false },
+      });
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            setTimeout(() => {
+              callbacks.onDelta({ content: 'ordinary reply' });
+              callbacks.onDone();
+              resolve();
+            }, 0);
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'help me outline a short note', CLOUD_MODEL);
+      });
+
+      expect(capturedBody?.web_search).toBe(true);
+      expect(capturedBody?.tool_choice).toBeUndefined();
     });
 
     it('omits web_search when the user turned the Capabilities preference off', async () => {
@@ -497,7 +528,14 @@ describe('chatStore — streaming state', () => {
     it('omits ambient web search when the account capability handshake denies it', async () => {
       let capturedBody: Parameters<typeof streamChat>[0] | null = null;
       seedCloudConversation();
-      useTierStore.setState({ grantedCapabilities: [] } as never);
+      // A DENIAL requires a handshake to have actually been received. An empty
+      // array on its own now means "never asked" — which must NOT deny, because
+      // that state is reachable on a cold start and used to disable every server
+      // tool on Mobile permanently.
+      useTierStore.setState({
+        grantedCapabilities: [],
+        capabilityHandshakeReceived: true,
+      } as never);
 
       mockStreamChat.mockImplementation(
         (body, callbacks) =>
@@ -513,6 +551,114 @@ describe('chatStore — streaming state', () => {
       });
 
       expect(capturedBody?.web_search).toBeUndefined();
+    });
+
+    // Regression: Mobile shipped with web search, code execution and deep
+    // research permanently off because `grantedCapabilities` starts empty,
+    // `refreshTier` early-returns while the app is in Local mode (how it always
+    // launches), and every failure path was swallowed — so "never asked" was
+    // indistinguishable from "denied" and the gate failed closed forever.
+    it('still requests web search when no capability handshake has been received', async () => {
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      seedCloudConversation();
+      useTierStore.setState({
+        grantedCapabilities: [],
+        capabilityHandshakeReceived: false,
+      } as never);
+
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'current news', CLOUD_MODEL);
+      });
+
+      expect(capturedBody?.web_search).toBe(true);
+    });
+
+    it('waits for the Cloud entitlement handshake before the first searchable send', async () => {
+      let resolveEntitlements!: (value: unknown) => void;
+      let capturedBody: Parameters<typeof streamChat>[0] | null = null;
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      seedCloudConversation();
+      useTierStore.setState({
+        tier: 'free',
+        grantedCapabilities: [],
+        capabilityHandshakeReceived: false,
+        capabilityHandshakeVersion: null,
+        genericWebSearchAvailable: false,
+        lastRefreshedAt: null,
+      } as never);
+      mockApiGet.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveEntitlements = resolve;
+        }),
+      );
+      mockStreamChat.mockImplementation(
+        (body, callbacks) =>
+          new Promise<void>((resolve) => {
+            capturedBody = body;
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      const send = getState().sendMessage(CONV_ID, 'current news', CLOUD_MODEL);
+      await Promise.resolve();
+      expect(mockStreamChat).not.toHaveBeenCalled();
+
+      resolveEntitlements({
+        id: 'chat-store-test-user',
+        email: 'test@example.com',
+        name: 'Test User',
+        avatar_url: null,
+        created_at: null,
+        updated_at: 1_787_000_000,
+        plan: {
+          tier: 'max',
+          display_name: 'Max',
+          status: 'active',
+          current_period_end: null,
+          subscription_source: 'stripe',
+        },
+        feature_flags: {
+          advanced_model_access: true,
+          code_execution: true,
+          generic_web_search: true,
+        },
+        credits: null,
+        routing_preferences: {},
+        capability_handshake: {
+          sessionId: 'chat-store-test-user',
+          version: 'mobile-search-v1',
+          computedAt: '2026-08-13T00:00:00.000Z',
+          sources: {
+            model: 'models.json@test',
+            tier: 'tier:max',
+            surface: 'surface:mobile',
+            settings: 'settings:default',
+          },
+          granted: ['canChat', 'canUseWebSearch'],
+          deniedBy: {},
+        },
+      });
+      await act(async () => {
+        await send;
+      });
+
+      expect(mockApiGet).toHaveBeenCalledWith('/api/me?surface=mobile');
+      expect(capturedBody?.web_search).toBe(true);
+      expect(useTierStore.getState()).toMatchObject({
+        tier: 'max',
+        capabilityHandshakeReceived: true,
+        genericWebSearchAvailable: true,
+      });
     });
 
     it('sends work_mode:agiwork only for the explicit Cloud work mode', async () => {
@@ -620,6 +766,7 @@ describe('chatStore — streaming state', () => {
       useTierStore.setState({
         tier: 'max',
         grantedCapabilities: ['canUseWebSearch', 'canUseDeepResearch'],
+        capabilityHandshakeReceived: true,
       } as never);
       useChatStore.setState({
         features: {
@@ -647,7 +794,11 @@ describe('chatStore — streaming state', () => {
       expect(capturedBody?.research).toBe(true);
 
       capturedBody = null;
-      useTierStore.setState({ tier: 'pro', grantedCapabilities: ['canUseWebSearch'] } as never);
+      useTierStore.setState({
+        tier: 'pro',
+        grantedCapabilities: ['canUseWebSearch'],
+        capabilityHandshakeReceived: true,
+      } as never);
 
       await act(async () => {
         await getState().sendMessage(CONV_ID, 'research this again', researchModel);
@@ -747,6 +898,95 @@ describe('chatStore — streaming state', () => {
       const assistantMsg = msgs.find((m) => m.role === 'assistant');
       expect(assistantMsg?.content).toBe('Hello world');
       expect(assistantMsg?.isStreaming).toBe(false);
+    });
+
+    it('finalizes map cards and generated files into durable Cloud metadata', async () => {
+      seedCloudConversation();
+      const mapCard = {
+        schemaVersion: 1,
+        cardId: 'fixture-mobile-map',
+        kind: 'map-search.v1',
+        createdAt: '2026-08-13T12:00:00.000Z',
+        fallback: {
+          headline: 'Coffee near Austin',
+          text: 'Map results for coffee near Austin.',
+        },
+        producedBy: { toolCallId: 'fixture-mobile-map', toolName: 'search_maps' },
+        body: {
+          title: 'Coffee near Austin',
+          query: 'coffee near Austin',
+          actions: [
+            {
+              provider: 'google_maps',
+              label: 'Open in Google Maps',
+              url: 'https://www.google.com/maps/search/?api=1&query=coffee%20austin',
+            },
+          ],
+          view: {
+            latitude: 30.2672,
+            longitude: -97.7431,
+            zoom: 11,
+            attribution: '© OpenStreetMap contributors',
+          },
+          places: [],
+        },
+      };
+
+      mockStreamChat.mockImplementation(
+        (_body, callbacks) =>
+          new Promise<void>((resolve) => {
+            callbacks.onDelta({ content: 'Here are the results.' });
+            callbacks.onDelta({ x_interactive_card: { card: mapCard } });
+            // Replayed card and file deltas must replace/dedupe, not duplicate.
+            callbacks.onDelta({ x_interactive_card: { card: mapCard } });
+            callbacks.onDelta({
+              x_generated_files: {
+                files: [
+                  {
+                    id: 'asset-mobile-report',
+                    file_name: 'report.pdf',
+                    mime_type: 'application/pdf',
+                    uri: '/api/files/asset-mobile-report',
+                    byte_count: 2048,
+                    kind: 'pdf',
+                    checksum_sha256: 'a'.repeat(64),
+                    surface: 'file',
+                    previewable: true,
+                  },
+                ],
+              },
+            });
+            callbacks.onDone();
+            resolve();
+          }),
+      );
+
+      await act(async () => {
+        await getState().sendMessage(CONV_ID, 'Map coffee and create a report', CLOUD_MODEL);
+      });
+
+      const assistant = getState().messages[CONV_ID]?.find(
+        (message) => message.role === 'assistant',
+      );
+      expect(assistant?.interactiveCards).toHaveLength(1);
+      expect(assistant?.metadata?.interactiveCards).toEqual(assistant?.interactiveCards);
+      expect(assistant?.artifacts).toEqual([
+        expect.objectContaining({
+          id: 'asset-mobile-report',
+          generatedFile: expect.objectContaining({
+            fileName: 'report.pdf',
+            uri: expect.stringContaining('/api/files/asset-mobile-report'),
+          }),
+        }),
+      ]);
+      expect(assistant?.metadata?.generatedFiles).toEqual([
+        expect.objectContaining({
+          id: 'asset-mobile-report',
+          fileName: 'report.pdf',
+          uri: '/api/files/asset-mobile-report',
+          previewable: true,
+        }),
+      ]);
     });
 
     it('reconciles durable replay text without duplicating content and persists the run cursor', async () => {

@@ -44,7 +44,7 @@ export default function ConsultingPage() {
           </div>
           <ul className="agi-fl-mode-ribbon" aria-label="Trust modes">
             <li>Local · sensitive engagements</li>
-            <li>BYOK · Desktop &amp; CLI</li>
+            <li>BYOK · Desktop, CLI &amp; VS Code</li>
             <li>Cloud · public alpha</li>
           </ul>
           <div className="agi-fl-hero-console" aria-hidden="true">
@@ -85,7 +85,7 @@ export default function ConsultingPage() {
           rows={[
             {
               k: 'Provider choice',
-              v: 'BYOK on Desktop and CLI. Pay providers directly at their rates.',
+              v: 'BYOK on Desktop, CLI, and VS Code. Pay providers directly at their rates.',
             },
             {
               k: 'Confidentiality',

@@ -32,13 +32,23 @@ const STATUS_LABELS: Record<string, string> = {
 export function DispatchTaskComposer() {
   const colors = useThemeColors();
   const [prompt, setPrompt] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const tasks = useDispatchTaskStore((state) => state.tasks);
   const visibleTasks = useMemo(() => tasks.slice(0, 4), [tasks]);
-  const canSend = prompt.trim().length > 0 && prompt.trim().length <= 20_000;
+  const canSend = !isSending && prompt.trim().length > 0 && prompt.trim().length <= 20_000;
 
-  const handleSend = () => {
-    const requestId = sendDispatchTask({ prompt });
-    if (requestId) setPrompt('');
+  const handleSend = async () => {
+    if (!canSend) return;
+    setIsSending(true);
+    setSendError(null);
+    const requestId = await sendDispatchTask({ prompt });
+    if (requestId) {
+      setPrompt('');
+    } else {
+      setSendError('Task was not sent. Check the Desktop connection and try again.');
+    }
+    setIsSending(false);
   };
 
   return (
@@ -63,11 +73,12 @@ export function DispatchTaskComposer() {
             className="min-h-[72px] text-sm text-white"
             style={{ textAlignVertical: 'top' }}
             accessibilityLabel="New Desktop task"
+            editable={!isSending}
           />
           <View className="flex-row items-center justify-between pt-2">
             <Text className="text-[10px] text-white/30">{prompt.trim().length}/20,000</Text>
             <Pressable
-              onPress={handleSend}
+              onPress={() => void handleSend()}
               disabled={!canSend}
               className={`flex-row items-center gap-1.5 rounded-lg px-3 py-2 ${
                 canSend ? '' : 'bg-white/10'
@@ -87,10 +98,19 @@ export function DispatchTaskComposer() {
                 className="text-xs font-semibold"
                 style={{ color: canSend ? colors.accentText : colors.textMuted }}
               >
-                Send
+                {isSending ? 'Sending…' : 'Send'}
               </Text>
             </Pressable>
           </View>
+          {sendError ? (
+            <Text
+              className="mt-2 text-xs"
+              style={{ color: colors.agentError }}
+              accessibilityRole="alert"
+            >
+              {sendError}
+            </Text>
+          ) : null}
         </View>
 
         {visibleTasks.length > 0 && (
@@ -120,7 +140,7 @@ export function DispatchTaskComposer() {
                     </Text>
                     {!isTerminal && task.status !== 'sending' && (
                       <Pressable
-                        onPress={() => cancelDispatchTask(task.requestId, task.taskId)}
+                        onPress={() => void cancelDispatchTask(task.requestId, task.taskId)}
                         className="rounded-md bg-red-500/10 p-1.5 active:bg-red-500/20"
                         accessibilityRole="button"
                         accessibilityLabel={`Cancel ${task.title}`}

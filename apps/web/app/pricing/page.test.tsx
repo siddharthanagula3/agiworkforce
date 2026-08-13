@@ -4,8 +4,18 @@ import React from 'react';
 import { MIN_PURCHASABLE_SEATS } from '@agiworkforce/types';
 
 const testState = vi.hoisted(() => ({
-  auth: { user: null as null | { id: string; email: string } },
+  auth: { user: null as null | { id: string; email: string }, initialized: true },
   billing: null as null | { plan: string; status: string },
+  account: {
+    subscription: null as null | {
+      tier: string;
+      status: string;
+      subscription_source?: 'none' | 'stripe' | 'apple' | 'google' | 'manual';
+    },
+    initialized: true,
+    isLoading: false,
+    error: null as string | null,
+  },
 }));
 
 const stripeMocks = vi.hoisted(() => ({
@@ -53,6 +63,9 @@ vi.mock('@features/billing/services/stripe-payments', () => ({
 vi.mock('@features/billing/hooks/use-billing-queries', () => ({
   useBillingData: () => ({ data: testState.billing, isLoading: false }),
 }));
+vi.mock('@shared/stores/web-auth-store', () => ({
+  useBillingStore: (selector: (state: unknown) => unknown) => selector(testState.account),
+}));
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => <div /> }));
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
   MarketingFooter: () => <div />,
@@ -94,8 +107,22 @@ describe('PricingPage', () => {
     vi.clearAllMocks();
     window.history.replaceState(null, '', '/pricing');
     testState.auth.user = null;
+    testState.auth.initialized = true;
     testState.billing = null;
+    testState.account.subscription = null;
+    testState.account.initialized = true;
+    testState.account.isLoading = false;
+    testState.account.error = null;
     vi.spyOn(global, 'fetch').mockImplementation(() => new Promise<Response>(() => undefined));
+  });
+
+  it('does not flash purchase controls before account identity is known', () => {
+    testState.auth.initialized = false;
+
+    render(<PricingPage />);
+
+    expect(screen.getAllByRole('button', { name: 'Checking account…' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'basicCta' })).toBeNull();
   });
 
   it('renders every public plan from the shared catalog, including Basic and both Max tiers', async () => {
@@ -413,6 +440,11 @@ describe('PricingPage', () => {
   it('confirms the prorated amount before charging an active paid subscriber mid-cycle', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'pro', status: 'active' };
+    testState.account.subscription = {
+      tier: 'pro',
+      status: 'active',
+      subscription_source: 'stripe',
+    };
     stripeMocks.previewUpgrade.mockResolvedValueOnce({
       amountDueNowCents: 4200,
       currency: 'usd',
@@ -440,9 +472,39 @@ describe('PricingPage', () => {
     expect(stripeMocks.upgradeToMaxPlan).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['apple', 'Manage with Apple'],
+    ['google', 'Manage with Google Play'],
+    ['manual', 'Contact administrator'],
+    [undefined, 'Review billing'],
+  ] as const)(
+    'routes an active %s-owned plan to its billing owner instead of a Stripe preview',
+    async (source, actionLabel) => {
+      testState.auth.user = { id: 'user-1', email: 'user@example.com' };
+      testState.billing = { plan: 'pro', status: 'active' };
+      testState.account.subscription = {
+        tier: 'pro',
+        status: 'active',
+        ...(source ? { subscription_source: source } : {}),
+      };
+
+      render(<PricingPage />);
+
+      const ownerAction = screen.getByRole('link', { name: actionLabel });
+      expect(ownerAction).toHaveAttribute('href', '/settings/billing');
+      expect(screen.queryByRole('button', { name: 'maxCta' })).toBeNull();
+      expect(stripeMocks.previewUpgrade).not.toHaveBeenCalled();
+    },
+  );
+
   it('prevents active subscribers from purchasing their current or a lower plan', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'pro', status: 'active' };
+    testState.account.subscription = {
+      tier: 'pro',
+      status: 'active',
+      subscription_source: 'stripe',
+    };
 
     render(<PricingPage />);
 
@@ -464,6 +526,11 @@ describe('PricingPage', () => {
   it('routes a Team subscriber to seat changes, not to an individual upgrade', async () => {
     testState.auth.user = { id: 'user-1', email: 'user@example.com' };
     testState.billing = { plan: 'team', status: 'active' };
+    testState.account.subscription = {
+      tier: 'team',
+      status: 'active',
+      subscription_source: 'stripe',
+    };
 
     render(<PricingPage />);
 

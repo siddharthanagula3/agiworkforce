@@ -1,16 +1,28 @@
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tauri::State;
+
+use crate::automation::AutomationService;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AutomationPermissions {
     pub accessibility: bool,
     pub screen_recording: bool,
     pub input_monitoring: bool,
+    /// The app creates this service during startup only after Accessibility is
+    /// already granted. A newly granted OS permission is therefore not enough
+    /// to launch Tasks until the app has restarted.
+    pub automation_service_ready: bool,
 }
 
 /// Check the current macOS automation permission statuses.
 /// On non-macOS platforms, returns true for all (no-op).
 #[tauri::command]
-pub async fn check_automation_permissions() -> Result<AutomationPermissions, String> {
+pub async fn check_automation_permissions(
+    automation: State<'_, Option<Arc<AutomationService>>>,
+) -> Result<AutomationPermissions, String> {
+    let automation_service_ready = automation.inner().is_some();
+
     #[cfg(target_os = "macos")]
     {
         let accessibility = check_accessibility();
@@ -20,6 +32,7 @@ pub async fn check_automation_permissions() -> Result<AutomationPermissions, Str
             accessibility,
             screen_recording,
             input_monitoring,
+            automation_service_ready,
         })
     }
 
@@ -29,6 +42,7 @@ pub async fn check_automation_permissions() -> Result<AutomationPermissions, Str
             accessibility: true,
             screen_recording: true,
             input_monitoring: true,
+            automation_service_ready,
         })
     }
 }
@@ -53,7 +67,7 @@ pub async fn request_automation_permission(kind: String) -> Result<(), String> {
                 return Err(format!(
                     "Unknown permission kind '{}'. Use: accessibility, screen_recording, input_monitoring",
                     other
-                ))
+                ));
             }
         };
 
@@ -74,7 +88,7 @@ pub async fn request_automation_permission(kind: String) -> Result<(), String> {
 
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
-fn check_accessibility() -> bool {
+pub(crate) fn check_accessibility() -> bool {
     use accessibility_sys::AXIsProcessTrusted;
     unsafe { AXIsProcessTrusted() }
 }

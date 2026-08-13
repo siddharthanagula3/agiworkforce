@@ -4,7 +4,8 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   execute: vi.fn(),
-  getObject: vi.fn(),
+  getPrivateObject: vi.fn(),
+  deletePrivateObject: vi.fn(),
   deleteObject: vi.fn(),
   resolveActiveOrganizationId: vi.fn(),
 }));
@@ -27,7 +28,10 @@ vi.mock('@/lib/server/neon-db', () => ({
 vi.mock('@/lib/server/object-storage', () => ({
   objectKeyFromStorageUri: (value: string) => value,
   isObjectStorageConfigured: () => true,
-  getObject: mocks.getObject,
+  isPrivateObjectStorageConfigured: () => true,
+  getObject: vi.fn(),
+  getPrivateObject: mocks.getPrivateObject,
+  deletePrivateObject: mocks.deletePrivateObject,
   deleteObject: mocks.deleteObject,
 }));
 vi.mock('@/lib/services/active-workspace-service', () => ({
@@ -51,10 +55,11 @@ describe('project knowledge file bytes and deletion', () => {
       },
     ]);
     mocks.execute.mockResolvedValue(1);
-    mocks.getObject.mockResolvedValue({
+    mocks.getPrivateObject.mockResolvedValue({
       data: Buffer.from('hello'),
       contentType: 'text/plain',
     });
+    mocks.deletePrivateObject.mockResolvedValue(undefined);
     mocks.deleteObject.mockResolvedValue(undefined);
     mocks.resolveActiveOrganizationId.mockResolvedValue(null);
   });
@@ -87,7 +92,7 @@ describe('project knowledge file bytes and deletion', () => {
     );
 
     expect(response.status).toBe(404);
-    expect(mocks.getObject).not.toHaveBeenCalled();
+    expect(mocks.getPrivateObject).not.toHaveBeenCalled();
     expect(mocks.query.mock.calls[0]?.[1]).toEqual([
       'file-1',
       'project-1',
@@ -114,7 +119,7 @@ describe('project knowledge file bytes and deletion', () => {
         storage_uri: `knowledge-files/projects/project-1/${fileName}`,
       },
     ]);
-    mocks.getObject.mockResolvedValue({ data: bytes, contentType: mimeType });
+    mocks.getPrivateObject.mockResolvedValue({ data: bytes, contentType: mimeType });
 
     const response = await GET(
       new NextRequest('https://agiworkforce.com/api/projects/project-1/knowledge-files/file-1'),

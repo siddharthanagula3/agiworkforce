@@ -11,7 +11,10 @@ import { useCallback } from 'react';
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+// From `expo-router`, not `@react-navigation/native` — see the note in
+// app/(app)/(tabs)/chat.tsx: duplicate copies of the navigation package
+// make the raw hook throw "Couldn't find a navigation object".
+import { useFocusEffect } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Separator } from '@/components/ui/separator';

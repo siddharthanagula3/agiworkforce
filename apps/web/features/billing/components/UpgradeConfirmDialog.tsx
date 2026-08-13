@@ -141,9 +141,6 @@ export function UpgradeConfirmDialog({
   //     UpgradePlanDialog, which passes `usesAnnual = annual &&
   //     plan.annualAvailable`, and `annualAvailable` is itself
   //     `yearlyPriceUsd > 0` (features/billing/lib/plan-display.ts:72).
-  //   - features/billing/pages/BillingDashboard.tsx:163 — NOT production-routed
-  //     today (that module has no importer outside __tests__), and it hardcodes
-  //     'monthly' for basic/max/max_15x anyway.
   // The catalog's `yearlyPriceUsd: 0` for basic/max/max_15x means "sells no
   // annual subscription" and cannot arrive here; see the not-yet-closed note on
   // `BillingPlanPricing` in packages/contracts/types/src/billing-catalog.ts.

@@ -8,6 +8,7 @@
  * The renderer never sees Node or Electron APIs — only this `window.agiHost`
  * surface, exposed via `contextBridge` from a sandboxed preload.
  */
+import type { DesktopCloudUpdateAvailability } from '../desktopCloudUpdate';
 
 /**
  * Invoke-style commands the Electron main process implements natively.
@@ -46,6 +47,8 @@ export const ELECTRON_IPC_CHANNELS = {
   notify: 'agi:notify',
   relaunch: 'agi:relaunch',
   deepLink: 'agi:deep-link',
+  checkUpdate: 'agi:check-update',
+  openUpdateInstaller: 'agi:open-update-installer',
 } as const;
 
 export type ElectronWindowControlAction =
@@ -98,6 +101,8 @@ export interface ElectronHostBridge {
   dialog(request: ElectronDialogRequest): Promise<string | boolean | null>;
   notify(request: ElectronNotifyRequest): Promise<void>;
   relaunch(): Promise<void>;
+  checkForUpdate(): Promise<DesktopCloudUpdateAvailability>;
+  openUpdateInstaller(): Promise<void>;
 }
 
 declare global {

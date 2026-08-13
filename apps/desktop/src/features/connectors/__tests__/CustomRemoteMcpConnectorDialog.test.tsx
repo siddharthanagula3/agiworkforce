@@ -5,6 +5,16 @@ import {
   buildRemoteMcpConnectorEntry,
   CustomRemoteMcpConnectorDialog,
 } from '../CustomRemoteMcpConnectorDialog';
+import { McpClient } from '@/api/mcp';
+
+vi.mock('@/api/mcp', () => ({
+  McpClient: {
+    saveApiKey: vi.fn(),
+    getConfig: vi.fn(),
+    updateConfig: vi.fn(),
+    connect: vi.fn(),
+  },
+}));
 
 describe('buildRemoteMcpConnectorEntry', () => {
   it('builds a Tauri-compatible HTTP MCP server config', () => {
@@ -78,5 +88,28 @@ describe('buildRemoteMcpConnectorEntry', () => {
     expect(screen.getByLabelText('Bearer token')).toBeInTheDocument();
     expect(screen.getByLabelText('Headers JSON')).toBeInTheDocument();
     expect(screen.getByLabelText('Timeout')).toBeInTheDocument();
+  });
+
+  it('saves custom connector configuration without connecting it', async () => {
+    const user = userEvent.setup();
+    const onSaved = vi.fn();
+    vi.mocked(McpClient.getConfig).mockResolvedValue({ mcpServers: {} });
+    vi.mocked(McpClient.updateConfig).mockResolvedValue(
+      'Configuration updated. Connect a server explicitly to start it.',
+    );
+
+    render(<CustomRemoteMcpConnectorDialog open onClose={vi.fn()} onSaved={onSaved} />);
+
+    await user.clear(screen.getByLabelText('Name'));
+    await user.type(screen.getByLabelText('Name'), 'Acme MCP');
+    await user.type(screen.getByLabelText('Remote MCP URL'), 'https://mcp.example.com/sse');
+    await user.click(screen.getByRole('button', { name: 'Save connector' }));
+
+    expect(McpClient.updateConfig).toHaveBeenCalledOnce();
+    expect(McpClient.connect).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledWith(
+      'custom-acme-mcp',
+      'Configuration updated. Connect a server explicitly to start it.',
+    );
   });
 });

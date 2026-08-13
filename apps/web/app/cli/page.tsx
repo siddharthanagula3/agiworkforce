@@ -225,7 +225,7 @@ export default function CliPage() {
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/agi-code', label: 'Explore AGI Code' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { label: 'Enterprise early access', waitlist: true },
           ]}
           stamp={SURFACE_STATUS.cli}
         />

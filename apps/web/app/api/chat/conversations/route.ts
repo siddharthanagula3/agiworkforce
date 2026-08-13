@@ -81,9 +81,9 @@ async function handleGetConversations(request: NextRequest) {
   const offset = parsePositiveInt(url.searchParams.get('offset'), 0);
   const includeHistoryStats = url.searchParams.get('includeHistoryStats') === '1';
 
+  const db = getNeonChatDb();
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   try {
-    const db = getNeonChatDb();
-    const organizationId = await resolveActiveOrganizationId(db, userId);
     const where = ['user_id = $1', 'organization_id is not distinct from $2'];
     where.push(deletedFilter === 'only' ? 'deleted_at is not null' : 'deleted_at is null');
     const params: unknown[] = [userId, organizationId];
@@ -110,7 +110,7 @@ async function handleGetConversations(request: NextRequest) {
     const [rows, historyStatsRows] = await Promise.all([
       db.query<ChatConversationRow>(
         `
-          select id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at
+          select id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at, deleted_at
           from web_conversations
           where ${where.join(' and ')}
           order by pinned desc, updated_at desc
@@ -187,7 +187,7 @@ async function handleCreateConversation(request: NextRequest) {
   }
   const body = validationResult.data;
   const db = getNeonChatDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   if (body.projectId) {
     let ownedProject: { id: string } | undefined;
@@ -224,7 +224,7 @@ async function handleCreateConversation(request: NextRequest) {
           updated_at = now()
         where web_conversations.user_id = $1
           and web_conversations.organization_id is not distinct from $7
-        returning id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
+        returning id, organization_id, title, model, project_id, pinned, starred, archived, is_temporary, created_at, updated_at
       `,
       [
         userId,

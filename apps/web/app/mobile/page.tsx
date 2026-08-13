@@ -123,7 +123,7 @@ export default function MobilePage() {
                   Get notified
                 </Link>
                 <WaitlistTrigger
-                  label="Team & Enterprise access"
+                  label="Enterprise early access"
                   source="website"
                   className="agi-fl-cta agi-fl-cta--secondary"
                 />
@@ -274,7 +274,7 @@ export default function MobilePage() {
           body="AGI Mobile launches on iPhone and Android. Local Mode is the default. AGI managed cloud is in public alpha — sign in to use it."
           ctas={[
             { href: '/download', label: 'Get notified' },
-            { label: 'Team & Enterprise access', waitlist: true },
+            { label: 'Enterprise early access', waitlist: true },
           ]}
           stamp={`iPhone & Android · ${LAUNCH.shortLabel}`}
         />

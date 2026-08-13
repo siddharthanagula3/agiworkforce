@@ -10,47 +10,56 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isCredentialFailure } from '../core/runInlineCommand';
+import { classifyCloudUtilityFailure } from '../core/cloudUtilityErrorActions';
+import { AgiWorkforceApiError, AgiWorkforcePaywallError } from '../utils/api';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const inline = readFileSync(resolve(here, '..', 'core/runInlineCommand.ts'), 'utf8');
 
-describe('isCredentialFailure', () => {
-  it.each([
-    'Invalid API key provided',
-    'Request failed: 401 Unauthorized',
-    'HTTP 403',
-    'authentication_error: check your credentials',
-    'invalid_api_key',
-  ])('treats %s as a credential problem', (message) => {
-    expect(isCredentialFailure(message)).toBe(true);
+describe('cloud utility failure classification', () => {
+  it('keeps AGI Cloud sign-in separate from saved API-key recovery', () => {
+    expect(
+      classifyCloudUtilityFailure(
+        new AgiWorkforceApiError('Session expired', 401, 'ACCOUNT_AUTH_REQUIRED'),
+      ),
+    ).toBe('account-auth');
+    expect(
+      classifyCloudUtilityFailure(new AgiWorkforceApiError('Invalid key', 401, 'INVALID_API_KEY')),
+    ).toBe('api-key');
   });
 
-  it.each([
-    'fetch failed: ECONNRESET',
-    'Rate limit exceeded, retry in 20s',
-    'Request timed out after 60000ms',
-    'HTTP 500 Internal Server Error',
-    'The model returned no content',
-  ])('does not send %s to the key dialog', (message) => {
-    // Each of these previously surfaced "Set API Key" as the only way forward.
-    expect(isCredentialFailure(message)).toBe(false);
+  it.each(['fetch failed: ECONNRESET', 'Request timed out after 60000ms'])(
+    'classifies %s as retryable without changing credentials',
+    (message) => {
+      expect(classifyCloudUtilityFailure(new Error(message))).toBe('retryable');
+    },
+  );
+
+  it('classifies structured HTTP throttling and server failures as retryable', () => {
+    expect(
+      classifyCloudUtilityFailure(new AgiWorkforceApiError('Slow down', 429, 'RATE_LIMITED')),
+    ).toBe('retryable');
+    expect(
+      classifyCloudUtilityFailure(new AgiWorkforceApiError('Unavailable', 503, 'HTTP_ERROR')),
+    ).toBe('retryable');
   });
 
-  it('is case-insensitive', () => {
-    expect(isCredentialFailure('INVALID API KEY')).toBe(true);
+  it('classifies paywalls without mistaking them for auth failures', () => {
+    expect(
+      classifyCloudUtilityFailure(new AgiWorkforcePaywallError('chat', 'pro', 'Upgrade required.')),
+    ).toBe('paywall');
   });
 });
 
 describe('inline command failure handling', () => {
   it('offers a retry for non-credential failures', () => {
-    expect(inline).toContain("showErrorMessage(`AGI Workforce error: ${message}`, 'Retry')");
-    expect(inline).toContain('void runInlineCommand(context, command, targetRange)');
+    expect(inline).toContain('showCloudUtilityErrorActions(err');
+    expect(inline).toContain('retry: () => runInlineCommand(context, command, targetRange)');
   });
 
-  it('still offers the key dialog when a key is the actual problem', () => {
-    expect(inline).toContain('if (isCredentialFailure(message))');
-    expect(inline).toContain("'agi-workforce.setApiKey'");
+  it('does not implement a second, message-regex credential classifier', () => {
+    expect(inline).not.toContain('isCredentialFailure');
+    expect(inline).not.toContain("'Set API Key'");
   });
 
   it('applies the edit to the range the prompt was built from', () => {

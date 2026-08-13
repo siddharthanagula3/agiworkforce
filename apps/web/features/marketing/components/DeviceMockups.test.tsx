@@ -108,6 +108,22 @@ describe('ProductFrame façade', () => {
     expect(container.querySelector('img.agi-dev-image')).not.toBeNull();
     expect(container.querySelector('.agi-dev-title')?.textContent).toBe('agi · zsh');
   });
+
+  it('keeps trust-route copy consistent with BYOK frame badges', () => {
+    const desktop = render(
+      <ProductFrame variant="desktop" title="AGI Desktop" badge="BYOK" routeMode="byok" />,
+    );
+    expect(desktop.container.textContent).toContain('What can I help with, BYOK?');
+    expect(desktop.container.textContent).toContain('Select provider model');
+    expect(desktop.container.textContent).not.toContain('What can I help with, Local?');
+
+    const terminal = render(
+      <ProductFrame variant="terminal" title="agi · zsh" badge="BYOK" routeMode="byok" />,
+    );
+    expect(terminal.container.textContent).toContain('BYOK · direct to your provider');
+    expect(terminal.container.textContent).toContain('provider billed');
+    expect(terminal.container.textContent).not.toContain('local · on-device');
+  });
 });
 
 describe('one canonical look per surface, everywhere', () => {

@@ -7,6 +7,7 @@ import {
   MAP_SEARCH_QUERY_MAX_LENGTH,
   type InteractiveCard,
 } from '@agiworkforce/types';
+import { resolveMapView } from '@/lib/services/map-geocoding-service';
 
 export const MAP_SEARCH_TOOL_NAME = 'search_maps';
 
@@ -27,9 +28,12 @@ export function createMapSearchToolDefinition() {
     function: {
       name: MAP_SEARCH_TOOL_NAME,
       description:
-        'Open a real map search card for a location or nearby-category request. Use this when ' +
-        'the user asks to find, show, or explore something on a map. This is a search, not a ' +
-        'verified place identity or turn-by-turn route; do not claim that a specific place was resolved.',
+        'Render a real, visible map card in the chat. ALWAYS call this instead of writing a ' +
+        'Google Maps or OpenStreetMap link in your answer whenever the user asks to see, show, ' +
+        'find, or explore a place, an area, or a route on a map — a pasted link is not a map ' +
+        'and does not satisfy that request. For a route, pass both endpoints in the query as ' +
+        '"<origin> to <destination>". This is a search, not a verified place identity or ' +
+        'turn-by-turn navigation; do not claim that a specific place was resolved.',
       parameters: {
         type: 'object',
         properties: {
@@ -66,10 +70,26 @@ export type MapSearchToolOutcome =
   | { ok: true; content: string; card: InteractiveCard }
   | { ok: false; content: string };
 
-export function executeMapSearchTool(
+/**
+ * The card's VISIBLE crop, in tiles — not the painted plane, which is larger
+ * so wide columns stay filled. Zoom is fitted to what the user can actually
+ * see, so both endpoints of a route land inside the frame rather than inside
+ * the part of the plane the container crops away. Conservative on purpose: a
+ * narrow column shows less than this and would otherwise clip a pin.
+ * Mirrors `FRAME_HEIGHT` / `TILE_SIZE` in `MapSearchCard`.
+ */
+export const MAP_SEARCH_TILES_ACROSS = 2.5;
+export const MAP_SEARCH_TILES_DOWN = 340 / 256;
+
+export async function executeMapSearchTool(
   args: Record<string, unknown>,
-  context: { toolCallId: string; now?: () => Date },
-): MapSearchToolOutcome {
+  context: {
+    toolCallId: string;
+    now?: () => Date;
+    /** Injectable for tests; production geocodes through Nominatim. */
+    resolveView?: typeof resolveMapView;
+  },
+): Promise<MapSearchToolOutcome> {
   const parsed = MapSearchToolInputSchema.safeParse(args);
   if (!parsed.success) {
     return {
@@ -92,6 +112,14 @@ export function executeMapSearchTool(
       url: providerSearchUrl('openstreetmap', query),
     },
   ];
+  // Resolve a real viewport so the card can paint tiles instead of only
+  // offering links. A null result is expected and non-fatal: the card still
+  // ships, just without a map.
+  const resolved = await (context.resolveView ?? resolveMapView)(query, {
+    tilesAcross: MAP_SEARCH_TILES_ACROSS,
+    tilesDown: MAP_SEARCH_TILES_DOWN,
+  });
+
   const rawCard = {
     schemaVersion: INTERACTIVE_CARD_SCHEMA_VERSION,
     cardId: context.toolCallId,
@@ -105,7 +133,12 @@ export function executeMapSearchTool(
       ].join('\n'),
     },
     producedBy: { toolCallId: context.toolCallId, toolName: MAP_SEARCH_TOOL_NAME },
-    body: { title, query, actions },
+    body: {
+      title,
+      query,
+      actions,
+      ...(resolved ? { view: resolved.view, places: resolved.places } : {}),
+    },
   };
   const card = parseInteractiveCardDelta({ card: rawCard });
   if (!card?.recognized || card.kind !== 'map-search.v1') {
@@ -115,8 +148,12 @@ export function executeMapSearchTool(
   return {
     ok: true,
     content:
-      `Created a map search card for "${query}". ` +
-      'The links open provider search results; do not describe them as a verified place or route.',
+      `Rendered a map card for "${query}"${
+        resolved
+          ? ' with a live map the user can already see'
+          : ' (link-only: the location could not be geocoded)'
+      }. Do not repeat the links as markdown and do not describe them as a ` +
+      'verified place or turn-by-turn route.',
     card,
   };
 }

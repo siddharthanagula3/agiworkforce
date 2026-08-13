@@ -185,7 +185,8 @@ export function CustomRemoteMcpConnectorDialog({
             </Badge>
           </div>
           <DialogDescription className="mt-1">
-            Connect a remote MCP server from a trusted provider or your own infrastructure.
+            Save a remote MCP server from a trusted provider or your own infrastructure. You can
+            review and connect it separately after saving.
           </DialogDescription>
         </DialogHeader>
 
@@ -318,7 +319,7 @@ export function CustomRemoteMcpConnectorDialog({
           </Button>
           <Button onClick={() => void handleSave()} disabled={saving || !draft.url.trim()}>
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Add
+            Save connector
           </Button>
         </DialogFooter>
       </DialogContent>

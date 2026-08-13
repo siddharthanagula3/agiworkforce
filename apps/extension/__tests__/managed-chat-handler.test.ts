@@ -382,7 +382,7 @@ describe('executeChromeManagedChat', () => {
   });
 
   it.each(['free', 'basic'])(
-    'stops the %s plan before it enters the Pro-only Chrome AGI Work path',
+    'admits the %s plan to the shared Managed Cloud chat capability',
     async (subscriptionTier) => {
       const deps = dependencies({
         getModelAccess: vi.fn(async () => ({
@@ -397,8 +397,8 @@ describe('executeChromeManagedChat', () => {
         deps,
       );
 
-      expect(result).toMatchObject({ status: 'error', code: 'plan_required' });
-      expect(deps.streamChat).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ status: 'success' });
+      expect(deps.streamChat).toHaveBeenCalledTimes(1);
     },
   );
 

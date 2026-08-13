@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "lastUpdated": "2026-07-15",
+  "version": 2,
+  "lastUpdated": "2026-08-13",
   "risks": [
     {
       "id": "privacy-boundary",
@@ -13,13 +13,21 @@
         "packages/contracts/trust-boundaries",
         "crates/*",
         "apps/desktop/src/lib/egressGuard.ts",
+        "apps/desktop/src-tauri/src/sys/security/egress_policy.rs",
         "apps/mobile/lib/egressGuard.ts",
-        "apps/desktop/src-tauri/src/sys/account"
+        "apps/desktop/src-tauri/src/sys/account",
+        "apps/desktop/electron",
+        "apps/extension/src/features/cloud-bridge",
+        "apps/extension/src/features/background/conversation-history.ts",
+        "apps/extension-vscode/src/features/sidebar-webview"
       ],
-      "reviewFocus": "Local/BYOK/Managed labels, explicit forks, no silent routing across trust boundaries. Desktop egress guard (egressGuard.ts) is FETCH-ONLY: JS our-cloud fetches must use guardedFetch (eslint-enforced for WEB_APP_URL/API_BASE_URL templates). KNOWN GAP (2026-06-24): Rust-transport egress is NOT covered by the JS guard — sys/account device/profile/credit Tauri commands reqwest www.agiworkforce.com with the Bearer token and no privacy-mode gate, and fire in BYOK (signed-in cloud session). Open decision: is BYOK account-management intended to reach AGI cloud (then correct the egressGuard 'never account data' docstring) or must it be gated Rust-side (then mirror the guard). Do not route chat/file/session payloads on any ungated transport.",
+      "reviewFocus": "Local/BYOK/Managed labels, explicit forks, no silent routing across trust boundaries. Chrome may append-only mirror a signed-in conversation only when every turn is proven Managed Cloud; unknown provenance or any Local/BYOK turn permanently disqualifies it, and local storage remains authoritative. The Electron shell is Managed-Cloud-only and must not expose Tauri Local/BYOK commands. VS Code developer sessions remain workspace-scoped and must use the CLI-reported trust mode before send. Desktop egressGuard.ts is FETCH-ONLY: JS our-cloud fetches must use guardedFetch. Rust's PublicHttpClient is the fail-closed initial-URL plus every-redirect boundary for source-proven arbitrary-public webhook, API-tool, upload/download, and scrape transports. KNOWN GAP: Rust transport still has no global enforced chokepoint across every provider/account/integration client; do not route chat/file/session payloads on an unclassified transport.",
       "checks": [
         "rg \"PrivacyMode|privacy_mode|BYOK|Managed|Local\" apps packages crates services",
         "rg \"reqwest|get_api_base_url|api/me|api/device\" apps/desktop/src-tauri/src/sys/account",
+        "rg \"PublicHttpClient|execute_public_request|strict_public_destination_redirect_policy\" apps/desktop/src-tauri/src",
+        "rg \"isCloudPersistenceEligible|blockCloudPersistence|skipLlm\" apps/extension/src/features/cloud-bridge apps/extension/src/features/background/conversation-history.ts",
+        "rg \"Route pending|trustMode|isElectronBridgeCommand\" apps/extension-vscode/src apps/desktop/src",
         "pnpm check:service-domain-ownership"
       ]
     },
@@ -73,11 +81,16 @@
       "owner": "Backend + Web",
       "paths": [
         "apps/web/app/api/stripe-webhook",
+        "apps/web/app/api/checkout",
+        "apps/web/app/api/portal",
+        "apps/web/app/api/upgrade",
+        "apps/web/lib/server/subscription-billing-owner.ts",
+        "apps/mobile/src/features/billing",
         "services",
         "apps/web/db/neon",
         "packages/contracts/types/src/billing-catalog.ts"
       ],
-      "reviewFocus": "Idempotency, ledgering, fraud/refund/chargeback handling, managed compute gating",
+      "reviewFocus": "Idempotency, ledgering, fraud/refund/chargeback handling, managed compute gating, Stripe account/mode and Price-ID consistency, subscription-owner routing (Stripe vs Apple/Google/manual), purchased-credit migration order, and exact-tier checkout-return verification",
       "checks": [
         "pnpm --filter @agiworkforce/web test",
         "pnpm --filter @agiworkforce/api-gateway test"
@@ -126,13 +139,44 @@
       "paths": [
         "infrastructure/sandbox",
         "apps/web/features/chat",
+        "apps/mobile/src/features/artifacts",
+        "apps/mobile/src/features/chat/components",
         "apps/desktop/src",
         "packages/ui/unified-chat"
       ],
-      "reviewFocus": "Iframe sandboxing, srcDoc fallback, generated file previews, download safety",
+      "reviewFocus": "Iframe sandboxing, srcDoc fallback, generated file previews, authenticated media thumbnails, durable generated-file metadata/deduplication, interactive-card validation, and download safety",
       "checks": [
         "pnpm --filter @agiworkforce/web test",
         "pnpm --filter @agiworkforce/sandbox build"
+      ]
+    },
+    {
+      "id": "desktop-shell-release",
+      "severity": "high",
+      "owner": "Desktop + release",
+      "paths": [
+        ".github/workflows/release-desktop-cloud.yml",
+        "apps/desktop/electron-builder.yml",
+        "apps/desktop/electron",
+        "apps/desktop/src/lib/desktopCloudUpdate.ts",
+        "apps/desktop/src/lib/tauri-electron",
+        "apps/web/app/api/releases/desktop-cloud/latest",
+        "apps/web/app/api/download"
+      ],
+      "reviewFocus": "Signed/notarized artifact availability, release-tag checkout integrity, architecture-specific downloads, registered callback schemes, origin-scoped native permissions, and honest manual-installer behavior (do not claim in-place electron-updater support without a real feed)",
+      "checks": [
+        "rg \"agiworkforce-cloud|checkForUpdate|openUpdateInstaller|setPermission\" apps/desktop/electron apps/desktop/src/lib/tauri-electron apps/desktop/electron-builder.yml",
+        "rg \"desktop-cloud|api/download\" .github/workflows/release-desktop-cloud.yml apps/web/app/api/releases apps/web/app/api/download"
+      ]
+    },
+    {
+      "id": "developer-session-runtime",
+      "severity": "high",
+      "owner": "CLI + VS Code",
+      "paths": ["apps/cli", "apps/extension-vscode/src", "apps/extension-vscode/package.json"],
+      "reviewFocus": "Protocol-7 handshake/version compatibility, CLI-authoritative Local/BYOK/Managed boundary before send, workspace trust, no consumer-chat sync, approval/Stop/resume semantics, and fail-closed missing/old-runtime recovery",
+      "checks": [
+        "rg \"protocol 7|PROTOCOL_VERSION|trustMode|Route pending|workspace-scoped\" apps/cli apps/extension-vscode"
       ]
     },
     {

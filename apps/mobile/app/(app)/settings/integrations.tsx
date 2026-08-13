@@ -3,7 +3,10 @@ import { View, Alert, Linking, Platform, ActivityIndicator, ScrollView } from 'r
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
+// From `expo-router`, not `@react-navigation/native` — see the note in
+// app/(app)/(tabs)/chat.tsx: duplicate copies of the navigation package
+// make the raw hook throw "Couldn't find a navigation object".
+import { useFocusEffect } from 'expo-router';
 import {
   ArrowLeft,
   Calendar,

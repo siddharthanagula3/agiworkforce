@@ -154,11 +154,19 @@ export function ThinkingBlock({
 
   return (
     <div
+      /**
+       * Theme tokens, not fixed zinc/slate values.
+       *
+       * The block previously painted `bg-zinc-950/*` in BOTH themes and drew
+       * its text in `slate-400`. In dark mode that reads correctly; in light
+       * mode it produced a dark slab of low-contrast grey text on the light
+       * page — the reasoning body was effectively unreadable. `--chat-glass`
+       * and `--chat-border-subtle` already flip per theme, and the text now
+       * uses `muted-foreground`, which is contrast-checked in both.
+       */
       className={cn(
-        'overflow-hidden rounded-lg border',
-        isStreaming
-          ? 'border-zinc-700/40 bg-zinc-950/20 dark:bg-zinc-950/30'
-          : 'border-zinc-700/40 bg-zinc-950/30 dark:bg-zinc-900/20',
+        'overflow-hidden rounded-lg border border-[var(--chat-border-subtle)]',
+        isStreaming ? 'bg-[var(--chat-glass)]' : 'bg-[var(--chat-glass)]/70',
       )}
     >
       {/* ── Header ──────────────────────────────────────────────────────────── */}
@@ -168,25 +176,28 @@ export function ThinkingBlock({
         onClick={handleToggle}
         aria-expanded={expanded}
         aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning block`}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-black/10 dark:hover:bg-white/5 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-500/50"
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--chat-surface-hover)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         {/* Clock icon · pulses while streaming (unless reduced-motion) */}
         <Clock
           className={cn(
-            'w-3.5 h-3.5 shrink-0',
-            isStreaming ? cn('text-zinc-400', !reducedMotion && 'animate-pulse') : 'text-zinc-500',
+            'w-3.5 h-3.5 shrink-0 text-muted-foreground',
+            isStreaming && !reducedMotion && 'animate-pulse',
           )}
           aria-hidden="true"
         />
 
         {/* "Reasoning" small-caps label */}
-        <span className="text-[10px] tracking-widest text-slate-400 [font-variant:small-caps]">
+        <span className="text-[10px] tracking-widest text-muted-foreground [font-variant:small-caps]">
           Reasoning
         </span>
 
         {/* Duration / status label */}
         <span
-          className={cn('text-xs tabular-nums', isStreaming ? 'text-slate-300' : 'text-slate-500')}
+          className={cn(
+            'text-xs tabular-nums',
+            isStreaming ? 'text-foreground/80' : 'text-muted-foreground',
+          )}
           // aria-live polite so screen readers pick up changes but not every second
           aria-live="polite"
           aria-atomic="true"
@@ -196,7 +207,7 @@ export function ThinkingBlock({
 
         {/* Collapsed preview · hidden on mobile (sm:) */}
         {!expanded && previewText && (
-          <span className="hidden sm:block flex-1 min-w-0 truncate text-xs italic font-mono text-slate-500">
+          <span className="hidden sm:block flex-1 min-w-0 truncate text-xs italic font-mono text-muted-foreground">
             {previewText}
           </span>
         )}
@@ -206,7 +217,7 @@ export function ThinkingBlock({
         {/* Animated chevron */}
         <ChevronDown
           className={cn(
-            'w-3.5 h-3.5 shrink-0 text-slate-500',
+            'w-3.5 h-3.5 shrink-0 text-muted-foreground',
             !reducedMotion && 'transition-transform duration-200',
             expanded && 'rotate-180',
           )}
@@ -232,18 +243,18 @@ export function ThinkingBlock({
               }
         }
       >
-        <div className="border-t border-zinc-700/30">
+        <div className="border-t border-[var(--chat-border-subtle)]">
           <div
             ref={bodyRef}
-            className="max-h-96 overflow-y-auto px-4 py-3 [scrollbar-width:thin] [scrollbar-color:rgba(113,113,122,0.4)_transparent]"
+            className="max-h-96 overflow-y-auto px-4 py-3 [scrollbar-width:thin] [scrollbar-color:var(--chat-border-strong)_transparent]"
           >
-            <p className="text-xs text-slate-400/80 font-mono italic leading-relaxed whitespace-pre-wrap">
+            <p className="text-xs text-muted-foreground font-mono italic leading-relaxed whitespace-pre-wrap">
               {content}
               {/* Blinking cursor while streaming (disabled with reduced-motion) */}
               {isStreaming && (
                 <span
                   className={cn(
-                    'inline-block w-1.5 h-3 bg-zinc-400/60 ml-0.5 align-middle',
+                    'inline-block w-1.5 h-3 bg-muted-foreground/60 ml-0.5 align-middle',
                     !reducedMotion && 'animate-pulse',
                   )}
                   aria-hidden="true"

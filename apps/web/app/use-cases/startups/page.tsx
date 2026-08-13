@@ -10,7 +10,7 @@ import { MARKETING, MARKETING_FEATURE_MATRIX, POSITIONING } from '../../../lib/m
 export const metadata = buildMetadata({
   title: 'Startups: AGI',
   description:
-    'How startups use AGI: ship product faster with multi-provider AI, BYOK on Desktop and CLI, and a CLI that fits CI.',
+    'How startups use AGI: ship product faster with multi-provider AI, BYOK on Desktop, CLI, and VS Code, and a CLI that fits CI.',
   path: '/use-cases/startups',
 });
 
@@ -36,8 +36,9 @@ export default function StartupsPage() {
           </h1>
           <p className="agi-fl-lede">
             Use the CLI in CI, the Desktop app for hard problems, and the Chrome side panel for
-            inbox and docs. One product, one chat history, with provider spend you control through
-            your own keys on Desktop and CLI.
+            inbox and docs. Cloud app chats follow the signed-in account where supported; CLI and VS
+            Code developer sessions remain workspace-scoped. Provider spend stays under your control
+            through your own keys on Desktop, CLI, and VS Code.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/download" className="agi-fl-cta agi-fl-cta--primary">

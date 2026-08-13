@@ -15,9 +15,9 @@ import {
  * Availability probe for the AGI Cloud desktop shell (the Electron app,
  * released under `v-cloud-desktop-*` tags by
  * .github/workflows/release-desktop-cloud.yml). Used by the public download
- * page to decide whether to show the macOS download button. This is NOT the
- * auto-update feed — electron-updater's feed lands under
- * /api/releases/electron/mac/* in a later phase.
+ * page and installed Electron shell to decide whether a newer signed macOS
+ * installer exists. This is an availability contract, not an in-place
+ * electron-updater feed; downloads use /api/download?platform=mac&app=cloud.
  */
 async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'release-latest');
@@ -31,6 +31,12 @@ async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise
     repo: getOptionalEnv('DESKTOP_CLOUD_GITHUB_REPO') ?? 'agiworkforce',
   });
 
+  const arm64Installer = release?.assets.find(
+    (asset) => asset.name.endsWith('.dmg') && /arm64|aarch64/i.test(asset.name),
+  );
+  const x64Installer = release?.assets.find(
+    (asset) => asset.name.endsWith('.dmg') && /x64|x86_64/i.test(asset.name),
+  );
   const macInstaller = release?.assets.find(
     (asset) => asset.name.endsWith('.dmg') && /arm64|aarch64|x64|x86_64/i.test(asset.name),
   );
@@ -46,6 +52,7 @@ async function handleGetLatestCloudDesktopRelease(request: NextRequest): Promise
       version: release.version,
       publishedAt: release.publishedAt,
       platforms: { mac: true },
+      architectures: { arm64: Boolean(arm64Installer), x64: Boolean(x64Installer) },
     },
     { headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' } },
   );
