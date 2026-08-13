@@ -1,6 +1,7 @@
 //! Webhook automation module
 
 use crate::sys::error::{Error, Result};
+use crate::sys::security::egress_policy::PublicHttpClient;
 use hmac::{Hmac, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
@@ -61,7 +62,7 @@ pub struct WebhookResult {
 /// Webhook manager
 pub struct WebhookManager {
     webhooks: Arc<RwLock<HashMap<String, Webhook>>>,
-    client: reqwest::Client,
+    client: PublicHttpClient,
     incoming_tx: Option<mpsc::Sender<WebhookPayload>>,
     server_port: u16,
 }
@@ -70,7 +71,7 @@ impl WebhookManager {
     pub fn new() -> Self {
         Self {
             webhooks: Arc::new(RwLock::new(HashMap::new())),
-            client: reqwest::Client::new(),
+            client: PublicHttpClient::new(),
             incoming_tx: None,
             server_port: 9876,
         }
@@ -158,7 +159,18 @@ impl WebhookManager {
     pub async fn send_webhook(&self, request: OutgoingWebhook) -> WebhookResult {
         let start = std::time::Instant::now();
 
-        let mut req = self.client.post(&request.url);
+        let mut req = match self.client.post(&request.url) {
+            Ok(request) => request,
+            Err(error) => {
+                return WebhookResult {
+                    success: false,
+                    status_code: None,
+                    response_body: None,
+                    error: Some(error.to_string()),
+                    duration_ms: start.elapsed().as_millis() as u64,
+                }
+            }
+        };
 
         for (key, value) in &request.headers {
             req = req.header(key, value);

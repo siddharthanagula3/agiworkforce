@@ -21,9 +21,9 @@ const panel = read('src/side_panel.ts');
 const background = read('src/background.ts');
 
 describe('autonomy chip', () => {
-  it('exists in the composer bar', () => {
+  it('exists in the composer trust strip', () => {
     expect(panel).toContain("id: 'sp-autonomy-chip'");
-    expect(panel).toContain('composerBar.appendChild(autonomyChip)');
+    expect(panel).toContain('trustStrip.appendChild(autonomyControl)');
   });
 
   it('reads the same pref the authoritative gate reads', () => {
@@ -57,8 +57,24 @@ describe('autonomy chip', () => {
 
   it('exposes the mode to assistive tech', () => {
     expect(panel).toContain("autonomyChip.setAttribute('aria-pressed'");
+    expect(panel).toContain("role: 'menuitemradio'");
+    expect(panel).toContain("autonomyChip.setAttribute('aria-expanded'");
     // The English lives in _locales/en/messages.json; __tests__/i18n.test.ts
     // proves the key resolves.
     expect(panel).toContain("t('spAutonomyAskFirstAria')");
+  });
+
+  it('requires an explicit menu choice before enabling full access', () => {
+    const chipHandlerStart = panel.indexOf("autonomyChip.addEventListener('click'");
+    const fullAccessHandlerStart = panel.indexOf("fullAccessOption.addEventListener('click'");
+    const fullAccessHandlerEnd = panel.indexOf(
+      "autonomyPopover.addEventListener('keydown'",
+      fullAccessHandlerStart,
+    );
+    const chipHandler = panel.slice(chipHandlerStart, fullAccessHandlerStart);
+    const fullAccessHandler = panel.slice(fullAccessHandlerStart, fullAccessHandlerEnd);
+
+    expect(chipHandler).not.toContain('agi_cu_ask_before_acting: false');
+    expect(fullAccessHandler).toContain('agi_cu_ask_before_acting: false');
   });
 });

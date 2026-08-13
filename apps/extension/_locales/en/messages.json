@@ -58,8 +58,8 @@
     "description": "Screenshot button while the capture is in flight. The leading space stands in for the icon the label replaces."
   },
   "spDrawerCaptured": {
-    "message": " Captured!",
-    "description": "Screenshot button after a successful capture"
+    "message": " Screenshot added",
+    "description": "Screenshot button after a successful capture is added to the chat composer"
   },
   "spDrawerCaptureFailed": {
     "message": " Failed",
@@ -72,6 +72,30 @@
   "spDrawerGroupTab": {
     "message": " Group",
     "description": "Tab-group button while the tab is not grouped"
+  },
+  "spTabGroupAddTitle": {
+    "message": "Add current tab to the AGI Workforce group",
+    "description": "Tooltip for a control that adds the active tab to AGI's tab group"
+  },
+  "spTabGroupRemoveTitle": {
+    "message": "Remove current tab from the AGI Workforce group",
+    "description": "Tooltip for a control that removes the active tab from AGI's tab group"
+  },
+  "spTabGroupChecking": {
+    "message": "Checking current tab group…",
+    "description": "Tooltip while the extension reads the active tab's group"
+  },
+  "spTabGroupAlreadyGrouped": {
+    "message": "Current tab is already in the AGI Workforce group",
+    "description": "Tooltip for the disabled add button when the active tab is grouped"
+  },
+  "spTabGroupNotGrouped": {
+    "message": "Current tab is not in the AGI Workforce group",
+    "description": "Tooltip for the disabled remove button when the active tab is not grouped"
+  },
+  "spTabGroupUpdateFailed": {
+    "message": "Could not update the current tab group. Try again.",
+    "description": "Fallback error after Chrome rejects a tab-group change"
   },
 
   "spPairingIdle": {
@@ -230,20 +254,32 @@
     }
   },
   "spQuotaPaidPlanRequired": {
-    "message": "Chrome access requires a paid plan.",
+    "message": "Checking your shared AGI plan and usage…",
     "description": "Quota row before entitlements are read"
   },
   "spQuotaProRequired": {
-    "message": "AGI in Chrome requires Pro or higher.",
-    "description": "Quota row for a plan without the developer-surfaces capability"
+    "message": "Managed Cloud chat is not available for this account.",
+    "description": "Quota row for an account without managed-chat capability"
   },
   "spQuotaFreeElsewhere": {
-    "message": "Free chat remains available on Web, Mobile, and Desktop.",
-    "description": "Quota sub-label pointing at the surfaces that stay free"
+    "message": "Your AGI plan and usage are shared across account apps.",
+    "description": "Quota sub-label explaining the single account subscription"
   },
   "spQuotaUpgrade": {
-    "message": "Upgrade",
+    "message": "View plans",
     "description": "Quota button and header badge that open the pricing page"
+  },
+  "spQuotaUsageExhausted": {
+    "message": "Managed Cloud usage limit reached.",
+    "description": "Quota state when the shared AGI allowance is exhausted"
+  },
+  "spQuotaManageUsage": {
+    "message": "Manage usage",
+    "description": "Button that opens the shared usage page"
+  },
+  "spGateUsageLimit": {
+    "message": "Your Managed Cloud usage limit has been reached.",
+    "description": "Composer gate shown before send when no shared usage remains"
   },
 
   "spGateChecking": {
@@ -370,16 +406,16 @@
     "description": "Workflows button that moves the active tab into the AGI tab group"
   },
   "spGroupTabAdded": {
-    "message": "Grouped!",
-    "description": "Workflows group button immediately after a successful grouping"
+    "message": "Added current tab to the AGI Workforce group.",
+    "description": "Success notice after the active tab joins AGI's tab group"
   },
   "spGroupTabRemove": {
     "message": "- Ungroup Tab",
     "description": "Workflows button that removes the active tab from the AGI tab group"
   },
   "spGroupTabRemoved": {
-    "message": "Removed!",
-    "description": "Workflows ungroup button immediately after a successful removal"
+    "message": "Removed current tab from the AGI Workforce group.",
+    "description": "Success notice after the active tab leaves AGI's tab group"
   },
 
   "spContextChipFallback": {
@@ -501,6 +537,194 @@
     "placeholders": {
       "reason": { "content": "$1", "example": "This model has a fixed reasoning budget." }
     }
+  },
+
+  "spHistoryDeleteFailed": {
+    "message": "Could not delete this chat. Try again.",
+    "description": "Conversation history error after the account deletion could not be queued"
+  },
+  "spHistoryDeleting": {
+    "message": "Deleting chat…",
+    "description": "Conversation history status while a chat is being deleted"
+  },
+  "spHistoryDeleted": {
+    "message": "Chat deleted.",
+    "description": "Conversation history status after a chat is deleted"
+  },
+  "spHistoryOpening": {
+    "message": "Opening chat…",
+    "description": "Conversation history status while a chat is being restored"
+  },
+  "spHistoryStopBeforeOpen": {
+    "message": "Stop the current response before opening another chat.",
+    "description": "Conversation history error when restore is blocked by streaming"
+  },
+  "spHistoryOpenFailed": {
+    "message": "That chat could not be opened. Please try again.",
+    "description": "Conversation history error after restore fails"
+  },
+
+  "spAttachmentAdding": {
+    "message": "Adding images… Send will be available when they are ready.",
+    "description": "Composer attachment status while selected images are being read"
+  },
+  "spAttachmentHistoryLimitation": {
+    "message": "Images are sent with this message but are not stored in Chrome chat history.",
+    "description": "Composer disclosure for request-only image attachments"
+  },
+  "spAttachmentReadFailed": {
+    "message": "That image could not be read. Choose another file and try again.",
+    "description": "Composer error when one selected image cannot be read"
+  },
+  "spAttachmentReadMultipleFailed": {
+    "message": "One or more images could not be read. Choose them again and retry.",
+    "description": "Composer error when multiple selected images cannot be read"
+  },
+  "spAttachmentReadAllFailed": {
+    "message": "Images could not be read. Choose them again and retry.",
+    "description": "Composer error when the image reading operation fails"
+  },
+  "spAttachmentCaptureFailed": {
+    "message": "This page could not be captured. Try again on a regular website tab.",
+    "description": "Composer error when Chrome cannot capture a screenshot"
+  },
+
+  "spPageAssistantOverlay": {
+    "message": "Page assistant overlay",
+    "description": "Settings label for the compact in-page assistant"
+  },
+  "spPageAssistantToggleAria": {
+    "message": "Toggle page assistant overlay",
+    "description": "Accessible name for the in-page assistant preference"
+  },
+  "spPageAssistantSaving": {
+    "message": "Saving…",
+    "description": "Status while saving the in-page assistant preference"
+  },
+  "spPageAssistantEnabled": {
+    "message": "Page assistant enabled. Reload approved pages to show it.",
+    "description": "Status after enabling the in-page assistant"
+  },
+  "spPageAssistantDisabled": {
+    "message": "Page assistant disabled.",
+    "description": "Status after disabling the in-page assistant"
+  },
+  "spPreferenceSaveFailed": {
+    "message": "Could not save this preference. Please try again.",
+    "description": "Generic settings preference save error"
+  },
+  "spPageAssistantOneShot": {
+    "message": "One prompt and response at a time. Open the side panel for saved conversations.",
+    "description": "Settings disclosure explaining the in-page assistant is not a chat thread"
+  },
+
+  "spWorkflowLoadFailed": {
+    "message": "Saved workflows could not be loaded. Please try again.",
+    "description": "Workflows status when shortcut listing fails"
+  },
+  "spTaskLoadFailed": {
+    "message": "Scheduled tasks could not be loaded. Please try again.",
+    "description": "Workflows status when scheduled-task listing fails"
+  },
+  "spWorkflowRunning": {
+    "message": "Running $NAME$…",
+    "description": "Workflows status while a workflow is replaying",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spWorkflowRunningButton": {
+    "message": "Running…",
+    "description": "Workflow replay button while a replay is active"
+  },
+  "spWorkflowRunFailed": {
+    "message": "$NAME$ could not run. Please try again.",
+    "description": "Workflows status after replay fails",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spWorkflowCompleted": {
+    "message": "$NAME$ completed.",
+    "description": "Workflows status after replay completes",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spWorkflowCompletedOpen": {
+    "message": "$NAME$ completed and its result is open.",
+    "description": "Workflows status after a prompt workflow result opens",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spWorkflowCompletedOpenFailed": {
+    "message": "$NAME$ completed, but its saved result could not be opened.",
+    "description": "Workflows status when replay completes but its result cannot open",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spWorkflowDeleting": {
+    "message": "Deleting $NAME$…",
+    "description": "Workflows status while a shortcut or task is being deleted",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spWorkflowDeleted": {
+    "message": "$NAME$ deleted.",
+    "description": "Workflows status after a shortcut or task is deleted",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spWorkflowDeleteFailed": {
+    "message": "$NAME$ could not be deleted. Please try again.",
+    "description": "Workflows status after a shortcut or task deletion fails",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spRecordingPrivacySaving": {
+    "message": "Saving recording privacy preference…",
+    "description": "Workflows status while value-capture preference is saved"
+  },
+  "spRecordingPrivacySaveFailed": {
+    "message": "Recording privacy preference could not be saved. Please try again.",
+    "description": "Workflows status after value-capture preference save fails"
+  },
+  "spRecordingValueCaptureEnabled": {
+    "message": "Typed-value capture enabled.",
+    "description": "Workflows status after typed-value capture is enabled"
+  },
+  "spRecordingValueCaptureDisabled": {
+    "message": "Typed-value capture disabled.",
+    "description": "Workflows status after typed-value capture is disabled"
+  },
+  "spTaskEnableAria": {
+    "message": "Enable scheduled task $NAME$",
+    "description": "Accessible name for a disabled scheduled task toggle",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spTaskDisableAria": {
+    "message": "Disable scheduled task $NAME$",
+    "description": "Accessible name for an enabled scheduled task toggle",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spTaskEnabling": {
+    "message": "Enabling $NAME$…",
+    "description": "Workflows status while a scheduled task is enabled",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spTaskDisabling": {
+    "message": "Disabling $NAME$…",
+    "description": "Workflows status while a scheduled task is disabled",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spTaskEnableFailed": {
+    "message": "$NAME$ could not be enabled. Please try again.",
+    "description": "Workflows status after enabling a task fails",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spTaskDisableFailed": {
+    "message": "$NAME$ could not be disabled. Please try again.",
+    "description": "Workflows status after disabling a task fails",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spTaskEnabled": {
+    "message": "$NAME$ enabled.",
+    "description": "Workflows status after a task is enabled",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
+  },
+  "spTaskDisabled": {
+    "message": "$NAME$ disabled.",
+    "description": "Workflows status after a task is disabled",
+    "placeholders": { "name": { "content": "$1", "example": "Daily brief" } }
   },
 
   "spQuickMode": {

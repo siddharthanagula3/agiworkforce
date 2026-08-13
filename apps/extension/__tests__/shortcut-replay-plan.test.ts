@@ -9,7 +9,11 @@
  * the chat path and refuses shortcuts that have neither actions nor a prompt.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadShortcuts, planShortcutReplay } from '../src/features/background/shortcuts';
+import {
+  handleSaveShortcut,
+  loadShortcuts,
+  planShortcutReplay,
+} from '../src/features/background/shortcuts';
 import type { RunPageAction } from '../src/types';
 
 const action: RunPageAction = { id: 'a1', type: 'CLICK', selector: '#go' };
@@ -21,6 +25,7 @@ const chromeMock = {
       get: vi.fn((_key: string, callback: (result: Record<string, unknown>) => void) =>
         callback({ agi_saved_shortcuts: [] }),
       ),
+      set: vi.fn(async () => undefined),
     },
   },
 };
@@ -70,5 +75,33 @@ describe('shortcut storage authority', () => {
     chromeMock.runtime.lastError = { message: 'shortcut storage unavailable' };
 
     await expect(loadShortcuts()).rejects.toThrow('shortcut storage unavailable');
+  });
+});
+
+describe('recorded shortcut save binding', () => {
+  it('refuses to persist page actions without a valid web origin', async () => {
+    const result = await handleSaveShortcut({
+      type: 'SAVE_SHORTCUT',
+      name: 'Unsafe legacy recording',
+      actions: [action],
+    });
+
+    expect(result.success).toBe(false);
+    expect(chromeMock.storage.local.set).not.toHaveBeenCalled();
+  });
+
+  it('persists only the canonical origin for a recorded page workflow', async () => {
+    const result = await handleSaveShortcut({
+      type: 'SAVE_SHORTCUT',
+      name: 'Bound recording',
+      actions: [action],
+      startUrl: 'https://app.example.test/private/path?token=secret#step',
+    });
+
+    expect(result.success).toBe(true);
+    const stored = chromeMock.storage.local.set.mock.calls[0]?.[0] as {
+      agi_saved_shortcuts?: Array<{ startUrl?: string }>;
+    };
+    expect(stored.agi_saved_shortcuts?.[0]?.startUrl).toBe('https://app.example.test');
   });
 });

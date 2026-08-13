@@ -119,28 +119,52 @@ pub(crate) fn floor_char_boundary(s: &str, max: usize) -> usize {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct AGIConfig {
+    #[serde(alias = "max_concurrent_tools")]
     pub max_concurrent_tools: usize,
 
+    #[serde(alias = "knowledge_memory_mb")]
     pub knowledge_memory_mb: u64,
 
+    #[serde(alias = "enable_learning")]
     pub enable_learning: bool,
 
+    #[serde(alias = "enable_self_improvement")]
     pub enable_self_improvement: bool,
 
+    #[serde(alias = "resource_limits")]
     pub resource_limits: ResourceLimits,
 
+    #[serde(alias = "max_planning_depth")]
     pub max_planning_depth: usize,
 
+    #[serde(alias = "enable_multimodal")]
     pub enable_multimodal: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct ResourceLimits {
+    #[serde(alias = "cpu_percent")]
     pub cpu_percent: f64,
+    #[serde(alias = "memory_mb")]
     pub memory_mb: u64,
+    #[serde(alias = "network_mbps")]
     pub network_mbps: f64,
+    #[serde(alias = "storage_mb")]
     pub storage_mb: u64,
+}
+
+impl Default for ResourceLimits {
+    fn default() -> Self {
+        Self {
+            cpu_percent: 80.0,
+            memory_mb: 2048,
+            network_mbps: 100.0,
+            storage_mb: 10240,
+        }
+    }
 }
 
 impl Default for AGIConfig {
@@ -150,12 +174,7 @@ impl Default for AGIConfig {
             knowledge_memory_mb: 1024,
             enable_learning: true,
             enable_self_improvement: true,
-            resource_limits: ResourceLimits {
-                cpu_percent: 80.0,
-                memory_mb: 2048,
-                network_mbps: 100.0,
-                storage_mb: 10240,
-            },
+            resource_limits: ResourceLimits::default(),
             max_planning_depth: 20,
             enable_multimodal: true,
         }
@@ -181,6 +200,26 @@ pub struct Goal {
     /// default to `Local`; the router does that.
     #[serde(default)]
     pub trust_mode: Option<agiworkforce_model_registry::TrustMode>,
+}
+
+impl Goal {
+    /// Returns the model/provider pair admitted by the privileged submission
+    /// boundary. Existing checkpoints and non-UI callers may omit it; callers
+    /// must never infer a provider from a dynamic model name.
+    pub fn execution_target(&self) -> Option<(&str, &str)> {
+        let mut model = None;
+        let mut provider = None;
+        for constraint in &self.constraints {
+            if let ConstraintValue::Custom { key, value } = &constraint.value {
+                match key.as_str() {
+                    "execution_model" => model = Some(value.as_str()),
+                    "execution_provider" => provider = Some(value.as_str()),
+                    _ => {}
+                }
+            }
+        }
+        model.zip(provider)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]

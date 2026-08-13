@@ -39,6 +39,10 @@ interface TierState {
   billingStatus: string;
   /** Server-authoritative owner of subscription management. */
   billingSource: MobileBillingSource;
+  /** Unix seconds for the current paid period end, or null when no period exists. */
+  billingPeriodEnd: number | null;
+  /** Whether the subscription is scheduled to cancel at `billingPeriodEnd`. */
+  billingCancelsAtPeriodEnd: boolean;
   /** True while a tier refresh network call is in flight. */
   isRefreshing: boolean;
   /** ISO timestamp of the last successful refresh, or null if never refreshed. */
@@ -64,6 +68,18 @@ interface TierState {
   grantedCapabilities: string[];
   /** Version/hash of the cached capability document. */
   capabilityHandshakeVersion: string | null;
+  /**
+   * Whether a capability handshake has ever been received on this device.
+   *
+   * This is the difference between "the server said no" and "we never asked",
+   * and conflating the two broke every server tool on Mobile: `grantedCapabilities`
+   * starts `[]`, `refreshTier` early-returns while the app is in Local mode (which
+   * is how it always launches), and every failure path is swallowed — so an empty
+   * array was indistinguishable from a denial and the send path failed closed
+   * forever. Web never had this problem because it does not consult the handshake
+   * at all. Read this before treating an absent capability as a denial.
+   */
+  capabilityHandshakeReceived: boolean;
   /**
    * Provider id of the first model used in the current conversation (e.g.
    * 'anthropic', 'openai').  Set to null when no conversation is active or
@@ -98,12 +114,15 @@ export const useTierStore = create<TierState>()(
       billingTier: 'free',
       billingStatus: 'none',
       billingSource: 'unknown',
+      billingPeriodEnd: null,
+      billingCancelsAtPeriodEnd: false,
       isRefreshing: false,
       lastRefreshedAt: null,
       codeExecutionAvailable: false,
       genericWebSearchAvailable: false,
       grantedCapabilities: [],
       capabilityHandshakeVersion: null,
+      capabilityHandshakeReceived: false,
       currentConversationProvider: null,
 
       refreshTier: async () => {
@@ -144,13 +163,22 @@ export const useTierStore = create<TierState>()(
             billingTier,
             billingStatus: data.plan.status,
             billingSource: data.plan.subscription_source ?? 'unknown',
+            billingPeriodEnd: data.plan.current_period_end,
+            billingCancelsAtPeriodEnd: data.plan.cancel_at_period_end ?? false,
             lastRefreshedAt: new Date().toISOString(),
+            // Same "absence is not denial" rule as `isCapabilityRequestable`: a
+            // deployment that ships no handshake must not turn code execution off.
             codeExecutionAvailable:
               (data.feature_flags.code_execution ?? false) &&
-              grantedCapabilities.includes('canUseCloudExecution'),
+              (data.capability_handshake === undefined ||
+                grantedCapabilities.includes('canUseCloudExecution')),
             genericWebSearchAvailable: data.feature_flags.generic_web_search ?? false,
             grantedCapabilities,
             capabilityHandshakeVersion: data.capability_handshake?.version ?? null,
+            // Only a response that actually carried a handshake counts. A 200 with
+            // no `capability_handshake` (older deployment) must not be recorded as
+            // "the server answered and granted nothing".
+            capabilityHandshakeReceived: data.capability_handshake !== undefined,
           });
         } catch (err) {
           if (!isCloudAccountEpochCurrent(account)) return;
@@ -175,12 +203,15 @@ export const useTierStore = create<TierState>()(
           billingTier: 'free',
           billingStatus: 'none',
           billingSource: 'unknown',
+          billingPeriodEnd: null,
+          billingCancelsAtPeriodEnd: false,
           isRefreshing: false,
           lastRefreshedAt: null,
           codeExecutionAvailable: false,
           genericWebSearchAvailable: false,
           grantedCapabilities: [],
           capabilityHandshakeVersion: null,
+          capabilityHandshakeReceived: false,
           currentConversationProvider: null,
         });
       },
@@ -202,11 +233,14 @@ export const useTierStore = create<TierState>()(
         billingTier: state.billingTier,
         billingStatus: state.billingStatus,
         billingSource: state.billingSource,
+        billingPeriodEnd: state.billingPeriodEnd,
+        billingCancelsAtPeriodEnd: state.billingCancelsAtPeriodEnd,
         lastRefreshedAt: state.lastRefreshedAt,
         codeExecutionAvailable: state.codeExecutionAvailable,
         genericWebSearchAvailable: state.genericWebSearchAvailable,
         grantedCapabilities: state.grantedCapabilities,
         capabilityHandshakeVersion: state.capabilityHandshakeVersion,
+        capabilityHandshakeReceived: state.capabilityHandshakeReceived,
       }),
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[tierStore] Hydration failed:', error);
@@ -216,3 +250,89 @@ export const useTierStore = create<TierState>()(
 );
 
 rehydrateWhenMmkvReady(useTierStore, 'tier-store');
+
+/**
+ * Is this capability allowed to be REQUESTED from the client?
+ *
+ * Absence of a handshake is not a denial. Until the server has actually answered,
+ * this returns true and lets the request go — the route re-checks entitlement and
+ * the model capability clamp still applies, so an over-permissive client cannot
+ * grant itself anything. Once a handshake HAS been received, its answer is
+ * respected exactly.
+ *
+ * The previous `grantedCapabilities.includes(...)` check inverted this: it denied
+ * by default, and because the array is empty until a cloud-mode `/api/me` succeeds,
+ * Mobile shipped with web search, code execution and deep research permanently off
+ * while Web (which never consults the handshake) had them on.
+ */
+export function isCapabilityRequestable(capability: string): boolean {
+  const { capabilityHandshakeReceived, grantedCapabilities } = useTierStore.getState();
+  if (!capabilityHandshakeReceived) return true;
+  return grantedCapabilities.includes(capability);
+}
+
+function waitForActiveTierRefresh(): Promise<void> {
+  if (!useTierStore.getState().isRefreshing) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      unsubscribe();
+      resolve();
+    };
+    const unsubscribe = useTierStore.subscribe((state) => {
+      if (!state.isRefreshing) finish();
+    });
+
+    // Close the check/subscribe race: the request can finish between the first
+    // read above and installing this listener.
+    if (!useTierStore.getState().isRefreshing) finish();
+  });
+}
+
+/**
+ * Resolve the first Cloud turn against the real account/deployment document.
+ *
+ * Cloud-mode entry already starts `refreshTier()` in the root layout, but that
+ * work is intentionally backgrounded. A fast user can press Send before it
+ * completes. Previously that first turn read the default Free tier, empty
+ * capability list, and `genericWebSearchAvailable:false`; Auto could choose the
+ * wrong plan route and generic Web Search was omitted until a later turn.
+ *
+ * This helper joins an existing refresh rather than issuing a duplicate. When
+ * no validated response has ever been received, it starts one and awaits it.
+ * Network/auth failures retain the existing optimistic fallback and remain
+ * server-authoritatively gated by the completion route.
+ */
+export async function ensureCloudEntitlementsReadyForRequest(): Promise<void> {
+  if (useChatAppModeStore.getState().appMode !== 'cloud') return;
+  const account = captureCloudAccountEpoch();
+  if (!account) return;
+
+  if (useTierStore.getState().isRefreshing) {
+    await waitForActiveTierRefresh();
+  }
+  if (!isCloudAccountEpochCurrent(account)) return;
+
+  const state = useTierStore.getState();
+  if (state.capabilityHandshakeReceived || state.lastRefreshedAt !== null) return;
+  await state.refreshTier();
+}
+
+/**
+ * Dev-only inspection handle.
+ *
+ * Entitlement bugs on this store are invisible from the UI — a missing capability
+ * looks identical to a model that simply chose not to call a tool. Exposing the
+ * store under __DEV__ lets Metro's Hermes inspector read the live values
+ * (`Runtime.evaluate` over the inspector proxy) instead of guessing from a
+ * console.warn that may never be captured. Stripped from release builds.
+ */
+if (__DEV__) {
+  (globalThis as unknown as { __AGI_DEBUG__?: Record<string, unknown> }).__AGI_DEBUG__ = {
+    ...((globalThis as unknown as { __AGI_DEBUG__?: Record<string, unknown> }).__AGI_DEBUG__ ?? {}),
+    tierStore: useTierStore,
+  };
+}

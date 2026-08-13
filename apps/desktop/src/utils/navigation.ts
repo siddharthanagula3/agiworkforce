@@ -1,15 +1,22 @@
 import { open } from '@tauri-apps/plugin-shell';
-import { isTauri } from '../lib/tauri-mock';
+import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 
 const PRICING_URL = 'https://www.agiworkforce.com/billing';
 
 export async function openExternalUrl(url: string) {
-  if (isTauri) {
+  if (isTauri || isElectronHost) {
     try {
       await open(url);
     } catch (error) {
       console.error('Failed to open external URL:', error);
-
+      if (isElectronHost) {
+        // The Electron main-process navigation policy denies this in-window
+        // navigation and hands the same HTTP(S) URL to the OS browser.
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw error;
+        window.location.href = parsed.toString();
+        return;
+      }
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   } else {

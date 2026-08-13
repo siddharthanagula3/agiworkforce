@@ -32,6 +32,7 @@ export function getSettingsWebviewContent(
   nonce: string,
   initialState: SettingsPanelState,
   initialSection: SettingsSection,
+  showDeveloperControls: boolean = false,
 ): string {
   const serializedState = serializeForInlineScript(initialState);
   const serializedSection = serializeForInlineScript(initialSection);
@@ -76,6 +77,10 @@ export function getSettingsWebviewContent(
 
       * {
         box-sizing: border-box;
+      }
+
+      [hidden] {
+        display: none !important;
       }
 
       html,
@@ -170,9 +175,31 @@ export function getSettingsWebviewContent(
         text-transform: uppercase;
       }
 
+      .nav-rail {
+        position: relative;
+      }
+
       .nav {
         display: grid;
+        gap: 12px;
+      }
+
+      .nav-overflow-button {
+        display: none;
+      }
+
+      .nav-group {
+        display: grid;
         gap: 3px;
+      }
+
+      .nav-group-label {
+        margin: 0 10px 3px;
+        color: var(--vscode-descriptionForeground);
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
       }
 
       .nav-button {
@@ -286,6 +313,34 @@ export function getSettingsWebviewContent(
         color: var(--vscode-errorForeground);
       }
 
+      .plan-status {
+        min-height: 0;
+        margin: 0;
+        padding: 0 18px 15px;
+      }
+
+      .usage-progress {
+        position: relative;
+        width: min(220px, 100%);
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: var(--vscode-progressBar-background, color-mix(in srgb, var(--vscode-foreground) 16%, transparent));
+      }
+
+      .usage-progress > span {
+        display: block;
+        width: 0;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--vscode-button-background);
+        transition: width 160ms ease;
+      }
+
+      .usage-progress.is-warning > span {
+        background: var(--vscode-editorWarning-foreground, var(--agi-vscode-warning));
+      }
+
       .override-notice {
         margin-bottom: 18px;
         padding: 12px 14px;
@@ -341,6 +396,28 @@ export function getSettingsWebviewContent(
         font-size: 12px;
         line-height: 1.45;
       }
+
+      .diagnostic-card > summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 18px;
+        cursor: pointer;
+        color: var(--vscode-editor-foreground);
+        font-weight: 600;
+        list-style: none;
+      }
+
+      .diagnostic-card > summary::-webkit-details-marker { display: none; }
+      .diagnostic-card > summary::after {
+        content: 'Show';
+        color: var(--vscode-descriptionForeground);
+        font-size: 11px;
+        font-weight: 400;
+      }
+      .diagnostic-card[open] > summary::after { content: 'Hide'; }
+      .diagnostic-card[open] > summary { border-bottom: 1px solid var(--vscode-panel-border); }
 
       .setting-row {
         display: grid;
@@ -483,6 +560,7 @@ export function getSettingsWebviewContent(
 
       .instruction-footer {
         display: flex;
+        flex-wrap: wrap;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
@@ -737,6 +815,10 @@ export function getSettingsWebviewContent(
         gap: 8px;
       }
 
+      .plan-actions {
+        flex-wrap: wrap;
+      }
+
       .override-notice-action {
         background: none;
         border: 0;
@@ -777,18 +859,48 @@ export function getSettingsWebviewContent(
           display: flex;
           gap: 5px;
           overflow-x: auto;
-          padding-bottom: 2px;
-          /*
-           * A 719px rail inside a 432px box scrolls, but nothing said so — the
-           * sections past the fold were simply invisible. The mask fades the
-           * trailing edge so the overflow is discoverable, and scroll-snap makes
-           * dragging land on a tab rather than mid-label.
-           */
+          padding: 0 30px 2px;
           scroll-snap-type: x proximity;
           scrollbar-width: thin;
-          -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
-          mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
+          scroll-behavior: smooth;
         }
+
+        .nav-overflow-button {
+          position: absolute;
+          z-index: 1;
+          top: 0;
+          bottom: 2px;
+          display: grid;
+          place-items: center;
+          width: 28px;
+          padding: 0;
+          border: 1px solid var(--vscode-panel-border);
+          border-radius: 6px;
+          color: var(--vscode-sideBar-foreground);
+          background: var(--vscode-sideBar-background);
+          box-shadow: 0 0 10px 6px var(--vscode-sideBar-background);
+          cursor: pointer;
+        }
+
+        .nav-overflow-button:hover {
+          background: var(--vscode-list-hoverBackground);
+        }
+
+        .nav-overflow-button--back {
+          left: 0;
+        }
+
+        .nav-overflow-button--forward {
+          right: 0;
+        }
+
+        .nav-group {
+          display: flex;
+          flex: 0 0 auto;
+          gap: 5px;
+        }
+
+        .nav-group-label { display: none; }
 
         .nav-button {
           scroll-snap-align: start;
@@ -831,8 +943,56 @@ export function getSettingsWebviewContent(
           justify-content: flex-start;
         }
 
+        .plan-actions {
+          justify-content: flex-start;
+        }
+
         .number-input {
           max-width: none;
+        }
+      }
+
+      @media (forced-colors: active) {
+        button:focus-visible,
+        select:focus-visible,
+        input:focus-visible,
+        textarea:focus-visible,
+        .toggle input:focus-visible + .toggle-track {
+          outline: 2px solid Highlight;
+        }
+
+        .card,
+        .pill,
+        .override-notice,
+        .text-input,
+        .number-input,
+        .select-input,
+        .instruction-textarea,
+        .instruction-preview,
+        .instruction-source,
+        .secondary-button,
+        .primary-button,
+        .raw-settings-button,
+        .toggle-track {
+          border-color: CanvasText;
+        }
+
+        .nav-button[aria-current='page'] {
+          color: HighlightText;
+          background: Highlight;
+        }
+
+        .primary-button,
+        .toggle input:checked + .toggle-track,
+        .usage-progress > span,
+        .status-dot.connected {
+          color: HighlightText;
+          background: Highlight;
+        }
+
+        .usage-progress {
+          border: 1px solid CanvasText;
+          background: Canvas;
         }
       }
 
@@ -857,23 +1017,50 @@ export function getSettingsWebviewContent(
           </span>
         </div>
         <p class="nav-label">Settings</p>
-        <nav class="nav">
-          <button class="nav-button" type="button" data-section="general">General</button>
-          <button class="nav-button" type="button" data-section="configuration">Configuration</button>
-          <button class="nav-button" type="button" data-section="personalization">Personalization</button>
-          <button class="nav-button" type="button" data-section="usage">Usage &amp; billing</button>
-          <button class="nav-button" type="button" data-section="mcp">MCP servers</button>
-          <button class="nav-button" type="button" data-section="hooks">Hooks</button>
-          <button class="nav-button" type="button" data-section="plugins">Plugins</button>
-          <button class="nav-button" type="button" data-section="account">Account</button>
+        <div class="nav-rail">
+        <nav class="nav" id="settingsNav" aria-label="Settings sections">
+          <div class="nav-group" role="group" aria-labelledby="nav-workspace-label">
+            <span class="nav-group-label" id="nav-workspace-label">Workspace</span>
+            <button class="nav-button" type="button" data-section="general">Session</button>
+            <button class="nav-button" type="button" data-section="configuration">Runtime</button>
+            <button class="nav-button" type="button" data-section="personalization">Instructions &amp; editor</button>
+          </div>
+          <div class="nav-group" role="group" aria-labelledby="nav-integrations-label">
+            <span class="nav-group-label" id="nav-integrations-label">Integrations</span>
+            <button class="nav-button" type="button" data-section="mcp">MCP servers</button>
+            <button class="nav-button" type="button" data-section="plugins">Plugins</button>
+            <button class="nav-button" type="button" data-section="hooks">Hooks</button>
+          </div>
+          <div class="nav-group" role="group" aria-labelledby="nav-account-label">
+            <span class="nav-group-label" id="nav-account-label">Account</span>
+            <button class="nav-button" type="button" data-section="usage">Usage &amp; billing</button>
+            <button class="nav-button" type="button" data-section="account">Cloud account</button>
+          </div>
         </nav>
+        <button
+          class="nav-overflow-button nav-overflow-button--back"
+          id="navScrollBack"
+          type="button"
+          aria-label="Show previous settings sections"
+          aria-controls="settingsNav"
+          hidden
+        ><span aria-hidden="true">‹</span></button>
+        <button
+          class="nav-overflow-button nav-overflow-button--forward"
+          id="navScrollForward"
+          type="button"
+          aria-label="Show more settings sections"
+          aria-controls="settingsNav"
+          hidden
+        ><span aria-hidden="true">›</span></button>
+        </div>
         <div class="sidebar-footer">
           <button
             class="raw-settings-button"
             type="button"
             data-command="openRawSettings"
           >
-            Open raw settings
+            Open VS Code settings
           </button>
         </div>
       </aside>
@@ -906,7 +1093,7 @@ export function getSettingsWebviewContent(
               <div>
                 <label class="setting-name" for="setting-model">Model preference</label>
                 <span class="setting-description">
-                  Auto routes each turn using the models available to your current plan.
+                  Auto selects from models admitted for the active Local, provider BYOK, or Managed Cloud boundary. Managed Cloud availability follows the signed-in AGI plan.
                 </span>
               </div>
               <div class="control-stack">
@@ -916,6 +1103,8 @@ export function getSettingsWebviewContent(
                   data-setting="model"
                   data-kind="string"
                   type="text"
+                  readonly
+                  aria-readonly="true"
                   autocomplete="off"
                   spellcheck="false"
                 />
@@ -969,7 +1158,7 @@ export function getSettingsWebviewContent(
               <div>
                 <label class="setting-name" for="setting-agent-thinking">Extended thinking</label>
                 <span class="setting-description">
-                  Applies to cloud-backed editor utilities, not local developer sessions.
+                  Used by supported cloud-backed utilities. It does not enable Managed Cloud or change a Local or BYOK session boundary.
                 </span>
               </div>
               <label class="toggle" title="Extended thinking">
@@ -988,21 +1177,6 @@ export function getSettingsWebviewContent(
             <div class="card-heading">
               <h3>Session behavior</h3>
               <p>Defaults used when the extension starts a new workspace-scoped session.</p>
-            </div>
-            <div class="setting-row">
-              <div>
-                <label class="setting-name" for="setting-streaming">Stream responses</label>
-                <span class="setting-description">Show response output as it arrives.</span>
-              </div>
-              <label class="toggle" title="Stream responses">
-                <input
-                  id="setting-streaming"
-                  data-setting="streamingEnabled"
-                  data-kind="boolean"
-                  type="checkbox"
-                />
-                <span class="toggle-track" aria-hidden="true"></span>
-              </label>
             </div>
             <div class="setting-row">
               <div>
@@ -1050,8 +1224,8 @@ export function getSettingsWebviewContent(
         >
           <div class="card">
             <div class="card-heading">
-              <h3>Local developer runtime</h3>
-              <p>AGI chat remains local and workspace scoped unless you explicitly use a cloud utility.</p>
+              <h3>Workspace developer runtime</h3>
+              <p>The CLI owns this workspace-scoped developer session. Local stays on this device, provider BYOK goes directly to the selected provider, and Managed Cloud is used only when that boundary is explicitly selected.</p>
             </div>
             <div class="setting-row">
               <div>
@@ -1115,40 +1289,6 @@ export function getSettingsWebviewContent(
             </div>
             <div class="setting-row">
               <div>
-                <label class="setting-name" for="setting-gateway-url">Gateway URL</label>
-                <span class="setting-description">
-                  User-scoped gateway used only when provider streaming is enabled.
-                </span>
-              </div>
-              <input
-                class="text-input"
-                id="setting-gateway-url"
-                data-setting="gatewayUrl"
-                data-kind="string"
-                type="url"
-                autocomplete="off"
-                spellcheck="false"
-              />
-            </div>
-            <div class="setting-row">
-              <div>
-                <label class="setting-name" for="setting-provider-stream">Provider streaming</label>
-                <span class="setting-description">
-                  Use the account-authenticated gateway for cloud editor utilities.
-                </span>
-              </div>
-              <label class="toggle" title="Provider streaming">
-                <input
-                  id="setting-provider-stream"
-                  data-setting="useProviderStream"
-                  data-kind="boolean"
-                  type="checkbox"
-                />
-                <span class="toggle-track" aria-hidden="true"></span>
-              </label>
-            </div>
-            <div class="setting-row">
-              <div>
                 <label class="setting-name" for="setting-auto-apply">Auto-apply fixes</label>
                 <span class="setting-description danger">
                   Applies AI-suggested fixes without opening a review diff. Leave off for review-first workflows.
@@ -1169,7 +1309,7 @@ export function getSettingsWebviewContent(
           <div class="card">
             <div class="card-heading">
               <h3>Desktop availability bridge</h3>
-              <p>Shows authenticated Desktop availability without moving IDE sessions out of the local runtime.</p>
+              <p>Shows authenticated Desktop availability. It does not route, send, or move IDE sessions.</p>
             </div>
             <div class="setting-row">
               <div>
@@ -1428,7 +1568,7 @@ export function getSettingsWebviewContent(
           <div class="card">
             <div class="card-heading">
               <h3>Your plan</h3>
-              <p>Resolved from your account, or from the Desktop bridge when it is connected.</p>
+              <p>Resolved from the AGI Cloud account signed in to this editor.</p>
             </div>
             <div class="setting-row">
               <div>
@@ -1437,48 +1577,54 @@ export function getSettingsWebviewContent(
                   Sign in on Web to resolve your plan.
                 </span>
               </div>
-              <div class="control-stack">
-                <button class="secondary-button" type="button" data-command="manageBilling">
-                  View plans
+              <div class="control-stack plan-actions">
+                <button class="primary-button" id="planSignInButton" type="button" data-command="signIn">
+                  Sign in to AGI Cloud
+                </button>
+                <button class="secondary-button" type="button" data-command="viewPlans">
+                  Compare plans
+                </button>
+                <button class="secondary-button" id="planBillingButton" type="button" data-command="manageBilling" hidden>
+                  Billing
                 </button>
               </div>
             </div>
+            <div class="setting-row" id="planUsageRow" hidden>
+              <div>
+                <span class="setting-name">Plan usage</span>
+                <span class="setting-description" id="planUsageCopy">Usage unavailable</span>
+              </div>
+              <div
+                class="usage-progress"
+                id="planUsageProgress"
+                role="progressbar"
+                aria-label="AGI Cloud plan usage"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow="0"
+              >
+                <span id="planUsageFill"></span>
+              </div>
+            </div>
+            <div class="status plan-status" id="planStatus" role="status" aria-live="polite"></div>
           </div>
 
-          <div class="card">
+          <details class="card diagnostic-card"${showDeveloperControls ? '' : ' hidden'}>
+            <summary>Developer diagnostics</summary>
             <div class="card-heading">
-              <h3>Developer overrides</h3>
-              <p>The override is intended for local testing; BYOK uses the live resolved account tier.</p>
+              <h3>Resolved entitlement</h3>
+              <p>Read-only account state used to diagnose model admission.</p>
             </div>
             <div class="setting-row">
               <div>
                 <span class="setting-name">Current resolved tier</span>
-                <span class="setting-description">Read-only value cached from the account or Desktop bridge.</span>
+                <span class="setting-description">Read-only value cached from the last account-tier refresh.</span>
               </div>
               <div class="control-stack">
                 <span class="pill" id="currentTier">Unknown</span>
               </div>
             </div>
-            <div class="setting-row">
-              <div>
-                <label class="setting-name" for="setting-tier">Tier override</label>
-                <span class="setting-description">
-                  Leave on BYOK to use the actual resolved tier for normal use.
-                </span>
-              </div>
-              <select class="select-input" id="setting-tier" data-setting="tier" data-kind="string">
-                <option value="local">Local only</option>
-                <option value="byok">BYOK / resolved account</option>
-                <option value="free">Free</option>
-                <option value="basic">Basic</option>
-                <option value="pro">Pro</option>
-                <option value="max">Max 5x</option>
-                <option value="max_15x">Max 15x</option>
-                <option value="team">Team</option>
-                <option value="enterprise">Enterprise</option>
-              </select>
-            </div>
-          </div>
+          </details>
 
           <div class="card">
             <div class="empty-capability">
@@ -1502,26 +1648,6 @@ export function getSettingsWebviewContent(
         </section>
 
         <section class="section" id="section-mcp" data-settings-section="mcp" hidden>
-          <div class="card">
-            <div class="setting-row">
-              <div>
-                <label class="setting-name" for="setting-mcp">MCP for cloud editor utilities</label>
-                <span class="setting-description">
-                  This toggle does not configure or enable MCP inside the local <code>app-server</code>.
-                </span>
-              </div>
-              <label class="toggle" title="MCP for cloud editor utilities">
-                <input
-                  id="setting-mcp"
-                  data-setting="mcp.enabled"
-                  data-kind="boolean"
-                  type="checkbox"
-                />
-                <span class="toggle-track" aria-hidden="true"></span>
-              </label>
-            </div>
-          </div>
-
           <div class="card">
             <div class="empty-capability">
               <h3>Local MCP is runtime-owned</h3>
@@ -1590,7 +1716,7 @@ ${capabilityAvailabilityRows}
               <div class="account-line">
                 <div class="account-state">
                   <span class="status-dot" id="accountDot" aria-hidden="true"></span>
-                  <span id="accountStatus">Checking AGI Cloud connection…</span>
+                  <span id="accountStatus" role="status" aria-live="polite">Checking AGI Cloud connection…</span>
                 </div>
                 <div class="action-row">
                   <button
@@ -1625,7 +1751,7 @@ ${capabilityAvailabilityRows}
                   Account &amp; usage
                 </button>
                 <button class="secondary-button" type="button" data-command="manageUsage">
-                  Open account on Web
+                  Usage on Web
                 </button>
                 <button class="secondary-button" type="button" data-command="manageTeam">
                   Team &amp; Enterprise
@@ -1643,17 +1769,20 @@ ${capabilityAvailabilityRows}
         var state = ${serializedState};
         var activeSection = ${serializedSection};
         var statusTimer;
+        var settingsNav = document.getElementById('settingsNav');
+        var navScrollBack = document.getElementById('navScrollBack');
+        var navScrollForward = document.getElementById('navScrollForward');
         var sectionCopy = {
           general: {
-            title: 'General',
+            title: 'Session',
             description: 'Configure the model, autonomy, reasoning, and session defaults used by AGI in VS Code.'
           },
           configuration: {
-            title: 'Configuration',
+            title: 'Runtime',
             description: 'Manage the local runtime, cloud utility endpoints, and Desktop availability bridge.'
           },
           personalization: {
-            title: 'Personalization',
+            title: 'Instructions & editor',
             description: 'Manage custom instructions and choose where AGI appears in the editor.'
           },
           usage: {
@@ -1662,7 +1791,7 @@ ${capabilityAvailabilityRows}
           },
           mcp: {
             title: 'MCP servers',
-            description: 'Configure the extension MCP boundary without conflating it with local runtime servers.'
+            description: 'Review runtime-owned MCP and Managed Cloud connector boundaries.'
           },
           hooks: {
             title: 'Hooks',
@@ -1673,7 +1802,7 @@ ${capabilityAvailabilityRows}
             description: 'Review the explicit installation and permission boundaries for extension capabilities.'
           },
           account: {
-            title: 'Account',
+            title: 'Cloud account',
             description: 'Manage explicit AGI Cloud sign-in while keeping local workspace chat independent.'
           }
         };
@@ -1681,7 +1810,6 @@ ${capabilityAvailabilityRows}
           apiEndpoint: 'API endpoint',
           model: 'Model',
           cliPath: 'CLI path',
-          streamingEnabled: 'Streaming',
           'composer.followUpBehavior': 'Active-turn send',
           contextLines: 'Context lines',
           telemetryEnabled: 'Telemetry',
@@ -1694,13 +1822,9 @@ ${capabilityAvailabilityRows}
           'agent.mode': 'Agent mode',
           'agent.effort': 'Reasoning effort',
           'agent.thinking': 'Extended thinking',
-          'mcp.enabled': 'MCP',
           'desktopBridge.enabled': 'Desktop bridge',
           'desktopBridge.port': 'Desktop bridge port',
-          telemetryEndpoint: 'Telemetry endpoint',
-          useProviderStream: 'Provider streaming',
-          gatewayUrl: 'Gateway URL',
-          tier: 'Tier override'
+          telemetryEndpoint: 'Telemetry endpoint'
         };
 
         function setStatus(message, kind) {
@@ -1714,6 +1838,24 @@ ${capabilityAvailabilityRows}
               status.dataset.kind = '';
             }, 2600);
           }
+        }
+
+        function updateNavOverflow() {
+          if (!settingsNav || !navScrollBack || !navScrollForward) return;
+          var maxScrollLeft = Math.max(0, settingsNav.scrollWidth - settingsNav.clientWidth);
+          navScrollBack.hidden = maxScrollLeft <= 1 || settingsNav.scrollLeft <= 1;
+          navScrollForward.hidden = maxScrollLeft <= 1 || settingsNav.scrollLeft >= maxScrollLeft - 1;
+        }
+
+        function scrollSettingsNav(direction) {
+          if (!settingsNav) return;
+          var distance = Math.max(160, Math.round(settingsNav.clientWidth * 0.7));
+          if (typeof settingsNav.scrollBy === 'function') {
+            settingsNav.scrollBy({ left: direction * distance, behavior: 'smooth' });
+          } else {
+            settingsNav.scrollLeft += direction * distance;
+          }
+          window.requestAnimationFrame(updateNavOverflow);
         }
 
         function setSection(section, moveFocus) {
@@ -1733,6 +1875,7 @@ ${capabilityAvailabilityRows}
               if (typeof button.scrollIntoView === 'function') {
                 button.scrollIntoView({ block: 'nearest', inline: 'nearest' });
               }
+              window.requestAnimationFrame(updateNavOverflow);
             } else {
               button.removeAttribute('aria-current');
             }
@@ -1766,20 +1909,94 @@ ${capabilityAvailabilityRows}
             control.disabled = false;
           });
 
+          var modelPreference = document.getElementById('setting-model');
+          if (modelPreference) modelPreference.value = String(state.values.model || 'auto');
+
           // Raw id stays on the developer pill; the plan card gets the canonical
           // catalog label the rest of the product uses ("Max 15x", not "max 15x").
           document.getElementById('currentTier').textContent =
             String(state.values.currentTier || 'unknown');
           var tierLabelEl = document.getElementById('currentTierLabel');
-          if (tierLabelEl) {
-            tierLabelEl.textContent = String(state.values.currentTierLabel || 'Unknown');
-          }
           var tierSourceEl = document.getElementById('currentTierSource');
+          var planSignInButton = document.getElementById('planSignInButton');
+          var planBillingButton = document.getElementById('planBillingButton');
+          var planUsageRow = document.getElementById('planUsageRow');
+          var planUsageCopy = document.getElementById('planUsageCopy');
+          var planUsageProgress = document.getElementById('planUsageProgress');
+          var planUsageFill = document.getElementById('planUsageFill');
+          var planStatus = document.getElementById('planStatus');
+          var accountAuthStatus = state.accountStatus ||
+            (state.accountConnected === null ? 'loading' : state.accountConnected ? 'signed-in' : 'signed-out');
+          var identity = state.accountIdentity || null;
+          var tierInfo = state.tierInfo || null;
+          var connected = accountAuthStatus === 'signed-in';
+
+          if (tierLabelEl) {
+            tierLabelEl.textContent = connected && identity
+              ? identity.planName + ' plan'
+              : connected
+                ? 'AGI Cloud account'
+                : accountAuthStatus === 'expired'
+                  ? 'Session expired'
+                  : accountAuthStatus === 'loading'
+                    ? 'Checking plan…'
+                    : 'No AGI subscription connected';
+          }
           if (tierSourceEl) {
-            var resolved = state.values.currentTier && state.values.currentTier !== 'unknown';
-            tierSourceEl.textContent = resolved
-              ? 'Usage limits, invoices and payment are managed on Web.'
-              : 'Sign in on Web to resolve your plan.';
+            tierSourceEl.textContent = connected && identity
+              ? identity.displayName + (identity.email ? ' · ' + identity.email : '')
+              : connected
+                ? 'Your editor session is active, but account details are temporarily unavailable.'
+                : accountAuthStatus === 'expired'
+                  ? 'Sign in again to restore AGI subscription access. Local and provider BYOK remain separate.'
+                  : accountAuthStatus === 'loading'
+                    ? 'Resolving the browser-approved AGI Cloud session.'
+                    : 'Sign in for AGI subscription features. Local and provider BYOK do not require an AGI plan.';
+          }
+          if (planSignInButton) planSignInButton.hidden = connected || accountAuthStatus === 'loading';
+          if (planBillingButton) planBillingButton.hidden = !connected;
+          if (planUsageRow) planUsageRow.hidden = !connected || !tierInfo || typeof tierInfo.usagePercentage !== 'number';
+          if (planUsageCopy && tierInfo && typeof tierInfo.usagePercentage === 'number') {
+            var used = Math.max(0, Math.min(100, Math.round(tierInfo.usagePercentage)));
+            var resetCopy = tierInfo.resetsAt
+              ? ' · resets ' + new Date(tierInfo.resetsAt).toLocaleDateString()
+              : '';
+            planUsageCopy.textContent = used + '% used' + resetCopy;
+            if (planUsageProgress) {
+              planUsageProgress.setAttribute('aria-valuenow', String(used));
+              planUsageProgress.setAttribute('aria-valuetext', used + '% used' + resetCopy);
+              planUsageProgress.classList.toggle('is-warning', used >= 80);
+            }
+            if (planUsageFill) planUsageFill.style.width = used + '%';
+          }
+          if (planStatus) {
+            var billingIssue = Boolean(tierInfo && tierInfo.accountPlanTier);
+            var scheduledCancellation = Boolean(
+              identity && identity.cancelAtPeriodEnd && identity.currentPeriodEnd
+            );
+            var cancellationDate = scheduledCancellation
+              ? new Date(identity.currentPeriodEnd).toLocaleDateString()
+              : '';
+            var billingOwner = identity && identity.subscriptionSource === 'apple'
+              ? 'Apple App Store'
+              : identity && identity.subscriptionSource === 'google'
+                ? 'Google Play'
+                : identity && identity.subscriptionSource === 'stripe'
+                  ? 'Web billing'
+                  : identity && identity.subscriptionSource === 'manual'
+                    ? 'Organization-managed billing'
+                    : '';
+            planStatus.textContent = billingIssue
+              ? (tierInfo.accountPlanTier + ' billing needs attention. Managed developer access is paused; Local and provider BYOK remain available.')
+              : scheduledCancellation
+                ? identity.planName + ' remains active through ' + cancellationDate +
+                  ', then ends.' + (billingOwner ? ' Billing owner: ' + billingOwner + '.' : '')
+              : connected && !tierInfo
+                ? 'Plan usage is temporarily unavailable. Your runtime boundary is unchanged.'
+                : connected && billingOwner
+                  ? 'Billing owner: ' + billingOwner + '.'
+                  : '';
+            planStatus.dataset.kind = billingIssue ? 'error' : '';
           }
 
           var trustPill = document.getElementById('trustPill');
@@ -1816,22 +2033,31 @@ ${capabilityAvailabilityRows}
             overrideNotice.textContent = '';
           }
 
-          var connected = state.accountConnected;
+          connected = state.accountConnected;
           var accountDot = document.getElementById('accountDot');
           var accountStatus = document.getElementById('accountStatus');
           var signInButton = document.getElementById('signInButton');
           var signOutButton = document.getElementById('signOutButton');
           accountDot.classList.toggle('connected', connected === true);
-          if (connected === null) {
+          if (accountAuthStatus === 'loading') {
             accountStatus.textContent = 'Checking AGI Cloud connection…';
             signInButton.hidden = true;
             signOutButton.hidden = true;
+          } else if (accountAuthStatus === 'expired') {
+            accountStatus.textContent = 'AGI Cloud session expired';
+            signInButton.textContent = 'Sign in again';
+            signInButton.hidden = false;
+            signOutButton.hidden = true;
           } else if (connected) {
-            accountStatus.textContent = 'Connected to AGI Cloud';
+            accountStatus.textContent = identity
+              ? identity.displayName + ' · ' + identity.planName + ' plan'
+              : 'Connected to AGI Cloud · account details unavailable';
+            signInButton.textContent = 'Sign in';
             signInButton.hidden = true;
             signOutButton.hidden = false;
           } else {
-            accountStatus.textContent = 'Local workspace mode — AGI Cloud not connected';
+            accountStatus.textContent = 'AGI Cloud not connected';
+            signInButton.textContent = 'Sign in';
             signInButton.hidden = false;
             signOutButton.hidden = true;
           }
@@ -1913,6 +2139,15 @@ ${capabilityAvailabilityRows}
           });
         });
 
+        if (settingsNav) settingsNav.addEventListener('scroll', updateNavOverflow, { passive: true });
+        window.addEventListener('resize', updateNavOverflow);
+        if (navScrollBack) {
+          navScrollBack.addEventListener('click', function () { scrollSettingsNav(-1); });
+        }
+        if (navScrollForward) {
+          navScrollForward.addEventListener('click', function () { scrollSettingsNav(1); });
+        }
+
         document.querySelectorAll('[data-setting]').forEach(function (control) {
           control.addEventListener('change', function () {
             var key = control.getAttribute('data-setting');
@@ -1989,6 +2224,7 @@ ${capabilityAvailabilityRows}
 
         applySnapshot(state);
         setSection(activeSection, false);
+        updateNavOverflow();
         vscode.postMessage({ type: 'settings.ready' });
       })();
     </script>

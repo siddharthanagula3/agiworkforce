@@ -7,12 +7,12 @@ interface UpdatePillProps {
 }
 
 /**
- * Sidebar pill that shows "Restart to update to vX.Y.Z" when an update is available.
+ * Sidebar pill that shows the supported update action when a release is available.
  * Matches the Claude.app sidebar update indicator pattern.
  * Renders nothing when no update is available or downloaded.
  */
 export function UpdatePill({ collapsed = false, onUpdateNow }: UpdatePillProps) {
-  const { status, updateInfo, downloadAndInstall } = useUpdater();
+  const { status, updateInfo, downloadAndInstall, isManualInstallerUpdate } = useUpdater();
 
   if (status !== 'available' && status !== 'downloaded' && status !== 'downloading') {
     return null;
@@ -31,7 +31,9 @@ export function UpdatePill({ collapsed = false, onUpdateNow }: UpdatePillProps) 
       ? `Restart to update to v${updateInfo?.version ?? '...'}`
       : status === 'downloading'
         ? 'Downloading update...'
-        : `Update to v${updateInfo?.version ?? '...'}`;
+        : isManualInstallerUpdate
+          ? `Download v${updateInfo?.version ?? '...'} installer`
+          : `Update to v${updateInfo?.version ?? '...'}`;
 
   return (
     <button

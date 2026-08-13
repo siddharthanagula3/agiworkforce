@@ -450,7 +450,8 @@ describe('the side panel can reach a stored background result', () => {
     );
     // Play on a prompt shortcut must land the user on the answer, not on a
     // spinner that finished with nothing to read.
-    expect(sidePanel).toContain('if (!isPromptBased || !resultConversationId) return;');
+    expect(sidePanel).toContain('if (!isPromptBased || !resultConversationId) {');
+    expect(sidePanel).toContain('openStoredConversation(resultConversationId).then((opened)');
   });
 });
 

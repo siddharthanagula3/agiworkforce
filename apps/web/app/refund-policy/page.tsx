@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { CONTACT_EMAIL, POLICY_LAST_UPDATED, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Refund policy',
@@ -21,7 +22,8 @@ export default function RefundPolicyPage() {
             <strong>
               Eligibility depends on the type of charge, account usage, applicable law, and any
               contract-specific terms.
-            </strong>
+            </strong>{' '}
+            Last updated: {POLICY_LAST_UPDATED.refunds}.
           </p>
         </section>
         <section className="agi-section">
@@ -88,8 +90,8 @@ export default function RefundPolicyPage() {
           <p className="agi-section-eyebrow">How to request</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Email{' '}
-            <a href="mailto:contact@agiworkforce.com" style={{ color: 'var(--agi-ink)' }}>
-              contact@agiworkforce.com
+            <a href={contactMailto('Refund request')} style={{ color: 'var(--agi-ink)' }}>
+              {CONTACT_EMAIL}
             </a>{' '}
             with the email on your account, the charge date, and a brief reason. We aim to respond
             within the support response target for your plan, published at{' '}
@@ -101,7 +103,7 @@ export default function RefundPolicyPage() {
             payment processor&rsquo;s timeline.
           </p>
           <div className="agi-cta-row">
-            <a href="mailto:contact@agiworkforce.com" className="agi-cta-primary">
+            <a href={contactMailto('Refund request')} className="agi-cta-primary">
               Request a refund
             </a>
             <Link href="/terms" className="agi-cta-ghost">

@@ -27,6 +27,7 @@ export function SettingsModalRedirect({ section, returnTo = '/chat' }: SettingsM
   const router = useRouter();
   const searchParams = useSearchParams();
   const handledGitHubStatus = useRef<string | null>(null);
+  const handledTopUpStatus = useRef<string | null>(null);
 
   useEffect(() => {
     const githubStatus = section === 'connectors' ? searchParams.get('github') : null;
@@ -37,6 +38,15 @@ export function SettingsModalRedirect({ section, returnTo = '/chat' }: SettingsM
         toast.success(notice.message);
       } else if (notice) {
         toast.error(notice.message);
+      }
+    }
+    const topUpStatus = section === 'billing' ? searchParams.get('topup') : null;
+    if (topUpStatus && handledTopUpStatus.current !== topUpStatus) {
+      handledTopUpStatus.current = topUpStatus;
+      if (topUpStatus === 'success') {
+        toast.success('Top-up payment received. Your balance updates after payment confirmation.');
+      } else if (topUpStatus === 'cancelled') {
+        toast.error('Top-up checkout was canceled. No balance was added.');
       }
     }
     openSettings(section);

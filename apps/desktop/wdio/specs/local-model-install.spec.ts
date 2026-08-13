@@ -154,5 +154,31 @@ describe('AGI Desktop local model management', () => {
       interval: 100,
       timeoutMsg: 'Desktop settings did not close after persisting the repaired Ollama URL',
     });
+
+    const modelPicker = await $('button[aria-label="Select model"]');
+    await clickElement(modelPicker);
+    await browser.waitUntil(
+      async () =>
+        browser.execute(
+          (expectedModel) =>
+            Array.from(document.querySelectorAll('button[aria-pressed]')).some((button) =>
+              (button.textContent ?? '').includes(expectedModel),
+            ),
+          modelToInstall,
+        ),
+      {
+        timeout: 15_000,
+        interval: 100,
+        timeoutMsg: 'Installed Ollama model did not reach the chat picker without an app reload',
+      },
+    );
+
+    const installedModelOption = await $(`button*=${modelToInstall}`);
+    await clickElement(installedModelOption);
+    await browser.waitUntil(async () => (await modelPicker.getText()).includes(modelToInstall), {
+      timeout: 10_000,
+      interval: 100,
+      timeoutMsg: 'The installed model was visible but could not be explicitly selected',
+    });
   });
 });

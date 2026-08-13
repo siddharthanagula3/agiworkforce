@@ -2,7 +2,7 @@
 
 Status: Current target; implementation incomplete
 Owner: Product + frontend platform
-Last updated: 2026-08-09
+Last updated: 2026-08-13
 
 This is the canonical frontend architecture and experience contract for AGI across Web, Desktop, Mobile, CLI, VS Code, and Chrome. It converts the current Claude/ChatGPT product evidence into AGI-owned behavior, component boundaries, screen ownership, and completion rules.
 
@@ -14,15 +14,15 @@ If a visible control conflicts with the effective runtime capability, the contro
 
 AGI is one suite, not one universal interface and not six unrelated products.
 
-| Product domain     | Primary surfaces                   | Canonical data                                                       | Execution                              | Sync rule                                                            |
-| ------------------ | ---------------------------------- | -------------------------------------------------------------------- | -------------------------------------- | -------------------------------------------------------------------- |
-| Cloud Conversation | Web, Desktop Cloud, Mobile Cloud   | Account conversations, messages, projects, cloud files, cloud memory | Managed Cloud                          | Shared only across these three surfaces                              |
-| Cloud Work         | Web, Desktop Cloud, Mobile Cloud   | Goals, runs, steps, approvals, schedules, deliverables               | Managed sandbox and connected tools    | Shared only across supported cloud surfaces                          |
-| Local Consumer     | Desktop Local, Mobile Local        | Local conversations, files, local memory                             | On device                              | Never automatically synced                                           |
-| Developer Session  | CLI, VS Code, Desktop Code         | Repository/workspace sessions, turns, diffs, terminal, checkpoints   | Local, worktree, approved remote/cloud | CLI and VS Code share host-owned sessions; not consumer chat history |
-| Browser Task       | Chrome, Desktop browser adapters   | Browser-scoped task history, page context, site policy               | Browser/native host/managed browser    | Separate from consumer conversations                                 |
-| Remote Projection  | Mobile/Web to a trusted local host | Device/session projection, approvals, event cursor                   | Host remains authority                 | Projection only; no implicit conversation migration                  |
-| Handoff Snapshot   | Explicit source and destination    | Redacted selected context with provenance                            | Destination runtime                    | User-approved copy/fork, never background sync                       |
+| Product domain     | Primary surfaces                                       | Canonical data                                                       | Execution                              | Sync rule                                                                                                                         |
+| ------------------ | ------------------------------------------------------ | -------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Cloud Conversation | Web, Desktop Cloud, Mobile Cloud, Chrome Managed Cloud | Account conversations, messages, projects, cloud files, cloud memory | Managed Cloud                          | Shared across account Cloud surfaces; Chrome contributes eligible conversation replicas while local storage remains authoritative |
+| Cloud Work         | Web, Desktop Cloud, Mobile Cloud                       | Goals, runs, steps, approvals, schedules, deliverables               | Managed sandbox and connected tools    | Shared only across supported cloud surfaces                                                                                       |
+| Local Consumer     | Desktop Local, Mobile Local                            | Local conversations, files, local memory                             | On device                              | Never automatically synced                                                                                                        |
+| Developer Session  | CLI, VS Code, Desktop Code                             | Repository/workspace sessions, turns, diffs, terminal, checkpoints   | Local, worktree, approved remote/cloud | CLI and VS Code share host-owned sessions; not consumer chat history                                                              |
+| Browser Task       | Chrome, Desktop browser adapters                       | Browser-scoped task history, page context, site policy               | Browser/native host/managed browser    | Browser task state stays separate; eligible Chrome chat transcripts mirror to Cloud Conversation                                  |
+| Remote Projection  | Mobile/Web to a trusted local host                     | Device/session projection, approvals, event cursor                   | Host remains authority                 | Projection only; no implicit conversation migration                                                                               |
+| Handoff Snapshot   | Explicit source and destination                        | Redacted selected context with provenance                            | Destination runtime                    | User-approved copy/fork, never background sync                                                                                    |
 
 Desktop Local and Desktop Cloud remain modes in one Desktop application. Separate applications are not required.
 
@@ -242,7 +242,9 @@ These screens remain unavailable until a first-class work-run protocol exists.
 - Settings/options.
 - Native-host pairing/status.
 
-Chrome conversations remain separate.
+Chrome's browser-task state remains separate. Signed-in Chrome conversations
+whose turns all ran in Managed Cloud automatically mirror into the shared Cloud
+Conversation history; unknown/Local/BYOK provenance stays browser-local.
 
 ### 6.6 Settings information architecture
 

@@ -21,6 +21,9 @@ export interface RunVideoGenerationTurnInput {
   displayText: string;
   prompt: string;
   model: string;
+  /** Video output shape chosen in the composer sheet; route defaults apply when absent. */
+  aspectRatio?: VideoGenRequest['aspect_ratio'];
+  resolution?: VideoGenRequest['resolution'];
   ownerId: string;
   begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
   /** Provider progress while the task runs, so the placeholder can show movement. */
@@ -105,7 +108,14 @@ export async function runVideoGenerationTurn(
 
   try {
     const result = await dependencies.generate(
-      { prompt: input.prompt, model: input.model },
+      {
+        prompt: input.prompt,
+        model: input.model,
+        // Omitted when absent so the route keeps applying its own defaults for
+        // any caller that has not selected a shape.
+        ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
+        ...(input.resolution ? { resolution: input.resolution } : {}),
+      },
       {
         onProgress: (progress, status) => {
           if (!isAccountCurrent()) return;

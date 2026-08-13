@@ -531,6 +531,23 @@
       },
       "evidenceRefs": []
     },
+    "veo-3.1-fast": {
+      "identity": {
+        "key": "veo-3.1-fast",
+        "displayName": "Veo 3.1 Fast",
+        "provider": "google",
+        "providerModelId": "veo-3.1-fast-generate-preview",
+        "kind": "video"
+      },
+      "lifecycle": {
+        "status": "active",
+        "availability": "live",
+        "released": "January 2026",
+        "deprecationDate": null,
+        "deprecated": false
+      },
+      "evidenceRefs": []
+    },
     "gpt-4o-transcribe": {
       "identity": {
         "key": "gpt-4o-transcribe",
@@ -654,6 +671,7 @@
       "gemini-3.1-flash-image",
       "gemini-3.6-flash",
       "veo-3.1",
+      "veo-3.1-fast",
       "veo-3.1-lite",
       "gemini-omni-flash-preview",
       "gemini-3.5-live-translate-preview"
@@ -907,6 +925,15 @@
       "modelKey": "veo-3.1",
       "provider": "google",
       "providerModelId": "veo-3.1-generate-preview",
+      "harnessId": "google/media",
+      "trustModes": ["managed_cloud", "byok"],
+      "availability": "live",
+      "selectable": true
+    },
+    "google/veo-3.1-fast": {
+      "modelKey": "veo-3.1-fast",
+      "provider": "google",
+      "providerModelId": "veo-3.1-fast-generate-preview",
       "harnessId": "google/media",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -1823,6 +1850,20 @@
       "functionCalling": false,
       "reasoning": false
     },
+    "veo-3.1-fast": {
+      "textInput": true,
+      "imageInput": false,
+      "audioInput": false,
+      "videoInput": false,
+      "textOutput": false,
+      "imageOutput": false,
+      "audioOutput": false,
+      "videoOutput": true,
+      "streaming": false,
+      "structuredOutput": false,
+      "functionCalling": false,
+      "reasoning": false
+    },
     "gpt-4o-transcribe": {
       "textInput": false,
       "imageInput": false,
@@ -2162,6 +2203,14 @@
       "videoPerSecond": 0.4,
       "videoPerSecondByResolution": { "720p": 0.4, "1080p": 0.4, "4k": 0.6 }
     },
+    "veo-3.1-fast": {
+      "currency": "USD",
+      "unit": "per_second",
+      "inputPerMillion": 0,
+      "outputPerMillion": 0,
+      "videoPerSecond": 0.1,
+      "videoPerSecondByResolution": { "720p": 0.1, "1080p": 0.12, "4k": 0.3 }
+    },
     "gpt-4o-transcribe": {
       "currency": "USD",
       "unit": "per_million_tokens",
@@ -2279,11 +2328,115 @@
     "qwen-3.7-plus": { "contextTokens": 1000000, "maxOutputTokens": 64000 },
     "kimi-k3": { "contextTokens": 1048576 },
     "grok-4.5": { "contextTokens": 500000 },
-    "veo-3.1": { "contextTokens": 4000 },
+    "veo-3.1": {
+      "contextTokens": 4000,
+      "videoGeneration": {
+        "durationSecs": [4, 6, 8],
+        "outputSizes": [
+          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
+          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "16:9",
+            "width": 1920,
+            "height": 1080,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "9:16",
+            "width": 1080,
+            "height": 1920,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "4k",
+            "aspectRatio": "16:9",
+            "width": 3840,
+            "height": 2160,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "4k",
+            "aspectRatio": "9:16",
+            "width": 2160,
+            "height": 3840,
+            "durationSecs": [8]
+          }
+        ],
+        "supportsAudio": true,
+        "supportsSeed": true
+      }
+    },
+    "veo-3.1-fast": {
+      "contextTokens": 4000,
+      "videoGeneration": {
+        "durationSecs": [4, 6, 8],
+        "outputSizes": [
+          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
+          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "16:9",
+            "width": 1920,
+            "height": 1080,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "9:16",
+            "width": 1080,
+            "height": 1920,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "4k",
+            "aspectRatio": "16:9",
+            "width": 3840,
+            "height": 2160,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "4k",
+            "aspectRatio": "9:16",
+            "width": 2160,
+            "height": 3840,
+            "durationSecs": [8]
+          }
+        ],
+        "supportsAudio": true,
+        "supportsSeed": true
+      }
+    },
     "gpt-4o-transcribe": { "contextTokens": 16000 },
     "gpt-4o-mini-transcribe": { "contextTokens": 16000 },
     "minimax-m3": { "contextTokens": 1000000 },
-    "veo-3.1-lite": { "contextTokens": 4000 },
+    "veo-3.1-lite": {
+      "contextTokens": 4000,
+      "videoGeneration": {
+        "durationSecs": [4, 6, 8],
+        "outputSizes": [
+          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
+          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "16:9",
+            "width": 1920,
+            "height": 1080,
+            "durationSecs": [8]
+          },
+          {
+            "resolution": "1080p",
+            "aspectRatio": "9:16",
+            "width": 1080,
+            "height": 1920,
+            "durationSecs": [8]
+          }
+        ],
+        "supportsAudio": true,
+        "supportsSeed": true
+      }
+    },
     "gemini-omni-flash-preview": { "contextTokens": 4000 },
     "gemini-3.5-live-translate-preview": { "contextTokens": 32000 }
   },
@@ -2321,6 +2474,7 @@
     "kimi-k3": {},
     "grok-4.5": { "swebench": 68, "humaneval": 96.5, "mmlu": 91.5, "gpqa": 80, "aime": 82 },
     "veo-3.1": {},
+    "veo-3.1-fast": {},
     "gpt-4o-transcribe": {},
     "gpt-4o-mini-transcribe": {},
     "minimax-m3": {},

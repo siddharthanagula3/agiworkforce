@@ -11,6 +11,7 @@
 import * as vscode from 'vscode';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
 import { getExtensionVersion } from '../platform/version';
+import { Config } from '../platform/config';
 
 // ─── Event names ─────────────────────────────────────────────────────────────
 
@@ -287,9 +288,7 @@ export function activate(_context: vscode.ExtensionContext): vscode.Disposable {
 
   // Log activation event
   logEvent(TelemetryEvents.EXTENSION_ACTIVATED, {
-    model: normalizeConfiguredModelId(
-      vscode.workspace.getConfiguration('agiWorkforce').get<string>('model'),
-    ),
+    model: normalizeConfiguredModelId(Config.model()),
   });
 
   return composite;

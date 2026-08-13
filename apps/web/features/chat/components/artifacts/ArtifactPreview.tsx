@@ -37,6 +37,7 @@ import {
 } from '@agiworkforce/types';
 import {
   GeneratedFileCard,
+  MarkdownContent,
   SpreadsheetArtifact,
   PresentationArtifact,
   EmailArtifact,
@@ -885,6 +886,28 @@ if (__AgiApp) {
 
   const canPreview = ['html', 'react', 'svg', 'mermaid'].includes(artifact.type);
 
+  /**
+   * A Markdown document has a rendered view, and it is the one the user
+   * expects. Before this, `.md` fell through to `type === 'document'` with no
+   * entry in any preview branch, so the panel could only ever show its source
+   * — a Markdown artifact opened as a wall of `#` and backticks.
+   *
+   * It renders in-app rather than in the sandbox iframe: the sandbox's
+   * `markdown` kind is an alias for `text` (it prints a `<pre>`), so routing
+   * there would reproduce the same raw output. `MarkdownContent` is the same
+   * sanitize→KaTeX→highlight chain that already renders untrusted model output
+   * in every chat message, so this adds no new trust boundary.
+   *
+   * PDF and DOCX are excluded by construction: both are `document` too, and
+   * both already own dedicated viewers below.
+   */
+  const isMarkdownDoc =
+    !isPdf &&
+    !isDocx &&
+    (artifact.type === 'document'
+      ? ['md', 'mdx', 'markdown', undefined].includes(artifact.language?.toLowerCase())
+      : false);
+
   // Shared unified-chat renderers (spreadsheet/table/csv, presentation, email):
   // rendered directly in the panel — no sandbox iframe, so the iframe-only
   // controls (refresh / open-in-tab) stay hidden for these types.
@@ -922,6 +945,17 @@ if (__AgiApp) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  const renderMarkdownPreview = (containerClassName: string) => (
+    <div
+      className={cn('overflow-auto bg-background px-6 py-5', containerClassName)}
+      data-testid="artifact-markdown-preview"
+    >
+      <div className="mx-auto max-w-3xl">
+        <MarkdownContent content={activeContent} />
+      </div>
+    </div>
+  );
 
   const renderSharedPreview = (containerClassName: string) => (
     <div className={cn('overflow-auto bg-background p-0', containerClassName)}>
@@ -1052,7 +1086,8 @@ if (__AgiApp) {
   if (variant === 'panel') {
     // Whether to show the preview content (vs source code)
     const showPreview =
-      activeTab === 'preview' && (canPreview || isPdf || isDocx || isSharedRendered || isImage);
+      activeTab === 'preview' &&
+      (canPreview || isPdf || isDocx || isSharedRendered || isImage || isMarkdownDoc);
     // Human-readable type label for the toolbar, e.g. "· HTML", "· MD".
     // For code/document artifacts the type alone is generic ("CODE"/"DOCUMENT");
     // prefer the language field which carries the actual format (ts, md, pdf...).
@@ -1082,7 +1117,7 @@ if (__AgiApp) {
                 and shared-renderer types (spreadsheet/presentation/email).
                 PDF/DOCX are single-view (their "source" is an opaque data URI),
                 so they get no toggle per the claude.ai artifact header. */}
-            {(canPreview || isSharedRendered) && (
+            {(canPreview || isSharedRendered || isMarkdownDoc) && (
               <div className="flex shrink-0 items-center rounded-md border border-border/40 bg-muted/40 p-0.5">
                 <button
                   type="button"
@@ -1466,6 +1501,9 @@ if (__AgiApp) {
           {/* Preview: shared renderers (spreadsheet / presentation / email) */}
           {showPreview && isSharedRendered && renderSharedPreview('h-full w-full')}
 
+          {/* Preview: rendered Markdown document */}
+          {showPreview && isMarkdownDoc && renderMarkdownPreview('h-full w-full')}
+
           {/* Preview: PDF */}
           {showPreview && isPdf && renderPdfPreview('h-full w-full')}
 
@@ -1714,7 +1752,7 @@ if (__AgiApp) {
         onValueChange={(v) => setActiveTab(v as 'preview' | 'code')}
         className="w-full"
       >
-        {(canPreview || isPdf || isDocx || isSharedRendered) && (
+        {(canPreview || isPdf || isDocx || isSharedRendered || isMarkdownDoc) && (
           <TabsList className="w-full justify-start rounded-none border-b border-border bg-muted/30 px-4">
             <TabsTrigger value="preview" className="gap-2">
               <Eye className="h-3.5 w-3.5" />
@@ -1746,6 +1784,13 @@ if (__AgiApp) {
         {isSharedRendered && (
           <TabsContent value="preview" className="m-0 p-0">
             {renderSharedPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
+          </TabsContent>
+        )}
+
+        {/* Preview Tab · rendered Markdown document */}
+        {isMarkdownDoc && (
+          <TabsContent value="preview" className="m-0 p-0">
+            {renderMarkdownPreview(isFullscreen ? 'h-[calc(100vh-100px)]' : 'h-[500px]')}
           </TabsContent>
         )}
 

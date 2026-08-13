@@ -107,6 +107,28 @@ export const POSITIONING = {
     'Managed cloud is open in public alpha; higher capacity is a paid subscription, not an invite.',
 } as const;
 
+/** Canonical public label for the only surfaces that accept provider keys. */
+export const BYOK_SURFACES = {
+  label: 'Desktop, CLI, and VS Code',
+  compact: 'Desktop · CLI · VS Code',
+  exclusion:
+    'Web, Mobile, Chrome, and the managed-only Electron shell do not accept provider keys.',
+} as const;
+
+const DESKTOP_LOCAL_RUNTIME_IDS = ['ollama', 'lmstudio', 'llamacpp', 'vllm'] as const;
+const desktopLocalRuntimeNames = Object.freeze(
+  DESKTOP_LOCAL_RUNTIME_IDS.map((id) =>
+    modelsCatalogJson.providers[id].label.replace(/\s+\(Local\)$/, ''),
+  ),
+);
+
+/** Verified HTTP runtimes supported by the Desktop local-provider registry. */
+export const DESKTOP_LOCAL_RUNTIMES = {
+  names: desktopLocalRuntimeNames,
+  label: `${desktopLocalRuntimeNames.slice(0, -1).join(', ')}, and ${desktopLocalRuntimeNames[desktopLocalRuntimeNames.length - 1]}`,
+  compact: desktopLocalRuntimeNames.join(' · '),
+} as const;
+
 export type PricingTabId = 'individual' | 'team' | 'api';
 
 export interface PlanFeatureRow {
@@ -181,12 +203,12 @@ export const MARKETING_FEATURE_MATRIX: Record<PricingTabId, PlanFeatureRow[]> = 
     {
       planId: 'team',
       label: BILLING_PLAN_PRICING.team.label,
-      price: 'Custom',
-      billingInterval: 'Sales-assisted contract',
-      usageCapacity: 'Contracted managed capacity with shared team controls',
+      price: `$${BILLING_PLAN_PRICING.team.monthlyPriceUsd}/seat/mo`,
+      billingInterval: 'Self-serve monthly; annual only where checkout offers it',
+      usageCapacity: 'Pro-level hosted capacity per licensed seat with shared team controls',
       bestFor: 'Collaborative teams needing shared context',
       ctaLabel: 'Get started',
-      ctaHref: '/pricing',
+      ctaHref: '/pricing#pricing-team-title',
       waitlist: false,
     },
   ],
@@ -232,8 +254,8 @@ export const MARKETING = {
   // `count` is the exact derived number of provider entries in models.json.
   //
   // `display` stays the conservative "10+" floor ON PURPOSE. Several pages
-  // enumerate the providers around this token — /faq, for one, expands it as
-  // "nine first-party cloud APIs ... and two local runtimes" — so swapping the
+  // enumerate providers around this token — /faq, for one, lists representative
+  // cloud APIs and the four verified Desktop local runtimes — so swapping the
   // token for the exact count would make those sentences stop adding up. "10+"
   // is true (there are more than ten), and pages that want the precise figure
   // use `count` instead. Do not change `display` without rewriting every

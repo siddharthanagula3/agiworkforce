@@ -122,6 +122,24 @@ interface WindowPreferences {
   reduceMotion?: boolean;
 }
 
+type NativeSettingsPayload = {
+  llmConfig?: Partial<LLMConfig> & {
+    defaultModels?: Partial<LLMConfig['defaultModels']>;
+    taskRouting?: Partial<TaskRouting>;
+  };
+  windowPreferences?: Partial<WindowPreferences>;
+  chatPreferences?: Partial<ChatPreferences>;
+  executionPreferences?: Partial<ExecutionPreferences> & {
+    terminalSandbox?: Partial<TerminalSandboxPreferences>;
+  };
+  globalHotkeyPreferences?: Partial<GlobalHotkeyPreferences>;
+  allowedDirectories?: string[];
+  customModels?: CustomModelConfig[];
+  featureFlags?: Record<string, boolean>;
+  personalization?: Partial<PersonalizationPreferences>;
+  customKeybindings?: Record<string, string>;
+};
+
 // ChatPreferences and AgentMode are defined in ./settings/chatPrefs and re-exported above.
 
 /**
@@ -403,6 +421,139 @@ export const createDefaultWindowPreferences = (): WindowPreferences => ({
   ...defaultSettings.windowPreferences,
 });
 
+function oneOf<T>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return allowed.some((candidate) => Object.is(candidate, value)) ? (value as T) : fallback;
+}
+
+function boundedInteger(value: unknown, min: number, max: number, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+async function configureLocalRuntimeProviders(config: LLMConfig): Promise<void> {
+  const runtimes = [
+    ['ollama', config.ollamaUrl || 'http://localhost:11434'],
+    ['lmstudio', config.lmstudioUrl || 'http://localhost:1234/v1'],
+    ['llamacpp', config.llamacppUrl || 'http://localhost:8080/v1'],
+    ['vllm', config.vllmUrl || 'http://localhost:8000/v1'],
+  ] as const;
+
+  const results = await Promise.allSettled(
+    runtimes.map(([provider, baseUrl]) =>
+      invoke('llm_configure_provider', { provider, apiKey: null, baseUrl }),
+    ),
+  );
+  const failedProviders = results.flatMap((result, index) =>
+    result.status === 'rejected' ? [runtimes[index]![0]] : [],
+  );
+  if (failedProviders.length > 0) {
+    throw new Error(`Could not apply local runtime settings for: ${failedProviders.join(', ')}`);
+  }
+}
+
+type LiveSettingsSnapshot = {
+  llmConfig: LLMConfig;
+  chatPreferences: ChatPreferences;
+  executionPreferences: ExecutionPreferences;
+  allowedDirectories: string[];
+  features: Record<string, boolean>;
+};
+
+function resolveNativeLiveSettings(
+  settings: NativeSettingsPayload | undefined,
+): LiveSettingsSnapshot {
+  const native = settings ?? {};
+  return {
+    llmConfig: {
+      ...defaultSettings.llmConfig,
+      ...(native.llmConfig ?? {}),
+      defaultModels: {
+        ...defaultSettings.llmConfig.defaultModels,
+        ...(native.llmConfig?.defaultModels ?? {}),
+      },
+      taskRouting: {
+        ...defaultSettings.llmConfig.taskRouting,
+        ...(native.llmConfig?.taskRouting ?? {}),
+      },
+      favoriteModels: Array.isArray(native.llmConfig?.favoriteModels)
+        ? native.llmConfig.favoriteModels
+        : [],
+    },
+    chatPreferences: {
+      ...defaultSettings.chatPreferences,
+      ...(native.chatPreferences ?? {}),
+    },
+    executionPreferences: {
+      ...defaultSettings.executionPreferences,
+      ...(native.executionPreferences ?? {}),
+      terminalSandbox: {
+        ...defaultSettings.executionPreferences.terminalSandbox,
+        ...(native.executionPreferences?.terminalSandbox ?? {}),
+      },
+    },
+    allowedDirectories: Array.isArray(native.allowedDirectories) ? native.allowedDirectories : [],
+    features:
+      native.featureFlags && typeof native.featureFlags === 'object' ? native.featureFlags : {},
+  };
+}
+
+async function applyLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Promise<void> {
+  await invoke('sync_capabilities', { capabilities: snapshot.features });
+  await configureLocalRuntimeProviders(snapshot.llmConfig);
+  await configureMemoryInjection(
+    snapshot.chatPreferences.memoryEnabled === true,
+    10,
+    5,
+    snapshot.chatPreferences.allowToolAssistedMemoryGeneration === true,
+  );
+  await invoke('update_allowed_directories', { paths: snapshot.allowedDirectories });
+  // The filesystem MCP command intentionally rejects an empty root list. The
+  // native ToolGuard still enforces an empty allowed-directory list as deny-all.
+  if (snapshot.allowedDirectories.length > 0) {
+    await McpClient.updateFilesystemDirectories(snapshot.allowedDirectories);
+  }
+  await syncExecutionTimeoutToBackend(snapshot.executionPreferences);
+}
+
+async function restoreLiveSettingsSnapshot(snapshot: LiveSettingsSnapshot): Promise<string[]> {
+  const failures: string[] = [];
+  const restore = async (label: string, operation: () => Promise<unknown>) => {
+    try {
+      await operation();
+    } catch (error) {
+      console.error(`Failed to restore ${label} after Settings save failure:`, error);
+      failures.push(label);
+    }
+  };
+
+  await restore('capability policy', () =>
+    invoke('sync_capabilities', { capabilities: snapshot.features }),
+  );
+  await restore('local runtime endpoints', () =>
+    configureLocalRuntimeProviders(snapshot.llmConfig),
+  );
+  await restore('memory policy', () =>
+    configureMemoryInjection(
+      snapshot.chatPreferences.memoryEnabled === true,
+      10,
+      5,
+      snapshot.chatPreferences.allowToolAssistedMemoryGeneration === true,
+    ),
+  );
+  await restore('allowed directories', () =>
+    invoke('update_allowed_directories', { paths: snapshot.allowedDirectories }),
+  );
+  if (snapshot.allowedDirectories.length > 0) {
+    await restore('filesystem MCP roots', () =>
+      McpClient.updateFilesystemDirectories(snapshot.allowedDirectories),
+    );
+  }
+  await restore('task timeout policy', () =>
+    syncExecutionTimeoutToBackend(snapshot.executionPreferences),
+  );
+  return failures;
+}
+
 // storageFallback is imported from '../lib/storageFallback'
 
 // Version for storage migration
@@ -478,16 +629,12 @@ export function isTaskRoutingModelAllowedForTier(
  * DESKTOP-SETTINGS-PERSISTED-BUT-UNREAD) and are deliberately left untouched here.
  */
 async function syncExecutionTimeoutToBackend(prefs: ExecutionPreferences): Promise<void> {
-  try {
-    const current = await getTimeoutConfig();
-    await setTimeoutConfig({
-      ...current,
-      max_duration_secs: minutesToSeconds(prefs.maxTimeoutMinutes),
-      enable_warnings: prefs.enableTimeoutWarnings,
-    });
-  } catch (error) {
-    console.error('Failed to sync timeout config to backend:', error);
-  }
+  const current = await getTimeoutConfig();
+  await setTimeoutConfig({
+    ...current,
+    max_duration_secs: minutesToSeconds(prefs.maxTimeoutMinutes),
+    enable_warnings: prefs.enableTimeoutWarnings,
+  });
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -888,7 +1035,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setProviderMode',
           );
-          void get().saveSettings();
         },
 
         setOllamaUrl: (url: string) => {
@@ -899,7 +1045,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setOllamaUrl',
           );
-          void get().saveSettings();
         },
 
         setLmStudioUrl: (url: string) => {
@@ -910,7 +1055,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setLmStudioUrl',
           );
-          void get().saveSettings();
         },
 
         setLlamaCppUrl: (url: string) => {
@@ -921,7 +1065,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setLlamaCppUrl',
           );
-          void get().saveSettings();
         },
 
         setVllmUrl: (url: string) => {
@@ -932,7 +1075,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setVllmUrl',
           );
-          void get().saveSettings();
         },
 
         setTheme: (theme: Theme) => {
@@ -1128,17 +1270,6 @@ export const useSettingsStore = create<SettingsState>()(
         },
 
         setMemoryEnabled: async (enabled: boolean) => {
-          const previous = get().chatPreferences;
-
-          // Apply the native enforcement boundary before the UI claims the new
-          // value. chat_send_message also reads the persisted master switch on
-          // every turn, so a restart or transient command failure fails closed.
-          await configureMemoryInjection(
-            enabled,
-            10,
-            5,
-            previous.allowToolAssistedMemoryGeneration === true,
-          );
           set(
             (state) => ({
               chatPreferences: {
@@ -1152,27 +1283,9 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setMemoryEnabled',
           );
-
-          try {
-            await get().saveSettings();
-          } catch (error) {
-            set({ chatPreferences: previous }, undefined, 'settings/setMemoryEnabled/rollback');
-            try {
-              await configureMemoryInjection(
-                previous.memoryEnabled === true,
-                10,
-                5,
-                previous.allowToolAssistedMemoryGeneration === true,
-              );
-            } catch (rollbackError) {
-              console.error('Failed to roll back native memory policy:', rollbackError);
-            }
-            throw error;
-          }
         },
 
         setAllowToolAssistedMemoryGeneration: async (enabled: boolean) => {
-          const previous = get().chatPreferences.allowToolAssistedMemoryGeneration === true;
           set(
             (state) => ({
               chatPreferences: {
@@ -1183,21 +1296,6 @@ export const useSettingsStore = create<SettingsState>()(
             undefined,
             'settings/setAllowToolAssistedMemoryGeneration',
           );
-          try {
-            await get().saveSettings();
-          } catch (error) {
-            set(
-              (state) => ({
-                chatPreferences: {
-                  ...state.chatPreferences,
-                  allowToolAssistedMemoryGeneration: previous,
-                },
-              }),
-              undefined,
-              'settings/setAllowToolAssistedMemoryGeneration/rollback',
-            );
-            throw error;
-          }
         },
 
         setAutoSaveMemories: async (enabled: boolean) => {
@@ -1325,44 +1423,20 @@ export const useSettingsStore = create<SettingsState>()(
               return;
             }
 
-            // Try to load settings from disk first, falling back to in-memory defaults
-            let settings: {
-              llmConfig: LLMConfig;
-              windowPreferences: WindowPreferences;
-              chatPreferences?: ChatPreferences;
-              executionPreferences?: ExecutionPreferences;
-              globalHotkeyPreferences?: GlobalHotkeyPreferences;
-              allowedDirectories: string[];
-              customModels?: CustomModelConfig[];
-              featureFlags?: Record<string, boolean>;
-            };
+            // Preserve the renderer-hydrated values for fields introduced into
+            // the native schema after launch. An older settings.json omits
+            // those fields; migration must not overwrite them with defaults.
+            const hydratedCurrent = get();
+            let settings: NativeSettingsPayload;
 
             try {
-              settings = await invoke<{
-                llmConfig: LLMConfig;
-                windowPreferences: WindowPreferences;
-                chatPreferences?: ChatPreferences;
-                executionPreferences?: ExecutionPreferences;
-                globalHotkeyPreferences?: GlobalHotkeyPreferences;
-                allowedDirectories: string[];
-                customModels?: CustomModelConfig[];
-                featureFlags?: Record<string, boolean>;
-              }>('settings_load_from_disk');
+              settings = await invoke<NativeSettingsPayload>('settings_load_from_disk');
             } catch (diskError) {
               console.warn(
                 '[settingsStore] Failed to load from disk, using in-memory defaults:',
                 diskError,
               );
-              settings = await invoke<{
-                llmConfig: LLMConfig;
-                windowPreferences: WindowPreferences;
-                chatPreferences?: ChatPreferences;
-                executionPreferences?: ExecutionPreferences;
-                globalHotkeyPreferences?: GlobalHotkeyPreferences;
-                allowedDirectories: string[];
-                customModels?: CustomModelConfig[];
-                featureFlags?: Record<string, boolean>;
-              }>('settings_load');
+              settings = await invoke<NativeSettingsPayload>('settings_load');
             }
 
             if (get().loading === false) {
@@ -1393,9 +1467,18 @@ export const useSettingsStore = create<SettingsState>()(
               providerMode:
                 settings.llmConfig?.providerMode ?? defaultSettings.llmConfig.providerMode,
               ollamaUrl: settings.llmConfig?.ollamaUrl ?? defaultSettings.llmConfig.ollamaUrl,
-              lmstudioUrl: settings.llmConfig?.lmstudioUrl ?? defaultSettings.llmConfig.lmstudioUrl,
-              llamacppUrl: settings.llmConfig?.llamacppUrl ?? defaultSettings.llmConfig.llamacppUrl,
-              vllmUrl: settings.llmConfig?.vllmUrl ?? defaultSettings.llmConfig.vllmUrl,
+              lmstudioUrl:
+                settings.llmConfig?.lmstudioUrl ??
+                hydratedCurrent.llmConfig.lmstudioUrl ??
+                defaultSettings.llmConfig.lmstudioUrl,
+              llamacppUrl:
+                settings.llmConfig?.llamacppUrl ??
+                hydratedCurrent.llmConfig.llamacppUrl ??
+                defaultSettings.llmConfig.llamacppUrl,
+              vllmUrl:
+                settings.llmConfig?.vllmUrl ??
+                hydratedCurrent.llmConfig.vllmUrl ??
+                defaultSettings.llmConfig.vllmUrl,
             };
 
             const mergedWindowPreferences: WindowPreferences = {
@@ -1403,11 +1486,41 @@ export const useSettingsStore = create<SettingsState>()(
               ...(settings.windowPreferences ?? defaultSettings.windowPreferences),
               language:
                 settings.windowPreferences?.language ?? defaultSettings.windowPreferences.language,
+              selectedTheme:
+                settings.windowPreferences?.selectedTheme ??
+                hydratedCurrent.windowPreferences.selectedTheme,
+              dyslexicFont:
+                settings.windowPreferences?.dyslexicFont ??
+                hydratedCurrent.windowPreferences.dyslexicFont ??
+                false,
+              chatFont: oneOf(
+                settings.windowPreferences?.chatFont,
+                ['default', 'sans', 'mono', 'dyslexic'] as const,
+                hydratedCurrent.windowPreferences.chatFont ?? 'default',
+              ),
+              uiScale: oneOf(
+                settings.windowPreferences?.uiScale,
+                [90, 100, 110] as const,
+                hydratedCurrent.windowPreferences.uiScale ?? 100,
+              ),
+              reduceMotion:
+                settings.windowPreferences?.reduceMotion ??
+                hydratedCurrent.windowPreferences.reduceMotion ??
+                false,
             };
 
             const mergedChatPreferences: ChatPreferences = {
               ...defaultSettings.chatPreferences,
               ...(settings.chatPreferences ?? defaultSettings.chatPreferences),
+              sendShortcut: oneOf(
+                settings.chatPreferences?.sendShortcut,
+                ['enter', 'mod-enter'] as const,
+                hydratedCurrent.chatPreferences.sendShortcut ?? 'enter',
+              ),
+              temporaryChat:
+                settings.chatPreferences?.temporaryChat ??
+                hydratedCurrent.chatPreferences.temporaryChat ??
+                false,
             };
 
             const mergedExecutionPreferences: ExecutionPreferences = {
@@ -1423,6 +1536,23 @@ export const useSettingsStore = create<SettingsState>()(
                   ? settings.executionPreferences?.terminalSandbox?.allowedDomains
                   : defaultSettings.executionPreferences.terminalSandbox.allowedDomains,
               },
+              approvalTimeoutSeconds: boundedInteger(
+                settings.executionPreferences?.approvalTimeoutSeconds,
+                30,
+                3600,
+                hydratedCurrent.executionPreferences.approvalTimeoutSeconds ?? 300,
+              ),
+              approvalTimeoutPolicy: oneOf(
+                settings.executionPreferences?.approvalTimeoutPolicy,
+                ['auto-deny', 'auto-approve', 'pause'] as const,
+                hydratedCurrent.executionPreferences.approvalTimeoutPolicy ?? 'auto-deny',
+              ),
+              streamInactivityTimeoutSeconds: boundedInteger(
+                settings.executionPreferences?.streamInactivityTimeoutSeconds,
+                10,
+                300,
+                hydratedCurrent.executionPreferences.streamInactivityTimeoutSeconds ?? 30,
+              ),
             };
 
             const mergedGlobalHotkeyPreferences: GlobalHotkeyPreferences = {
@@ -1430,53 +1560,54 @@ export const useSettingsStore = create<SettingsState>()(
               ...(settings.globalHotkeyPreferences ?? defaultSettings.globalHotkeyPreferences),
             };
 
-            // Configure local Ollama provider
-            try {
-              await invoke('llm_configure_provider', {
-                provider: 'ollama',
-                apiKey: null,
-                baseUrl: mergedLLMConfig.ollamaUrl || 'http://localhost:11434',
-              });
-            } catch (error) {
-              console.error('Failed to configure Ollama provider:', error);
-            }
+            const mergedPersonalization: PersonalizationPreferences = {
+              ...defaultPersonalization,
+              ...hydratedCurrent.personalization,
+              name:
+                typeof settings.personalization?.name === 'string'
+                  ? settings.personalization.name
+                  : hydratedCurrent.personalization.name,
+              occupation:
+                typeof settings.personalization?.occupation === 'string'
+                  ? settings.personalization.occupation
+                  : hydratedCurrent.personalization.occupation,
+              bio:
+                typeof settings.personalization?.bio === 'string'
+                  ? settings.personalization.bio
+                  : hydratedCurrent.personalization.bio,
+              formality: boundedInteger(
+                settings.personalization?.formality,
+                1,
+                5,
+                hydratedCurrent.personalization.formality,
+              ),
+              warmth: boundedInteger(
+                settings.personalization?.warmth,
+                1,
+                5,
+                hydratedCurrent.personalization.warmth,
+              ),
+              detail: boundedInteger(
+                settings.personalization?.detail,
+                1,
+                5,
+                hydratedCurrent.personalization.detail,
+              ),
+              emojiUsage: oneOf(
+                settings.personalization?.emojiUsage,
+                ['never', 'sometimes', 'often'] as const,
+                hydratedCurrent.personalization.emojiUsage,
+              ),
+            };
 
-            // Configure local LM Studio / llama.cpp / vLLM providers. Like Ollama, these
-            // are best-effort: `ensure_lmstudio_provider`/`ensure_llamacpp_provider`/
-            // `ensure_vllm_provider` on the Rust side lazily register a default-URL
-            // instance before any Local-mode chat send, so a failure here only matters
-            // if the user configured a non-default base URL and this callback never ran.
-            // This is also the ONLY restart-survival path for a non-default base URL:
-            // `rehydrate_byok_providers` (lib.rs setup()) explicitly skips local runtimes
-            // (they have no BYOK key in settings_v2), so without this invoke a custom
-            // vLLM/LM Studio/llama.cpp URL would silently revert to the default on every
-            // app restart even though it's correctly persisted here.
+            // Restore every persisted local runtime independently. The helper
+            // attempts all four before reporting a failure, so an unavailable
+            // optional runtime cannot prevent another configured runtime from
+            // being restored.
             try {
-              await invoke('llm_configure_provider', {
-                provider: 'lmstudio',
-                apiKey: null,
-                baseUrl: mergedLLMConfig.lmstudioUrl || 'http://localhost:1234/v1',
-              });
+              await configureLocalRuntimeProviders(mergedLLMConfig);
             } catch (error) {
-              console.error('Failed to configure LM Studio provider:', error);
-            }
-            try {
-              await invoke('llm_configure_provider', {
-                provider: 'llamacpp',
-                apiKey: null,
-                baseUrl: mergedLLMConfig.llamacppUrl || 'http://localhost:8080/v1',
-              });
-            } catch (error) {
-              console.error('Failed to configure llama.cpp provider:', error);
-            }
-            try {
-              await invoke('llm_configure_provider', {
-                provider: 'vllm',
-                apiKey: null,
-                baseUrl: mergedLLMConfig.vllmUrl || 'http://localhost:8000/v1',
-              });
-            } catch (error) {
-              console.error('Failed to configure vLLM provider:', error);
+              console.error('Failed to restore one or more local runtime providers:', error);
             }
 
             if (get().loading === false) {
@@ -1490,8 +1621,13 @@ export const useSettingsStore = create<SettingsState>()(
                 chatPreferences: mergedChatPreferences,
                 executionPreferences: mergedExecutionPreferences,
                 globalHotkeyPreferences: mergedGlobalHotkeyPreferences,
+                personalization: mergedPersonalization,
                 allowedDirectories: settings.allowedDirectories ?? [],
                 customModels: Array.isArray(settings.customModels) ? settings.customModels : [],
+                customKeybindings:
+                  settings.customKeybindings && typeof settings.customKeybindings === 'object'
+                    ? settings.customKeybindings
+                    : hydratedCurrent.customKeybindings,
                 features:
                   settings.featureFlags && typeof settings.featureFlags === 'object'
                     ? settings.featureFlags
@@ -1630,7 +1766,20 @@ export const useSettingsStore = create<SettingsState>()(
 
             // Push the loaded max-timeout / timeout-warning prefs into the live
             // TimeoutConfig (resets to default on each launch, so sync on startup).
-            await syncExecutionTimeoutToBackend(get().executionPreferences);
+            try {
+              await syncExecutionTimeoutToBackend(get().executionPreferences);
+            } catch (error) {
+              console.error('Failed to restore task timeout policy:', error);
+              set(
+                {
+                  error:
+                    get().error ??
+                    'Task timeout settings could not be applied. Restart the app before running long tasks.',
+                },
+                undefined,
+                'settings/loadSettings/timeoutSyncFailed',
+              );
+            }
           } catch (error) {
             console.error('Failed to load settings:', error);
 
@@ -1651,6 +1800,7 @@ export const useSettingsStore = create<SettingsState>()(
 
         saveSettings: async () => {
           set({ loading: true, error: null }, undefined, 'settings/saveSettings/start');
+          let previousLiveSettings: LiveSettingsSnapshot | null = null;
           try {
             const {
               llmConfig,
@@ -1662,26 +1812,23 @@ export const useSettingsStore = create<SettingsState>()(
               customModels,
               features,
               personalization,
+              customKeybindings,
             } = get();
 
-            // Push capability toggles BEFORE persisting. This sync is the only
-            // input to backend tool gating, so persisting first and syncing
-            // after leaves a failed sync with the opt-out on disk and the
-            // capability still live for the rest of the session. Rethrowing
-            // hands the failure to the outer catch, which surfaces it instead
-            // of reporting a save the backend is not enforcing.
-            //
-            // Trade-off, deliberate: this makes the whole save atomic on the
-            // sync, so a sync failure also blocks persisting unrelated settings
-            // (theme, API keys, custom models). That is the fail-closed side of
-            // the choice — the alternative persists an opt-out the backend is
-            // not applying.
-            try {
-              await invoke('sync_capabilities', { capabilities: features });
-            } catch (error) {
-              console.error('Failed to sync capabilities to backend:', error);
-              throw error;
-            }
+            // `settings_load` is a non-mutating read of the last native commit.
+            // Keep it as the rollback snapshot while all live policy owners are
+            // staged. Native settings_save is deliberately last: once it
+            // succeeds there are no remaining fallible stages.
+            previousLiveSettings = resolveNativeLiveSettings(
+              await invoke<NativeSettingsPayload>('settings_load'),
+            );
+            await applyLiveSettingsSnapshot({
+              llmConfig,
+              chatPreferences,
+              executionPreferences,
+              allowedDirectories,
+              features,
+            });
 
             await invoke('settings_save', {
               settings: {
@@ -1694,25 +1841,9 @@ export const useSettingsStore = create<SettingsState>()(
                 customModels,
                 featureFlags: features,
                 personalization,
+                customKeybindings,
               },
             });
-
-            // FIX-003: Sync allowed directories to the backend security guard
-            // This ensures file operations respect user-configured allowed directories
-            try {
-              await invoke('update_allowed_directories', { paths: allowedDirectories });
-
-              if (allowedDirectories.length > 0) {
-                // Also update MCP filesystem server to use the allowed directories
-                await McpClient.updateFilesystemDirectories(allowedDirectories);
-              }
-            } catch (error) {
-              console.error('Failed to sync allowed directories to backend:', error);
-            }
-
-            // Bridge max-timeout / timeout-warning prefs into the live TimeoutConfig
-            // the executor reads (settings_save only persists them to disk).
-            await syncExecutionTimeoutToBackend(executionPreferences);
 
             // FIX (DESKTOP-AGENTMODE-GUARDRAIL-SURFACE-01, audit 2026-07-03):
             // deliberately do NOT push `chatPreferences.agentMode` /
@@ -1737,13 +1868,23 @@ export const useSettingsStore = create<SettingsState>()(
 
             set({ loading: false }, undefined, 'settings/saveSettings/success');
           } catch (error) {
-            console.error('Failed to save settings:', error);
+            const rollbackFailures = previousLiveSettings
+              ? await restoreLiveSettingsSnapshot(previousLiveSettings)
+              : [];
+            const originalMessage = error instanceof Error ? error.message : String(error);
+            const resolvedError =
+              rollbackFailures.length > 0
+                ? new Error(
+                    `${originalMessage}. Previous live settings could not be fully restored: ${rollbackFailures.join(', ')}`,
+                  )
+                : error;
+            console.error('Failed to save settings:', resolvedError);
             set(
-              { error: getSimpleErrorMessage(error), loading: false },
+              { error: getSimpleErrorMessage(resolvedError), loading: false },
               undefined,
               'settings/saveSettings/error',
             );
-            throw error;
+            throw resolvedError;
           }
         },
       })),

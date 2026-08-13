@@ -4,7 +4,7 @@
  * `upload-scan` asks whether a file can *do* something dangerous when served.
  * Nothing asked what it *depicts*, so a known-illegal image registered and was
  * served like any other attachment. These cases pin the denylist hit: the
- * object is deleted from the public bucket, the asset is never registered, a
+ * object is deleted from the private bucket, the asset is never registered, a
  * moderation report is emitted with the digest and list provenance, and the
  * uploader is told nothing that identifies the check.
  */
@@ -15,16 +15,16 @@ import { createHash } from 'node:crypto';
 
 const {
   mockGetClerkAuthUser,
-  mockGetObject,
-  mockDeleteObject,
+  mockGetPrivateObject,
+  mockDeletePrivateObject,
   mockInsertMediaAsset,
   mockGetMediaAssetByStoragePathname,
   mockResolveActiveOrganizationId,
   loggerMock,
 } = vi.hoisted(() => ({
   mockGetClerkAuthUser: vi.fn(),
-  mockGetObject: vi.fn(),
-  mockDeleteObject: vi.fn(),
+  mockGetPrivateObject: vi.fn(),
+  mockDeletePrivateObject: vi.fn(),
   mockInsertMediaAsset: vi.fn(),
   mockGetMediaAssetByStoragePathname: vi.fn(),
   mockResolveActiveOrganizationId: vi.fn(),
@@ -40,10 +40,9 @@ vi.mock('@/lib/api-auth', () => ({
   getAuthenticatedUser: vi.fn(),
 }));
 vi.mock('@/lib/server/object-storage', () => ({
-  isObjectStorageConfigured: vi.fn(() => true),
-  getObject: mockGetObject,
-  deleteObject: mockDeleteObject,
-  publicUrlForKey: vi.fn((key: string) => `https://cdn.test/${key}`),
+  isPrivateObjectStorageConfigured: vi.fn(() => true),
+  getPrivateObject: mockGetPrivateObject,
+  deletePrivateObject: mockDeletePrivateObject,
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: mockInsertMediaAsset,
@@ -83,9 +82,9 @@ beforeEach(() => {
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockResolveActiveOrganizationId.mockResolvedValue(ORGANIZATION_ID);
   mockGetMediaAssetByStoragePathname.mockResolvedValue(null);
-  mockGetObject.mockResolvedValue({ data: PNG_BYTES, contentType: 'image/png' });
+  mockGetPrivateObject.mockResolvedValue({ data: PNG_BYTES, contentType: 'image/png' });
   mockInsertMediaAsset.mockResolvedValue('asset-1');
-  mockDeleteObject.mockResolvedValue(undefined);
+  mockDeletePrivateObject.mockResolvedValue(undefined);
   loggerMock.error.mockClear();
 });
 
@@ -110,7 +109,10 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
     expect(mockInsertMediaAsset).toHaveBeenCalledWith(
       expect.objectContaining({ organizationId: ORGANIZATION_ID }),
     );
-    expect(mockDeleteObject).not.toHaveBeenCalled();
+    expect(mockDeletePrivateObject).not.toHaveBeenCalled();
+    expect(mockInsertMediaAsset).toHaveBeenCalledWith(
+      expect.objectContaining({ storageUrl: STORAGE_KEY, storagePathname: STORAGE_KEY }),
+    );
   });
 
   it('rejects, deletes, and reports an attachment whose digest is on the list', async () => {
@@ -121,7 +123,7 @@ describe('POST /api/uploads/chat-attachment/complete · hash denylist', () => {
 
     expect(response.status).toBe(400);
     expect(mockInsertMediaAsset).not.toHaveBeenCalled();
-    expect(mockDeleteObject).toHaveBeenCalledWith(STORAGE_KEY);
+    expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_KEY);
     expect(loggerMock.error).toHaveBeenCalledWith(
       expect.objectContaining({
         surface: 'upload',

@@ -2,9 +2,8 @@
  * tierResolver.ts — Resolves the current user's subscription tier.
  *
  * Priority chain:
- *   1. agi-workforce.tier setting (explicit override — useful for testing)
- *   2. Cached value from globalState (populated by fetchTierInfo on activation)
- *   3. 'byok' fallback (safe default — never over-gates)
+ *   1. Cached value from globalState (populated only by account tier refresh)
+ *   2. 'byok' fallback (safe default — never over-gates)
  *
  * This module is intentionally free of side-effects and VS Code window calls
  * so that it can be unit-tested in isolation.
@@ -81,12 +80,15 @@ export type AccountTierLoader = (secrets: vscode.SecretStorage) => Promise<TierI
  * managed models appear reachable even though the account token is gone.
  */
 export async function clearAccountTierCache(context: vscode.ExtensionContext): Promise<void> {
-  await Promise.all([
-    context.globalState.update('tierStatus.cachedTier', undefined),
-    vscode.workspace
-      .getConfiguration('agiWorkforce')
-      .update('currentTier', 'unknown', vscode.ConfigurationTarget.Global),
-  ]);
+  const configuration = vscode.workspace.getConfiguration('agiWorkforce');
+  const updates: Thenable<void>[] = [];
+  if (context.globalState.get<string>('tierStatus.cachedTier') !== undefined) {
+    updates.push(context.globalState.update('tierStatus.cachedTier', undefined));
+  }
+  if (configuration.inspect<string>('currentTier')?.globalValue !== 'unknown') {
+    updates.push(configuration.update('currentTier', 'unknown', vscode.ConfigurationTarget.Global));
+  }
+  await Promise.all(updates);
 }
 
 /**
@@ -112,12 +114,15 @@ export async function refreshAccountTierCache(
     return undefined;
   }
 
-  await Promise.all([
-    context.globalState.update('tierStatus.cachedTier', tier),
-    vscode.workspace
-      .getConfiguration('agiWorkforce')
-      .update('currentTier', tier, vscode.ConfigurationTarget.Global),
-  ]);
+  const configuration = vscode.workspace.getConfiguration('agiWorkforce');
+  const updates: Thenable<void>[] = [];
+  if (context.globalState.get<string>('tierStatus.cachedTier') !== tier) {
+    updates.push(context.globalState.update('tierStatus.cachedTier', tier));
+  }
+  if (configuration.inspect<string>('currentTier')?.globalValue !== tier) {
+    updates.push(configuration.update('currentTier', tier, vscode.ConfigurationTarget.Global));
+  }
+  await Promise.all(updates);
   return tier;
 }
 
@@ -130,12 +135,6 @@ export async function refreshAccountTierCache(
  * Identical to {@link resolveTier}; kept for webview builders that cannot await.
  */
 export function resolveTierSync(context: vscode.ExtensionContext): Tier {
-  const settingRaw = vscode.workspace
-    .getConfiguration('agiWorkforce')
-    .inspect<string>('tier')?.globalValue;
-  const settingTier = coerceTier(settingRaw);
-  if (settingTier !== undefined && settingTier !== 'byok') return settingTier;
-
   const cachedTier = coerceTier(context.globalState.get<string>('tierStatus.cachedTier'));
   if (cachedTier !== undefined) return cachedTier;
 
@@ -148,25 +147,13 @@ export function resolveTierSync(context: vscode.ExtensionContext): Tier {
  * @param context - ExtensionContext used to read cached globalState tier.
  */
 export async function resolveTier(context: vscode.ExtensionContext): Promise<Tier> {
-  // 1. Explicit user override via setting — read globalValue only so an untrusted
-  //    workspace cannot escalate tier by placing "agiWorkforce.tier": "max" in
-  //    .vscode/settings.json. The workspace value is intentionally ignored here;
-  //    `agiWorkforce.tier` is also listed in restrictedConfigurations as defense-in-depth.
-  const settingRaw = vscode.workspace
-    .getConfiguration('agiWorkforce')
-    .inspect<string>('tier')?.globalValue;
-  const settingTier = coerceTier(settingRaw);
-  if (settingTier !== undefined && settingTier !== 'byok') {
-    // If set to 'byok' (the default), fall through so a cached authenticated
-    // account tier can provide the real plan. Any other value is an override.
-    return settingTier;
-  }
-
-  // 2. Cached tier from globalState (populated during activation by fetchTierInfo)
+  // Cached tier is populated only by the authenticated account refresh. There
+  // is intentionally no user/workspace entitlement override: diagnostics must
+  // not make a paid model appear reachable without server-owned admission.
   const cachedRaw = context.globalState.get<string>('tierStatus.cachedTier');
   const cachedTier = coerceTier(cachedRaw);
   if (cachedTier !== undefined) return cachedTier;
 
-  // 3. Safe fallback
+  // Safe fallback keeps Local/provider BYOK available without inventing plan access.
   return 'byok';
 }

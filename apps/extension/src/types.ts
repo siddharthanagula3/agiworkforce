@@ -1,7 +1,8 @@
-import type { Effort, RoutingTaskType } from '@agiworkforce/types';
+import type { Effort, InteractiveCard, RoutingTaskType } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import type {
   ManagedCloudAgentRunReference,
+  GeneratedFileWire,
   ToolApprovalDecisionWire,
 } from '@agiworkforce/cloud-contracts';
 import type { ManagedCloudOwner } from './features/cloud-bridge/managedCloudAuthority';
@@ -41,6 +42,7 @@ export type NativeMessageType =
   | 'RESUME_CHAT_RUN'
   | 'RESOLVE_CHAT_APPROVAL'
   | 'CANCEL_COMPUTER_USE'
+  | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
   | 'SET_COOKIE'
   | 'GET_ALL_TABS'
@@ -70,6 +72,7 @@ export type NativeMessageType =
   | 'LIST_SHORTCUTS'
   | 'DELETE_SHORTCUT'
   | 'REPLAY_SHORTCUT'
+  | 'GET_TAB_GROUP_STATE'
   | 'ADD_TAB_TO_GROUP'
   | 'REMOVE_TAB_FROM_GROUP'
   | 'CREATE_SCHEDULED_TASK'
@@ -81,7 +84,9 @@ export type NativeMessageType =
   | 'UPDATE_MEMORY'
   | 'DELETE_MEMORY'
   | 'GET_QUICK_MODE'
-  | 'SET_QUICK_MODE';
+  | 'SET_QUICK_MODE'
+  | 'SYNC_CONVERSATION'
+  | 'DELETE_CLOUD_CONVERSATION';
 
 /** Internal-only messages between extension contexts — NOT sent to native host. */
 export type InternalMessageType = 'CHAT_CHUNK';
@@ -577,12 +582,52 @@ export interface ChatChunkMessage {
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
   routing?: ChromeManagedRoutingMetadata;
+  /** Validated durable file descriptors emitted by x_generated_files. */
+  generatedFiles?: GeneratedFileWire[];
+  /** Validated card envelope emitted by x_interactive_card. */
+  interactiveCard?: InteractiveCard;
 }
 
 export interface ChatMessageResponse {
   success: boolean;
   error?: string;
 }
+
+export type InPagePromptOutcome =
+  | 'signed_out'
+  | 'plan_required'
+  | 'quota_exceeded'
+  | 'account_unavailable'
+  | 'rate_limited'
+  | 'cancelled'
+  | 'request_rejected'
+  | 'retryable_error';
+
+/**
+ * Prompt sent by the optional in-page assistant on an explicitly approved
+ * origin. The content script builds the prompt from redacted visible page text;
+ * inference always uses the signed-in account's Managed Cloud entitlement.
+ */
+export interface InPagePromptMessage extends BaseMessage {
+  type: 'IN_PAGE_PROMPT';
+  prompt: string;
+  /** Sanitized visible-page context, fenced as untrusted data by the background. */
+  pageContext?: string;
+}
+
+export type InPagePromptResponse =
+  | {
+      success: true;
+      text: string;
+      provider: 'managed_cloud';
+      modelSelection: 'auto';
+    }
+  | {
+      success: false;
+      outcome: InPagePromptOutcome;
+      message: string;
+      retryable: boolean;
+    };
 
 // Open side panel — sent from content script FAB button to background (intra-extension only, not native messaging)
 export interface OpenSidePanelMessage extends BaseMessage {
@@ -805,6 +850,10 @@ export interface AddTabToGroupMessage extends BaseMessage {
   type: 'ADD_TAB_TO_GROUP';
 }
 
+export interface GetTabGroupStateMessage extends BaseMessage {
+  type: 'GET_TAB_GROUP_STATE';
+}
+
 export interface RemoveTabFromGroupMessage extends BaseMessage {
   type: 'REMOVE_TAB_FROM_GROUP';
 }
@@ -950,6 +999,36 @@ export interface GetQuickModeResponse {
 }
 
 /**
+ * Account-backed conversation mirroring.
+ *
+ * Both messages carry the side panel's captured `owner` so the worker can fence the
+ * request against the exact account/session incarnation that asked for it — a
+ * message that arrives after a sign-out must not write under the new identity.
+ * Both are `extension-page-only` in `background/policy.ts`: an allowlisted page
+ * must never be able to trigger an authenticated write of the user's transcript.
+ */
+export interface SyncConversationMessage extends BaseMessage {
+  type: 'SYNC_CONVERSATION';
+  owner: ManagedCloudOwner;
+  conversationId: string;
+  /**
+   * True while a stream is still writing into this thread. The worker uses it
+   * to skip the trailing, still-growing message instead of writing a copy it
+   * knows will be superseded.
+   */
+  streaming?: boolean;
+}
+
+export interface DeleteCloudConversationMessage extends BaseMessage {
+  type: 'DELETE_CLOUD_CONVERSATION';
+  owner: ManagedCloudOwner;
+  /** Server-side `web_conversations.id`, returned by `deleteConversation`. */
+  cloudConversationId: string;
+  /** Server-confirmed stable scope for the delete; null means Personal. */
+  organizationId: string | null;
+}
+
+/**
  * Sent from the side panel to the CONTENT SCRIPT to trigger the fast-path
  * autofill + escalation-decision sequence. Content script runs the autofill,
  * calls makeEscalationDecision, and returns the result as the sendResponse.
@@ -1028,6 +1107,7 @@ export type ExtensionMessage =
   | CancelStreamMessage
   | ResumeChatRunMessage
   | ResolveChatApprovalMessage
+  | InPagePromptMessage
   | OpenSidePanelMessage
   | SetCookieMessage
   | GetAllTabsMessage
@@ -1054,6 +1134,7 @@ export type ExtensionMessage =
   | WebMCPToolsChangedMessage
   | NLWebDetectedMessage
   | AddTabToGroupMessage
+  | GetTabGroupStateMessage
   | RemoveTabFromGroupMessage
   | SaveShortcutMessage
   | ListShortcutsMessage
@@ -1065,6 +1146,8 @@ export type ExtensionMessage =
   | DeleteScheduledTaskMessage
   | GetQuickModeMessage
   | SetQuickModeMessage
+  | SyncConversationMessage
+  | DeleteCloudConversationMessage
   | RunAutofillMessage
   | StartComputerUseMessage
   | CancelComputerUseMessage
@@ -1093,6 +1176,7 @@ export type ExtensionResponse =
   | ElementInfoResponse
   | AutoFillJobApplicationResponse
   | ChatMessageResponse
+  | InPagePromptResponse
   | SetCookieResponse
   | GetAllTabsResponse
   | CreateTabResponse

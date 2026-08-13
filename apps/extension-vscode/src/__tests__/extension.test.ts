@@ -48,25 +48,19 @@ describe('commandLabel', () => {
 
 describe('buildStatusBarText', () => {
   it('shows model only when no features enabled', () => {
-    expect(buildExtensionStatusBarText('auto', 'auto', false)).toBe('$(hubot) AGI: auto');
+    expect(buildExtensionStatusBarText('auto', 'auto')).toBe('$(hubot) AGI: auto');
   });
 
   it('shows plan mode chip', () => {
-    const text = buildExtensionStatusBarText('current-model', 'plan', false);
+    const text = buildExtensionStatusBarText('current-model', 'plan');
     expect(text).toContain('plan');
     expect(text).toContain('current-model');
   });
 
-  it('shows mcp chip', () => {
-    const text = buildExtensionStatusBarText('auto', 'auto', true);
-    expect(text).toContain('mcp');
-  });
-
   it('keeps optional desktop connectivity out of the primary model status', () => {
     const fixtureModelId = 'fixture-status-model';
-    const text = buildExtensionStatusBarText(fixtureModelId, 'plan', true);
+    const text = buildExtensionStatusBarText(fixtureModelId, 'plan');
     expect(text).toContain('plan');
-    expect(text).toContain('mcp');
     expect(text).toContain(fixtureModelId);
     expect(text).not.toContain('bridge');
   });
@@ -220,13 +214,6 @@ describe('feature flag validation', () => {
     const shouldWarn = inlineEnabled && !hasApiKey;
     expect(shouldWarn).toBe(false);
   });
-
-  it('warns when MCP enabled without desktop bridge', () => {
-    const mcpEnabled = true;
-    const desktopBridgeEnabled = false;
-    const shouldWarn = mcpEnabled && !desktopBridgeEnabled;
-    expect(shouldWarn).toBe(true);
-  });
 });
 
 // ── Configuration change detection ───────────────────────────────────────────
@@ -235,7 +222,6 @@ describe('configuration change detection', () => {
   const STATUS_BAR_CONFIGS = [
     'agiWorkforce.model',
     'agiWorkforce.agent.planMode',
-    'agiWorkforce.mcp.enabled',
     'agiWorkforce.desktopBridge.enabled',
     'agiWorkforce.desktopBridge.port',
   ];

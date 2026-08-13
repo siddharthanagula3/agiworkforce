@@ -56,6 +56,10 @@ export function setupVoiceInput(
       if (transcript) {
         inputEl.value = inputEl.value ? `${inputEl.value} ${transcript}` : transcript;
         autoResize(inputEl);
+        // Programmatic value writes do not emit `input`. The side panel uses
+        // that event to enable Send and refresh slash-command suggestions, so
+        // dictation must participate in the same composer state path as typing.
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
       }
     };
 

@@ -15,7 +15,8 @@ export type ConfiguredCheckoutPlan = SelfServePaidPlanTier;
  * Returns the price ID if valid, undefined if not set
  */
 function validatePriceId(priceId: string | undefined, name: string): string | undefined {
-  if (!priceId || priceId.trim() === '') {
+  const normalizedPriceId = priceId?.trim();
+  if (!normalizedPriceId) {
     // Only log warning in server-side context (not during build/client)
     if (typeof window === 'undefined' && process.env.NODE_ENV !== 'test') {
       logger.warn(
@@ -27,15 +28,15 @@ function validatePriceId(priceId: string | undefined, name: string): string | un
   }
 
   // Validate price ID format (Stripe price IDs start with 'price_')
-  if (!priceId.startsWith('price_')) {
+  if (!normalizedPriceId.startsWith('price_')) {
     logger.error(
-      { envVar: name, priceId },
+      { envVar: name, priceId: normalizedPriceId },
       'Invalid Stripe price ID format. Price IDs should start with "price_".',
     );
     return undefined;
   }
 
-  return priceId;
+  return normalizedPriceId;
 }
 
 export const STRIPE_PRICE_IDS = {

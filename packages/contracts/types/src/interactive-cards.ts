@@ -379,10 +379,52 @@ export interface MapSearchAction {
   url: string;
 }
 
+/** Web Mercator zoom bounds the tile proxy is willing to serve. */
+export const MAP_SEARCH_MIN_ZOOM = 2;
+export const MAP_SEARCH_MAX_ZOOM = 17;
+export const MAP_SEARCH_MAX_PLACES = 2;
+
+/**
+ * A place the SERVER resolved through its own geocoder. The model never
+ * authors any field here — same rule as `actions`. `label` is the geocoder's
+ * display name, not the model's phrasing, so the pin can never assert a place
+ * the resolver did not actually return.
+ */
+export interface MapSearchPlace {
+  label: string;
+  latitude: number;
+  longitude: number;
+  /**
+   * The geocoder's own classification — "city", "town", "administrative".
+   * Displayed as the secondary line in the place list so a pin is legible as
+   * a KIND of place, not just a name. Server-filled like every other field
+   * here; the model never authors it.
+   */
+  kind?: string;
+}
+
+/**
+ * The server-computed viewport for the rendered map. Its presence is what
+ * distinguishes a card that can paint real tiles from one that can only offer
+ * provider links: when geocoding fails, `view` is absent and the renderer
+ * degrades to the link-only layout rather than inventing a location.
+ */
+export interface MapSearchView {
+  latitude: number;
+  longitude: number;
+  zoom: number;
+  /** Required tile attribution, server-authored. */
+  attribution: string;
+}
+
 export interface MapSearchCardBody {
   title: string;
   query: string;
   actions: MapSearchAction[];
+  /** Absent when the server could not resolve the query to coordinates. */
+  view?: MapSearchView;
+  /** Pins to paint over `view`. Empty/absent renders the map with no pin. */
+  places?: MapSearchPlace[];
 }
 
 // ---------------------------------------------------------------------------

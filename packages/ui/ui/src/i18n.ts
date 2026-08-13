@@ -37,16 +37,11 @@
  *
  * WHERE THIS ACTUALLY TRANSLATES, TODAY:
  *
- * - Desktop and mobile: yes. `apps/desktop/src/i18n/index.ts` and
- *   `apps/mobile` both depend on `react-i18next@^17.0.6`, which resolves to
- *   the same physical copy this file resolves (the root-hoisted 17.0.7).
- *   Same module, same `I18nContext`, same default instance — so `hasInstance`
- *   is true and the key lookup runs.
- * - Web: yes. The web host and shared UI packages intentionally resolve the
- *   same `react-i18next` and `i18next` versions, so the provider mounted in
- *   `apps/web/app/providers.tsx` is visible to shared components. Keep those
- *   dependency ranges aligned: separate physical copies create separate
- *   module-scoped contexts and make shared copy silently fall back to English.
+ * - Desktop, Web, and Mobile: yes. Every host initializes the same workspace
+ *   `i18next` singleton. This hook passes that singleton explicitly to
+ *   react-i18next instead of relying on `I18nContext`: pnpm may legitimately
+ *   install separate react-i18next peer variants for React Native and DOM,
+ *   whose module-scoped contexts cannot see one another.
  *
  * The other half of the gap is the corpus: most keys passed below do not yet
  * exist in `packages/ui/i18n/locales`, so even on desktop they resolve to the
@@ -62,6 +57,7 @@
  */
 
 import { useCallback, useMemo } from 'react';
+import i18next from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -114,11 +110,14 @@ function interpolate(template: string, values: Record<string, unknown> | undefin
  * Translate copy in `namespace`, falling back to the supplied English.
  */
 export function useUiTranslation(namespace: UiNamespace): UiTranslation {
-  const { t, i18n } = useTranslation(namespace);
-  // react-i18next returns `i18n: {}` when it cannot find an instance, so the
-  // absence of `t` on it is the signal that `t` above is the key-echoing
-  // `notReadyT` rather than a real `getFixedT`.
-  const hasInstance = typeof i18n?.t === 'function';
+  // Bind to the host-initialized singleton explicitly. Relying on the nearest
+  // I18nextProvider is unsafe in this monorepo because React Native and DOM can
+  // resolve distinct react-i18next peer variants with distinct contexts.
+  // Shared chat must remain renderable while a host is still loading a locale
+  // namespace. Every call below carries complete English source copy, so
+  // suspending the whole composer here is both unnecessary and harmful.
+  const { t } = useTranslation(namespace, { i18n: i18next, useSuspense: false });
+  const hasInstance = i18next.isInitialized;
 
   const translate = useCallback<UiTranslate>(
     (key, english, values) => {

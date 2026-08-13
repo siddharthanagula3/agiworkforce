@@ -10,6 +10,10 @@ import {
   objectKeyFromPublicUrl,
   objectKeyFromStorageUri,
 } from '@/lib/server/object-storage';
+import {
+  deleteProjectKnowledgeObject,
+  isProjectKnowledgeObjectStorageConfigured,
+} from '@/lib/server/project-knowledge-object-storage';
 
 /**
  * PER-24 — the erasure that account deletion always claimed to perform.
@@ -79,6 +83,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'connector_oauth_authorizations', column: 'user_id' },
   { table: 'messaging_connections', column: 'user_id' },
   { table: 'github_installations', column: 'user_id' },
+  { table: 'plugin_installations', column: 'user_id' },
   // Executions before their tools: a run of a GLOBAL tool has no parent to
   // cascade from, so it would otherwise outlive the account that made it.
   { table: 'agent_tool_executions', column: 'user_id' },
@@ -112,6 +117,11 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'feature_flags', column: 'user_id' },
   // Usage + billing
   { table: 'usage_events', column: 'user_id' },
+  // Native-store records are bound to this AGI account. Apple and Google own
+  // their payment records; our account token and receipt-processing ledger are
+  // user-scoped product data and follow the account-erasure policy.
+  { table: 'mobile_iap_transactions', column: 'user_id' },
+  { table: 'mobile_iap_accounts', column: 'user_id' },
   // Terminal video jobs before their RESTRICTed managed-usage parent. Active
   // jobs block the entire erasure before bytes/rows are touched (see below).
   { table: 'video_generation_jobs', column: 'user_id' },
@@ -463,12 +473,18 @@ export async function eraseUserMedia(
 async function deleteObjectKeys(
   keys: ReadonlyArray<string>,
   kind: string,
+  options: {
+    configured?: () => boolean;
+    deleteKey?: (key: string) => Promise<void>;
+  } = {},
 ): Promise<{ deleted: number; failed: number }> {
   if (keys.length === 0) return { deleted: 0, failed: 0 };
-  if (!isObjectStorageConfigured()) {
+  const configured = options.configured ?? isObjectStorageConfigured;
+  const deleteKey = options.deleteKey ?? deleteObject;
+  if (!configured()) {
     // The bytes exist but this deployment cannot reach them. Reporting them as
     // failed keeps the rows that point at them; claiming success would strand
-    // world-readable objects with nothing left to find them by.
+    // stored objects with nothing left to find them by.
     logger.warn({ kind, count: keys.length }, 'Object storage is not configured; objects retained');
     return { deleted: 0, failed: keys.length };
   }
@@ -477,7 +493,7 @@ async function deleteObjectKeys(
   let failed = 0;
   for (const key of keys) {
     try {
-      await deleteObject(key);
+      await deleteKey(key);
       deleted++;
     } catch (error) {
       failed++;
@@ -491,8 +507,9 @@ async function deleteObjectKeys(
  * Delete the BYTES of the user's project-knowledge files.
  *
  * The rows themselves cascade from `user_projects`, so this must run before
- * that delete: `storage_uri` is the only pointer to the object, and the bucket
- * is public.
+ * that delete: `storage_uri` is the only pointer to the object. Current writes
+ * use the private bucket; the storage adapter also removes a possible legacy
+ * public twin during rollout.
  */
 async function eraseUserKnowledgeObjects(
   userId: string,
@@ -516,7 +533,10 @@ async function eraseUserKnowledgeObjects(
   const keys = rows
     .map((row) => (row.storage_uri ? objectKeyFromStorageUri(row.storage_uri) : null))
     .filter((key): key is string => Boolean(key));
-  return deleteObjectKeys(keys, 'knowledge-file');
+  return deleteObjectKeys(keys, 'knowledge-file', {
+    configured: isProjectKnowledgeObjectStorageConfigured,
+    deleteKey: deleteProjectKnowledgeObject,
+  });
 }
 
 /**

@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::io::Write;
+use std::path::Path;
 use std::sync::Arc;
 use tauri::{Manager, State};
 use tokio::sync::Mutex;
@@ -18,6 +20,12 @@ pub struct LLMConfig {
     pub provider_mode: String,
     #[serde(default = "default_ollama_url")]
     pub ollama_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lmstudio_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llamacpp_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub vllm_url: Option<String>,
 }
 
 fn default_provider_mode() -> String {
@@ -32,7 +40,7 @@ fn default_ollama_url() -> String {
 #[serde(rename_all = "camelCase")]
 pub struct DefaultModels {
     pub ollama: String,
-    #[serde(default)]
+    #[serde(default, rename = "managed_cloud", alias = "managedCloud")]
     pub managed_cloud: String,
 }
 
@@ -44,6 +52,16 @@ pub struct WindowPreferences {
     pub language: String,
     pub startup_position: String,
     pub dock_on_startup: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_theme: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dyslexic_font: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chat_font: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_scale: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduce_motion: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,6 +93,10 @@ pub struct ChatPreferences {
     /// `"cloud"` — reserved for explicit cloud storage; unavailable in Desktop v1.
     #[serde(default = "default_chat_storage_mode")]
     pub chat_storage_mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub send_shortcut: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temporary_chat: Option<bool>,
 }
 
 impl Default for ChatPreferences {
@@ -92,6 +114,8 @@ impl Default for ChatPreferences {
             // IMPORTANT: must match default_chat_storage_mode(); cloud sync is
             // off by default unless the user explicitly enables a cloud path.
             chat_storage_mode: default_chat_storage_mode(),
+            send_shortcut: Some(default_send_shortcut()),
+            temporary_chat: Some(false),
         }
     }
 }
@@ -152,6 +176,12 @@ pub struct ExecutionPreferences {
     pub enable_timeout_warnings: bool,
     #[serde(default)]
     pub terminal_sandbox: TerminalSandboxPreferences,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_timeout_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approval_timeout_policy: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream_inactivity_timeout_seconds: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -165,6 +195,10 @@ pub struct GlobalHotkeyPreferences {
 
 fn default_chat_storage_mode() -> String {
     "local".to_string()
+}
+
+fn default_send_shortcut() -> String {
+    "enter".to_string()
 }
 
 fn default_prompt_completion_enabled() -> bool {
@@ -282,6 +316,83 @@ mod tests {
             "temp directory should be allowed by default"
         );
     }
+
+    #[test]
+    fn legacy_settings_keep_new_fields_unset_and_migrate_managed_cloud_key() {
+        let legacy = serde_json::json!({
+            "llmConfig": {
+                "defaultProvider": "managed_cloud",
+                "temperature": 0.7,
+                "maxTokens": 4096,
+                "defaultModels": { "ollama": "", "managedCloud": "auto" },
+                "favoriteModels": [],
+                "providerMode": "auto",
+                "ollamaUrl": "http://localhost:11434"
+            },
+            "windowPreferences": {
+                "theme": "system",
+                "language": "en",
+                "startupPosition": "center",
+                "dockOnStartup": null
+            },
+            "globalHotkeyPreferences": {
+                "enabled": true,
+                "combo": "CommandOrControl+Shift+Space"
+            }
+        });
+
+        let parsed: Settings = serde_json::from_value(legacy).expect("legacy settings deserialize");
+        assert_eq!(parsed.llm_config.default_models.managed_cloud, "auto");
+        assert_eq!(parsed.llm_config.lmstudio_url, None);
+        assert_eq!(parsed.window_preferences.ui_scale, None);
+        assert!(parsed.personalization.is_none());
+        assert!(parsed.custom_keybindings.is_none());
+
+        let migrated = serde_json::to_value(parsed).expect("migrated settings serialize");
+        assert_eq!(
+            migrated
+                .pointer("/llmConfig/defaultModels/managed_cloud")
+                .and_then(serde_json::Value::as_str),
+            Some("auto")
+        );
+        assert!(migrated
+            .pointer("/llmConfig/defaultModels/managedCloud")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn settings_snapshot_atomically_replaces_an_existing_file() {
+        let directory = tempfile::tempdir().expect("temporary settings directory");
+        let settings_path = directory.path().join("settings.json");
+        std::fs::write(&settings_path, b"previous valid snapshot")
+            .expect("seed previous settings snapshot");
+
+        let state = SettingsState::default();
+        let mut settings = state.settings.lock().await.clone();
+        settings.window_preferences.language = "fr".to_string();
+
+        persist_settings_snapshot_to_path(&settings_path, &settings)
+            .await
+            .expect("replace settings snapshot");
+
+        let persisted: Settings = serde_json::from_slice(
+            &std::fs::read(&settings_path).expect("read committed settings snapshot"),
+        )
+        .expect("committed snapshot is complete JSON");
+        assert_eq!(persisted.window_preferences.language, "fr");
+        assert!(
+            std::fs::read_dir(directory.path())
+                .expect("read settings directory")
+                .all(|entry| {
+                    !entry
+                        .expect("settings directory entry")
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".settings.json.")
+                }),
+            "a successful commit must not leave a staged settings file behind"
+        );
+    }
 }
 
 /// Personalization preferences sent from the frontend on each save.
@@ -347,9 +458,12 @@ pub struct Settings {
     pub custom_models: Vec<serde_json::Value>,
     #[serde(default)]
     pub feature_flags: std::collections::HashMap<String, bool>,
-    /// Personalization preferences (added alongside P0-4 disk-persist wiring)
-    #[serde(default)]
-    pub personalization: Personalization,
+    /// Optional during migration so an older settings.json does not replace a
+    /// renderer-hydrated personalization profile with neutral defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub personalization: Option<Personalization>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_keybindings: Option<std::collections::HashMap<String, String>>,
 }
 
 fn default_global_hotkey_preferences() -> GlobalHotkeyPreferences {
@@ -394,12 +508,20 @@ impl SettingsState {
                     task_routing: None,
                     provider_mode: default_provider_mode(),
                     ollama_url: default_ollama_url(),
+                    lmstudio_url: Some("http://localhost:1234/v1".to_string()),
+                    llamacpp_url: Some("http://localhost:8080/v1".to_string()),
+                    vllm_url: Some("http://localhost:8000/v1".to_string()),
                 },
                 window_preferences: WindowPreferences {
                     theme: "system".to_string(),
                     language: default_language(),
                     startup_position: "center".to_string(),
                     dock_on_startup: None,
+                    selected_theme: None,
+                    dyslexic_font: Some(false),
+                    chat_font: Some("default".to_string()),
+                    ui_scale: Some(100),
+                    reduce_motion: Some(false),
                 },
                 chat_preferences: Some(ChatPreferences {
                     prompt_completion_enabled: true,
@@ -412,6 +534,8 @@ impl SettingsState {
                     allow_tool_assisted_memory_generation: false,
                     auto_save_memories: false,
                     chat_storage_mode: default_chat_storage_mode(),
+                    send_shortcut: Some(default_send_shortcut()),
+                    temporary_chat: Some(false),
                 }),
                 execution_preferences: Some(ExecutionPreferences {
                     max_timeout_minutes: default_max_timeout_minutes(),
@@ -420,12 +544,16 @@ impl SettingsState {
                     auto_resume_on_restart: default_auto_resume_on_restart(),
                     enable_timeout_warnings: default_enable_timeout_warnings(),
                     terminal_sandbox: TerminalSandboxPreferences::default(),
+                    approval_timeout_seconds: Some(300),
+                    approval_timeout_policy: Some("auto-deny".to_string()),
+                    stream_inactivity_timeout_seconds: Some(30),
                 }),
                 global_hotkey_preferences: default_global_hotkey_preferences(),
                 allowed_directories: default_allowed_directories(),
                 custom_models: Vec::new(),
                 feature_flags: std::collections::HashMap::new(),
-                personalization: Personalization::default(),
+                personalization: Some(Personalization::default()),
+                custom_keybindings: Some(std::collections::HashMap::new()),
             })),
         }
     }
@@ -452,18 +580,17 @@ pub async fn settings_save(
         settings.global_hotkey_preferences.combo = default_global_hotkey_combo();
     }
 
-    // Update in-memory state
+    // Hold the native settings lock for the complete commit. Concurrent save
+    // commands must not interleave their shortcut, disk, and in-memory stages.
     let mut current_settings = state.settings.lock().await;
-    *current_settings = settings.clone();
+    let previous_settings = current_settings.clone();
 
-    persist_settings_snapshot(&app_handle, &settings).await?;
-
-    if let Some(shortcuts_state) =
-        app_handle.try_state::<Arc<Mutex<crate::sys::commands::shortcuts::ShortcutsState>>>()
-    {
+    let shortcuts_state =
+        app_handle.try_state::<Arc<Mutex<crate::sys::commands::shortcuts::ShortcutsState>>>();
+    if let Some(shortcuts_state) = shortcuts_state.as_ref() {
         crate::sys::commands::shortcuts::apply_quick_query_hotkey_preferences(
             &app_handle,
-            &shortcuts_state,
+            shortcuts_state,
             crate::sys::commands::shortcuts::QuickQueryHotkeyPreferences {
                 enabled: settings.global_hotkey_preferences.enabled,
                 combo: settings.global_hotkey_preferences.combo.clone(),
@@ -471,6 +598,38 @@ pub async fn settings_save(
         )
         .await?;
     }
+
+    if let Err(save_error) = persist_settings_snapshot(&app_handle, &settings).await {
+        // The OS shortcut was the only live side effect staged before disk.
+        // Restore it before reporting failure so the Settings panel can keep
+        // the draft open without having silently applied part of it.
+        let rollback_error = if let Some(shortcuts_state) = shortcuts_state.as_ref() {
+            crate::sys::commands::shortcuts::apply_quick_query_hotkey_preferences(
+                &app_handle,
+                shortcuts_state,
+                crate::sys::commands::shortcuts::QuickQueryHotkeyPreferences {
+                    enabled: previous_settings.global_hotkey_preferences.enabled,
+                    combo: previous_settings.global_hotkey_preferences.combo.clone(),
+                },
+            )
+            .await
+            .err()
+        } else {
+            None
+        };
+
+        return Err(match rollback_error {
+            Some(rollback_error) => format!(
+                "{save_error}. The previous global shortcut could not be restored: {rollback_error}"
+            ),
+            None => save_error,
+        });
+    }
+
+    // Publish the new native state only after every fallible commit stage has
+    // succeeded. A failed Save therefore leaves disk, shortcut, and memory on
+    // the same previous snapshot.
+    *current_settings = settings;
 
     tracing::info!("Settings persisted");
     Ok(())
@@ -486,19 +645,48 @@ pub(crate) async fn persist_settings_snapshot(
         .map_err(|e| format!("Failed to get app data dir: {}", e))?;
 
     let settings_path = app_data_dir.join("settings.json");
-    if let Err(e) = tokio::fs::create_dir_all(&app_data_dir).await {
-        return Err(format!("Failed to create app data directory: {}", e));
-    }
-
-    let json = serde_json::to_string_pretty(&settings)
-        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
-
-    tokio::fs::write(&settings_path, json)
-        .await
-        .map_err(|e| format!("Failed to write settings file: {}", e))?;
+    persist_settings_snapshot_to_path(&settings_path, settings).await?;
 
     tracing::info!("Settings persisted to {:?}", settings_path);
     Ok(())
+}
+
+async fn persist_settings_snapshot_to_path(
+    settings_path: &Path,
+    settings: &Settings,
+) -> Result<(), String> {
+    let parent = settings_path
+        .parent()
+        .ok_or_else(|| "Settings path has no parent directory".to_string())?;
+    tokio::fs::create_dir_all(parent)
+        .await
+        .map_err(|error| format!("Failed to create app data directory: {error}"))?;
+
+    let json = serde_json::to_vec_pretty(settings)
+        .map_err(|error| format!("Failed to serialize settings: {error}"))?;
+    let parent = parent.to_path_buf();
+    let settings_path = settings_path.to_path_buf();
+
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let mut staged = tempfile::Builder::new()
+            .prefix(".settings.json.")
+            .suffix(".tmp")
+            .tempfile_in(&parent)
+            .map_err(|error| format!("Failed to stage settings file: {error}"))?;
+        staged
+            .write_all(&json)
+            .map_err(|error| format!("Failed to write staged settings file: {error}"))?;
+        staged
+            .as_file_mut()
+            .sync_all()
+            .map_err(|error| format!("Failed to sync staged settings file: {error}"))?;
+        staged
+            .persist(&settings_path)
+            .map_err(|error| format!("Failed to atomically replace settings file: {error}"))?;
+        Ok(())
+    })
+    .await
+    .map_err(|error| format!("Settings persistence task failed: {error}"))?
 }
 
 /// Persist a native-authoritative extension of the Allowed Directories list.

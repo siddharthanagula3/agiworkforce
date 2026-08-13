@@ -68,7 +68,7 @@ const PRODUCT_FACTS: { k: string; v: string }[] = [
   },
   {
     k: 'Pricing posture',
-    v: 'Local and BYOK cost nothing to AGI — users pay their provider directly, or nothing at all when running locally. Managed cloud is metered. Team is self-serve per seat; Enterprise is sales-assisted. Current figures live on the pricing page.',
+    v: 'Local and BYOK cost nothing to AGI — users pay their provider directly, or nothing at all when running locally. Managed cloud is metered. Team is priced per seat, with current checkout availability shown on Pricing; Enterprise is sales-assisted.',
   },
 ];
 

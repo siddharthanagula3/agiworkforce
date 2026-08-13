@@ -32,6 +32,7 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
     downloadProgress,
     error,
     isDownloading,
+    isManualInstallerUpdate,
     currentVersion,
     downloadAndInstall,
     dismiss,
@@ -104,10 +105,14 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
           </DialogTitle>
           <DialogDescription>
             {isError
-              ? 'There was a problem downloading the update.'
+              ? isManualInstallerUpdate
+                ? 'There was a problem checking or opening the installer.'
+                : 'There was a problem downloading the update.'
               : isDownloadComplete
                 ? 'The update has been downloaded and is ready to install.'
-                : 'A new version of AGI Workforce is available.'}
+                : isManualInstallerUpdate
+                  ? 'A new signed AGI Cloud installer is available.'
+                  : 'A new version of AGI Workforce is available.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -117,7 +122,9 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
             <div className="flex items-center justify-center gap-4 rounded-lg bg-muted/50 p-4">
               <div className="text-center">
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">Current</p>
-                <p className="text-lg font-mono font-semibold">v{currentVersion}</p>
+                <p className="text-lg font-mono font-semibold">
+                  v{updateInfo.currentVersion || currentVersion}
+                </p>
               </div>
               <ArrowRight className="h-5 w-5 text-muted-foreground" />
               <div className="text-center">
@@ -219,7 +226,7 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
               </Button>
               <Button onClick={handleDownload}>
                 <Download className="mr-2 h-4 w-4" />
-                Download & Install
+                {isManualInstallerUpdate ? 'Download Installer' : 'Download & Install'}
               </Button>
             </>
           )}

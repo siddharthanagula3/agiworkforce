@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'crypto';
 
 const storeMedia = vi.fn();
+const deleteStoredMedia = vi.fn();
 const insertMediaAsset = vi.fn();
 let configured = true;
 
 vi.mock('@/lib/server/media-storage', () => ({
-  isMediaStorageConfigured: () => configured,
+  isGeneratedMediaStorageConfigured: () => configured,
   storeMedia: (...args: unknown[]) => storeMedia(...args),
+  deleteStoredMedia: (...args: unknown[]) => deleteStoredMedia(...args),
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: (...args: unknown[]) => insertMediaAsset(...args),
@@ -25,9 +27,10 @@ describe('persistGeneratedFileBytes', () => {
 
   beforeEach(() => {
     configured = true;
+    deleteStoredMedia.mockReset().mockResolvedValue(undefined);
     storeMedia.mockReset().mockImplementation(async (p: { data: Buffer }) => ({
-      url: 'https://media.example.com/media/file/u/x.bin',
-      pathname: 'media/file/u/x.bin',
+      url: 'private-media/file/owner/x.bin',
+      pathname: 'private-media/file/owner/x.bin',
       byteSize: p.data.byteLength,
       contentType: 'application/octet-stream',
     }));
@@ -108,8 +111,8 @@ describe('persistGeneratedFileBytes', () => {
     expect(storeMedia).toHaveBeenCalledOnce();
     params.organizationId = laterOrganizationId;
     finishStorage({
-      url: 'https://media.example.com/media/file/u/result.txt',
-      pathname: 'media/file/u/result.txt',
+      url: 'private-media/file/owner/result.txt',
+      pathname: 'private-media/file/owner/result.txt',
       byteSize: params.data.byteLength,
       contentType: params.mimeType,
     });
@@ -141,7 +144,7 @@ describe('persistGeneratedFileBytes', () => {
     );
   });
 
-  it('falls back to the storage URL when the catalog row cannot be written', async () => {
+  it('removes private bytes and fails when the owner-scoped catalog row cannot be written', async () => {
     insertMediaAsset.mockResolvedValue(null);
     const outcome = await persistGeneratedFileBytes({
       userId: 'u',
@@ -152,9 +155,8 @@ describe('persistGeneratedFileBytes', () => {
       provider: 'e2b',
       origin: 'e2b-execution',
     });
-    expect(outcome.ok).toBe(true);
-    if (!outcome.ok) return;
-    expect(outcome.file.uri).toBe('https://media.example.com/media/file/u/x.bin');
+    expect(outcome).toEqual({ ok: false, reason: 'storage_error' });
+    expect(deleteStoredMedia).toHaveBeenCalledWith('private-media/file/owner/x.bin');
   });
 
   it('rejects oversized payloads with a typed reason (no storage call)', async () => {
@@ -198,6 +200,22 @@ describe('persistGeneratedFileBytes', () => {
       origin: 'code-execution',
     });
     expect(outcome).toEqual({ ok: false, reason: 'storage_error' });
+  });
+
+  it('removes staged private bytes when the catalog insert throws', async () => {
+    insertMediaAsset.mockRejectedValueOnce(new Error('database unavailable'));
+    const outcome = await persistGeneratedFileBytes({
+      userId: 'u',
+      organizationId: null,
+      data: Buffer.from('x'),
+      mimeType: 'application/pdf',
+      filename: 'report.pdf',
+      provider: 'e2b',
+      origin: 'e2b-execution',
+    });
+
+    expect(outcome).toEqual({ ok: false, reason: 'storage_error' });
+    expect(deleteStoredMedia).toHaveBeenCalledWith('private-media/file/owner/x.bin');
   });
 });
 

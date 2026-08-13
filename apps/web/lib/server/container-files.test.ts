@@ -5,8 +5,9 @@ const insertMediaAsset = vi.fn();
 let configured = true;
 
 vi.mock('@/lib/server/media-storage', () => ({
-  isMediaStorageConfigured: () => configured,
+  isGeneratedMediaStorageConfigured: () => configured,
   storeMedia: (...args: unknown[]) => storeMedia(...args),
+  deleteStoredMedia: vi.fn(),
 }));
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: (...args: unknown[]) => insertMediaAsset(...args),
@@ -40,8 +41,8 @@ describe('persistGeneratedFile', () => {
     process.env['OPENAI_API_KEY'] = 'sk-test';
     process.env['ANTHROPIC_API_KEY'] = 'ak-test';
     storeMedia.mockResolvedValue({
-      url: 'https://blob.example/media/file/u/x.pdf',
-      pathname: 'media/file/u/x.pdf',
+      url: 'private-media/file/owner/x.pdf',
+      pathname: 'private-media/file/owner/x.pdf',
       byteSize: 5,
       contentType: 'application/pdf',
     });
@@ -169,8 +170,8 @@ describe('persistGeneratedFiles', () => {
   beforeEach(() => {
     configured = true;
     storeMedia.mockReset().mockResolvedValue({
-      url: 'https://blob.example/f.pdf',
-      pathname: 'p',
+      url: 'private-media/file/owner/f.pdf',
+      pathname: 'private-media/file/owner/f.pdf',
       byteSize: 1,
       contentType: 'application/pdf',
     });

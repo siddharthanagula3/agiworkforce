@@ -59,6 +59,16 @@ export interface VideoGenerationOutputSize {
   aspectRatio: string;
   width: number;
   height: number;
+  /**
+   * Durations this size alone permits, when narrower than the model's overall
+   * `durationSecs`. Veo publishes exactly this shape: 4/6/8 seconds at 720p,
+   * but 1080p and 4k are 8-second-only. Without a per-size list the constraint
+   * has to live in provider `if` branches, which is what kept Veo pinned to a
+   * hardcoded 16:9 path instead of being described by the registry.
+   *
+   * Omitted means "whatever the model allows".
+   */
+  durationSecs?: number[];
 }
 
 /** Provider-published formula for video-token-priced generation. */
@@ -1878,6 +1888,215 @@ export function isExecutableVideoModel(
 }
 
 /** Resolve the exact provider pixel tuple; resolution alone is not a price. */
+/**
+ * Aspect-ratio and quality choices for a video model, derived from the model
+ * registry rather than hardcoded per surface.
+ *
+ * This lives in the shared catalog because Web, Mobile and Desktop all need the
+ * same answer, and a per-surface copy is exactly how they drift: Mobile shipped
+ * video generation sending only `{ prompt, model }` while Web grew pickers, so
+ * a phone silently took the route's 16:9/720p defaults with no way to change
+ * them. A model that publishes no 4k size must never offer 4k on ANY surface,
+ * and that is a property of the catalog, not of a component.
+ */
+
+export interface VideoAspectOption {
+  id: string;
+  label: string;
+}
+
+export interface VideoQualityOption {
+  id: string;
+  label: string;
+  /** Present when this quality accepts fewer durations than the model overall. */
+  durationSecs?: number[];
+}
+
+/** Human ordering, widest-first, so the list does not read arbitrarily. */
+const VIDEO_ASPECT_ORDER = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9'];
+const VIDEO_QUALITY_ORDER = ['480p', '720p', '1080p', '4k'];
+
+const VIDEO_ASPECT_LABELS: Record<string, string> = {
+  '16:9': 'Landscape 16:9',
+  '9:16': 'Portrait 9:16',
+  '1:1': 'Square 1:1',
+  '4:3': 'Classic 4:3',
+  '3:4': 'Tall 3:4',
+  '21:9': 'Cinematic 21:9',
+};
+
+const VIDEO_QUALITY_LABELS: Record<string, string> = {
+  '480p': '480p',
+  '720p': '720p',
+  '1080p': '1080p',
+  '4k': '4K',
+};
+
+function sortByKnownOrder(order: string[], values: string[]): string[] {
+  return [...values].sort((a, b) => {
+    const ia = order.indexOf(a);
+    const ib = order.indexOf(b);
+    // A value this file has not seen sorts last rather than vanishing — an
+    // unknown option the catalog introduces is still a real one.
+    return (ia === -1 ? order.length : ia) - (ib === -1 ? order.length : ib);
+  });
+}
+
+function videoOutputSizesFor(modelId?: string): VideoGenerationOutputSize[] {
+  if (!modelId) return [];
+  return getModelMetadataById(modelId)?.videoGeneration?.outputSizes ?? [];
+}
+
+export function getVideoAspectOptionsForModel(modelId?: string): VideoAspectOption[] {
+  const unique = [...new Set(videoOutputSizesFor(modelId).map((size) => size.aspectRatio))];
+  return sortByKnownOrder(VIDEO_ASPECT_ORDER, unique).map((id) => ({
+    id,
+    label: VIDEO_ASPECT_LABELS[id] ?? id,
+  }));
+}
+
+/**
+ * Qualities available at a given aspect ratio. Scoped by aspect because the two
+ * are NOT independent — a model can publish a resolution in landscape that it
+ * does not publish in portrait, and offering it anyway produces a request the
+ * route rejects.
+ */
+export function getVideoQualityOptionsForModel(
+  modelId?: string,
+  aspectRatio?: string,
+): VideoQualityOption[] {
+  const sizes = videoOutputSizesFor(modelId);
+  const matching = aspectRatio ? sizes.filter((size) => size.aspectRatio === aspectRatio) : sizes;
+  const seen = new Map<string, VideoQualityOption>();
+  for (const size of matching) {
+    if (seen.has(size.resolution)) continue;
+    seen.set(size.resolution, {
+      id: size.resolution,
+      label: VIDEO_QUALITY_LABELS[size.resolution] ?? size.resolution,
+      ...(size.durationSecs ? { durationSecs: size.durationSecs } : {}),
+    });
+  }
+  return sortByKnownOrder(VIDEO_QUALITY_ORDER, [...seen.keys()]).map((id) => seen.get(id)!);
+}
+
+/** True when the model publishes this exact tuple. */
+export function isVideoOutputSupported(
+  modelId: string | undefined,
+  aspectRatio: string,
+  resolution: string,
+): boolean {
+  return videoOutputSizesFor(modelId).some(
+    (size) => size.aspectRatio === aspectRatio && size.resolution === resolution,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Image aspect ratios
+// ---------------------------------------------------------------------------
+
+export interface ImageAspectOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * Provider-published ratios per wired image adapter.
+ *
+ * Unlike video, an image model's shapes are a property of the ADAPTER, not of
+ * per-model output sizes — Gemini accepts the same ratio set for every model it
+ * serves — so this is keyed by `imageApi` rather than read from the model row.
+ *
+ * The image route holds the same table as the server authority and re-checks
+ * every request after catalog resolution; this copy exists so Web, Mobile and
+ * Desktop can render a picker that cannot offer a ratio the route would reject.
+ * Keep the two in step: a ratio added here but not there becomes a visible
+ * option that fails at send.
+ */
+const IMAGE_ASPECT_RATIOS_BY_IMAGE_API: Record<
+  NonNullable<ModelMetadata['imageApi']>,
+  readonly string[]
+> = {
+  gemini: [
+    '1:1',
+    '1:4',
+    '1:8',
+    '2:3',
+    '3:2',
+    '3:4',
+    '4:1',
+    '4:3',
+    '4:5',
+    '5:4',
+    '8:1',
+    '9:16',
+    '16:9',
+    '21:9',
+  ],
+  imagen: ['1:1', '3:4', '4:3', '9:16', '16:9'],
+  // The OpenAI adapter sends the enumerated Images API dimensions only, so it
+  // publishes just the ratios whose exact pixel mapping is represented.
+  openai: ['1:1', '2:3', '3:2'],
+  stability: ['1:1', '2:3', '3:2', '4:5', '5:4', '9:16', '16:9', '21:9', '9:21'],
+};
+
+/** Widest-first, matching the video ordering so the two pickers read alike. */
+const IMAGE_ASPECT_ORDER = [
+  '1:1',
+  '16:9',
+  '9:16',
+  '4:3',
+  '3:4',
+  '3:2',
+  '2:3',
+  '5:4',
+  '4:5',
+  '21:9',
+  '9:21',
+  '4:1',
+  '1:4',
+  '8:1',
+  '1:8',
+];
+
+const IMAGE_ASPECT_LABELS: Record<string, string> = {
+  '1:1': 'Square 1:1',
+  '16:9': 'Landscape 16:9',
+  '9:16': 'Portrait 9:16',
+  '4:3': 'Classic 4:3',
+  '3:4': 'Tall 3:4',
+  '3:2': 'Photo 3:2',
+  '2:3': 'Portrait 2:3',
+  '5:4': 'Wide 5:4',
+  '4:5': 'Social 4:5',
+  '21:9': 'Cinematic 21:9',
+  '9:21': 'Tall 9:21',
+  '4:1': 'Banner 4:1',
+  '1:4': 'Column 1:4',
+  '8:1': 'Ultra-wide 8:1',
+  '1:8': 'Ultra-tall 1:8',
+};
+
+/**
+ * Aspect ratios a given image model can actually produce. Empty when the model
+ * is unknown or is not an image model, so a caller that renders this list
+ * cannot offer a shape the route would reject.
+ */
+export function getImageAspectOptionsForModel(modelId?: string): ImageAspectOption[] {
+  if (!modelId) return [];
+  const imageApi = getModelMetadataById(modelId)?.imageApi;
+  if (!imageApi) return [];
+  const supported = IMAGE_ASPECT_RATIOS_BY_IMAGE_API[imageApi] ?? [];
+  return sortByKnownOrder(IMAGE_ASPECT_ORDER, [...supported]).map((id) => ({
+    id,
+    label: IMAGE_ASPECT_LABELS[id] ?? id,
+  }));
+}
+
+/** True when the model's adapter publishes this exact ratio. */
+export function isImageAspectSupported(modelId: string | undefined, aspectRatio: string): boolean {
+  return getImageAspectOptionsForModel(modelId).some((option) => option.id === aspectRatio);
+}
+
 export function resolveVideoGenerationOutputSize(
   model: Pick<ModelMetadata, 'videoGeneration'>,
   resolution: string,

@@ -26,6 +26,10 @@ import {
   isUpgrade,
 } from '@/lib/server/stripe-plan-change';
 import { isPerSeatBillingPlan } from '@agiworkforce/types';
+import {
+  getSubscriptionBillingOwnerPolicy,
+  stripeBillingOwnershipMessage,
+} from '@/lib/server/subscription-billing-owner';
 
 let stripeClient: Stripe | null = null;
 function getStripe(): Stripe {
@@ -65,12 +69,19 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   // Fetch current subscription
   type SubRow = Pick<
     SubscriptionRow,
-    'status' | 'plan_tier' | 'stripe_customer_id' | 'stripe_subscription_id'
+    | 'status'
+    | 'plan_tier'
+    | 'stripe_customer_id'
+    | 'stripe_subscription_id'
+    | 'apple_original_transaction_id'
+    | 'google_purchase_token'
+    | 'current_period_end'
   >;
   let subRows: SubRow[];
   try {
     subRows = await db.query<SubRow>(
-      `select status, plan_tier, stripe_customer_id, stripe_subscription_id
+      `select status, plan_tier, stripe_customer_id, stripe_subscription_id,
+              apple_original_transaction_id, google_purchase_token, current_period_end
        from subscriptions where user_id = $1 limit 1`,
       [userId],
     );
@@ -81,8 +92,17 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     );
   }
   const sub = subRows[0] ?? null;
+  const ownerPolicy = getSubscriptionBillingOwnerPolicy(sub);
 
-  if (!sub || !['active', 'trialing'].includes(sub.status)) {
+  if (sub && !ownerPolicy.ownershipVerified) {
+    throw createError.conflict(stripeBillingOwnershipMessage(ownerPolicy, 'upgrade'));
+  }
+
+  if (sub && !ownerPolicy.terminal && !ownerPolicy.canApplyStripeUpgrade) {
+    throw createError.conflict(stripeBillingOwnershipMessage(ownerPolicy, 'upgrade'));
+  }
+
+  if (!sub || ownerPolicy.terminal) {
     throw createError.validation(
       'No active subscription found. Use checkout to start a new subscription.',
     );

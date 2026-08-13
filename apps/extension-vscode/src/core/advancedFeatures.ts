@@ -1,6 +1,5 @@
 /**
- * advancedFeatures.ts — Validation + status-bar surface for non-default features
- * (inline completions, MCP, desktop bridge).
+ * advancedFeatures.ts — Credential validation for opt-in inline completions.
  *
  * Extracted from `extension.ts` (~95 LOC) per A1 decomposition.
  */

@@ -12,14 +12,17 @@ function request(headers: Record<string, string> = {}) {
 }
 
 describe('managed cloud chat surface policy', () => {
-  it.each(['web', 'mobile', 'desktop'] as const)('admits Free and Basic chat on %s', (surface) => {
-    expect(canUseManagedCloudChatSurface('free', surface)).toBe(true);
-    expect(canUseManagedCloudChatSurface('basic', surface)).toBe(true);
-    expect(getCloudChatSurfaceCapability(surface)).toBe('managed_chat');
-    expect(resolveCloudChatSurface(request({ 'x-agi-surface': surface }))).toBe(surface);
-  });
+  it.each(['web', 'mobile', 'desktop', 'chrome'] as const)(
+    'admits Free and Basic chat on %s',
+    (surface) => {
+      expect(canUseManagedCloudChatSurface('free', surface)).toBe(true);
+      expect(canUseManagedCloudChatSurface('basic', surface)).toBe(true);
+      expect(getCloudChatSurfaceCapability(surface)).toBe('managed_chat');
+      expect(resolveCloudChatSurface(request({ 'x-agi-surface': surface }))).toBe(surface);
+    },
+  );
 
-  it.each(['chrome', 'vscode', 'cli'] as const)(
+  it.each(['vscode', 'cli'] as const)(
     'requires the developer-surface capability on %s',
     (surface) => {
       expect(getCloudChatSurfaceCapability(surface)).toBe('developer_surfaces');
@@ -52,11 +55,14 @@ describe('managed cloud chat surface policy', () => {
     expect(
       resolveCloudChatSurface(request({ 'x-client': 'vscode-extension', 'x-agi-surface': 'web' })),
     ).toBe('vscode');
-    expect(
-      resolveCloudChatSurface(
-        request({ origin: 'chrome-extension://abcdefghijklmnop', 'x-agi-surface': 'web' }),
-      ),
-    ).toBe('chrome');
+    const chromeRequest = request({
+      origin: 'chrome-extension://abcdefghijklmnop',
+      'x-agi-surface': 'web',
+    });
+    expect(resolveCloudChatSurface(chromeRequest)).toBe('chrome');
+    expect(canUseManagedCloudChatSurface('basic', resolveCloudChatSurface(chromeRequest))).toBe(
+      true,
+    );
   });
 
   // WEB-AUTH-SURFACE-CLAIM-DISCARDED-01
@@ -74,7 +80,7 @@ describe('managed cloud chat surface policy', () => {
       },
     );
 
-    it.each(['cli', 'vscode', 'chrome'] as const)(
+    it.each(['cli', 'vscode'] as const)(
       'keeps %s granularity when the header names a surface already in the class',
       (claimed) => {
         expect(resolveCloudChatSurface(request({ 'x-agi-surface': claimed }), 'developer')).toBe(
@@ -82,6 +88,12 @@ describe('managed cloud chat surface policy', () => {
         );
       },
     );
+
+    it('does not let a developer credential claim the Chrome consumer surface', () => {
+      expect(resolveCloudChatSurface(request({ 'x-agi-surface': 'chrome' }), 'developer')).toBe(
+        'cli',
+      );
+    });
 
     it('defaults to a developer surface when no usable hint is present', () => {
       expect(resolveCloudChatSurface(request(), 'developer')).toBe('cli');

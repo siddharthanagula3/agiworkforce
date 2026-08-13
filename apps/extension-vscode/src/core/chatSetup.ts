@@ -54,8 +54,8 @@ export function setupChat(
     contextPanelProvider,
   );
 
-  // ── Memory tree (cross-conversation facts) ──────────────────────────────────
-  const memoryTreeProvider = new MemoryTreeProvider(context.globalState);
+  // ── Memory tree (facts scoped to this workspace) ────────────────────────────
+  const memoryTreeProvider = new MemoryTreeProvider(context.workspaceState);
   context.subscriptions.push(
     vscode.window.registerTreeDataProvider('agi-workforce.memory', memoryTreeProvider),
     memoryTreeProvider,

@@ -4,26 +4,22 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { type DrawerContentComponentProps } from 'expo-router/drawer';
 import {
-  Bell,
   BookImage,
-  BookOpen,
   Bot,
-  Boxes,
   CalendarClock,
   FolderOpen,
   HelpCircle,
   MessageSquare,
+  MonitorSmartphone,
   Pin,
   Search,
   Settings,
-  Sparkles,
   SquarePen,
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
-import { DesktopCompanionWidget } from '@/src/shared/components/DesktopCompanionWidget';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
@@ -46,6 +42,7 @@ type RoutePath =
   | '/(app)/library'
   | '/(app)/skills'
   | '/(app)/schedules'
+  | '/(app)/companion'
   | '/(app)/agents'
   | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
@@ -55,15 +52,7 @@ type RoutePath =
   | '/(app)/chat/[id]';
 
 interface PrimaryItem {
-  key:
-    | 'chats'
-    | 'projects'
-    | 'artifacts'
-    | 'library'
-    | 'skills'
-    | 'tasks'
-    | 'schedules'
-    | 'notifications';
+  key: 'chats' | 'projects' | 'library' | 'schedules' | 'remote';
   label: string;
   icon: LucideIcon;
   route?: RoutePath;
@@ -83,31 +72,17 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     icon: FolderOpen,
     route: '/(app)/(tabs)/projects',
   },
-  {
-    key: 'artifacts',
-    label: 'Artifacts',
-    icon: Boxes,
-    route: '/(app)/artifacts',
-  },
+  // Library is the single place generated media and files live. "Artifacts"
+  // was a second grid over the same material — and a worse one, since its
+  // tiles rendered no thumbnails — so it is de-listed here rather than kept as
+  // a competing entry point (founder 2026-08-13). The `/(app)/artifacts`
+  // route still exists and is still reachable from an artifact card in a
+  // message; only the drawer row is gone.
   {
     key: 'library',
     label: 'Library',
     icon: BookImage,
     route: '/(app)/library',
-  },
-  {
-    key: 'skills',
-    label: 'Skills',
-    icon: BookOpen,
-    route: '/(app)/skills',
-    cloud: true,
-  },
-  {
-    key: 'tasks',
-    label: 'Tasks',
-    icon: Sparkles,
-    route: '/(app)/agents',
-    cloud: true,
   },
   {
     key: 'schedules',
@@ -116,15 +91,11 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     route: '/(app)/schedules',
     cloud: true,
   },
-  // The notification centre had no inbound navigation at all: Tasks and
-  // Schedules wrote into it and nothing ever led the user back out. This row
-  // is the drawer half of that entry point; the header badge
-  // (shared/components/DrawerButton) is the always-visible half.
   {
-    key: 'notifications',
-    label: 'Notifications',
-    icon: Bell,
-    route: '/(app)/notifications',
+    key: 'remote',
+    label: 'Remote',
+    icon: MonitorSmartphone,
+    route: '/(app)/companion',
   },
 ];
 
@@ -300,8 +271,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
   const appMode = useChatAppModeStore((s) => s.appMode);
-  const workMode = useChatStore((s) => s.workMode);
-  const setWorkMode = useChatStore((s) => s.setWorkMode);
   const tier = useTierStore((s) => s.tier);
   // Same gate the [+] sheet applied before this moved: Cloud-only, and only for
   // a plan that includes AGI Work. The server is still authoritative.
@@ -310,12 +279,6 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const closeDrawer = useCallback(() => {
     props.navigation.closeDrawer();
   }, [props.navigation]);
-
-  // Toggling leaves the drawer open: this is a mode change, not navigation, and
-  // closing would hide the state change the user just made.
-  const handleToggleAgiWork = useCallback(() => {
-    setWorkMode(workMode === 'agiwork' ? 'chat' : 'agiwork');
-  }, [setWorkMode, workMode]);
 
   const navigate = useCallback(
     (route: RoutePath, params?: Record<string, string>) => {
@@ -376,12 +339,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         // Cloud mode exposes the shared cloud surfaces (Tasks, Schedules). Local
         // mode keeps only on-device surfaces and hides every cloud-only item.
         if (item.key === 'schedules' && !FEATURES.schedules) return false;
-        if (item.key === 'tasks' && !FEATURES.cloudTasks) return false;
-        if (item.key === 'skills' && !FEATURES.skills) return false;
-        // The notification centre renders nothing without cloudChat (it early
-        // returns null), so the row would open a blank screen. Not appMode:
-        // notifications are readable in both modes.
-        if (item.key === 'notifications' && !FEATURES.cloudChat) return false;
+        if (item.key === 'remote' && !FEATURES.companion) return false;
         if (appMode === 'cloud') return true;
         return !item.cloud;
       }),
@@ -393,14 +351,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       const p = pathname.startsWith('/') ? pathname : `/${pathname}`;
       if (key === 'projects') return p.includes('/projects');
       if (key === 'chats') return p.includes('/chats');
-      if (key === 'artifacts') return p.includes('/artifacts');
       if (key === 'library') return p.includes('/library');
-      if (key === 'skills') return p.includes('/skills');
       if (key === 'schedules') return p.includes('/schedules');
-      if (key === 'tasks') return p.includes('/agents');
-      // `/settings/notifications` is the notification PREFERENCES screen, a
-      // different destination that also matches a bare `/notifications` test.
-      if (key === 'notifications') return p.includes('/notifications') && !p.includes('/settings');
+      if (key === 'remote') return p.includes('/companion');
       return false;
     },
     [pathname],
@@ -467,27 +420,23 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 }}
               />
             ))}
-            {/* AGI Work is a session-wide stance, not a per-message attachment,
-                so it lives here rather than in the composer's [+] sheet where it
-                used to be a toggle (founder 2026-08-06). It stays a row that
-                flips state instead of a route because there is no AGI Work
-                screen — the mode changes how the next turns are executed. */}
+            {/* AGI Work NAVIGATES; it does not toggle (founder 2026-08-13).
+                A drawer row that silently flipped a session stance gave no
+                feedback about what it had changed and no way to see the work
+                it produced. `workMode` is a property of a cloud agent RUN
+                (cloud-contracts/cloud-agent-runs.ts), not of a conversation,
+                so "the AGI Work chats" are exactly the runs list — which is
+                also why the separate "Tasks" row is gone rather than sitting
+                beside this one showing the same records. */}
             {showAgiWork ? (
               <NavRow
                 label="AGI Work"
                 icon={Bot}
-                active={workMode === 'agiwork'}
-                tag={workMode === 'agiwork' ? 'On' : 'Cloud'}
-                onPress={handleToggleAgiWork}
+                tag="Cloud"
+                onPress={() => navigate('/(app)/agents')}
               />
             ) : null}
           </View>
-
-          {FEATURES.companion ? (
-            <View style={{ marginTop: 14 }}>
-              <DesktopCompanionWidget compact />
-            </View>
-          ) : null}
 
           {displayedProjects.length > 0 ? (
             <View style={{ marginTop: 22 }}>

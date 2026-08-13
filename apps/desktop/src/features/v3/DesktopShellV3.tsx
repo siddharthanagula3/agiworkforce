@@ -8,6 +8,7 @@ import {
   CapabilityProvider,
   type ChatHostBridge,
   type ChatInterfaceProps,
+  useChatModelStore,
   useChatStore as useSharedChatStore,
 } from '@agiworkforce/unified-chat';
 import type { ChatMessage, ChatRuntime } from '@agiworkforce/unified-chat';
@@ -19,6 +20,7 @@ import { AgiWorkArtifacts } from './AgiWorkArtifacts';
 import { AgiWorkScheduled } from './AgiWorkScheduled';
 import { ArtifactPanel } from '@/features/artifacts/ArtifactPanel';
 import { ArtifactDraftView } from '@/features/artifacts/ArtifactDraftView';
+import { getAgiTaskModelEligibility } from '@/lib/modelCapabilityGates';
 // Library is the Managed Cloud counterpart to Local's Artifacts: cloud-stored
 // files, shared with web through @agiworkforce/unified-chat.
 const DesktopLibrary = lazy(() => import('@/features/library/DesktopLibrary'));
@@ -247,9 +249,23 @@ export function DesktopShellV3({
   const cloudSessionEpoch = useUnifiedAuthStore((state) => state.cloudSessionEpoch);
   const activeCloudConversationId = useChatStore((s) => s.activeConversationId);
   const isManagedCloud = privacyMode === 'managed';
+  const needsLocalModelSetup = useChatModelStore(
+    (state) =>
+      privacyMode === 'local' &&
+      !state.models.some((model) => model.isLocal === true && model.availability !== 'unavailable'),
+  );
   const [managedSkills, setManagedSkills] = useState<ChatInterfaceProps['skills']>([]);
   const cloudVoice = useCloudVoiceController(isManagedCloud);
-  const canUseAgiWork = !isManagedCloud || canUseDesktopCloudAgiWork(accountPlan);
+  const selectedModel = useChatModelStore((state) => state.getSelectedModel());
+  const localAgiTaskEligibility = getAgiTaskModelEligibility(selectedModel);
+  const canUseAgiWork = isManagedCloud
+    ? canUseDesktopCloudAgiWork(accountPlan)
+    : localAgiTaskEligibility.eligible;
+  const agiWorkUnavailableReason = canUseAgiWork
+    ? undefined
+    : isManagedCloud
+      ? 'AGI Work is not included in this account plan. Project chat still works.'
+      : localAgiTaskEligibility.reason;
   const composerSendShortcut = useSettingsStore(
     (state) => state.chatPreferences.sendShortcut ?? 'enter',
   );
@@ -765,6 +781,7 @@ export function DesktopShellV3({
                 onClearFolder={folderSeamEnabled ? clearFolder : undefined}
                 projectPicker={composerProjectPicker}
                 canUseAgiWork={canUseAgiWork}
+                agiWorkUnavailableReason={agiWorkUnavailableReason}
                 composerHostControls={
                   <ComposerContextControls
                     mode={privacyMode}
@@ -782,6 +799,8 @@ export function DesktopShellV3({
                     workspaceLabel={folderSeamEnabled ? currentFolderLabel : null}
                     onSelectWorkspace={folderSeamEnabled ? handleSelectFolder : undefined}
                     onOpenScheduled={() => handleNavigateView('work-scheduled')}
+                    onSetUpLocalModel={isManagedCloud ? undefined : onModelSelectorClick}
+                    needsLocalModelSetup={needsLocalModelSetup}
                   />
                 }
                 enableSearchOverlay={false}

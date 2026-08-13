@@ -29,34 +29,35 @@ function makeContext(cachedTier?: string): vscode.ExtensionContext {
   } as unknown as vscode.ExtensionContext;
 }
 
-function stubTierInspect(globalValue?: string, workspaceValue?: string): void {
+function stubConfiguration(): void {
   vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
     get: vi.fn(),
-    inspect: vi.fn((key: string) => (key === 'tier' ? { globalValue, workspaceValue } : undefined)),
+    inspect: vi.fn(),
     has: vi.fn().mockReturnValue(false),
     update: vi.fn(),
   } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
 }
 
-describe('resolveTier workspace-spoofing hardening', () => {
+describe('resolveTier account-owned entitlement', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('ignores a workspace-scoped max override', async () => {
-    stubTierInspect(undefined, 'max');
+  it('ignores removed legacy tier settings and falls back to BYOK', async () => {
+    vi.mocked(vscode.workspace.getConfiguration).mockReturnValue({
+      get: vi.fn(),
+      inspect: vi.fn((key: string) =>
+        key === 'tier' ? { globalValue: 'max', workspaceValue: 'enterprise' } : undefined,
+      ),
+      has: vi.fn().mockReturnValue(false),
+      update: vi.fn(),
+    } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
 
     await expect(resolveTier(makeContext())).resolves.toBe('byok');
   });
 
-  it('respects a legitimate global max override', async () => {
-    stubTierInspect('max', undefined);
-
-    await expect(resolveTier(makeContext())).resolves.toBe('max');
-  });
-
-  it('uses the cached account tier when no global override exists', async () => {
-    stubTierInspect(undefined, undefined);
+  it('uses the cached account tier', async () => {
+    stubConfiguration();
 
     await expect(resolveTier(makeContext('basic'))).resolves.toBe('basic');
   });
@@ -64,14 +65,14 @@ describe('resolveTier workspace-spoofing hardening', () => {
   it.each(['free', 'max_15x', 'team', 'enterprise'] as const)(
     'preserves the canonical %s account tier instead of collapsing it to BYOK',
     async (tier) => {
-      stubTierInspect(undefined, undefined);
+      stubConfiguration();
 
       await expect(resolveTier(makeContext(tier))).resolves.toBe(tier);
     },
   );
 
-  it('keeps cross-provider switching locked after a workspace tier spoof', async () => {
-    stubTierInspect(undefined, 'max');
+  it('keeps cross-provider switching locked without an account entitlement', async () => {
+    stubConfiguration();
     const tier = await resolveTier(makeContext());
 
     expect(guardProviderSwitch(FIRST_PROVIDER_MODEL, SECOND_PROVIDER_MODEL, tier)).toBe(

@@ -10,10 +10,10 @@ import { WEB_APP_URL } from '../api/config';
 import { parseMeResponse, type MeResponse } from '@agiworkforce/cloud-contracts';
 import { effectivePlanTier, normalizeUIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
-// `isTauri` from the zero-import leaf, not the barrel: this module runs during
+// Runtime flags come from the zero-import leaf, not the barrel: this module runs during
 // auth-store init (checkSession → isLocalDevBrowser), and pulling `isTauri`
 // through the cyclic `tauri-mock` barrel reads it before initialization.
-import { isTauri } from '../lib/runtimeEnvironment';
+import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 import { authorizeDesktopDevice } from './desktopDeviceAuthorization';
 import {
   openDesktopCloudSignInWindow,
@@ -84,6 +84,7 @@ const DEV_BROWSER_SESSION_STORAGE_KEY = '__AGI_DEV_BROWSER_CLOUD_SESSION__';
 const NATIVE_SESSION_RESTORE_TIMEOUT_MS = 8_000;
 const SESSION_REFRESH_SKEW_SECONDS = 5 * 60;
 const REMOTE_LOGOUT_TIMEOUT_MS = 5_000;
+const usesNativeCloudAccountBridge = isTauri || isElectronHost;
 
 interface CachedAuthData<T> {
   data: T;
@@ -92,7 +93,9 @@ interface CachedAuthData<T> {
 }
 
 function isLocalDevBrowser(): boolean {
-  if (isTauri || typeof window === 'undefined' || !import.meta.env.DEV) return false;
+  if (usesNativeCloudAccountBridge || typeof window === 'undefined' || !import.meta.env.DEV) {
+    return false;
+  }
   return window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 }
 
@@ -249,7 +252,8 @@ function buildSubscription(userId: string, plan: MeResponse['plan'] | null): Sub
     stripe_subscription_id: null,
     current_period_start: null,
     current_period_end: currentPeriodEnd,
-    cancel_at_period_end: false,
+    cancel_at_period_end: plan.cancel_at_period_end ?? false,
+    subscription_source: plan.subscription_source ?? 'unknown',
     canceled_at: null,
     created_at: now,
     updated_at: now,
@@ -267,6 +271,11 @@ function normalizeFeatureFlags(raw: MeResponse['feature_flags'] | null): Record<
 
 async function openWebAccount(path = '/sign-in'): Promise<void> {
   const url = `${WEB_APP_URL}${path}`;
+  if (isElectronHost) {
+    const { open } = await import('@tauri-apps/plugin-shell');
+    await open(url);
+    return;
+  }
   if (!isTauri) {
     window.location.href = url;
     return;
@@ -368,7 +377,7 @@ class CloudAccountAuthService {
       return;
     }
 
-    if (isTauri && !this.currentState.session) {
+    if (usesNativeCloudAccountBridge && !this.currentState.session) {
       this.updateState({ isLoading: true, error: null });
       try {
         const seed = await restoreNativeSessionSeed();
@@ -411,7 +420,7 @@ class CloudAccountAuthService {
 
     try {
       const { guardedFetch } = await import('../lib/egressGuard');
-      if (isTauri) {
+      if (usesNativeCloudAccountBridge) {
         // Device authorization, account validation, managed chat persistence,
         // and native sync all terminate at the Next.js managed-cloud origin.
         // Set it before requesting a code so a fresh install cannot fall back
@@ -425,7 +434,7 @@ class CloudAccountAuthService {
         origin: WEB_APP_URL,
         signal: controller.signal,
         post: async (url, payload, headers) => {
-          if (isTauri) {
+          if (usesNativeCloudAccountBridge) {
             const endpoint = new URL(url);
             const trustedOrigin = new URL(WEB_APP_URL).origin;
             if (endpoint.origin !== trustedOrigin) {
@@ -483,6 +492,13 @@ class CloudAccountAuthService {
             signInWindow.current = await openDesktopCloudSignInWindow(url, {
               onUserClosed: () => controller.abort(),
             });
+            return;
+          }
+          if (isElectronHost) {
+            // Electron denies embedded popups at the main-process boundary.
+            // Use its shell shim so device approval opens in the real browser.
+            const { open } = await import('@tauri-apps/plugin-shell');
+            await open(url);
             return;
           }
           const opened = window.open(url, '_blank', 'noopener,noreferrer');
@@ -611,7 +627,7 @@ class CloudAccountAuthService {
     // native clear or remote logout erase/revoke account B's replacement.
     if (this.sessionGeneration !== signOutGeneration || this.currentState.session !== null) return;
 
-    const nativeClear = isTauri
+    const nativeClear = usesNativeCloudAccountBridge
       ? this.clearNativeSession().catch((error) => {
           console.warn('[Auth] Failed to clear cloud account tokens:', error);
         })
@@ -820,7 +836,7 @@ class CloudAccountAuthService {
     });
     this.scheduleSessionExpiry(session);
 
-    if (isTauri) {
+    if (usesNativeCloudAccountBridge) {
       try {
         await this.persistNativeSession(session, generation);
       } catch (error) {
@@ -962,7 +978,7 @@ class CloudAccountAuthService {
     if (typeof window !== 'undefined') {
       window.sessionStorage.removeItem(DEV_BROWSER_SESSION_STORAGE_KEY);
     }
-    if (isTauri) {
+    if (usesNativeCloudAccountBridge) {
       await this.clearNativeSession().catch((error) => {
         console.warn('[Auth] Failed to clear an invalid Cloud session:', error);
       });

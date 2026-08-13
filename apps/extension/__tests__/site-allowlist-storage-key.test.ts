@@ -32,7 +32,7 @@ const DEFINITION_FILE = 'background/policy.ts';
  * already in flight against those files, so this set records the remaining
  * work rather than hiding it — it may only ever shrink.
  */
-const PENDING_MIGRATION = new Set(['side_panel.ts', 'options.ts', 'inPagePanel/setup.ts']);
+const PENDING_MIGRATION = new Set(['side_panel.ts', 'inPagePanel/setup.ts']);
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];

@@ -12,13 +12,7 @@
  * subscriptions open Stripe Checkout inside an owned Desktop billing window.
  */
 import { X } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/ui/Dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/ui/Dialog';
 import { PlanCard } from './PlanCard';
 import {
   isFreePlan,
@@ -38,6 +32,7 @@ import {
 import { useState } from 'react';
 import { openBillingPortal } from '../../lib/stripeCheckout';
 import { cloudAccountAuth } from '../../services/cloudAccountAuth';
+import { getDesktopSubscriptionOwnerPolicy } from '../../lib/subscriptionOwnership';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -73,7 +68,15 @@ function legacyToUIPlanTier(raw: string | null | undefined): UIPlanTier | null {
 
 export function PlansModal({ open, onOpenChange }: PlansModalProps) {
   const rawPlan = useAuthStore(selectPlan);
+  const subscriptionSource = useAuthStore((state) => state.subscriptionSource);
+  const subscriptionStatus = useAuthStore((state) => state.subscriptionStatus);
+  const subscriptionFetchStatus = useAuthStore((state) => state.subscriptionFetchStatus);
   const currentTier = legacyToUIPlanTier(rawPlan);
+  const ownerPolicy = getDesktopSubscriptionOwnerPolicy(
+    subscriptionSource,
+    subscriptionStatus,
+    subscriptionFetchStatus === 'succeeded',
+  );
   const [upgradeRequest, setUpgradeRequest] = useState<DesktopUpgradeRequest | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [billingBusy, setBillingBusy] = useState(false);
@@ -93,7 +96,15 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
     }
 
     if (isSelfServePaidPlanTier(tier)) {
+      if (!ownerPolicy.canStartStripePlanChange) {
+        setBillingError(
+          ownerPolicy.stripeActionBlockedReason ??
+            'This subscription cannot be changed through Stripe.',
+        );
+        return;
+      }
       if (
+        ownerPolicy.canOpenStripePortal &&
         !isFreePlan(currentTier) &&
         (!isSelfServePaidPlanTier(currentTier) || tierAtLeast(currentTier, tier))
       ) {
@@ -166,6 +177,12 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
                     !isFreePlan(currentTier) &&
                     (!isSelfServePaidPlanTier(currentTier) || tierAtLeast(currentTier, tier))
                   }
+                  actionDisabled={
+                    isSelfServePaidPlanTier(tier) && !ownerPolicy.canStartStripePlanChange
+                  }
+                  {...(ownerPolicy.stripeActionBlockedReason
+                    ? { actionDisabledReason: ownerPolicy.stripeActionBlockedReason }
+                    : {})}
                   onCtaClick={(selectedTier) => void handleCtaClick(selectedTier)}
                 />
               ))}
@@ -178,6 +195,14 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
               <p role="status" className="mt-4 text-center text-xs text-muted-foreground">
                 Checking your current Cloud plan…
               </p>
+            ) : null}
+            {currentTier && subscriptionStatus !== 'none' ? (
+              <div className="mt-4 rounded-lg border border-border bg-muted/30 px-4 py-3 text-center">
+                <p className="text-xs font-medium text-foreground">
+                  Billing owner: {ownerPolicy.sourceLabel}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{ownerPolicy.description}</p>
+              </div>
             ) : null}
 
             {/* Footer note */}

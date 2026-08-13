@@ -25,6 +25,8 @@ export interface RunImageGenerationTurnInput {
   displayText: string;
   prompt: string;
   model: string;
+  /** Output shape chosen in the [+] sheet; absent keeps the route's default. */
+  aspectRatio?: ImageGenRequest['aspect_ratio'];
   ownerId: string;
   begin: (conversationId: string, displayText: string, prompt: string, model: string) => string;
   complete: (
@@ -91,7 +93,14 @@ export async function runImageGenerationTurn(
   );
 
   try {
-    const result = await dependencies.generate({ prompt: input.prompt, model: input.model });
+    const result = await dependencies.generate({
+      prompt: input.prompt,
+      model: input.model,
+      // Omitted rather than defaulted: the route keeps a legacy size-derived
+      // ratio for requests that carry none, and sending a guess here would
+      // override it with something the user never chose.
+      ...(input.aspectRatio ? { aspect_ratio: input.aspectRatio } : {}),
+    });
     if (!isAccountCurrent()) return { status: 'cancelled', assistantMessageId };
     const image = result.images?.[0];
     const imageUrl = dependencies.getUri(image);

@@ -8,7 +8,11 @@ import {
   isExecutableImageModel,
   isExecutableVideoModel,
 } from '@agiworkforce/types';
-import type { ManagedMediaImageAspectRatio } from '@agiworkforce/cloud-contracts';
+import type {
+  ManagedMediaImageAspectRatio,
+  ManagedMediaVideoAspectRatio,
+  ManagedMediaVideoResolution,
+} from '@agiworkforce/cloud-contracts';
 import { useMediaStore } from '@shared/stores/media-store';
 import {
   generateVideo as startVideoGeneration,
@@ -24,7 +28,9 @@ async function getAuthToken(): Promise<string> {
 export interface GenerateVideoOptions {
   /** Seconds of footage. The route defaults to the cheapest valid Google duration (4s). */
   durationSecs?: number;
-  resolution?: '720p' | '1080p' | '4k';
+  resolution?: ManagedMediaVideoResolution;
+  /** Landscape/portrait, validated by the route against the model. */
+  aspectRatio?: ManagedMediaVideoAspectRatio;
   provider?: 'runway' | 'google' | 'openrouter';
   /** Catalog model id chosen in the composer's video picker; see VideoGenerationRequest.model. */
   modelId?: string;
@@ -364,6 +370,7 @@ export function useMediaGeneration() {
           prompt,
           ...(options.durationSecs !== undefined ? { duration_secs: options.durationSecs } : {}),
           ...(options.resolution ? { resolution: options.resolution } : {}),
+          ...(options.aspectRatio ? { aspect_ratio: options.aspectRatio } : {}),
           ...(options.provider ? { provider: options.provider } : {}),
           ...(options.modelId ? { model: options.modelId } : {}),
           ...(options.conversationId ? { conversation_id: options.conversationId } : {}),

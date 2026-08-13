@@ -44,10 +44,12 @@ vi.mock('../runtimeEnvironment', async (importOriginal) => ({
 
 import {
   applyPlanUpgrade,
+  openBillingPortal,
   openCheckout,
   previewPlanUpgrade,
   waitForPlanActivation,
 } from '../stripeCheckout';
+import { useAuthStore } from '../../stores/auth';
 
 describe('Desktop Stripe upgrade flow', () => {
   beforeEach(() => {
@@ -58,6 +60,11 @@ describe('Desktop Stripe upgrade flow', () => {
     });
     mocks.refreshUserData.mockResolvedValue(undefined);
     mocks.getPlanTier.mockReturnValue('max');
+    useAuthStore.setState({
+      subscriptionSource: 'stripe',
+      subscriptionStatus: 'active',
+      subscriptionFetchStatus: 'succeeded',
+    });
   });
 
   afterEach(() => {
@@ -152,5 +159,30 @@ describe('Desktop Stripe upgrade flow', () => {
     );
     expect(mocks.openExternalUrl).not.toHaveBeenCalled();
     expect(mocks.openDesktopBillingWindow).not.toHaveBeenCalled();
+  });
+
+  it('does not send portal, checkout, or upgrade requests for an Apple-owned subscription', async () => {
+    useAuthStore.setState({
+      subscriptionSource: 'apple',
+      subscriptionStatus: 'active',
+      subscriptionFetchStatus: 'succeeded',
+    });
+
+    await expect(openCheckout('pro')).resolves.toMatch(/managed by Apple/i);
+    await expect(openBillingPortal()).resolves.toMatch(/managed by Apple/i);
+    await expect(previewPlanUpgrade('pro')).rejects.toThrow(/managed by Apple/i);
+    await expect(applyPlanUpgrade('pro', 'preview')).rejects.toThrow(/managed by Apple/i);
+    expect(mocks.requestFetch).not.toHaveBeenCalled();
+  });
+
+  it('fails closed before a Stripe request when ownership is not verified', async () => {
+    useAuthStore.setState({
+      subscriptionSource: 'none',
+      subscriptionStatus: 'none',
+      subscriptionFetchStatus: 'failed',
+    });
+
+    await expect(openCheckout('pro')).resolves.toMatch(/could not be verified/i);
+    expect(mocks.requestFetch).not.toHaveBeenCalled();
   });
 });

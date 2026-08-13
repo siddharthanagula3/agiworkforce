@@ -14,10 +14,11 @@ import type { Readable } from 'node:stream';
  *
  * R2 has zero egress fees, unlike Vercel Blob's per-GB bandwidth charges, which
  * matters for a chat product serving generated images/attachments repeatedly.
- * Existing images/files use the public bucket + permanent URLs, matching the
- * trust model of the prior Vercel Blob usage. Generated videos use a distinct
- * private bucket and are readable only through the authenticated `/api/files`
- * route; the private path never constructs or returns a public URL.
+ * Legacy generated images/files and current avatars may still use the public
+ * bucket during migration. New generated media, chat attachments, and project
+ * knowledge use a distinct private bucket and are readable only through
+ * authenticated owner-scoped routes; private paths never construct or return
+ * a public URL.
  *
  * Once the CLOUDFLARE_R2_* env vars below are set, run
  * `node apps/web/scripts/verify-r2-connection.mjs` for an end-to-end smoke
@@ -300,4 +301,28 @@ export async function getPresignedUploadUrl(params: {
     expiresIn: params.expiresInSeconds ?? 300,
   });
   return { uploadUrl, publicUrl: publicUrlForKey(params.key) };
+}
+
+/**
+ * Presigned PUT URL for an object that must never have a public locator.
+ *
+ * The browser still uploads directly to R2, so large attachment bytes do not
+ * cross the Vercel request-body boundary. Reads must go through an
+ * authenticated, owner-scoped application route.
+ */
+export async function getPresignedPrivateUploadUrl(params: {
+  key: string;
+  contentType: string;
+  expiresInSeconds?: number;
+}): Promise<{ uploadUrl: string }> {
+  const client = getR2Client();
+  const command = new PutObjectCommand({
+    Bucket: getPrivateBucketName(),
+    Key: params.key,
+    ContentType: params.contentType,
+  });
+  const uploadUrl = await getSignedUrl(client, command, {
+    expiresIn: params.expiresInSeconds ?? 300,
+  });
+  return { uploadUrl };
 }

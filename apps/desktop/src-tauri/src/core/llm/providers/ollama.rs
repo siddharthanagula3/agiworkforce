@@ -202,6 +202,7 @@ pub(crate) fn build_ollama_chat_body(
     effective_messages: &[crate::core::llm::ChatMessage],
     tools: Option<&[crate::core::llm::ToolDefinition]>,
     images: Option<&[String]>,
+    num_ctx: u32,
     stream: bool,
 ) -> serde_json::Value {
     use agiworkforce_llm::serialize::{
@@ -224,7 +225,7 @@ pub(crate) fn build_ollama_chat_body(
             max_tokens: request.max_tokens.unwrap_or(0),
             temperature: request.temperature,
             think: resolve_ollama_think(request.thinking.as_ref()),
-            num_ctx: Some(OLLAMA_DEFAULT_NUM_CTX),
+            num_ctx: Some(num_ctx),
             stream,
         },
     )
@@ -491,6 +492,9 @@ impl LLMProvider for OllamaProvider {
             &effective_messages,
             native_tools,
             images.as_deref(),
+            u32::try_from(capabilities.context_length)
+                .unwrap_or(u32::MAX)
+                .min(OLLAMA_DEFAULT_NUM_CTX),
             false,
         );
 
@@ -684,6 +688,9 @@ impl LLMProvider for OllamaProvider {
             &effective_messages,
             native_tools,
             images.as_deref(),
+            u32::try_from(capabilities.context_length)
+                .unwrap_or(u32::MAX)
+                .min(OLLAMA_DEFAULT_NUM_CTX),
             true,
         );
 

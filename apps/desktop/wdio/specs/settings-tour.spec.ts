@@ -1,4 +1,5 @@
 import { resolveScreenDir } from '../support/dom';
+import { closeAnySettingsDialog, waitForSettingsReady } from '../support/close-settings';
 // Live-interaction QA pass over the full desktop Settings surface (local mode):
 // App.tsx -> SettingsPanel (gear icon in the v3 sidebar). Opens the modal for
 // real, walks every nav section, and records DOM evidence (text snapshot +
@@ -10,7 +11,8 @@ import { resolveScreenDir } from '../support/dom';
 
 const SCREEN_DIR = resolveScreenDir('settings');
 
-// Canonical order from packages/ui/ui/src/settings-nav.ts (SETTINGS_NAV).
+// Canonical rendered order from packages/ui/ui/src/settings-nav.ts
+// (SETTINGS_NAV_GROUPS after Local-only visibility filtering).
 const NAV_LABELS = [
   'General',
   // Account, Billing, and Usage are LOCAL_HIDDEN_TABS (SettingsPanel.tsx):
@@ -20,11 +22,13 @@ const NAV_LABELS = [
   'Privacy',
   'Models & Keys',
   'Capabilities',
-  'Agents',
+  'Connections',
+  'Cowork',
   'Connectors',
   'AGI Code',
   'AGI in Chrome',
   'Plugins',
+  'Agents',
   'Memory',
   'Notifications',
   'Voice',
@@ -53,8 +57,9 @@ function getContentSnapshot() {
   return browser.execute(() => {
     const nav = document.querySelector('nav[aria-label="Settings sections"]');
     const dialog = nav?.closest('[role="dialog"]') ?? document.querySelector('[role="dialog"]');
-    // Content pane is the sibling of <nav> inside the dialog's flex row.
-    const contentRoot = dialog?.querySelector('.flex-1.flex.flex-col.min-w-0');
+    // The content pane is the nav's direct sibling. Do not couple this evidence
+    // collector to Tailwind class order; class serialization is not a DOM contract.
+    const contentRoot = nav?.nextElementSibling;
     const text = (contentRoot?.textContent ?? '').replace(/\s+/g, ' ').trim();
     const hasErrorBoundary = /encountered an unexpected error|Something went wrong/i.test(text);
     const hasSpinner = !!contentRoot?.querySelector('.animate-spin');
@@ -77,20 +82,20 @@ describe('AGI Desktop Settings — full live tour', () => {
     // arbitrary tab — possibly DIRTY, in which case Escape raises the discard
     // confirmation. Close through the shared helper so the gear opens fresh
     // on General.
-    const { closeAnySettingsDialog } = await import('../support/close-settings');
     expect(await closeAnySettingsDialog()).toBe(true);
 
     const gear = await $('button[aria-label="Settings"]');
     await gear.waitForDisplayed({ timeout: 15000 });
     await gear.click();
 
-    const { waitForSettingsReady } = await import('../support/close-settings');
     await waitForSettingsReady();
 
     const snap = await getContentSnapshot();
     console.log('SETTINGS OPEN — active section:', snap.activeLabel);
     console.log('SETTINGS OPEN — content preview:', snap.text);
     expect(snap.hasErrorBoundary).toBe(false);
+    expect(snap.activeLabel).toBe('General');
+    expect(snap.text.length).toBeGreaterThan(0);
 
     await browser.saveScreenshot(`${SCREEN_DIR}/00-general-default.png`);
   });
@@ -104,8 +109,22 @@ describe('AGI Desktop Settings — full live tour', () => {
       console.log(`NAV[${label}] — button found and clicked:`, clicked);
       expect(clicked).toBe(true);
 
-      // Give lazy-loaded tabs (React.lazy + Suspense) time to resolve.
-      await browser.pause(600);
+      await browser.waitUntil(
+        async () => {
+          const section = await getContentSnapshot();
+          return (
+            section.activeLabel === label &&
+            !section.hasSpinner &&
+            !section.hasErrorBoundary &&
+            section.text.length > 0
+          );
+        },
+        {
+          timeout: 15_000,
+          interval: 100,
+          timeoutMsg: `Settings section ${label} did not settle with real content`,
+        },
+      );
 
       const snap = await getContentSnapshot();
       console.log(`NAV[${label}] — activeLabel:`, snap.activeLabel);
@@ -118,7 +137,29 @@ describe('AGI Desktop Settings — full live tour', () => {
       );
 
       expect(snap.hasErrorBoundary).toBe(false);
+      expect(snap.activeLabel).toBe(label);
       expect(snap.text.length).toBeGreaterThan(0);
+
+      if (label === 'Models & Keys' || label === 'Agents') {
+        const fullText = await browser.execute(() => {
+          const nav = document.querySelector('nav[aria-label="Settings sections"]');
+          return (nav?.nextElementSibling?.textContent ?? '').replace(/\s+/g, ' ').trim();
+        });
+        if (label === 'Models & Keys') {
+          expect(fullText).toContain('API Keys (BYOK)');
+          expect(fullText).toContain('Local Models');
+          expect(fullText).not.toContain('Request routing');
+          expect(fullText).not.toContain('Model Behavior');
+          expect(fullText).not.toContain('Prompt Completion');
+        } else {
+          expect(fullText).toContain('Max Task Timeout');
+          expect(fullText).toContain('Auto-Approve All Tools');
+          expect(fullText).not.toContain('Always Use Agent Mode');
+          expect(fullText).not.toContain('Approval Mode');
+          expect(fullText).not.toContain('Enable Checkpointing');
+          expect(fullText).not.toContain('Auto-resume on Restart');
+        }
+      }
     });
   }
 
@@ -132,5 +173,6 @@ describe('AGI Desktop Settings — full live tour', () => {
     );
     console.log('ESCAPE — settings nav still present after Escape:', stillOpen);
     await browser.saveScreenshot(`${SCREEN_DIR}/99-after-escape.png`);
+    expect(stillOpen).toBe(false);
   });
 });

@@ -70,6 +70,12 @@ fn managed_auth_boundary_for_goal(goal: &Goal) -> Result<Option<ManagedAuthBound
         .map_err(|error| anyhow!(error))
 }
 
+fn has_explicit_success_criteria(goal: &Goal) -> bool {
+    goal.success_criteria
+        .iter()
+        .any(|criterion| !criterion.trim().is_empty())
+}
+
 // === MEDIUM-006 fix: Context memory limits ===
 /// Maximum number of context memory entries to prevent unbounded growth.
 const MAX_CONTEXT_MEMORY_ENTRIES: usize = 1000;
@@ -1392,6 +1398,32 @@ impl AGICore {
                 break;
             }
 
+            // A task without explicit success criteria cannot truthfully claim
+            // that its goal was achieved. Once every planned step has actually
+            // succeeded, stop the autonomous loop and hand the work to the user
+            // for review. Deliberately do not emit `agi:goal:achieved` here.
+            if !has_explicit_success_criteria(&context.goal)
+                && steps_failed == 0
+                && steps_succeeded == plan.steps.len()
+            {
+                self.emit_event(
+                    "agi:goal:iteration_complete",
+                    json!({
+                        "goal_id": goal_id.clone(),
+                        "iteration": iteration,
+                        "steps_succeeded": steps_succeeded,
+                        "steps_failed": steps_failed,
+                        "consecutive_failures": consecutive_failures,
+                    }),
+                );
+                self.transition_task_state(
+                    &goal_id,
+                    AgentTaskState::ReadyForReview,
+                    "The planned work finished and is ready for your review.",
+                );
+                break;
+            }
+
             // === MULTI-TURN REFLECTION: Post-execution reflection ===
             if let Some(ref reflection_engine) = self.reflection_engine {
                 tracing::info!("[AGI] Starting post-execution reflection");
@@ -1584,7 +1616,16 @@ impl AGICore {
     }
 
     async fn check_goal_achieved(&self, context: &ExecutionContext) -> Result<bool> {
-        for criterion in &context.goal.success_criteria {
+        if !has_explicit_success_criteria(&context.goal) || context.tool_results.is_empty() {
+            return Ok(false);
+        }
+
+        for criterion in context
+            .goal
+            .success_criteria
+            .iter()
+            .filter(|criterion| !criterion.trim().is_empty())
+        {
             let evaluation = self.planner.evaluate_criterion(criterion, context).await?;
 
             if !evaluation {
@@ -1913,5 +1954,25 @@ mod tests {
             history,
             VecDeque::from(["task-1".to_string(), "task-3".to_string()])
         );
+    }
+
+    #[test]
+    fn success_criteria_must_include_nonblank_user_evidence() {
+        let mut goal = Goal {
+            id: "goal-criteria".to_string(),
+            description: "criteria".to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            constraints: vec![],
+            success_criteria: vec![],
+            trust_mode: None,
+        };
+
+        assert!(!has_explicit_success_criteria(&goal));
+        goal.success_criteria = vec!["  ".to_string(), "\n".to_string()];
+        assert!(!has_explicit_success_criteria(&goal));
+        goal.success_criteria
+            .push("The requested result exists".to_string());
+        assert!(has_explicit_success_criteria(&goal));
     }
 }

@@ -1,15 +1,30 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
 describe('price tier mapping', () => {
+  const priceEnvVars = [
+    'STRIPE_PRICE_BASIC_MONTHLY_USD',
+    'STRIPE_PRICE_BASIC_MONTHLY_INR',
+    'STRIPE_PRICE_PRO_MONTHLY',
+    'STRIPE_PRICE_PRO_YEARLY',
+    'STRIPE_PRICE_MAX_MONTHLY',
+    'STRIPE_PRICE_MAX_15X_MONTHLY',
+    'STRIPE_PRICE_TEAM_MONTHLY_USD',
+    'STRIPE_PRICE_TEAM_MONTHLY_INR',
+    'STRIPE_PRICE_TEAM_YEARLY_USD',
+    'STRIPE_PRICE_ENTERPRISE_MONTHLY',
+    'STRIPE_PRICE_ENTERPRISE_YEARLY',
+    'PRICE_ID_OVERRIDES',
+  ] as const;
+
+  beforeEach(() => {
+    for (const envVar of priceEnvVars) delete process.env[envVar];
+    vi.resetModules();
+  });
+
   afterEach(() => {
-    delete process.env['STRIPE_PRICE_PRO_MONTHLY'];
-    delete process.env['STRIPE_PRICE_MAX_15X_MONTHLY'];
-    delete process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'];
-    delete process.env['STRIPE_PRICE_TEAM_MONTHLY_INR'];
-    delete process.env['STRIPE_PRICE_TEAM_YEARLY_USD'];
-    delete process.env['PRICE_ID_OVERRIDES'];
+    for (const envVar of priceEnvVars) delete process.env[envVar];
     vi.resetModules();
   });
 
@@ -34,6 +49,34 @@ describe('price tier mapping', () => {
 
     expect(resolvePlanTier({ plan_tier: 'pro' }, 'price_unregistered')).toBeNull();
     expect(resolvePlanTier({ plan_tier: 'pro' }, null)).toBeNull();
+  });
+
+  it('preserves Stripe Price case, trims whitespace, and rejects a case-variant entitlement', async () => {
+    process.env['STRIPE_PRICE_PRO_MONTHLY'] = '  price_LiveAbC123  ';
+    const { getAllRegisteredPriceIds, isPriceIdRegistered, resolvePlanTier } =
+      await import('../price-tier-mapping');
+
+    expect(getAllRegisteredPriceIds()).toContain('price_LiveAbC123');
+    expect(resolvePlanTier(null, 'price_LiveAbC123')).toBe('pro');
+    expect(resolvePlanTier(null, '  price_LiveAbC123  ')).toBe('pro');
+    expect(resolvePlanTier({ plan_tier: 'pro' }, 'price_liveabc123')).toBeNull();
+    expect(isPriceIdRegistered('price_liveabc123')).toBe(false);
+  });
+
+  it('keeps override Price IDs case-sensitive too', async () => {
+    process.env['PRICE_ID_OVERRIDES'] = ' price_OverrideAbC , pro , yearly ';
+    const { getPlanTierFromPriceId, getTierMapping } = await import('../price-tier-mapping');
+
+    expect(getPlanTierFromPriceId('price_OverrideAbC')).toBe('pro');
+    expect(getPlanTierFromPriceId('price_overrideabc')).toBeNull();
+    expect(getTierMapping()['price_OverrideAbC']).toEqual({ tier: 'pro', interval: 'yearly' });
+  });
+
+  it('does not report drift when configured mixed-case Price IDs differ only by whitespace', async () => {
+    process.env['STRIPE_PRICE_PRO_MONTHLY'] = '  price_LiveAbC123  ';
+    const { validatePriceIdConsistency } = await import('../validate-env');
+
+    expect(validatePriceIdConsistency()).toEqual({ valid: true, errors: [], warnings: [] });
   });
 
   it('rejects a generic Stripe override for Team even though Team is self-serve', async () => {

@@ -2,18 +2,20 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-11
+Last updated: 2026-08-13
 
 Things the remediation cannot finish in code, because they need a dashboard, a
 credential, a paid account, or a product decision that is not mine to make.
 
-Each entry states what is blocked, what it costs to leave it, and the exact
-steps. Nothing here is a suggestion for improvement — every item is a gate that
-something else is waiting behind.
+Each active entry states what is blocked, what it costs to leave it, and the
+exact steps. Branch-specific or source-resolved carryovers are labeled
+explicitly so they are not mistaken for current founder gates.
 
 ---
 
 ## 1. Restore `tools/skill-vetting/README.md` on `chore/retire-stale-docs`
+
+**Status:** `BRANCH-SPECIFIC`, not a blocker in the current release worktree.
 
 **Blocks:** the skill supply-chain security gate, on that branch only.
 
@@ -41,7 +43,11 @@ published artifact consumes" and lists the Cargo and npm cases; hatchling
 
 ## 2. Stop `verify.sh` reusing a cached venv in CI
 
-**Blocks:** nothing today. It makes item 1 invisible, which is worse.
+**Status:** `CODE_BACKLOG`, not blocked by founder access or a dashboard.
+
+**Blocks:** nothing today. It makes item 1 invisible, which is worse. This is
+retained here only so the branch-specific context is not lost; it belongs in a
+normal CI remediation lane rather than the founder-action queue.
 
 `tools/skill-vetting/verify.sh` reuses `$TMPDIR/skill-vetting-venv` when present.
 A warm venv skips the install step entirely, so the gate reports success even
@@ -188,9 +194,15 @@ production Chrome bundle and all extension tests build and pass locally.
 `pnpm --filter @agiworkforce/extension package` intentionally fails closed when
 `CHROME_EXTENSION_PUBLIC_KEY` is absent, because packaging without the Web Store
 public key would create a different CRX identity and break the Clerk extension
-origin allowlist. The local verification on 2026-08-11 passed typecheck, both
-production Vite builds, and 1,470 tests before stopping at this release-only
-identity guard.
+origin allowlist. The local verification on 2026-08-13 passed extension
+typecheck, lint, both production Vite builds, cloud-IPC and color guards, two
+real Chromium smoke loops, and the 320/390/500px dark/light rendered review
+before stopping at this release-only identity guard.
+
+The same run had no real Google Chrome profile available for a live side-panel
+or Options click-through. That does not weaken the Chromium layout evidence,
+but it is not exact Chrome Web Store/profile acceptance evidence; the browser
+and live-account portion remains tracked separately in item #14.
 
 **Do:** copy the single-line base64 DER RSA public key for the existing AGI item
 from the Chrome Web Store dashboard and set it as the repository/developer
@@ -202,31 +214,26 @@ or rotate the published item identity.
 
 ---
 
-## 10. Create bucket-scoped R2 S3 credentials for local media lifecycle QA
+## 10. Recheck local R2 media lifecycle acceptance
 
-**Blocks:** general local-browser verification of permanent Library deletion,
-media cleanup, and deletion reconciliation. It does not require a Vercel upgrade
-and does not block ordinary local Library browsing or recoverable 30-day soft
-deletion.
+**Status:** `NO LONGER PROVEN BLOCKED_BY_HUMAN`; one-app Web acceptance remains.
 
-The Web storage service deletes objects through R2's S3-compatible API. Wrangler
-is authenticated and the `agiworkforce-media` bucket exists, but the local Web
-runtime has no R2 S3 access-key pair. Permanent deletion therefore fails closed:
-the object and database pointer are retained together instead of deleting only
-the row and orphaning private bytes. The single retired model artifact
-was removed safely by resolving its exact row and object key and deleting both;
-that one-off operator action is not a substitute for runtime credentials.
+The earlier “local runtime has no R2 S3 access-key pair” claim is stale. Both
+local Web environment files now declare the account, access key, secret,
+public bucket, and distinct private bucket settings, and the durable video
+ledger records a successful PUT/HEAD/GET/DELETE round-trip with the replacement
+account-owned token across both buckets. Secret values were not printed or
+revalidated during this source-only reconciliation.
 
-**Do:** in Cloudflare Dashboard → R2 → **Manage R2 API Tokens**, create an
-Object Read & Write token scoped only to `agiworkforce-media`. Put its Access Key
-ID and Secret Access Key directly in the local Web environment as
-`CLOUDFLARE_R2_ACCESS_KEY_ID` and `CLOUDFLARE_R2_SECRET_ACCESS_KEY`, together
-with the existing account ID, bucket name, and public base URL keys documented
-in `apps/web/.env.local.example`. Do not paste the secret into chat or source.
-Then run `node apps/web/scripts/verify-r2-connection.mjs` and repeat the signed-in
-Library soft-delete, restore, and permanent-delete browser loop. Use a separate
-private bucket and credentials for generated video as required by the adjacent
-environment example; never reuse the public media bucket for private video.
+**Remaining acceptance:** in the next one-app Web loop, use a synthetic owned
+asset to repeat Library soft-delete, restore, and double-confirmed permanent
+delete. Confirm both the R2 object and owner-scoped database pointer disappear.
+If that fails because the declared credentials are invalid or insufficiently
+scoped, restore this as a concrete founder credential action with the exact
+non-secret error; until then, do not ask for a second token pre-emptively.
+
+Permanent deletion must continue to fail closed by retaining the database
+pointer if object deletion cannot be authenticated.
 
 ---
 
@@ -349,6 +356,320 @@ is not attached.
 No Apple/Google developer credential is needed for local compilation, but the
 physical-device and store-signing steps require the developer accounts already
 listed in the native purchase item above.
+
+---
+
+## 14. Verify exact-package Chrome presentation and signed-in chat continuity
+
+**Blocks:** exact packaged-store presentation evidence plus acceptance proof that a Chrome
+Managed Cloud chat appears in Web, Mobile Cloud, Tauri Cloud, and Electron
+Cloud. The UI implementation, automatic mirror, provenance gate, owner
+fencing, retry/idempotency, deletion tombstones, shared-store consumers, tests,
+typecheck, lint, cloud-egress guard, and production build are complete.
+
+**Already verified locally:** `pnpm --filter @agiworkforce/extension test:e2e` loads
+the real unpacked MV3 build in Chromium, passes the 320/390/500px dark/light
+overflow matrix, contains the model and approval menus, verifies Escape
+dismissal, drives drawer/model/composer/allowlist/autofill flows, and builds
+without CSP or page exceptions. On 2026-08-13 this loop passed twice. Separate
+rendered captures also verified Options and the injected page panel; that review
+caught and fixed the previously hidden 320px navigation overflow and truncated
+Managed Cloud boundary label. With `AGI_E2E_SCREENSHOT_DIR` and an exact ZIP,
+the same harness captures named exact-artifact screenshots.
+
+**Why the remainder is manual:** it needs a published/exact signed package, a
+live authenticated test account, and Web, Mobile Cloud, Tauri Cloud, and
+Electron Cloud running together. No remaining code change can substitute for
+that deployed-account proof.
+
+**Observed 2026-08-13:** no real Google Chrome profile was available to this
+one-app run, and the stable Web Store public key was absent. The run therefore
+could neither create the stable-ID ZIP nor perform an exact-browser/profile
+click-through. The completed Playwright Chromium loop remains valid unpacked-UI
+evidence, but it is not a substitute for these two release acceptance steps.
+
+**Do:**
+
+1. Make the current stable Google Chrome and the intended test profile
+   available, then open Chrome → `chrome://extensions`, enable **Developer mode**, choose
+   **Load unpacked**, and select
+   `apps/extension/dist`.
+2. Open the AGI side panel at approximately 320px, 390px, and 500px widths.
+   Confirm the header actions and composer never clip or scroll horizontally;
+   the branded empty state, rounded composer, warm-neutral surfaces, terra Send
+   button, and Cloud/local trust strip remain readable in dark and light mode.
+3. Open the model, attachment, reasoning, and browser-action approval menus.
+   Confirm each menu stays inside the panel, uses the rounded elevated surface,
+   closes with Escape, and can be traversed with Tab plus arrow keys where
+   applicable. Selecting **Full access** must require the explicit menu choice;
+   clicking the status itself must not change the approval boundary.
+4. Open **AGI Chrome settings**. Confirm the 16px cards, sidebar navigation,
+   focus rings, headings, toggles, approved-sites list, account controls, and
+   mobile horizontal navigation render without overlap in dark and light mode.
+5. Sign in to the same test account used on Web,
+   Mobile Cloud, Tauri Cloud, and Electron Cloud.
+6. Start a new Chrome chat with a distinctive prompt such as
+   `Chrome continuity check 2026-08-13`, wait for the assistant response to
+   finish, and confirm the composer says **Syncs to your account**.
+7. Open conversation history on each Cloud surface and confirm the same title,
+   user turn, assistant turn, ordering, and resolved model label appear. Refresh
+   each surface once to prove server persistence rather than in-memory state.
+8. Delete the chat from Chrome. Within one minute, refresh the other Cloud
+   surfaces and confirm the account copy is gone. If deletion cannot be queued,
+   Chrome must keep the local history row and show **Could not delete this chat.
+   Try again.**
+9. For the fail-closed proof, an old pre-feature Chrome conversation with
+   unknown provenance must remain labeled **Saved on this device** and must not
+   appear in account history.
+
+**How to report:** record pass/fail plus any console/network error. A failure
+needs the Chrome service-worker log and the response status for
+`/api/chat/conversations`; do not paste bearer tokens or captured page content.
+
+**Status:** `BLOCKED_BY_HUMAN` only for the exact signed package, real-Chrome
+profile pass, and live-account cross-surface continuity/deletion steps. The
+unpacked rendered-UI loop is complete and green.
+
+---
+
+## 15. Deploy and accept the Mobile Cloud map-card path
+
+**Blocks:** claiming that map results work in the production Mobile Cloud app.
+The local implementation and regression matrix are complete: Mobile advertises
+`map-search.v1`, the server offers `search_maps` to the Mobile surface only when
+that exact capability and map intent are present, native tiles carry the
+signed-in Bearer header, Local performs no Managed Cloud tile request, and cards
+persist through Cloud message metadata.
+
+**Observed 2026-08-13:** a real iPhone 17 Pro / iOS 26.5 simulator send against
+`https://agiworkforce.com` completed successfully but returned prose saying it
+could not display an interactive map. That is expected from the currently
+deployed backend because the Mobile `search_maps` admission change in this
+worktree has not been deployed. Pointing the app at the local Next.js server was
+not an acceptable substitute: its Clerk environment did not recognize the
+existing production session and the app failed closed with `Authentication
+required`.
+
+**Do:** after the current server/mobile changes are reviewed and deployed:
+
+1. Install or update the signed Mobile build that advertises
+   `x_interactive_cards.supported = ['map-search.v1']` and sign in to the same
+   test account used for Cloud continuity checks.
+2. Ask `Find three coffee shops near downtown Austin and show them on a map.`
+   Confirm the request reaches the deployed chat route with surface `mobile`,
+   Web Search enabled, and the advertised card kind. Do not capture bearer
+   tokens in screenshots or logs.
+3. Confirm the transcript shows a compact activity row followed by one rounded
+   map card with authenticated tiles, numbered places, and a working external
+   Maps action. The assistant must not say maps are unavailable when a valid
+   card was emitted.
+4. Background and reopen the app, then open the same Cloud conversation on Web.
+   Confirm exactly one validated map card remains on both surfaces.
+5. Switch to Local and confirm no request reaches `/api/maps/tile/*`; any old
+   Cloud map content must not be presented as locally generated.
+6. Exercise signed-out and denied-tile states. The card must keep an honest
+   `Open in Maps` fallback and never show a blank tile canvas as success.
+
+**Status:** `BLOCKED_BY_HUMAN` until the server/mobile build is deployed and the
+credentialed acceptance pass succeeds. No production deployment was performed
+from the dirty multi-surface worktree.
+
+---
+
+## 16. Provide a routing credential so map cards can draw a real route line
+
+- **What is blocked.** The `map-search.v1` card renders real OpenStreetMap
+  tiles with numbered pins and a place list, but it cannot draw the driving
+  route between them. Claude's equivalent card draws the polyline and states
+  "about 1,220 miles, roughly 18 hours, via I-20 W", which is the single
+  biggest remaining visual gap for a demo recording.
+- **Why the agent cannot do it.** Drawing a route needs a routing engine, and
+  every viable one needs a credential or forbids production use:
+  - `GOOGLE_API_KEY` is a Generative Language key, NOT a Maps Platform key.
+    Verified 2026-08-12 against the real value: Maps Static, Geocoding and
+    Directions all return `REQUEST_DENIED / API key is invalid`, while
+    `generativelanguage.googleapis.com` returns the Gemini catalogue.
+  - OSRM's public demo server (`router.project-osrm.org`) is documented as
+    development-only with no SLA, so it must not back a shipped feature.
+  - Geocoding is fine as-is: Nominatim is keyless and already in use.
+- **Exact founder steps.** Pick ONE:
+  1. **OpenRouteService** (recommended for a keyless-ish start) — sign up at
+     `openrouteservice.org`, create a token, free tier is ~2,000 requests/day.
+     Then `vercel env add OPENROUTE_API_KEY production` and add it to
+     `.env.local`.
+  2. **Google Maps Platform** — in Google Cloud, enable _Directions API_,
+     _Geocoding API_ and _Maps Static API_, create a SEPARATE key from the
+     Gemini one, restrict it by HTTP referrer/IP, then
+     `vercel env add GOOGLE_MAPS_API_KEY production`. This also unlocks
+     Google-quality tiles and place photos, matching the reference card most
+     closely, but it is billed per request.
+- **How to verify.** Ask the product "show me a map of the route from Dallas to
+  Las Vegas". The card should draw a line following I-20/I-10/I-40 rather than
+  only pinning the two endpoints.
+- **What becomes available afterward.** Route polylines, real distance and
+  duration in the answer text, and — on the Google option — themed tiles and
+  place thumbnails.
+- Status: `BLOCKED_BY_HUMAN`. The card ships and is useful without it; the
+  renderer will gain the line with no further UI work once a provider exists.
+
+---
+
+## 17. Approve a verified Local model profile before enabling Desktop Tasks
+
+**Blocks:** claiming that Desktop Local **Tasks** can run on the models
+currently installed on this machine. Project Chat remains available and was
+manually verified with the selected Ollama model.
+
+**Observed 2026-08-13:** Ollama reports the installed models as completion-only
+or as supporting generic function tools, vision, and/or thinking. None is an
+exact model in the canonical registry with both `tools` and `agentic`
+capabilities. Those runtime flags do not prove that a model can produce valid
+AGI plans or invoke the registered Task tool vocabulary. A manual attempt with
+the installed model named by `AGI_WDIO_OLLAMA_MODEL_ID` generated malformed or
+invented tool identifiers, confirming that generic tool support is not sufficient.
+
+**Already fixed:** the model picker now labels dynamic models only with
+provider-reported capabilities and no invented quality tier. The Tasks creator
+shows an explicit **available for chat, not Tasks** state, disables Launch in
+every execution mode, and the Rust command boundary independently rejects the
+same unverified model. The one-app WDIO pass exercised real picker clicks,
+Sequential/Parallel controls, the disabled launch state, and the native
+rejection.
+
+**Founder action:** choose a concrete Local model/build that is acceptable for
+the 16 GB minimum device target and approve its validation matrix. The profile
+must be added only after empirical checks prove stable structured planning,
+exact registered tool IDs, permission handling, cancellation, and bounded
+memory/latency. Do not alias an Ollama tag to a similarly named cloud model.
+
+**Acceptance:** after the verified profile is in the canonical model registry,
+repeat the WDIO journey with that exact installed tag/digest. Launch must become
+enabled, the native planner and executor must use the selected model, a
+one-step disposable task must reach **Ready for review** with inspectable
+output, and restart/status history must retain the result. No Local prompt or
+tool payload may leave the device.
+
+**Status:** `BLOCKED_BY_HUMAN` until a Local Tasks model/resource target is
+chosen and approved for empirical certification.
+
+---
+
+## 18. Align Stripe key mode, recurring Price IDs, and production checkout
+
+**Blocks:** proving that Basic, Pro, and Max upgrades can enter Stripe Checkout
+from the public Pricing and Billing surfaces. The UI and ownership guards now
+fail closed, but a correctly rendered plan is not the same as a purchasable
+plan.
+
+**Observed 2026-08-13:** the signed-in local Web browser loop loaded the real
+account, plan, payment method, invoices, and Billing controls. The localized
+pricing endpoint then rejected every configured Pro/Max Price lookup because
+the supplied Stripe secret was test-mode while those Price IDs exist in live
+mode. It served catalog prices for display and correctly kept checkout closed.
+Basic, Max 15x, and Team Price IDs were also absent from the local runtime.
+No checkout session or payment was created.
+
+**Founder action:** in each Vercel environment, verify that
+`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and every configured
+`STRIPE_PRICE_*` value belong to the same Stripe account and mode. Preview/test
+must use test Prices; Production must use live Prices. Complete item 5 for Team,
+add the founder-approved Basic and Max 15x Prices, configure the Customer Portal,
+and redeploy. Do not paste any secret into chat or source.
+
+**Acceptance:** with an explicitly authorized test customer, `/api/pricing/localized`
+must report checkout-ready exact Price IDs; Pricing must open an owned Checkout
+Session; the signed webhook must provision the expected tier once; returning to
+Billing must show the verified payment/activation state; replay must not grant a
+second entitlement. Repeat once against Production with a founder-authorized
+live transaction and refund it through the normal operator process.
+
+**Status:** `BLOCKED_BY_HUMAN`. Source and local UI behavior are complete; the
+remaining proof requires Stripe/Vercel dashboard configuration and an
+authorized transaction.
+
+---
+
+## 19. Publish and certify the developer-session protocol 7 AGI CLI
+
+**Blocks:** using the public VS Code extension for real Local, provider BYOK,
+or Managed Cloud developer turns. The packaged extension is usable for
+onboarding, account/billing, Settings, Context, and workspace Memory, but it
+correctly disables the composer when its AGI CLI is missing or too old.
+
+**Observed 2026-08-13:** the verified `agi-workforce-0.3.0.vsix` was installed
+into a clean VS Code 1.131 profile and manually exercised. The host found an AGI
+CLI, but its developer-session handshake did not support protocol 7. The
+sidebar stayed on `Route pending`, displayed the exact upgrade/path recovery,
+opened Runtime Settings, and sent no prompt. No AGI extension-host error or
+warning occurred.
+
+**Founder/release action:** publish a signed protocol-7 `agi` CLI with a
+supported version of at least 1.7.1 for every Marketplace platform, document
+the official install/update/rollback/uninstall path, and make that artifact
+available to the extension's clean-machine setup journey. Do not point users at
+an unpublished workspace build or silently fall back to another trust boundary.
+
+**Acceptance:** in a fresh signed package/profile, verify CLI discovery,
+version/protocol handshake, and one real thread for each configured boundary:
+Local, provider BYOK, and Managed Cloud. Before `turn/start`, the header must
+switch from `Route pending` to the CLI-reported boundary; account refresh must
+not change it. Exercise streaming activity, a denied and approved tool, Stop,
+resume/history, missing/old CLI recovery, update, rollback, and uninstall. Prove
+that Local/BYOK developer sessions remain workspace-scoped and never enter
+consumer chat history.
+
+**Status:** `BLOCKED_BY_HUMAN` until the signed CLI artifact and release channel
+exist. The extension UI/package fail closed and are source-verified; a release
+binary cannot be fabricated inside this worktree.
+
+---
+
+## 20. Ratify the remaining public-media and orphan-upload policy
+
+**Blocks:** claiming that every Web upload is private, byte-inspected before
+public access, and covered by retention/account erasure.
+
+**Already patched in source:** chat attachments and project knowledge now use
+the provisioned private R2 bucket for direct presigned PUTs, return opaque keys
+only, scan private bytes before registration, and leave reads/deletes behind
+their existing owner/workspace API gates. Legacy public rows remain readable
+and deletable during rollout. New generated images, videos, and files also use
+owner-hashed keys in the private bucket and leave only through the catalog-backed
+`/api/files/{id}` owner gate. An uncataloged generated file is now removed and
+reported as a storage failure instead of being returned through a raw locator.
+This was source-only while another app owned the one runtime slot, so the
+focused Web and deployed R2 acceptance pass is still due.
+
+**Decision required:** avatars still upload directly to the public bucket and
+persist a permanent URL. Replacing one loses the only pointer to the previous
+avatar object. Generated objects created before the private-storage change also
+retain their public locations until a migration policy is chosen. Pick one
+avatar policy:
+
+1. **Private by default (recommended):** move avatars to the private bucket and
+   serve them through authenticated or short-lived signed routes.
+   Migrate/delete legacy public objects, then disable the public custom domain.
+2. **Public avatars only:** stage each avatar in private storage, inspect its
+   real bytes, copy only an accepted image public, and delete the prior owned
+   avatar on successful replacement. Keep generated media private.
+
+For either policy, approve a pending-upload lifecycle: write presigns under a
+staging prefix and apply a bounded R2 lifecycle rule (or durable pending-row
+cron) so a client that never calls completion cannot create an untracked object
+that account erasure cannot find. Specify the legacy migration window and the
+allowed recovery/retention duration.
+
+**Acceptance:** after deployment, use a synthetic account to prove private PUT
+→ inspection → owner-only read → deletion for chat and project sources; abandon
+one presign and verify bounded cleanup; replace an avatar twice and prove the
+prior bytes are gone; permanently delete a generated image and prove both row
+and object disappear. A foreign/signed-out request must never read private
+bytes.
+
+**Status:** `BLOCKED_BY_HUMAN` only for the public-avatar/public-bucket and
+retention-duration/legacy-migration choices. The new generated-media and
+chat/project private-boundary code is present but intentionally not described
+as runtime-verified yet.
 
 ---
 

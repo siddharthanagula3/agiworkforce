@@ -11,6 +11,7 @@ use crate::sys::security::egress_policy::ensure_public_http_destination;
 
 pub struct ApiState {
     client: OnceCell<ApiClient>,
+    public_client: OnceCell<ApiClient>,
     single_attempt_client: OnceCell<ApiClient>,
     oauth_clients: Mutex<HashMap<String, OAuth2Client>>,
     pkce_challenges: Mutex<HashMap<String, PkceChallenge>>,
@@ -20,6 +21,7 @@ impl Default for ApiState {
     fn default() -> Self {
         Self {
             client: OnceCell::new(),
+            public_client: OnceCell::new(),
             single_attempt_client: OnceCell::new(),
             oauth_clients: Mutex::new(HashMap::new()),
             pkce_challenges: Mutex::new(HashMap::new()),
@@ -39,6 +41,15 @@ impl ApiState {
     pub fn get_client(&self) -> Result<&ApiClient, String> {
         self.client.get_or_try_init(|| {
             ApiClient::new().map_err(|e| format!("Failed to initialize API client: {}", e))
+        })
+    }
+
+    /// Get the client whose initial destination and every redirect hop must be
+    /// public. User- and LLM-selected API destinations must use this client.
+    pub fn get_public_client(&self) -> Result<&ApiClient, String> {
+        self.public_client.get_or_try_init(|| {
+            ApiClient::public()
+                .map_err(|e| format!("Failed to initialize public API client: {}", e))
         })
     }
 
@@ -73,8 +84,16 @@ impl ApiState {
         &self,
         request: ApiRequest,
     ) -> Result<ApiResponse, String> {
-        ensure_public_http_destination(&request.url).map_err(|denial| denial.to_string())?;
-        self.execute_request(request).await
+        self.get_public_client()?
+            .execute(request)
+            .await
+            .map_err(|e| format!("Public API request failed: {}", e))
+    }
+
+    /// Execute an agent-selected request through the same public-only boundary
+    /// as renderer-selected API calls.
+    pub async fn execute_public_request(&self, request: ApiRequest) -> Result<ApiResponse, String> {
+        self.execute_renderer_request(request).await
     }
 }
 

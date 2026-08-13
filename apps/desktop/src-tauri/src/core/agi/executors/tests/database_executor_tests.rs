@@ -300,7 +300,7 @@ mod tests {
     #[test]
     fn test_validate_query_merge() {
         let result = DatabaseExecutor::validate_query(
-            "MERGE INTO users USING src ON users.id = src.id WHEN MATCHED THEN UPDATE SET name = src.name"
+            "MERGE INTO users USING src ON users.id = src.id WHEN MATCHED THEN UPDATE SET name = src.name",
         );
         assert!(result.is_err());
     }

@@ -22,7 +22,7 @@ export interface RemoteChatAccessState {
 }
 
 export const MOBILE_REMOTE_CHAT_DISABLED_MESSAGE =
-  'AGI Cloud chat is not enabled in this mobile build yet. Local Mode stays on this device.';
+  'AGI Cloud chat is unavailable in this mobile build. Local Mode stays on this device.';
 
 export const MOBILE_REMOTE_CHAT_SIGNIN_REQUIRED_MESSAGE =
   'Sign in to use AGI Cloud chat. Local Mode stays available on this device.';

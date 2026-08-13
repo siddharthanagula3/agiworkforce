@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 /* global URL, console, process */
 /**
- * AP-10: Scan extension src for direct cloud-IPC calls that bypass InviteCodeModal.
- * v1 LOCAL ONLY rule — cloud feature paths must go through InviteCodeModal gate.
- * Exit 0 = clean, 1 = direct cloud-IPC found.
+ * AP-10: Scan extension src for cloud egress outside the cloud-bridge gate.
+ *
+ * The rule is no longer "v1 LOCAL ONLY". Chrome automatically mirrors eligible
+ * Managed-Cloud-only conversations to the signed-in account.
+ * What is still locked down is WHERE that egress may live: every cloud call —
+ * IPC action, chat-conversations endpoint, or Managed Cloud chat client — must
+ * be inside `src/features/cloud-bridge/`, which is the audited gate. A copy
+ * anywhere else fails this check.
+ *
+ * Exit 0 = clean, 1 = cloud egress found outside the gate.
  */
 
 import { readFileSync, readdirSync, statSync } from 'fs';
@@ -32,6 +39,10 @@ const CLOUD_IPC_PATTERNS = [
     re: /chrome\.runtime\.sendMessage\s*\([^)]*['"`]cloud_[a-z_]+['"`]/g,
     label: 'sendMessage with cloud_ action',
   },
+  // Account-backed chat persistence. The endpoint and the shared client are the
+  // two ways to reach it; both belong to the cloud-bridge gate only.
+  { re: /['"`]\/api\/chat\/conversations/g, label: 'direct chat-conversations endpoint' },
+  { re: /\bcreateManagedCloudChatClient\b/g, label: 'managed cloud chat client construction' },
 ];
 
 // A line is exempt if it is behind a cloud-unlock check
@@ -87,8 +98,8 @@ if (violations === 0) {
   process.exit(0);
 } else {
   console.error(
-    `\n[AP-10] ${violations} direct cloud-IPC call(s) found outside the cloud-bridge gate.` +
-      `\n        All cloud feature paths must route through InviteCodeModal (v1-local-only rule).`,
+    `\n[AP-10] ${violations} cloud egress site(s) found outside the cloud-bridge gate.` +
+      `\n        Move the call into src/features/cloud-bridge/, which is the audited gate.`,
   );
   process.exit(1);
 }

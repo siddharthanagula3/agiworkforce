@@ -9,6 +9,7 @@
 import * as vscode from 'vscode';
 import {
   canAccessModelForSubscriptionTier,
+  canUseBillingPlanCapability,
   getCoreManualModelOptions,
   getModelContextLimits,
   getModelCostRates,
@@ -119,7 +120,7 @@ export const MODEL_LOCKED_HINT = 'Sign in or add a provider key';
 export function isModelReachableForTier(modelId: string, tier: string | undefined): boolean {
   if (tier === undefined) return true;
   if (tier === 'byok') return true;
-  if (tier === 'local' || tier === 'free' || tier === 'basic') return false;
+  if (tier === 'local' || !canUseBillingPlanCapability(tier, 'developer_surfaces')) return false;
   return canAccessModelForSubscriptionTier(modelId, tier);
 }
 

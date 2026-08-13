@@ -47,7 +47,7 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request early access
     }
 
     if (!isSignedIn) {
-      setErrorMsg('Sign in to request Cloud access.');
+      setErrorMsg('Sign in to save this early-access request.');
       setAuthRequired(true);
       setState('error');
       return;
@@ -65,7 +65,7 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request early access
         setState('success');
         setEmail('');
       } else if (res.status === 401) {
-        setErrorMsg('Sign in to request Cloud access.');
+        setErrorMsg('Sign in to save this early-access request.');
         setAuthRequired(true);
         setState('error');
       } else {
@@ -93,7 +93,8 @@ export function WaitlistForm({ source = 'byok', ctaLabel = 'Request early access
           margin: 0,
         }}
       >
-        Your request is saved. We will email you when hosted cloud access opens for your account.
+        Your request is saved. We will email you when this early-access program opens for your
+        account.
       </p>
     );
   }

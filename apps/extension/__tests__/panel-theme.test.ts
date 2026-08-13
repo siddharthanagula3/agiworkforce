@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getExtensionTokensCss, getExtensionTokensCssAuto } from '../src/tokens';
+import { buildPanelStyles } from '../src/features/content/in-page-panel/panelStyles';
+import { buildLauncherStyles } from '../src/features/content/in-page-panel/launcher';
 
 /**
  * EXT-08: the side panel, options page and invite modal all shipped
@@ -33,5 +35,18 @@ describe('extension panel theming', () => {
     const css = getExtensionTokensCssAuto(':host');
     expect(css).toContain(':host {');
     expect(css).not.toContain(':root');
+  });
+
+  it('keeps both injected in-page surfaces responsive and theme-aware', () => {
+    const panelCss = buildPanelStyles();
+    const launcherCss = buildLauncherStyles();
+    for (const css of [panelCss, launcherCss]) {
+      expect(css).toContain('@media (prefers-color-scheme: light)');
+      expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+      expect(css).toContain(':host {');
+    }
+    expect(panelCss).toContain('width:min(380px, 100vw)');
+    expect(panelCss).toContain('focus-visible');
+    expect(launcherCss).toContain('background:var(--agi-ext-accent)');
   });
 });

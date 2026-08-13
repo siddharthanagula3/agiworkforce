@@ -83,15 +83,15 @@ export const POLICY_LAST_UPDATED = {
   terms: '2026-08-11',
   privacy: '2026-08-11',
   acceptableUse: '2026-08-05',
-  dpa: '2026-08-05',
+  dpa: '2026-08-13',
   cookies: '2026-08-05',
-  subprocessors: '2026-08-11',
+  subprocessors: '2026-08-13',
   security: '2026-08-11',
   sla: '2026-08-05',
-  refunds: '2026-08-05',
+  refunds: '2026-08-13',
   accessibility: '2026-08-05',
   euRepresentative: '2026-08-05',
-  mobile: '2026-08-05',
+  mobile: '2026-08-13',
   copyright: '2026-08-06',
   modelLicenses: '2026-08-06',
 } as const;
@@ -117,6 +117,8 @@ export const CANONICAL_POLICY_ROUTES = {
   legalIndex: '/legal',
   euRepresentative: '/legal/eu-representative',
   mobile: '/mobile/legal',
+  copyright: '/copyright',
+  modelLicenses: '/model-licenses',
 } as const;
 
 /** Alias → canonical. Mirrored by the redirect table in `next.config.ts`. */

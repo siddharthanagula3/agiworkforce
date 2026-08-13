@@ -21,6 +21,7 @@ const localModel: ModelInfo = {
   contextWindow: 128_000,
   isLocal: true,
   isByok: false,
+  metadataSource: 'runtime',
 };
 
 const byokModel: ModelInfo = {
@@ -121,6 +122,8 @@ describe('ModelSelector execution-boundary admission', () => {
     useModelStore.setState({
       models: [localModel, byokModel, managedModel],
       selectedModelId: localModel.id,
+      modelCatalogStatus: 'ready',
+      modelCatalogError: null,
       recentModelIds: [],
       lastRoutingDecision: null,
     });
@@ -141,6 +144,20 @@ describe('ModelSelector execution-boundary admission', () => {
     expect(screen.getAllByText(localModel.name).length).toBeGreaterThan(0);
     expect(screen.queryByText('Direct Provider Fixture')).toBeNull();
     expect(screen.queryByText('Auto Balanced')).toBeNull();
+  });
+
+  it('shows only runtime-reported capabilities for an uncatalogued local model', () => {
+    seedConversation('local_only');
+    render(<ModelSelector />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    const row = screen.getByRole('button', { name: /Local Model Fixture/i });
+    expect(row.textContent).toContain('Vision');
+    expect(row.textContent).toContain('Function tools');
+    expect(row.textContent).not.toContain('Balanced');
+    expect(row.textContent).not.toContain('standard');
+    expect(row.textContent).not.toContain('premium');
   });
 
   it('stays on the local catalog in the desktop shell with no persisted mode', () => {
@@ -166,6 +183,55 @@ describe('ModelSelector execution-boundary admission', () => {
     for (const fallback of CLOUD_FALLBACK_MODELS) {
       expect(screen.queryByText(fallback.name)).toBeNull();
     }
+  });
+
+  it('shows an honest discovery state instead of a final empty diagnosis while loading', () => {
+    seedDesktopShellWithoutPersistedMode();
+    useModelStore.setState({
+      models: [],
+      selectedModelId: '',
+      modelCatalogStatus: 'loading',
+      modelCatalogError: null,
+    });
+    render(<ModelSelector onSettingsClick={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Select model' }).textContent).toContain(
+      'Detecting models',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    expect(screen.getByRole('status').textContent).toContain('Looking for available local models');
+    expect(screen.queryByText('No local models detected')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Set up a local model' })).toBeNull();
+  });
+
+  it('keeps the last verified Local selection stable during a same-boundary refresh', () => {
+    seedConversation('local_only', localModel.id);
+    useModelStore.setState({
+      models: [localModel],
+      selectedModelId: localModel.id,
+      modelCatalogStatus: 'loading',
+      modelCatalogError: null,
+    });
+    render(<ModelSelector />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    expect(screen.getByTestId('model-catalog-refreshing')).toBeTruthy();
+    expect(screen.getAllByText(localModel.name).length).toBeGreaterThan(0);
+    expect(useModelStore.getState().selectedModelId).toBe(localModel.id);
+  });
+
+  it('routes the explicit local setup action through the host settings callback', () => {
+    const onSettingsClick = vi.fn();
+    seedDesktopShellWithoutPersistedMode();
+    useModelStore.setState({ models: [], selectedModelId: '' });
+    render(<ModelSelector onSettingsClick={onSettingsClick} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Set up a local model' }));
+
+    expect(onSettingsClick).toHaveBeenCalledOnce();
   });
 
   it('shows only direct-provider models for a BYOK conversation', () => {
@@ -196,6 +262,19 @@ describe('ModelSelector execution-boundary admission', () => {
     await waitFor(() => {
       expect(useModelStore.getState().selectedModelId).toBe('');
     });
+  });
+
+  it('does not silently choose the first reachable local model', async () => {
+    useModelStore.setState({ models: [localModel], selectedModelId: '' });
+    seedConversation('local_only');
+    render(<ModelSelector />);
+
+    await waitFor(() => {
+      expect(useModelStore.getState().selectedModelId).toBe('');
+    });
+    expect(screen.getByRole('button', { name: 'Select model' }).textContent).toContain(
+      'Select model',
+    );
   });
 
   it('persists a manual model choice through the host conversation seam', async () => {
@@ -284,6 +363,7 @@ describe('ModelSelector execution-boundary admission', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
     expect(screen.getByText('Unknown ctx')).toBeTruthy();
+    expect(screen.getByText('Capabilities unverified')).toBeTruthy();
   });
 
   it('does not render a dead thinking toggle when the host has no effort handler', () => {

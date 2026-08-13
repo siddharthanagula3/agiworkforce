@@ -33,6 +33,45 @@ describe('active workspace persistence', () => {
     expect(String(h.query.mock.calls[0]?.[0])).toContain('join public.organization_members');
   });
 
+  it('uses an explicit Personal selector instead of following a later active workspace', async () => {
+    const h = harness();
+    const request = { headers: new Headers({ 'x-agi-organization-id': 'personal' }) };
+
+    await expect(resolveActiveOrganizationId(h.db, 'user-1', request)).resolves.toBeNull();
+    expect(h.query).not.toHaveBeenCalled();
+  });
+
+  it('re-proves an explicit organization selector and fails closed when membership is absent', async () => {
+    const h = harness();
+    const request = {
+      headers: new Headers({ 'x-agi-organization-id': ORGANIZATION_ID }),
+    };
+    h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]);
+
+    await expect(resolveActiveOrganizationId(h.db, 'user-1', request)).resolves.toBe(
+      ORGANIZATION_ID,
+    );
+    expect(h.query).toHaveBeenCalledWith(expect.stringContaining('organization_members'), [
+      ORGANIZATION_ID,
+      'user-1',
+    ]);
+
+    h.query.mockResolvedValueOnce([]);
+    await expect(resolveActiveOrganizationId(h.db, 'user-1', request)).rejects.toMatchObject({
+      statusCode: 403,
+    });
+  });
+
+  it('rejects a malformed explicit selector instead of falling back to Personal', async () => {
+    const h = harness();
+    const request = { headers: new Headers({ 'x-agi-organization-id': 'not-a-workspace' }) };
+
+    await expect(resolveActiveOrganizationId(h.db, 'user-1', request)).rejects.toMatchObject({
+      statusCode: 400,
+    });
+    expect(h.query).not.toHaveBeenCalled();
+  });
+
   it('revalidates an explicit workspace selector and rejects malformed ids before SQL', async () => {
     const h = harness();
     h.query.mockResolvedValueOnce([{ organization_id: ORGANIZATION_ID }]);

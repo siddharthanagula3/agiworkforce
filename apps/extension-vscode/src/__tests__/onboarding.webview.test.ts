@@ -106,7 +106,10 @@ describe('VS Code first-run onboarding', () => {
     expect(document.body.textContent).toContain('AGI can make mistakes');
     expect(document.body.textContent).toContain('Review generated code and every command');
     expect(document.getElementById('onboardingBoundary')?.textContent).toContain(
-      'Active developer-session boundary: Local',
+      'Runtime route pending',
+    );
+    expect(document.getElementById('onboardingBoundary')?.textContent).toContain(
+      'the AGI CLI will confirm Local, BYOK, or Managed Cloud before the first turn starts',
     );
 
     click('onboardingPermissionDocs');
@@ -128,5 +131,11 @@ describe('VS Code first-run onboarding', () => {
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'showOnboarding' } }));
     expect(document.getElementById('onboarding')?.style.display).toBe('flex');
     expect(document.getElementById('onboardingProgress')?.textContent).toBe('Step 1 of 4');
+
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'hideOnboarding' } }));
+    expect(document.getElementById('onboarding')?.style.display).toBe('none');
+    expect((document.querySelector('.input-area') as HTMLElement & { inert: boolean }).inert).toBe(
+      false,
+    );
   });
 });

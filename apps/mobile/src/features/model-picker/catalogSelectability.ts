@@ -14,15 +14,13 @@ import type { OnDeviceModel } from '@agiworkforce/types';
 
 /**
  * Runtimes that exist only as an OS-resident model (Apple Intelligence,
- * Android AICore). A row supported by nothing else cannot be downloaded, and
- * the picker cannot offer it until async tier-1 detection makes the catalog
- * reactive — see the backlog note on `isSystemRuntimeOnlyModel`.
+ * Android AICore). These rows are catalog-selectable, but their actual ready
+ * state remains fail-closed in `installStore`: capability hydration enables
+ * only the row matching the active native Tier-1 runtime and leaves every
+ * other system row visibly unavailable.
  */
 export const SYSTEM_RUNTIME_ONLY = new Set(['apple-foundation-models', 'aicore']);
 
-// Backlog: this always excludes system-runtime-only rows rather than showing them
-// once native async capability detection confirms the runtime is actually active.
-// Making the catalog reactive to that detection is a separate scope item, not done here.
 export function isSystemRuntimeOnlyModel(model: OnDeviceModel): boolean {
   return model.supportedRuntimes.every((r) => SYSTEM_RUNTIME_ONLY.has(r));
 }
@@ -40,7 +38,12 @@ export function isSystemRuntimeOnlyModel(model: OnDeviceModel): boolean {
  * regardless of what it returns.
  */
 export function isSelectableLocalCatalogModel(model: OnDeviceModel): boolean {
-  if (isSystemRuntimeOnlyModel(model)) return false;
+  // OS-resident rows must reach LOCAL_MODEL_LIST so the async capability probe
+  // can mark the matching one ready. `statusForModel` is the authoritative
+  // runtime gate and prevents selecting a system model that is absent on this
+  // device; excluding the rows here made a detected Tier-1 runtime impossible
+  // to select or auto-route to at all.
+  if (isSystemRuntimeOnlyModel(model)) return model.fileSizeBytes <= 0;
   if (model.fileSizeBytes <= 0) return true;
   if (model.executorchPreset) return true;
   return hasRunnableGgufArtifacts(model);

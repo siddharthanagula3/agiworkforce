@@ -152,9 +152,13 @@ function makeSections(input: {
           key: 'code',
           icon: FileCode,
           tone: 'cloud',
-          label: 'AGI Code',
+          // One switch, both capabilities — it gates `code_execution` AND
+          // `office_creation` on the wire. Named for what it actually does:
+          // "AGI Code" read as a separate product and gave no hint that turning
+          // it off is why "create a CSV file" fails.
+          label: 'Code execution and file creation',
           description: FEATURES.codeExecution
-            ? 'Allow supported Cloud models to execute code in a secure sandbox.'
+            ? 'Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.'
             : 'Code execution is not available in this mobile release.',
           value: FEATURES.codeExecution ? cloudValue : 'Off',
           ...(FEATURES.codeExecution ? { toggle: 'codeExecution' as const } : {}),

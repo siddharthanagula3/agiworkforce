@@ -283,7 +283,7 @@ async fn execute_create_task(
             return Err(anyhow!(
                 "Unknown productivity provider: {}. Supported: notion, trello, asana",
                 provider_str
-            ))
+            ));
         }
     };
 

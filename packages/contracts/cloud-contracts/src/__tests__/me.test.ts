@@ -71,6 +71,21 @@ describe('MeResponseSchema', () => {
     ).toBe(false);
   });
 
+  it('accepts and preserves scheduled cancellation state', () => {
+    const parsed = parseMeResponse({
+      ...golden,
+      plan: { ...golden.plan, cancel_at_period_end: true },
+    });
+    expect(parsed.plan.cancel_at_period_end).toBe(true);
+
+    expect(
+      MeResponseSchema.safeParse({
+        ...golden,
+        plan: { ...golden.plan, cancel_at_period_end: 'yes' },
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects a payload missing plan.tier', () => {
     const { tier: _tier, ...planWithoutTier } = golden.plan;
     const mutated = { ...golden, plan: planWithoutTier };

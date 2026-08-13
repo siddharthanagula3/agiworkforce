@@ -2204,10 +2204,30 @@ export function useChatStream(): UseChatStreamReturn {
           });
         }
 
+        /**
+         * Label the turn with the model that ACTUALLY answered.
+         *
+         * `model` here is what we asked for. Under Auto routing that is the
+         * literal `auto`, which is not a catalog id, so the transcript footer
+         * fell through to "Unavailable model" on every reply. A credit-driven
+         * fallback has the same problem in reverse: the footer would name a
+         * model that never ran. The server reports the routed id in
+         * `X-AGI-Resolved-Model`; trust it when present and keep the requested
+         * value as the fallback for older deployments.
+         */
+        const resolvedModel = response.headers.get('X-AGI-Resolved-Model')?.trim() || model;
+        // The in-memory message was created BEFORE the fetch, stamped with the
+        // requested model, and it is that object the transcript renders. Patch
+        // it now or the footer keeps showing the pre-routing value no matter
+        // what we persist.
+        if (resolvedModel !== model) {
+          updateMessage(assistantMessageId, { model: resolvedModel }, conversationId);
+        }
+
         const outcome = await consumeAssistantStream({
           response,
           assistantMessageId,
-          model,
+          model: resolvedModel,
           conversationId,
           isTemporaryConversation,
           getAuthToken,
@@ -2409,7 +2429,9 @@ export function useChatStream(): UseChatStreamReturn {
         await consumeAssistantStream({
           response,
           assistantMessageId,
-          model,
+          // See the send path: label with the model that ANSWERED, not the one
+          // requested, so an Auto-routed turn is not stamped `auto`.
+          model: response.headers.get('X-AGI-Resolved-Model')?.trim() || model,
           conversationId,
           isTemporaryConversation,
           getAuthToken,
@@ -2754,7 +2776,9 @@ export function useResolveToolApproval(
         const outcome = await consumeAssistantStream({
           response,
           assistantMessageId,
-          model: turn.model,
+          // Resume path: the resumed leg may route differently from the
+          // original, so prefer what this response reports.
+          model: response.headers.get('X-AGI-Resolved-Model')?.trim() || turn.model,
           conversationId: turn.conversationId,
           isTemporaryConversation: turn.isTemporaryConversation,
           getAuthToken,

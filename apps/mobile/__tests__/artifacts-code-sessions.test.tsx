@@ -105,6 +105,10 @@ jest.mock('@/lib/clipboard', () => ({
   copyToClipboard: jest.fn().mockResolvedValue(true),
 }));
 
+jest.mock('@/src/features/image/hooks/useGeneratedImageSource', () => ({
+  useGeneratedImageSource: (uri: string) => ({ source: { uri }, status: 'ready' }),
+}));
+
 describe('Artifacts gallery', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -236,6 +240,7 @@ describe('Artifacts gallery', () => {
     const { getByText, getByTestId } = render(<ArtifactsGalleryScreen />);
 
     expect(getByTestId('artifact-card-generated-image-message-1')).toBeTruthy();
+    expect(getByTestId('artifact-image-thumbnail-generated-image-message-1')).toBeTruthy();
     expect(getByText('Image: Enterprise launch')).toBeTruthy();
   });
 

@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { AgiMark } from '@shared/components/agi/AgiMark';
-import { COMING_SOON_LABEL } from '@/lib/marketing-constants';
 
 /*
  * Site-wide marketing footer. Compact product, surface, capability, and
@@ -29,7 +28,7 @@ const SURFACES = [
   { href: '/cli', label: 'CLI' },
   { href: '/chrome-extension', label: 'Chrome' },
   { href: '/vscode-extension', label: 'VS Code' },
-  { href: '/download', label: COMING_SOON_LABEL },
+  { href: '/download', label: 'Downloads & release status' },
 ];
 
 const CAPABILITIES = [
@@ -44,6 +43,9 @@ const COMPANY = [
   { href: '/about', label: 'About' },
   { href: '/enterprise', label: 'Enterprise' },
   { href: '/contact', label: 'Contact' },
+  { href: '/help', label: 'Help' },
+  { href: '/faq', label: 'FAQ' },
+  { href: '/support', label: 'Support' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/terms', label: 'Terms' },
   { href: '/acceptable-use', label: 'Acceptable use' },
@@ -125,8 +127,8 @@ export function MarketingFooter() {
       <div className="agi-footer-strip">
         <span>© 2026 AGI. Proprietary.</span>
         <span>
-          Local and BYOK stay explicit. Managed cloud is open in public alpha; higher-capacity paid
-          plans roll out as release controls are proven.
+          Local and BYOK stay explicit. Managed Cloud is open in public alpha; self-serve paid plans
+          are listed on Pricing, while Enterprise remains contract-scoped.
         </span>
       </div>
     </footer>

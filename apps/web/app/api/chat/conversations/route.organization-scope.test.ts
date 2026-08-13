@@ -166,7 +166,11 @@ describe('conversation active-organization isolation', () => {
     const [sql, params] = mocks.query.mock.calls.at(-1) as [string, unknown[]];
     expect(sql).toContain('(id, user_id, organization_id, title, model, project_id, is_temporary)');
     expect(sql).toContain('web_conversations.organization_id is not distinct from $7');
+    expect(sql).toContain('returning id, organization_id');
     expect(sql).not.toMatch(/set[\s\S]*organization_id\s*=/u);
     expect(params[6]).toBe(ORGANIZATION_ID);
+    await expect(response.json()).resolves.toMatchObject({
+      conversation: { organization_id: ORGANIZATION_ID },
+    });
   });
 });

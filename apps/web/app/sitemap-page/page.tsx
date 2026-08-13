@@ -2,7 +2,6 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { COMING_SOON_LABEL } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Sitemap',
@@ -36,7 +35,7 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/cli', label: 'CLI' },
       { href: '/chrome-extension', label: 'Chrome extension' },
       { href: '/vscode-extension', label: 'VS Code extension' },
-      { href: '/download', label: COMING_SOON_LABEL },
+      { href: '/download', label: 'Downloads & release status' },
     ],
   },
   {
@@ -90,6 +89,8 @@ const SECTIONS: { title: string; links: { href: string; label: string }[] }[] = 
       { href: '/agent-permissions', label: 'Agent permissions' },
       { href: '/privacy', label: 'Privacy' },
       { href: '/cookies', label: 'Cookies' },
+      { href: '/copyright', label: 'Copyright' },
+      { href: '/model-licenses', label: 'Model licences' },
       { href: '/dpa', label: 'DPA' },
       { href: '/sla', label: 'SLA' },
       { href: '/subprocessors', label: 'Subprocessors' },

@@ -51,9 +51,11 @@ export const FEATURES = {
    * Billing / subscription MANAGEMENT — specifically the "Manage billing"
    * Stripe Customer Portal link (fetchPortalSessionUrl -> openExternalUrl).
    * Stays false on mobile: opening an external checkout/management link for
-   * a subscription from inside the app risks Apple Guideline 3.1.1. There is
-   * no native store purchase path. Does NOT gate read-only usage display —
-   * see `usageDashboard` below.
+   * a subscription from inside the app risks Apple Guideline 3.1.1. Native
+   * purchases are owned separately by `mobileIapService` and fail closed until
+   * the signed store catalog is provisioned; this flag never disables that
+   * native path. Does NOT gate read-only usage display — see
+   * `usageDashboard` below.
    */
   billing: false,
 

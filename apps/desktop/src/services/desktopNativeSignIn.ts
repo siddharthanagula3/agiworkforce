@@ -37,7 +37,7 @@ import {
 } from '@agiworkforce/client-runtime';
 import { WEB_APP_URL } from '../api/config';
 import { invoke } from '../lib/tauri-mock';
-import { isTauri } from '../lib/runtimeEnvironment';
+import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 
 export interface NativeCloudCredential {
   accessToken: string;
@@ -79,6 +79,7 @@ interface NativeDeviceAuthorizationResponse {
 
 const APPROVED_POLL_ATTEMPTS = 4;
 const APPROVED_POLL_DELAY_MS = 400;
+const usesNativeCloudAccountBridge = isTauri || isElectronHost;
 
 function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -116,10 +117,9 @@ function assertNativeResponse(value: unknown): NativeDeviceAuthorizationResponse
 /**
  * POST adapter for the device-authorization routes.
  *
- * Under Tauri these run through the native HTTP client (Rust) because the
- * webview is a different origin from agiworkforce.com — the same reason the
- * existing browser-approval path uses these commands. Outside Tauri (the local
- * dev browser build) the guarded fetch is used, which is same-origin there.
+ * Under a native Desktop shell these run through its audited account bridge
+ * because the renderer is a different origin from agiworkforce.com. The local
+ * development browser uses guarded fetch instead.
  */
 function createDeviceAuthorizationPost(signal?: AbortSignal): DeviceAuthorizationPost {
   const trustedOrigin = new URL(WEB_APP_URL).origin;
@@ -133,7 +133,7 @@ function createDeviceAuthorizationPost(signal?: AbortSignal): DeviceAuthorizatio
       );
     }
 
-    if (isTauri) {
+    if (usesNativeCloudAccountBridge) {
       if (endpoint.pathname === '/api/auth/device/code') {
         return assertNativeResponse(
           await invoke<NativeDeviceAuthorizationResponse>('account_start_device_authorization'),
@@ -233,7 +233,7 @@ async function approveOwnDeviceCode(
   const trustedOrigin = new URL(WEB_APP_URL).origin;
   let response: NativeDeviceAuthorizationResponse;
 
-  if (isTauri) {
+  if (usesNativeCloudAccountBridge) {
     response = assertNativeResponse(
       await invoke<NativeDeviceAuthorizationResponse>('account_approve_device_authorization', {
         userCode,
@@ -278,7 +278,7 @@ export async function exchangeClerkSessionForCloudCredential(
     );
   }
 
-  if (isTauri) {
+  if (usesNativeCloudAccountBridge) {
     // Pin the native HTTP client to the same origin the webview uses before
     // any authorization call, so a stale override cannot redirect approval.
     await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });

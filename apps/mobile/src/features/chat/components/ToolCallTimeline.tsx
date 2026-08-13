@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleCheck,
+  AlertCircle,
   Loader2,
   Maximize2,
   ShieldAlert,
@@ -92,6 +93,9 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
   if (tool.status === 'running') {
     return <Loader2 size={15} strokeWidth={1.75} color={colors.agentActive} />;
   }
+  if (tool.status === 'failed') {
+    return <AlertCircle size={15} strokeWidth={1.75} color={colors.agentError} />;
+  }
 
   // A tool that created/wrote a file gets the file's own extension icon
   // (matches the reference: build_resume.js shows a JS-file icon, not a
@@ -104,6 +108,10 @@ function ToolRowIcon({ tool }: { tool: ToolCall }) {
 
 function trailingChipLabel(tool: ToolCall): string | null {
   if (tool.requiresApproval) return 'Needs approval';
+  if (tool.status === 'failed') {
+    return tool.duration !== undefined ? `Failed · ${formatToolDuration(tool.duration)}` : 'Failed';
+  }
+  if (tool.duration !== undefined) return formatToolDuration(tool.duration);
   if (tool.searchResults?.length) {
     return `${tool.searchResults.length} result${tool.searchResults.length === 1 ? '' : 's'}`;
   }
@@ -114,6 +122,13 @@ function trailingChipLabel(tool: ToolCall): string | null {
   }
   if (tool.output || tool.input) return 'Result';
   return null;
+}
+
+function formatToolDuration(durationMs: number): string {
+  const safeMs = Math.max(0, durationMs);
+  if (safeMs < 1_000) return `${Math.round(safeMs)}ms`;
+  const seconds = safeMs / 1_000;
+  return `${seconds.toFixed(seconds >= 10 || Number.isInteger(seconds) ? 0 : 1)}s`;
 }
 
 function ToolCallTimelineRow({
@@ -155,7 +170,7 @@ function ToolCallTimelineRow({
         onPress={toggle}
         disabled={!hasBody}
         accessibilityRole={hasBody ? 'button' : 'text'}
-        accessibilityLabel={`${nameText}${chip ? `, ${chip}` : ''}`}
+        accessibilityLabel={`${nameText}${tool.status === 'failed' ? ', failed' : ''}${chip ? `, ${chip}` : ''}`}
         accessibilityHint={hasBody ? 'Double tap to expand details' : undefined}
         style={{ flexDirection: 'row', alignItems: 'stretch', minHeight: 30 }}
       >
@@ -174,7 +189,14 @@ function ToolCallTimelineRow({
           }}
         >
           <ToolRowIcon tool={tool} />
-          <Text numberOfLines={1} style={{ flex: 1, fontSize: 13, color: colors.textSecondary }}>
+          <Text
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              fontSize: 13,
+              color: tool.status === 'failed' ? colors.agentError : colors.textSecondary,
+            }}
+          >
             {nameText}
           </Text>
           {chip ? (
@@ -393,7 +415,13 @@ function needsFullScreen(tool: ToolCall): boolean {
  * composer under it) stays reachable the moment it's dismissed. The full
  * request/response scrolls HERE, never inline in the message list.
  */
-function ToolCallFullScreen({ tool, onClose }: { tool: ToolCall | null; onClose: () => void }) {
+export function ToolCallDetailsSheet({
+  tool,
+  onClose,
+}: {
+  tool: ToolCall | null;
+  onClose: () => void;
+}) {
   const colors = useThemeColors();
   if (!tool) return null;
   const label = getToolDisplayLabel(tool.name);
@@ -435,6 +463,28 @@ function ToolCallFullScreen({ tool, onClose }: { tool: ToolCall | null; onClose:
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+          {tool.searchResults?.length ? (
+            <View style={{ gap: 8 }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  fontWeight: '600',
+                  color: colors.textMuted,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5,
+                }}
+              >
+                {tool.searchResults.length === 1
+                  ? '1 source'
+                  : `${tool.searchResults.length} sources`}
+              </Text>
+              <View style={{ gap: 4 }}>
+                {tool.searchResults.map((result, index) => (
+                  <WebSearchResultCard key={`${tool.id}-sheet-${index}`} result={result} />
+                ))}
+              </View>
+            </View>
+          ) : null}
           {tool.command || tool.input ? (
             <View>
               <Text
@@ -457,7 +507,7 @@ function ToolCallFullScreen({ tool, onClose }: { tool: ToolCall | null; onClose:
               </Text>
             </View>
           ) : null}
-          {tool.output ? (
+          {tool.output && !tool.searchResults?.length ? (
             <View>
               <Text
                 style={{
@@ -605,7 +655,7 @@ export function ToolCallTimeline({
       ) : null}
 
       {fullScreenTool ? (
-        <ToolCallFullScreen tool={fullScreenTool} onClose={closeFullScreen} />
+        <ToolCallDetailsSheet tool={fullScreenTool} onClose={closeFullScreen} />
       ) : null}
     </View>
   );

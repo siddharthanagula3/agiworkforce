@@ -13,9 +13,21 @@
 
 import { describe, expect, it, vi } from 'vitest';
 
+const clerkOpenSignIn = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+const accountRefresh = vi.hoisted(() =>
+  vi.fn(
+    async (
+      _getToken: () => Promise<string | null>,
+      render: (state: { signedIn: boolean; unavailable: boolean; loading: boolean }) => void,
+    ) => {
+      render({ signedIn: false, unavailable: false, loading: false });
+    },
+  ),
+);
+
 // options.ts calls buildPage() at module load, so every browser/chrome API it
 // touches on the way down has to exist on globalThis BEFORE the import.
-vi.hoisted(() => {
+const chromeHarness = vi.hoisted(() => {
   // jsdom ships CSSStyleSheet without the constructable-stylesheet methods.
   class FakeStyleSheet {
     replaceSync(): void {}
@@ -27,6 +39,10 @@ vi.hoisted(() => {
     value: [],
   });
 
+  const storageSet = vi.fn((_items: unknown, cb?: () => void) => {
+    if (cb) cb();
+    return Promise.resolve();
+  });
   (globalThis as Record<string, unknown>).chrome = {
     runtime: {
       getManifest: () => ({ version: '1.2.3' }),
@@ -39,10 +55,7 @@ vi.hoisted(() => {
           if (cb) cb({});
           return Promise.resolve({});
         },
-        set: (_items: unknown, cb?: () => void) => {
-          if (cb) cb();
-          return Promise.resolve();
-        },
+        set: storageSet,
         remove: () => Promise.resolve(),
       },
     },
@@ -53,7 +66,17 @@ vi.hoisted(() => {
       },
       create: () => Promise.resolve({}),
     },
+    commands: {
+      getAll: (
+        cb: (commands: Array<{ name: string; description: string; shortcut?: string }>) => void,
+      ) =>
+        cb([
+          { name: '_execute_action', description: 'Open side panel', shortcut: 'Alt+Shift+G' },
+          { name: 'capture_page', description: 'Capture page' },
+        ]),
+    },
   };
+  return { storageSet };
 });
 
 vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
@@ -63,14 +86,92 @@ vi.mock('../src/features/cloud-bridge/freeTrialClient', () => ({
 
 vi.mock('../src/features/cloud-bridge/clerkAuth', () => ({
   isClerkExtensionAuthConfigured: () => true,
-  openClerkSignIn: vi.fn().mockResolvedValue(undefined),
+  openClerkSignIn: clerkOpenSignIn,
 }));
 
 vi.mock('../src/features/options/account-state', () => ({
-  beginOptionsAccountRefresh: vi.fn().mockResolvedValue(undefined),
+  beginOptionsAccountRefresh: accountRefresh,
 }));
 
 describe('options page — Help', () => {
+  it('renders the responsive AGI settings shell and section navigation', async () => {
+    await import('../src/options');
+
+    expect(document.querySelector('.opt-shell')).not.toBeNull();
+    expect(document.querySelector('.opt-sidebar')).not.toBeNull();
+    expect(document.querySelector('h1.opt-header-title')?.textContent).toBe('AGI Chrome settings');
+    expect(document.querySelectorAll('h2.opt-section-title').length).toBeGreaterThanOrEqual(5);
+    const targets = Array.from(document.querySelectorAll<HTMLButtonElement>('.opt-nav-item')).map(
+      (button) => button.dataset.target,
+    );
+    expect(targets).toEqual([
+      'opt-permissions',
+      'opt-account',
+      'opt-preferences',
+      'opt-shortcuts',
+      'opt-help',
+    ]);
+    for (const target of targets) expect(document.getElementById(target!)).not.toBeNull();
+  });
+
+  it('keeps Add disabled and never stores a label when no web site is open', async () => {
+    await import('../src/options');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const addButton = document.querySelector<HTMLButtonElement>('#opt-add-btn');
+    expect(document.querySelector('#opt-current-origin')?.textContent).toBe('No site open');
+    expect(addButton?.disabled).toBe(true);
+
+    chromeHarness.storageSet.mockClear();
+    addButton?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(chromeHarness.storageSet).not.toHaveBeenCalled();
+  });
+
+  it('keeps keyboard navigation state synchronized with the visible destination', () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(globalThis.HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    const shortcutsButton = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.opt-nav-item'),
+    ).find((button) => button.dataset.target === 'opt-shortcuts');
+    expect(shortcutsButton).toBeDefined();
+
+    shortcutsButton!.click();
+
+    expect(shortcutsButton!.classList.contains('active')).toBe(true);
+    expect(shortcutsButton!.getAttribute('aria-current')).toBe('location');
+    expect(document.querySelectorAll('.opt-nav-item.active')).toHaveLength(1);
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('renders Chrome’s current command bindings instead of stale manifest defaults', () => {
+    const shortcutRows = Array.from(document.querySelectorAll('#opt-shortcuts tbody tr')).map(
+      (row) => row.textContent?.replace(/[\s+]/g, ''),
+    );
+    expect(shortcutRows).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('AltShiftG'),
+        expect.stringContaining('Notassigned'),
+      ]),
+    );
+  });
+
+  it('advances one sign-in handler to account refresh without reopening auth', async () => {
+    const signInButton = document.querySelector<HTMLButtonElement>('#opt-signin-btn');
+    expect(signInButton?.textContent).toBe('Sign in');
+
+    signInButton!.click();
+    await vi.waitFor(() => expect(signInButton?.textContent).toBe('Check sign-in'));
+    expect(clerkOpenSignIn).toHaveBeenCalledTimes(1);
+
+    signInButton!.click();
+    await vi.waitFor(() => expect(accountRefresh.mock.calls.length).toBeGreaterThanOrEqual(2));
+    expect(clerkOpenSignIn).toHaveBeenCalledTimes(1);
+  });
+
   it('renders a Help section linking to real web routes', async () => {
     await import('../src/options');
 

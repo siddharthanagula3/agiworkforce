@@ -80,6 +80,9 @@ vi.mock('@agiworkforce/unified-chat', async () => {
   const useChatStore = (selector: (state: ReturnType<typeof readState>) => unknown) =>
     selector(readState());
   useChatStore.getState = readState;
+  const useChatModelStore = (
+    selector: (state: { models: Array<Record<string, unknown>> }) => unknown,
+  ) => selector({ models: [] });
   return {
     CapabilityProvider: (props: { children?: ReactNode }) =>
       React.createElement(React.Fragment, null, props.children),
@@ -91,6 +94,7 @@ vi.mock('@agiworkforce/unified-chat', async () => {
     QuickChips: () => React.createElement('div', { 'data-testid': 'quick-chips' }),
     useReducedMotion: () => false,
     useChatStore,
+    useChatModelStore,
     selectBudget: () => ({ enabled: false }),
     selectBudgetPercentage: () => 0,
     useBudgetStore: (selector: (state: unknown) => unknown) =>

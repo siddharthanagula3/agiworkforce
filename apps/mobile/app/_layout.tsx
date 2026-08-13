@@ -78,7 +78,6 @@ import {
   setSignedIn,
 } from '@/services/notifications';
 import { registerBackgroundFetch, unregisterBackgroundFetch } from '@/services/backgroundFetch';
-import { subscribeToRealtime, unsubscribeFromRealtime } from '@/services/realtime';
 import { useChatStore } from '@/stores/chatStore';
 import { isAgeGateConfirmed } from '@/src/features/auth/services/ageGate';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
@@ -136,14 +135,6 @@ function ClerkTokenBridge() {
   const setClerkLoaded = useAuthStore((s) => s.setClerkLoaded);
   const setCloudAccess = useWaitlistStore((s) => s.setCloudAccess);
 
-  // Propagate Clerk's loaded state first so auth guards never fire during
-  // the cold-start window where isSignedIn is false even for signed-in users.
-  useEffect(() => {
-    if (isLoaded) {
-      setClerkLoaded(true);
-    }
-  }, [isLoaded, setClerkLoaded]);
-
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn) {
@@ -185,6 +176,11 @@ function ClerkTokenBridge() {
         subscriptionTier: useTierStore.getState().tier,
       });
       setClerkSignedIn(true);
+      // Publish "loaded" only after the owner, Cloud entitlement and signed-in
+      // state are coherent. Publishing it in a separate earlier effect exposed
+      // a transient loaded+signed-out frame that downgraded persisted Cloud
+      // mode on every cold start.
+      setClerkLoaded(true);
     } else {
       clearPostAuthIntent();
       setClerkTokenGetter(null, null, null);
@@ -203,8 +199,18 @@ function ClerkTokenBridge() {
       // inherit account A's Cloud chats, artifacts, memories, projects,
       // personalization, sync cursors, plan grants, or connector badges.
       clearLocalCloudAccountState();
+      setClerkLoaded(true);
     }
-  }, [getToken, userId, isLoaded, isSignedIn, setClerkSignedIn, setClerkUserId, setCloudAccess]);
+  }, [
+    getToken,
+    userId,
+    isLoaded,
+    isSignedIn,
+    setClerkLoaded,
+    setClerkSignedIn,
+    setClerkUserId,
+    setCloudAccess,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -495,32 +501,6 @@ export default function RootLayout() {
       void queueBackgroundFetchLifecycle(() => unregisterBackgroundFetch()).catch((err) => {
         console.warn('[RootLayout] Background fetch unregister failed:', err);
       });
-    };
-  }, [isClerkSignedIn, clerkUserId]);
-
-  // Cloud realtime — cross-surface sync of conversations/messages
-  // #386: gated on isClerkSignedIn instead of the legacy session (always null).
-  useEffect(() => {
-    if (!FEATURES.cloudChat || !isClerkSignedIn || !clerkUserId) return;
-
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
-    subscribeToRealtime()
-      .then((unsub) => {
-        if (disposed) {
-          unsub();
-          return;
-        }
-        unsubscribe = unsub;
-      })
-      .catch((err) => {
-        console.warn('[RootLayout] Realtime subscription failed:', err);
-      });
-
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-      unsubscribeFromRealtime();
     };
   }, [isClerkSignedIn, clerkUserId]);
 

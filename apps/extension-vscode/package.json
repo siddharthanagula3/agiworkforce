@@ -46,14 +46,15 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",
-      "description": "API endpoint, gateway URL, CLI path, auto-apply, telemetry endpoint, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
+      "description": "API endpoint, CLI path, model boundary, Desktop bridge, auto-apply, telemetry endpoint, and tier settings cannot be overridden by workspace settings in untrusted workspaces. Agent mode file writes are disabled until the workspace is trusted.",
       "restrictedConfigurations": [
         "agiWorkforce.apiEndpoint",
-        "agiWorkforce.gatewayUrl",
         "agiWorkforce.cliPath",
+        "agiWorkforce.model",
+        "agiWorkforce.desktopBridge.enabled",
+        "agiWorkforce.desktopBridge.port",
         "agiWorkforce.autoApplyFixes",
-        "agiWorkforce.telemetryEndpoint",
-        "agiWorkforce.tier"
+        "agiWorkforce.telemetryEndpoint"
       ]
     }
   },
@@ -88,7 +89,7 @@
       },
       {
         "command": "agi-workforce.agentMode",
-        "title": "AGI Workforce: Agent Mode",
+        "title": "AGI Workforce: Choose Agent Mode",
         "icon": "$(robot)"
       },
       {
@@ -561,6 +562,20 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "agi-workforce.conversations",
+        "contents": "Developer sessions stay scoped to this workspace.\n[Start a new session](command:agi-workforce.chat)"
+      },
+      {
+        "view": "agi-workforce.contextPanel",
+        "contents": "Pin workspace files to keep them in context. Automatic context appears as you work.\n[Add the active file](command:agi-workforce.addToContext)"
+      },
+      {
+        "view": "agi-workforce.memory",
+        "contents": "Memory facts apply only to this workspace and are never added to consumer chat history.\n[Add a workspace memory](command:agi-workforce.memory.create)"
+      }
+    ],
     "menus": {
       "view/item/context": [
         {
@@ -713,11 +728,6 @@
           "scope": "machine",
           "description": "Path to the AGI CLI executable that owns workspace-scoped local developer sessions."
         },
-        "agiWorkforce.streamingEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable streaming responses from AGI Workforce API"
-        },
         "agiWorkforce.composer.followUpBehavior": {
           "type": "string",
           "enum": [
@@ -816,11 +826,6 @@
           "default": false,
           "description": "Enable extended thinking for cloud-backed editor utilities such as Explain, Fix, diagnostics, and inline completion. This setting does not affect local @agi, sidebar, or editor developer sessions, whose reasoning effort is controlled by the Effort setting."
         },
-        "agiWorkforce.mcp.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable MCP for cloud-backed editor utilities. This does not control the local app-server; configure developer-session MCP through the AGI CLI."
-        },
         "agiWorkforce.desktopBridge.enabled": {
           "type": "boolean",
           "default": false,
@@ -838,48 +843,11 @@
           "default": "https://telemetry.agiworkforce.com/v1/events",
           "description": "Endpoint URL for sending anonymous telemetry events"
         },
-        "agiWorkforce.useProviderStream": {
-          "type": "boolean",
-          "default": false,
-          "description": "Use account-authenticated provider streaming for cloud-backed editor utilities instead of the legacy AGI Workforce LLM proxy. This does not affect local @agi, sidebar, or editor developer sessions. Requires browser-approved AGI Cloud device sign-in."
-        },
-        "agiWorkforce.gatewayUrl": {
-          "type": "string",
-          "default": "https://api.agiworkforce.com",
-          "description": "Base URL of the AGI Workforce gateway used by the provider-stream path. Override for self-hosted / regional gateways."
-        },
         "agiWorkforce.currentTier": {
           "type": "string",
           "default": "unknown",
           "readOnly": true,
           "description": "Current subscription tier (read-only, populated on activation). Run 'AGI Workforce: Show Tier Status' to see full usage details or visit agiworkforce.com/pricing to upgrade."
-        },
-        "agiWorkforce.tier": {
-          "type": "string",
-          "enum": [
-            "local",
-            "byok",
-            "free",
-            "basic",
-            "pro",
-            "max",
-            "max_15x",
-            "team",
-            "enterprise"
-          ],
-          "enumDescriptions": [
-            "Local-only mode — Ollama / LMStudio, no cloud, no multi-provider switch.",
-            "Bring-your-own-key — free, single-provider per session (default).",
-            "Free managed account — Local and BYOK developer use only.",
-            "Basic managed account — Local and BYOK developer use only.",
-            "Pro managed cloud — higher limits, single-provider per session.",
-            "Max 5x — flagship model access and cross-provider selection; provider changes start a fresh developer session.",
-            "Max 15x — Max model access with the highest individual usage limits.",
-            "Team — Pro model access with shared team administration.",
-            "Enterprise — negotiated limits and managed organization controls."
-          ],
-          "default": "byok",
-          "markdownDescription": "Subscription tier override for the VS Code extension. When set to any value other than `byok`, this overrides the live tier fetched from the desktop bridge or API (useful for testing). Leave at `byok` to use the real resolved tier."
         }
       }
     },
@@ -957,11 +925,6 @@
         "key": "ctrl+shift+alt+u",
         "mac": "cmd+shift+alt+u",
         "when": "agi-workforce.hasDiff"
-      },
-      {
-        "command": "agi-workforce.cycleAgentMode",
-        "key": "shift+tab",
-        "when": "focusedView == 'agi-workforce.sidebar' || activeWebviewPanelId == 'agi-workforce.chatPanel'"
       }
     ]
   },
@@ -987,7 +950,6 @@
     "@agiworkforce/agent-core": "workspace:*",
     "@agiworkforce/cloud-contracts": "workspace:*",
     "@agiworkforce/design-tokens": "workspace:*",
-    "@agiworkforce/provider-runtime": "workspace:*",
     "@agiworkforce/client-runtime": "workspace:*",
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/types": "workspace:*",

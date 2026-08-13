@@ -1,5 +1,12 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { checkForUpdates, relaunchApp, isTauri, listen } from '../../lib/tauri-mock';
+import {
+  checkForUpdates,
+  relaunchApp,
+  isElectronHost,
+  isTauri,
+  listen,
+} from '../../lib/tauri-mock';
+import { getElectronHostBridge } from '../../lib/tauri-electron/bridgeContract';
 import {
   useUpdaterStore,
   shouldShowUpdateNotification,
@@ -9,13 +16,15 @@ import {
 } from '../../stores/updaterStore';
 
 // Package version - will be replaced by build process or read from package.json
-const CURRENT_VERSION_FALLBACK = '1.1.2';
+const CURRENT_VERSION_FALLBACK = 'Unknown';
 
 interface UpdateCheckResult {
   available: boolean;
+  currentVersion?: string;
   version?: string;
   body?: string;
   date?: string;
+  downloadAndInstall?: () => Promise<void>;
 }
 
 export function useUpdater() {
@@ -51,6 +60,11 @@ export function useUpdater() {
   }, []);
 
   useEffect(() => {
+    if (isElectronHost) {
+      const version = getElectronHostBridge()?.appVersion.trim();
+      if (version) setCurrentVersion(version);
+      return;
+    }
     if (!isTauri) return;
 
     const loadVersion = async () => {
@@ -120,7 +134,7 @@ export function useUpdater() {
    * Check for available updates
    */
   const doCheckForUpdates = useCallback(async (): Promise<UpdateInfo | null> => {
-    if (!isTauri) {
+    if (!isTauri && !isElectronHost) {
       setStatus('up-to-date');
       return null;
     }
@@ -136,9 +150,11 @@ export function useUpdater() {
       if (!mountedRef.current) return null;
 
       if (update?.available && update.version) {
+        const installedVersion = update.currentVersion || currentVersion;
+        if (update.currentVersion) setCurrentVersion(update.currentVersion);
         const info: UpdateInfo = {
           version: update.version,
-          currentVersion,
+          currentVersion: installedVersion,
           releaseNotes: update.body,
           releaseDate: update.date,
         };
@@ -182,8 +198,30 @@ export function useUpdater() {
    * Download and install the available update
    */
   const downloadAndInstall = useCallback(async (): Promise<void> => {
-    if (!isTauri) {
+    if (!isTauri && !isElectronHost) {
       setError('Updates are only available in the desktop application');
+      return;
+    }
+
+    if (isElectronHost) {
+      setError(null);
+      try {
+        const { check } = await import('@tauri-apps/plugin-updater');
+        const update = (await check()) as UpdateCheckResult;
+        if (!update.available || !update.downloadAndInstall) {
+          setStatus('up-to-date');
+          return;
+        }
+        await update.downloadAndInstall();
+        // Electron's supported update path is a signed DMG in the OS browser.
+        // Keep the update visible until the user installs and relaunches it.
+        setStatus('available');
+      } catch (err) {
+        if (!mountedRef.current) return;
+        console.error('[useUpdater] Failed to open the AGI Cloud installer:', err);
+        setError(err instanceof Error ? err.message : String(err));
+        setStatus('error');
+      }
       return;
     }
 
@@ -279,6 +317,7 @@ export function useUpdater() {
     dismiss,
     retry,
     reset,
+    isManualInstallerUpdate: isElectronHost,
   };
 }
 

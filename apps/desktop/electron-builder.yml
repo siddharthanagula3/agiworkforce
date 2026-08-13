@@ -24,14 +24,20 @@ files:
 
 mac:
   category: public.app-category.productivity
+  # The main process handles Electron's macOS `open-url` event. Register the
+  # distinct cloud-shell callback scheme in the packaged Info.plist so OAuth
+  # and account deep links reach that handler after installation.
+  protocols:
+    - name: AGI Cloud authentication callback
+      role: Viewer
+      schemes:
+        - agiworkforce-cloud
   # Explicit arch marker on every artifact: the default x64 names omit it
   # ("AGI Cloud-1.0.0.dmg"), which breaks arch-aware selection in the
   # website download route and human triage on the releases page.
   artifactName: ${productName}-${version}-${arch}.${ext}
   target:
     - target: dmg
-      arch: [arm64, x64]
-    - target: zip # required by electron-updater on macOS (Phase 5)
       arch: [arm64, x64]
   hardenedRuntime: true
   gatekeeperAssess: false
@@ -48,11 +54,3 @@ mac:
 
 dmg:
   sign: false
-
-# A publish provider must be configured for electron-builder to emit
-# latest-mac.yml (the electron-updater feed manifest), but actual publishing
-# is handled by the release workflow via `gh release upload` — CI always runs
-# with `--publish never`. The URL is the planned Phase 5 generic update feed.
-publish:
-  provider: generic
-  url: https://www.agiworkforce.com/api/releases/electron/mac

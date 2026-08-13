@@ -21,7 +21,7 @@ export default function UseCasesPage() {
           eyebrow="Use cases"
           titleLines={['Built for the way', 'you already work.']}
           em="you already work."
-          lede="AGI is a routeable AI workspace for people with real constraints: private local work, provider choice through your own keys on Desktop and CLI, and managed cloud, open in public alpha, when you're ready to scale."
+          lede="AGI is a routeable AI workspace for people with real constraints: private local work, provider choice through your own keys on Desktop, CLI, and VS Code, and managed cloud, open in public alpha, when you're ready to scale."
           ctas={[
             { href: '/download', label: 'Get AGI Desktop' },
             { href: '/solutions', label: 'See the Solutions Map' },

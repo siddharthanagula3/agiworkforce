@@ -297,13 +297,17 @@ describe('settingsStore', () => {
     expect(useSettingsStore.getState().loading).toBe(false);
   });
 
-  it('persists the memory master as the authoritative auto-save policy', async () => {
+  it('keeps the memory master in the Settings draft until Save', async () => {
     await useSettingsStore.getState().setMemoryEnabled(true);
 
     expect(useSettingsStore.getState().chatPreferences).toMatchObject({
       memoryEnabled: true,
       autoSaveMemories: true,
     });
+    expect(invokeMock).not.toHaveBeenCalledWith('settings_save', expect.anything());
+
+    await useSettingsStore.getState().saveSettings();
+
     expect(invokeMock).toHaveBeenCalledWith(
       'settings_save',
       expect.objectContaining({
@@ -315,19 +319,51 @@ describe('settingsStore', () => {
         }),
       }),
     );
+    expect(invokeMock).toHaveBeenCalledWith('chat_configure_memory_injection', {
+      enabled: true,
+      maxMemories: 10,
+      minImportance: 5,
+      allowToolAssistedGeneration: false,
+    });
   });
 
-  it('rolls back the memory policy when persistence fails', async () => {
+  it('does not claim a failed Save discarded the in-panel memory draft', async () => {
     const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'settings_load') {
+        return {
+          chatPreferences: {
+            memoryEnabled: false,
+            allowToolAssistedMemoryGeneration: false,
+          },
+          featureFlags: { webSearch: true },
+          allowedDirectories: [],
+        };
+      }
+      if (command === 'timeout_get_config') {
+        return {
+          max_duration_secs: 3600,
+          enable_warnings: true,
+          enable_checkpoint_on_timeout: true,
+        };
+      }
       if (command === 'settings_save') throw new Error('save failed');
       return undefined;
     });
 
-    await expect(useSettingsStore.getState().setMemoryEnabled(true)).rejects.toThrow('save failed');
+    await useSettingsStore.getState().setMemoryEnabled(true);
+    await expect(useSettingsStore.getState().saveSettings()).rejects.toThrow('save failed');
     expect(useSettingsStore.getState().chatPreferences).toMatchObject({
-      memoryEnabled: false,
-      autoSaveMemories: false,
+      memoryEnabled: true,
+      autoSaveMemories: true,
+    });
+    const memoryPolicyCalls = invokeMock.mock.calls.filter(
+      ([command]) => command === 'chat_configure_memory_injection',
+    );
+    expect(memoryPolicyCalls.at(-2)?.[1]).toMatchObject({ enabled: true });
+    expect(memoryPolicyCalls.at(-1)?.[1]).toMatchObject({ enabled: false });
+    expect(invokeMock).toHaveBeenCalledWith('sync_capabilities', {
+      capabilities: { webSearch: true },
     });
 
     consoleErrorSpy.mockRestore();

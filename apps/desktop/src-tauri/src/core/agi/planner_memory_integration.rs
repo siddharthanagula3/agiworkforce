@@ -105,7 +105,9 @@ impl PlannerMemoryIntegration {
     pub fn build_planner_system_prompt(&self, goal: &str) -> Result<String> {
         let memory_context = self.analyze_goal_memories(goal)?;
 
-        let mut prompt = String::from("You are an expert AGI planner with access to previous solutions and architectural decisions.\n\n");
+        let mut prompt = String::from(
+            "You are an expert AGI planner with access to previous solutions and architectural decisions.\n\n",
+        );
 
         if !memory_context.referenced_decisions.is_empty() {
             prompt.push_str("## Previous Architectural Decisions\n");

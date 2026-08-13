@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
@@ -80,21 +80,26 @@ function completedSummary(activity: AgentActivityState): string {
 }
 
 export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: number): string {
-  const elapsed = formatDuration(
-    Math.max(0, (activity.completedAtMs ?? nowMs) - activity.startedAtMs),
-  );
   const active = latestActiveSummary(activity);
   if (activity.status === 'awaiting-approval') {
     return active ? `Needs approval · ${active}` : 'Needs approval';
   }
+  // Active work stays semantic and stable (no one-second render timer). Once a
+  // run settles, however, elapsed time is fixed useful output — the latest
+  // mobile reference presents it as “Worked for 5m 24s”. Prefer the canonical
+  // terminal timestamp, then the last event time, and only use the injected
+  // clock for a malformed legacy state with neither.
+  const elapsed = formatDuration(
+    Math.max(0, (activity.completedAtMs ?? activity.updatedAtMs ?? nowMs) - activity.startedAtMs),
+  );
   if (activity.status === 'paused') return `Paused after ${elapsed}`;
-  if (activity.status === 'failed') return `Stopped after ${elapsed}`;
+  if (activity.status === 'failed') return `Failed after ${elapsed}`;
   if (activity.status === 'cancelled') return `Cancelled after ${elapsed}`;
   if (activity.status === 'completed') {
     const completed = completedSummary(activity);
-    return `Done in ${elapsed}${completed ? ` · ${completed}` : ''}`;
+    return `Worked for ${elapsed}${completed ? ` · ${completed}` : ''}`;
   }
-  return active ? `${active} · ${elapsed}` : `Working for ${elapsed}`;
+  return active ?? 'Working…';
 }
 
 function asDisplayText(value: unknown): string | undefined {
@@ -280,9 +285,14 @@ function ToolRow({
           {entry.error ? (
             <Text style={{ color: colors.agentError, fontSize: 11 }}>{entry.error}</Text>
           ) : null}
-          {entry.sources?.map((source, index) => (
+          {entry.sources?.slice(0, 5).map((source, index) => (
             <WebSearchResultCard key={`${source.url}:${index}`} result={source} />
           ))}
+          {(entry.sources?.length ?? 0) > 5 ? (
+            <Text selectable style={{ color: colors.textMuted, fontSize: 11 }}>
+              +{entry.sources!.length - 5} more sources
+            </Text>
+          ) : null}
         </View>
       ) : null}
     </View>
@@ -336,9 +346,14 @@ function StaticRow({
               {entry.query}
             </Text>
           ) : null}
-          {entry.sources.map((source, index) => (
+          {entry.sources.slice(0, 5).map((source, index) => (
             <WebSearchResultCard key={`${source.url}:${index}`} result={source} />
           ))}
+          {entry.sources.length > 5 ? (
+            <Text selectable style={{ color: colors.textMuted, fontSize: 11, paddingTop: 4 }}>
+              +{entry.sources.length - 5} more sources
+            </Text>
+          ) : null}
         </View>
       </View>
     );
@@ -404,7 +419,11 @@ export function AgentActivityTimeline({
   onResendApproval,
 }: AgentActivityTimelineProps) {
   const colors = useThemeColors();
-  const [expanded, setExpanded] = useRecyclingState(defaultExpanded, [messageId, activity.turnId]);
+  const isActive = activity.status === 'running' || activity.status === 'awaiting-approval';
+  const [expanded, setExpanded] = useRecyclingState(defaultExpanded || isActive, [
+    messageId,
+    activity.turnId,
+  ]);
   const [visibleCount, setVisibleCount] = useRecyclingState(ACTIVITY_PAGE_SIZE, [
     messageId,
     activity.turnId,
@@ -413,25 +432,21 @@ export function AgentActivityTimeline({
     messageId,
     activity.turnId,
   ]);
-  const [liveNow, setLiveNow] = useRecyclingState(nowMs ?? activity.updatedAtMs, [
-    messageId,
-    activity.turnId,
-  ]);
+  const userExpansionRef = useRef<'expanded' | 'collapsed' | null>(null);
 
   useEffect(() => {
-    if (activity.status === 'awaiting-approval') setExpanded(true);
-  }, [activity.status, setExpanded]);
+    userExpansionRef.current = null;
+    setExpanded(defaultExpanded || isActive);
+  }, [activity.turnId, defaultExpanded, isActive, messageId, setExpanded]);
 
   useEffect(() => {
-    if (nowMs !== undefined || activity.status !== 'running') return;
-    const timer = setInterval(() => setLiveNow(Date.now()), 1_000);
-    return () => clearInterval(timer);
-  }, [activity.status, nowMs, setLiveNow]);
+    if (userExpansionRef.current !== null) return;
+    setExpanded(defaultExpanded || isActive);
+  }, [activity.status, defaultExpanded, isActive, setExpanded]);
 
-  const effectiveNow = nowMs ?? Math.max(liveNow, activity.updatedAtMs);
   const summary = useMemo(
-    () => buildAgentActivitySummary(activity, effectiveNow),
-    [activity, effectiveNow],
+    () => buildAgentActivitySummary(activity, nowMs ?? activity.updatedAtMs),
+    [activity, nowMs],
   );
   const hiddenCount = Math.max(0, activity.entries.length - visibleCount);
   const visibleEntries = activity.entries.slice(hiddenCount);
@@ -441,7 +456,12 @@ export function AgentActivityTimeline({
   return (
     <View accessibilityLabel="Agent activity" style={{ width: '100%', marginBottom: 7 }}>
       <Pressable
-        onPress={() => setExpanded((value) => !value)}
+        onPress={() =>
+          setExpanded((value) => {
+            userExpansionRef.current = value ? 'collapsed' : 'expanded';
+            return !value;
+          })
+        }
         accessibilityRole="button"
         accessibilityLabel={`${expanded ? 'Hide' : 'Show'} agent activity: ${summary}`}
         accessibilityState={{ expanded }}

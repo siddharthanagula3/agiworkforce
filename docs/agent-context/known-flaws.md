@@ -2,9 +2,90 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-08-08
+Last updated: 2026-08-13
 
 Use this file to prevent duplicate bug discovery. If an agent finds one of these again, update the row instead of reporting it as new.
+
+## 2026-08-12 Three rich-format card parsers are still unaudited for content loss
+
+- **WEB-FORMAT-CARD-LOSSY-PARSE — PARTIALLY OPEN, mitigated.**
+  `apps/web/features/chat/components/cards/` holds four heuristic parsers that
+  turn assistant markdown into structured cards. They were written but never
+  wired to anything (zero consumers) until 2026-08-12. All four `continue` past
+  lines they do not recognise, so any of them can drop content.
+- **One was provably lossy and is fixed.** `RecipeCard.parseRecipe` set
+  `currentSection = 'other'` on the first unrecognised heading and nothing
+  collected that branch, so a trailing "Notes" / "Tips" / "Variations" section
+  vanished from the card. Now captured into `extraSections` and rendered.
+- **`ComparisonCard`, `StepsCard`, `CalculationCard` have NOT been audited**
+  for the same class of bug. Assume they can drop content until someone checks.
+- **Why that is survivable.** `MessageFormatCard` is the only sanctioned way to
+  render these: it shows the card by default and keeps the exact model markdown
+  behind an "Original response" toggle. A parser gap therefore costs a click,
+  not the answer. Do NOT render these cards in place of the prose without that
+  wrapper — that is what would make an answer silently lossy.
+- **Detection runs only on settled text.** `MessageBubble` computes
+  `detectCardType` with `isStreaming` false, because the detector keys on
+  structural thresholds (an `## Ingredients` heading, three `Step N:` markers)
+  that a partial answer crosses at arbitrary moments, which would flip the
+  layout mid-stream.
+
+## 2026-08-12 Managed video generation: provisioned, pending a redeploy
+
+- **WEB-VIDEO-PRIVATE-BUCKET-UNSET — RESOLVED in config 2026-08-12; awaiting
+  the next production deploy to take effect.** Kept here because the diagnosis
+  is the reusable part: `isVideoStorageConfigured()`
+  (`apps/web/lib/server/media-storage.ts`) requires
+  `isPrivateObjectStorageConfigured()`, which needs
+  `CLOUDFLARE_R2_PRIVATE_BUCKET_NAME` set to a bucket DISTINCT from
+  `CLOUDFLARE_R2_BUCKET_NAME`. It was absent from the project entirely, so every
+  video model reported `storage_not_configured` and the composer showed
+  `UNAVAILABLE`. Image generation was unaffected, which is why only video
+  looked broken.
+- **The non-obvious second half.** Creating the bucket was not enough. The R2
+  API token behind `CLOUDFLARE_R2_ACCESS_KEY_ID`/`_SECRET_ACCESS_KEY` was a
+  USER token scoped to `agiworkforce-media` alone, and `getR2Client()`
+  (`apps/web/lib/server/object-storage.ts`) builds ONE S3 client for both
+  buckets — so a bucket-scoped token fails the private path even when the
+  bucket exists. Had the env var been set without rotating the token, the
+  composer would have advertised video, called and BILLED the provider, then
+  died on the R2 upload. Set storage config and token scope together.
+- **Not mintable from any CLI or agent.** Cloudflare excludes API-token
+  creation from every OAuth grant: wrangler 4.122 has no `r2` token command
+  (`wrangler auth` manages local login profiles only), and both the wrangler
+  OAuth token and the official Cloudflare MCP grant return `403 9109` on
+  `/accounts/{id}/tokens`, `/user/tokens`, and `.../permission_groups`. The one
+  R2 credential endpoint, `POST /accounts/{id}/r2/temp-access-credentials`,
+  cannot help: it derives from a `parentAccessKeyId` and so cannot exceed that
+  parent's bucket scope, and caps at `ttlSeconds` 604800. Token creation is a
+  dashboard action. Do not re-litigate this.
+- **What was done.** Bucket `agiworkforce-media-private` created (WNAM,
+  Standard, r2.dev public access disabled). A new ACCOUNT-owned R2 token with
+  Object Read & Write over both buckets replaced the user token; verified by
+  PUT/HEAD/GET/DELETE round-trip against BOTH buckets before any env change.
+  `CLOUDFLARE_R2_ACCESS_KEY_ID`, `CLOUDFLARE_R2_SECRET_ACCESS_KEY` rotated and
+  `CLOUDFLARE_R2_PRIVATE_BUCKET_NAME=agiworkforce-media-private` added to Vercel
+  production. Note Vercel now marks newly-added vars SENSITIVE, so they pull
+  back as `[SENSITIVE]` and cannot be round-trip verified from a local pull.
+  The old user token `agiworkforce-media-rw` was intentionally left active; it
+  can be revoked once a deploy confirms the new one is live.
+- **Schema gate: already satisfied.** `isVideoJobStoreReady`'s full predicate
+  passes on the Neon endpoint in `.env.local`
+  (`ep-little-math-apu2yl8h...neondb`) — `video_generation_jobs` plus all five
+  functions, `workflow_run_id`, `provider_failure_code`, 7/7 job columns, 6/6
+  `profiles` columns, 5/5 `credit_settlement_jobs` columns, `media_assets`.
+  CAVEAT: production's `DATABASE_URL` is marked sensitive in Vercel and pulls
+  as a placeholder, so that endpoint could not be cross-checked against the
+  production value. Treat as strong evidence, not proof.
+- **Not a Maps key, while we are here.** `GOOGLE_API_KEY` is a Generative
+  Language key. Verified 2026-08-12 against the real value from `.env.local`:
+  `generativelanguage.googleapis.com/v1beta/models` returns the Gemini catalog,
+  while Maps Static, Geocoding, and Directions all reject it with
+  `REQUEST_DENIED / API key is invalid`. The map-search card therefore renders
+  from OpenStreetMap and needs no Google credential.
+- **Remaining step.** Redeploy production, then confirm with a signed-in
+  `GET /api/media/availability` that `video_storage_configured` and
+  `video_schema_configured` are both true and video models report `enabled`.
 
 ## 2026-08-08 The desktop visual baseline is a different app state, and the threshold hides it
 
@@ -38,38 +119,24 @@ Use this file to prevent duplicate bug discovery. If an agent finds one of these
   forced in the deterministic-mock harness so the screen under test is the real
   one rather than a fallback.
 
-## 2026-08-08 Parallel AGI execution writes outcomes to a stray database
+## 2026-08-08 Parallel AGI execution writes outcomes to a stray database — PATCHED
 
-- **AGI-EXECUTOR-PARALLEL-ORPHAN-DB — OPEN, needs a small design decision.**
-  `core/agi/executor.rs:742` constructs
-  `OutcomeTracker::new("outcome_tracker_parallel.db".to_string())` — a bare
-  RELATIVE path, in production code, not a test.
-- **Two consequences, both real.** (1) The file is created wherever the process
-  working directory happens to be. For a packaged desktop app that is whatever
-  the launcher set, which may be read-only (an app bundle) or the user's home.
-  (2) Every other construction site resolves the real database:
-  `core.rs:267` takes `db_path` as a parameter and
-  `sys/commands/process_reasoning.rs:38` uses `database_path(&db)`. So outcomes
-  recorded during PARALLEL execution land in a different database from every
-  other path, and `get_outcome_tracking` — which reads the real one — cannot
-  see them. The data is silently orphaned rather than lost loudly.
-- **Why it happened.** `execute_plans_parallel(&self, ...)` clones the fields
-  it needs out of `self` before `tokio::spawn` — tool_registry, automation,
-  router, tool_cache, app_handle — but NOT `self.outcome_tracker`. Inside the
-  spawned task there is no tracker in scope, so one is fabricated. The
-  correctly-built tracker was three lines away in the same function.
-- **Why it is not a one-line fix.** `AGIExecutor::with_process_reasoning`
-  takes `Arc<OutcomeTracker>`, while `self.outcome_tracker` is
-  `Option<Arc<OutcomeTracker>>` (executor.rs:59, and constructors at :96 and
-  :161 set it to None). Cloning it through requires deciding what a parallel
-  sub-task should do when the PARENT has no tracker: skip outcome tracking to
-  match the parent, or take a constructor that accepts None. That is a
-  behavioural choice about whether parallel sub-tasks are tracked at all, and
-  it sits in a live execution path.
-- **Found by sweeping the class, not the instance.** The indexer test flake
-  (#406) was a bare relative `test.db`; sweeping every bare relative database
-  path in the Rust surfaces turned this up in production code. The other hits
-  in that sweep were labels passed to parsers rather than opened files.
+- **AGI-EXECUTOR-PARALLEL-ORPHAN-DB — PATCHED IN CURRENT TREE (2026-08-13),
+  packaged-runtime verification pending.** `execute_plans_parallel` no longer
+  constructs `OutcomeTracker::new("outcome_tracker_parallel.db")`. Parallel
+  workers invoke `execute_step` directly, which consumes neither process
+  reasoning nor an outcome tracker, so they are now built through
+  `AGIExecutor::new` without fabricating a relative SQLite database.
+- **The original consequence was real.** The removed path could create an
+  unmigrated database in the launcher working directory or fail before the
+  first step. Current source contains no `outcome_tracker_parallel` reference.
+  No Desktop app/test command was run during this source-only reconciliation,
+  so this is not packaged-runtime evidence.
+- **Separate outcome gap remains open.** Normal Desktop task execution still
+  does not call the outcome-tracking path and the outcomes UI is unmounted.
+  Removing an unused stray tracker fixes the orphan-file defect; it does not
+  prove end-to-end outcome capture. That residual remains called out in
+  `ExecutionPlan.md` under late release-integration verification.
 
 ## 2026-08-08 Enterprise spend has no instrument, though the config is deliberate
 
@@ -124,40 +191,24 @@ Use this file to prevent duplicate bug discovery. If an agent finds one of these
   `true` when managed compute is OPEN. Both call sites read it correctly so
   behaviour is sound, but the name asserts the opposite of what it means.
 
-## 2026-08-08 Async video generation is charged even when it fails
+## 2026-08-08 Async video generation failure settlement — RESOLVED
 
-- **BILLING-VIDEO-NO-FAILURE-REFUND — OPEN, needs a design decision.** A user
-  is charged for a video that never generates. `apps/web/app/api/media/video/
-generate/route.ts:635` settles the managed-usage reservation as `completed`
-  at **task-creation** time, using `getVideoCostCents(model, resolution,
-billableDurationSecs)` computed from the REQUESTED parameters. Video
-  generation is asynchronous: the route returns a `taskId` and the client polls
-  `media/video/status`. That status route contains no
-  `finalizeManagedUsageRequest` call at all — verified by grepping every
-  `operation: 'video'` settlement site in the repo, which yields exactly two,
-  both inside the generate route (one refunding a task that failed to be
-  CREATED, one settling on successful creation). So when the provider later
-  reports `status: 'failed'` at `status/route.ts:172/247/263`, nothing reverses
-  the charge.
-- **Why the obvious fix is wrong.** Calling `finalizeManagedUsageRequest` again
-  from the status route does not refund: the reservation is already terminal
-  and the RPC is idempotent, so the second call returns `already_finalized`.
-  There is also no credit/adjustment mechanism in `apps/web/lib` to post a
-  compensating entry — searched for `grantCredit`/`applyCredit`/
-  `recordAdjustment`/ledger-adjustment exports, none exist.
-- **What a correct fix requires.** Defer settlement to the task's TERMINAL
-  status rather than its creation: hold the reservation open across the async
-  task, extend the lease while it runs, settle `failed` (cost 0) or `completed`
-  (cost from the realised duration/resolution) when it resolves, and add a
-  sweeper so a task the user never polls cannot leak a held reservation
-  forever. That is a billing-architecture decision with real money on both
-  sides, which is why it is recorded here rather than patched in passing — a
-  wrong billing fix is worse than a documented billing bug.
-- **Contrast with the image path, which is correct.** `media/image/generate/
-route.ts:1277` recomputes cost from `result.images.length` — the number
-  actually returned — and settles synchronously because image generation
-  completes within the request. The asymmetry is the tell: the same team got
-  this right where the work was synchronous.
+- **BILLING-VIDEO-NO-FAILURE-REFUND — RESOLVED IN THE DURABLE JOB PATH.** The
+  old task-creation settlement described here no longer owns the lifecycle.
+  `video_generation_jobs` now stores the billing lease; Workflow/status
+  reconciliation holds it across the asynchronous provider task; and
+  `finalize_video_generation_job` atomically settles a known failure at zero
+  actual cost or a completed delivery at the provider-reported/validated cost.
+- **Ambiguous provider outcomes do not masquerade as refunds.** Unknown task
+  acceptance, provider moderation, or an output that cannot be verified or
+  safely delivered enters the durable `outcome_unknown` incident state. Known
+  provider failures call `finishFailed`; completed bytes are persisted before
+  completion settlement; a durable Workflow reconciles jobs even if the user
+  never polls the status route.
+- **Existing runtime evidence.** The 2026-08-13 Web browser evidence in
+  `ExecutionPlan.md` records pre-provider failures settling at zero actual user
+  cost and a successful catalog-selected Google video reaching the private R2
+  path. No new runtime was started for this source-only ledger pass.
 
 ## 2026-08-05 iOS App Store submission blockers (partly resolved; native billing approved 2026-08-11)
 
@@ -1487,24 +1538,22 @@ run:ios` on the iPhone 17 Pro sim FAILED on a React Native codegen/build-order
   product bug. Maestro 2.6.1 + Pods + Xcode 26.3 + generated ios/ workspace all
   present, so once the build succeeds the Maestro real-UI smoke is runnable.
   Deferred to a focused mobile session.
-- TRACKED (extension MED/LOW residuals from the 2026-07-21 side-panel audit, none
-  gating the no-critical/high proceed-gate; complete-or-remove dispositions):
-  (1) EXT-SHORTCUT-MODAL-DEAD-INPUTS (MED) — the "+ Create shortcut" modal's
-  "Start from" URL field and "Schedule" toggle are persisted (startUrl/scheduled)
-  but have no replay consumer; scheduled is only a cosmetic label. Fix = on
-  save-with-scheduled create a real CREATE_SCHEDULED_TASK, use startUrl in replay,
-  or remove both fields (needs a product call on shortcut-scheduling).
-  (2) EXT-ONBOARDING-SLASH-FINDER-UNBUILT (MED) — onboarding step 3 teaches "Type
-  / in the chat to find and create shortcuts" with a mock hero, but the composer
-  has no slash menu (expandSlashCommand only matches 6 hardcoded built-ins). Fix =
-  build a "/" autocomplete over saved shortcuts, or rewrite the copy to point at
-  Workflows. (3) EXT-DEAD-OFFLINE-ONBOARDING (LOW) — #sp-offline-onboarding block
-  (side_panel.ts ~6422) + its CSS + hideLegacyOfflineOnboarding() are dead (never
-  gets .visible); safe deletion is blocked only by the function's message-display
-  reset side-effect, so it needs a dedicated cleanup pass. (4) EXT-CU-METER /
-  voice-mic emoji, tab-group-label desync across the 3 duplicate group controls,
-  and drawer-History restore dropping agentEvents/cloudRun fidelity vs loadMessages
-  (all LOW polish).
+- RESOLVED (2026-08-13 re-audit of the 2026-07-21 extension residual set):
+  `EXT-SHORTCUT-MODAL-DEAD-INPUTS` and
+  `EXT-ONBOARDING-SLASH-FINDER-UNBUILT` were already closed by the 2026-07-25
+  checkpoint above. `EXT-DEAD-OFFLINE-ONBOARDING` is now deleted; Chrome chat is
+  Managed Cloud-only, and the helper's message-display reset had no live state
+  to restore. The remaining LOW bundle is also closed in current code: Computer
+  Use consumes live `AGI_CU_USAGE` events; voice uses the shared SVG mic; all
+  three tab-group controls read one `GET_TAB_GROUP_STATE` result and mutate one
+  shared state; and boot/History restore both use `hydrateStoredChatMessage` for
+  agent events, activity, run cursors, approvals, quick mode, and provenance.
+  Unpacked-extension interaction proof remains founder item 14, not an open code
+  defect.
+- RESOLVED `EXT-COMPOSER-SEND-STATE-01` (2026-08-13): textarea input now
+  recomputes the visible Send button. Voice transcription emits the same input
+  event after writing the transcript, so Send state, sizing, and slash-command
+  suggestions cannot remain stale.
 
 2026-07-20 desktop-trust-boundary-01 slice (uncommitted working tree at time of
 writing): desktop AGI trust_mode threaded end-to-end (IPC wire enum → Goal →
@@ -3190,102 +3239,102 @@ current capability claim.
 new. Paths, full findings, and verification commands were dropped on 2026-07-26 —
 they are recoverable from this file's git history. Do not re-expand them here.
 
-| ID                                                    | Severity | Status                                                                                                                 | Owner                                         | Paths | Finding                                                                                                                                                                                                         | Verification    |
-| ----------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
-| WEB-APPSHELL-MOBILE-SIDEBAR-01                        | High     | Fixed (2026-07-15: matchMedia-gated modal drawer with backdrop, Escape, focus return, aria-expanded, compact mobile…   | Web                                           | —     | At narrow viewports (390px and below) WebAppShell keeps the persistent ~260px desktop sidebar beside main content, reducing the page to a clipped unusable strip; `overflow-hidden` suppresses…                 | see git history |
-| DX-NODE-01                                            | Low      | Fixed                                                                                                                  | Platform                                      | —     | The repository, CI, release tooling, and local shell now standardize on Node 24 LTS with pnpm 9.15.x.                                                                                                           | see git history |
-| CLI-TUI-ORPHAN-01                                     | High     | Fixed                                                                                                                  | CLI lead                                      | —     | ~370 orphan .rs files (108K LOC) across `bottom_pane/`, `chatwidget/`, `app/`, `notifications/`, `public_widgets/`, `render/`, `status/`, `streaming/`, `exec_cell/`, and loose `tui/*.rs` files were…          | see git history |
-| DESKTOP-RUST-ORPHAN-01                                | High     | Fixed                                                                                                                  | Desktop native                                | —     | `pnpm check:module-reachability` found 23 pre-existing Desktop Tauri `.rs` files that were not reachable from `lib.rs`, `main.rs`, or bin roots. Real modules were declared so they compile; stale…             | see git history |
-| WEB-PROVIDER-DRIFT-01                                 | High     | Fixed (2026-07-15)                                                                                                     | Web + providers                               | —     | The legacy `apps/web/lib/llm-providers/` owner is absent. All TypeScript leaf-adapter construction now dispatches through `@agiworkforce/providers-factory`; Web and Gateway retain only…                       | see git history |
-| GATEWAY-STREAM-RESILIENCE-01                          | High     | Fixed (2026-07-15)                                                                                                     | API Gateway                                   | —     | The OpenAI-compatible streaming route previously flushed HTTP 200 before provider iteration, converted canonical provider errors into ordinary stop chunks followed by `[DONE]`, silently closed on…            | see git history |
-| GATEWAY-METERING-IDEMPOTENCY-01                       | Critical | Fixed in code and migration (2026-07-15); live migration proof pending                                                 | API Gateway + billing                         | —     | Managed Gateway and Web chat now require a stable client operation key, fingerprint the request, reserve credits in one RLS-bound transition before provider execution, mark provider start, settle…            | see git history |
-| UI-TAILWIND-SOURCE-01                                 | High     | Fixed                                                                                                                  | Web + desktop                                 | —     | Tailwind v4 does not auto-scan sibling workspace packages. App `@source` globs only covered each app's own `src`, so utilities used ONLY inside shared TSX packages — notably arbitrary classes like…           | see git history |
-| UI-MODEL-GATING-01                                    | High     | Fixed                                                                                                                  | Desktop + unified-chat                        | —     | Production path is `DesktopShellV3` → unified-chat `ChatInterface` → unified-chat `ModelSelector` (the appMode-gated `v3/ModelPopover.tsx` is dead code — rendered nowhere). `ModelSelector` IS…                | see git history |
-| UI-WEBSEARCH-TOGGLE-01                                | Medium   | Fixed (2026-07-15)                                                                                                     | unified-chat                                  | —     | The composer "+" menu's "Web search" toggle is a DEAD control. `ChatInput` holds it as a local `useState(true)` (lines ~78, 402-403) whose `onWebSearchToggle` only flips that local state; it is…              | see git history |
-| UI-AGENTMODE-DEFAULT-01                               | Medium   | Fixed (2026-07-15)                                                                                                     | unified-chat                                  | —     | The composer "Edit automatically" Agent Mode control is well-built (Ask before edits / Edit automatically / Plan mode / Bypass permissions [DANGER]), but the GLOBAL DEFAULT is `mode: 'auto'` = "Edit…         | see git history |
-| LOCAL-CHAT-NOINVOKE-01                                | Critical | Fixed                                                                                                                  | Desktop + tauri + unified-chat                | —     | In the REAL Tauri desktop app (Local mode, real local Ollama backend), sending a chat renders the user bubble but NEVER invokes the local model. Ollama's `~/.ollama/logs/server.log` shows only…               | see git history |
-| UI-CLI-PALETTE-ARG-01                                 | Medium   | Fixed                                                                                                                  | CLI                                           | —     | The slash-command palette (`CommandPopup`) dropped the space character (`KeyAction::Char(c) if c != ' '`), so a parametrized command like `/privacy-mode local` collapsed to the filter…                        | see git history |
-| UI-CLI-STATUSBAR-MODE-01                              | Medium   | Fixed                                                                                                                  | CLI                                           | —     | The status-bar access chip showed only the active model's provider tier (`provider_access_mode`) — e.g. `◉ byok` — and never the SESSION privacy mode. In Local mode with a BYOK/Cloud model (the…              | see git history |
-| BYOK-HANDOFF-CONSENT-01                               | Critical | Fixed                                                                                                                  | CLI                                           | —     | Trust-boundary leak (introduced by an earlier loop-fix, caught by the cli-bug-sweep workflow): `/continue-with-byok` (and `/byok`, `/fork-byok`) called `set_privacy_mode(provider_privacy_mode())` at…         | see git history |
-| UI-CLI-PICKER-LOCAL-01                                | Medium   | Fixed                                                                                                                  | CLI                                           | —     | The `/model` picker built its list from `catalog().all()` + cached OpenRouter models only — it never merged `local_models::discovered_models()`, so installed Ollama/LM Studio models (the local-first…         | see git history |
-| UI-CLI-EFFORT-REASONING-01                            | High     | Fixed                                                                                                                  | CLI                                           | —     | The `/model` picker showed the reasoning-effort selector for NON-reasoning catalog entries because `show_effort_bar()` gated on the provider's `supports_effort` (all Anthropic = true)…                        | see git history |
-| UI-CLI-OVERLAY-DOUBLEBORDER-01                        | Medium   | Fixed                                                                                                                  | CLI                                           | —     | Every `InteractiveView` overlay routed through `render_overlay` (command palette, diff-review, approval, elicitation) rendered a DOUBLE border: each widget's `render()` already emits a complete…              | see git history |
-| DESKTOP-WDIO-COMPOSER-MOUNT-FLAKY-01                  | High     | Fixed                                                                                                                  | Desktop QA infra                              | —     | The React app intermittently fails to fully mount inside WDIO/embedded-webdriver sessions: `document.title` correctly shows "AGI" (native window/Tauri layer fine) but `document.body.innerHTML` stays…         | see git history |
-| DESKTOP-MARKDOWN-NO-HEADING-01                        | Medium   | Fixed (2026-07-15)                                                                                                     | Desktop + unified-chat                        | —     | The lightweight shared markdown renderer styled ATX headings but emitted generic `div` elements, so Desktop and every other unified-chat consumer had no semantic heading structure. It now emits the…          | see git history |
-| UI-CLI-TOOLDROP-SILENT-01                             | High     | Fixed                                                                                                                  | CLI                                           | —     | In the TUI, when a local Ollama model's per-turn `/api/show` tool-support probe returned `Ok(false)` OR hit a transient `Err` (Ollama busy/loading, connection reset), `streaming.rs` set…                      | see git history |
-| AUDIT-IMMUT-01                                        | High     | Fixed (2026-07-17) — 0043 applied to prod Neon after disposable-branch rehearsal; app_rls verified INSERT+SELECT-only… | Backend + security                            | —     | `public.security_audit_logs` is freely mutable/deletable — no REVOKE or trigger, so `app_rls` can tamper with the audit trail (the enterprise risk implies immutability but it is NOT enforced). The…           | see git history |
-| NETLIFY-PROXY-01                                      | High     | Fixed-by-deletion (2026-07-16)                                                                                         | Web + providers                               | —     | All `/.netlify/functions/*` callers deleted in the 2026-07-16 web/core dead-code pass. The original "12 files" figure was stale: the live tree had 5 non-test callers (grok-ai, web-search-handler,…            | see git history |
-| MOBILE-GUARDRAILS-01                                  | Medium   | Fixed                                                                                                                  | Mobile                                        | —     | Both guardrails from the cloud-settings feature (commit 9e867abb1) are now GREEN. `check:no-hex-mobile`: all 21 cloud-connectors literals VERIFIED as official connector `iconBg` brand colors (incl.…          | see git history |
-| DESKTOP-TOOLTIMELINE-01                               | Medium   | Fixed                                                                                                                  | Desktop chat                                  | —     | 4 tool-timeline tests failed. CORRECTED ROOT CAUSE (the earlier "routing rewrite" hypothesis was wrong — useTauriStreamListeners.ts was unchanged since 2026-05-21): a test-harness environment gap,…           | see git history |
-| DESKTOP-CLOUDROLLBACK-01                              | Medium   | Fixed (data-loss core) — UI-surface runtime-confirm                                                                    | Desktop chat                                  | —     | Pre-existing UX gap found while fixing DESKTOP-TOOLTIMELINE-01: when `createConversation()` runs in cloud mode and `createCloudConversation()` rejects (network/auth failure), the `.catch()` rollback…         | see git history |
-| CI-TIER-SCRIPTS-01                                    | High     | Fixed                                                                                                                  | Platform / CI                                 | —     | The root priority-tier test scripts ran `vitest run --include='**/priority-level-N/**'` from the repo root. Broken two ways: (1) vitest 4 removed the `--include` CLI flag, so the command…                     | see git history |
-| CI-INSTEP-REDS-01                                     | High     | Fixed                                                                                                                  | Platform / CI                                 | —     | Systematic sweep of every command `ci.yml`/`test-l*.yml` invoke in a step (run locally; distinct from the logless `startup_failure` which fails BEFORE steps). Found + fixed all blocking in-step…              | see git history |
-| CLI-DAEMON-AUTO-APPROVAL-01                           | Critical | Fixed (2026-07-14, uncommitted tree)                                                                                   | CLI daemon / automations                      | —     | Daemon triggers accepted `auto-*`as if it were a provider model and passed it into`AgentSession`; provider inference could therefore send the pseudo ID upstream. Worse, every unattended trigger set…          | see git history |
-| DESKTOP-ECONOMY-ROUTING-01                            | High     | Fixed (Option A — regression restore)                                                                                  | Desktop Rust / routing                        | —     | LIKELY UNINTENDED PRODUCTION ROUTING REGRESSION. Commit bc3e43c3a ("chore(models): clean catalog for fresh launch") cleared `managed_cloud.taskRouting`believing it dead ("no active users consuming…           | see git history |
-| CI-RUST-AUDIT-01                                      | High     | Fixed                                                                                                                  | Desktop Rust / deps                           | —     | `cargo audit`(ci.yml blocking gates:`--deny warnings`critical + plain`cargo audit`high) flagged 1 high vuln + 3 unsound warnings (advisory DB is fetched fresh each CI run, so these went red as the…           | see git history |
-| BILLING-DEDUCT-DURABILITY-01                          | High     | Fixed in code (2026-07-15; production migration/cron proof pending)                                                    | Web + billing                                 | —     | Source re-verification found that the cited `apps/web/core/billing/token-enforcement-service.ts` no longer exists and the active managed-compute paths reserve credits before provider execution, then…         | see git history |
-| MODELS-CURATION-DRIFT-01                              | High     | Fixed, RECURRED once, re-fixed                                                                                         | Platform / models SSOT                        | —     | `models.json` is GENERATED from `models.curation.json` + `models.synced.json`, but the committed `models.json` had been hand-edited for months while curation lagged: curation was missing…                     | see git history |
-| DESK-SETTINGS-IA-01                                   | Medium   | Fixed (DESK-1 sections present + wired; visual e2e pending)                                                            | Desktop settings                              | —     | The desktop settings IA is converging on the locked spec in `docs/current/source-of-truth.md` §"Settings must converge on these sections"…                                                                      | see git history |
-| MOB-CLOUD-SIGNIN-DISMISS-01                           | High     | Fixed in code 2026-07-18; signed-build confirmation pending                                                            | Mobile authentication                         | —     | The native Clerk `AuthView` close control did not reliably deliver its dismissal event through the Expo native boundary, so a signed-out user who entered Cloud mode could not return to the Local…             | see git history |
-| MOB-CLERK-PENDING-SESSION-01                          | High     | Fixed in code 2026-07-18; signed-build confirmation pending                                                            | Mobile authentication                         | —     | Mobile's native Clerk consumers called `useAuth()` with the default pending-session behavior. During an additional-verification flow Clerk could therefore surface the pending session as signed out,…          | see git history |
-| MOB-IOS-WEBRTC-SHIM-01                                | Critical | Fixed in code 2026-07-18; signed-build confirmation pending                                                            | Mobile startup                                | —     | The iOS development app crashed before Expo Router mounted with `Super expression must either be null or a function` while evaluating `react-native-webrtc`. Metro's manual `event-target-shim/index`…          | see git history |
-| DESK-CLOUD-COPY-01                                    | Medium   | RESOLVED (PA-3, `66ce9c8a1`)                                                                                           | Desktop cloud                                 | —     | RESOLVED by PA-3 (runbook `docs/strategy/PUBLIC-ALPHA-CUTOVER.md`). The product decision the prior triage was waiting on is in the runbook: desktop managed cloud is a fast-follow (DCL-1..4), not…             | see git history |
-| DESKTOP-CHAT-SILENT-FAIL-01                           | Critical | Fixed                                                                                                                  | Desktop Rust / chat + telemetry               | —     | Three compounding bugs made every first Local-mode chat send in a new conversation fail with no visible error ("user message shows, assistant never replies"), reproduced end-to-end via a real native…         | see git history |
-| DESKTOP-V3-COMPOSER-DEADCODE-01                       | Medium   | Fixed 2026-07-15                                                                                                       | Desktop v3                                    | —     | The shipped v3 shell uses the canonical `@agiworkforce/unified-chat` composer. The unreachable private `Composer`, `PlusMenu`, `ModelPopover`, and `MicSettings` family, its isolated test, and its…            | see git history |
-| DESKTOP-CHAT-CONVO-ACTIONS-PERSIST-01                 | High     | Fixed                                                                                                                  | Desktop TS                                    | —     | QA pass on the 11 Chat conversation-actions (Stop/Continue/Retry/Regenerate/Edit/Delete/Copy/Share/Export/Rename/Branch/Archive) driven end-to-end via a real native WebDriver session. Found two…              | see git history |
-| DESKTOP-PLAN-TIER-DISPLAY-STALE-01                    | High     | Fixed 2026-07-15                                                                                                       | Desktop                                       | —     | The pricing modal and Settings General page read the backend-populated unified auth plan. Paying accounts no longer render the unwritten app-mode default as their current plan.                                | see git history |
-| DESKTOP-PLAN-TIER-DUPLICATE-OWNER-01                  | Medium   | Fixed 2026-07-15                                                                                                       | Desktop state                                 | —     | `planTier` and `setPlanTier` were removed from `appModeStore`. Store version 3 sanitizes legacy persisted state and strips the old field; Cloud admission, managed-model reloads, and…                          | see git history |
-| DESKTOP-BYOK-PROVIDER-UI-COVERAGE-01                  | Medium   | Fixed (this session, partial by design)                                                                                | Desktop                                       | —     | Corrects an earlier claim made this session that BYOK covers "~25 providers, all reachable from ModelsKeys". Re-counted from source (catalog changed this session — lmstudio/llamacpp/vllm/openrouter…          | see git history |
-| DESKTOP-BYOK-OPENROUTER-VERIFY-01                     | Critical | Fixed (this session)                                                                                                   | Desktop                                       | —     | Tier-1 checklist "verify and complete OpenRouter support" pass. OpenRouter's own wiring (`Provider::OpenRouter`, `Provider::from_string("open_router"\|"openrouter"\|"open-router")`,…                          | see git history |
-| DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01            | High     | Fixed (2026-07-03)                                                                                                     | Desktop                                       | —     | Two parallel, disconnected MCP server-configuration UIs both lived in Settings simultaneously. One worked: `ConnectorGallery.tsx`'s "Add custom" → `CustomRemoteMcpConnectorDialog.tsx` →…                      | see git history |
-| DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01               | Critical | Fixed (send-wire) — docx/xlsx/pptx parsing still open (2026-07-03)                                                     | Desktop                                       | —     | Feature-inventory audit found that EVERY attachment type that successfully passes client-side validation (images, PDFs, CSV, text/markdown/code files) is picked, previewed, and held correctly in…             | see git history |
-| DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01             | Medium   | Fixed 2026-07-15 (store ownership only)                                                                                | Desktop                                       | —     | The hotkey and live overlay now use the canonical settings-owned voice store. The unreferenced duplicate `apps/desktop/src/stores/voiceInputStore.ts` and its isolated test were deleted, together…             | see git history |
-| DESKTOP-SONNER-TOASTER-UNMOUNTED-01                   | Medium   | Fixed                                                                                                                  | Desktop                                       | —     | Found while adding e2e coverage for desktop QA task #10 (folder-selection composer trigger). `apps/desktop/src/main.tsx` mounts only the app's custom `useToast`-backed `<Toaster/>`…                           | see git history |
-| DESKTOP-SETTINGS-BILLING-RENDER-LOOP-01               | Critical | Fixed (this session)                                                                                                   | Desktop settings                              | —     | Live-interaction QA (native WDIO harness, `apps/desktop/wdio/specs/settings-tour.spec.ts`) found that clicking Settings → Billing reliably (100% of attempts pre-fix) crashed the ENTIRE Settings…              | see git history |
-| DESKTOP-WDIO-FIXED-PORT-CONTENTION-01                 | Low      | Fixed                                                                                                                  | Desktop test infra                            | —     | While running the Settings live-interaction pass, the native WDIO harness intermittently threw `ECONNREFUSED` against `http://127.0.0.1:4445` mid-run (once after "Personalization", once after…                | see git history |
-| DESKTOP-SIDEBAR-COLLAPSE-NOT-PERSISTED-01             | Low      | Fixed (this session)                                                                                                   | Desktop                                       | —     | Live QA on the v3 Sidebar (`wdio/specs/sidebar-navigation.spec.ts`): the collapse/expand toggle used a plain `useState(false)` local to `Sidebar.tsx`, so a full reload/restart always reset it to…             | see git history |
-| DESKTOP-SONNER-TOAST-LIGHT-THEME-ONLY-01              | Low      | Fixed (this session)                                                                                                   | Desktop                                       | —     | Live QA on the Local/Cloud sidebar toggle's "coming soon" toast (`wdio/specs/sidebar-navigation.spec.ts`): `<SonnerToaster richColors position="bottom-right" />` was mounted with no `theme` prop, so…         | see git history |
-| DESKTOP-SIDEBAR-SEARCHMODALCMDK-DEAD-CODE-01          | Low      | Fixed (2026-07-15: deleted in the W8 dead-code sweep with zero-importer proof; barrel export removed; desktop suite…   | Desktop                                       | —     | Found while tracing the Sidebar's search button/Cmd+K wiring for live QA. `SearchModalCmdK.tsx` is a fully-built, separate spotlight-search component (own query/filter/keyboard-nav logic) exported…           | see git history |
-| EXT-DUPLICATE-MODULE-FORKS-01                         | Medium   | Fixed                                                                                                                  | Chrome extension                              | —     | Exhaustive QA pass on `apps/extension` found six duplicate module forks with zero importers confirmed by grep across `src` and `__tests__` (pure dead code, not an alternate live path): the…                   | see git history |
-| VSCODE-CYCLEMODE-KEYBIND-DEAD-01                      | Low      | Fixed                                                                                                                  | VS Code extension                             | —     | Exhaustive QA pass on`apps/extension-vscode`(commands, settings, keybindings). Commit 098b97157 added the Shift+Tab "Cycle Agent Mode" keybinding scoped with`when: agi-workforce.sidebarFocus or…              | see git history |
-| VSCODE-MODEL-DEFAULT-MISMATCH-01                      | Low      | Fixed (2026-07-25)                                                                                                     | VS Code extension / model catalog             | —     | The fresh-install setting, typed config fallback, Quick Pick, and webview now use the single routing alias`auto`. Each developer turn is classified and supplied to the app-server as…                          | see git history |
-| DESKTOP-BYOK-STALE-TESTKEY-TRUSTBOUNDARY-01           | Medium   | Fixed (was stale QA test data, not a code bug)                                                                         | Desktop + BYOK                                | —     | Founder screenshot showed retired OpenAI models available in Local mode with no BYOK indicator, despite believing no key was configured — investigated as a potential…                                          | see git history |
-| DESKTOP-CHAT-LEGACY-ORPHANED-01                       | Medium   | Fixed — core orphaned entry removed; wider legacy subtree still open (see note)                                        | Desktop                                       | —     | Found while porting `AgiMark` for the "Auto" model badge (UI-parity work): `apps/desktop/src/features/chat/index.tsx`'s `UnifiedAgenticChat` was never mounted anywhere in the live app — `App.tsx`…            | see git history |
-| DESKTOP-TERMINAL-SANDBOX-NOT-APPLIED-TO-AGENT-EXEC-01 | High     | Fixed (2026-07-15)                                                                                                     | Desktop                                       | —     | The LLM-agent `terminal_execute` path now resolves the same persisted `TerminalSandboxPreferences` and allowed directories as the manual terminal, builds its process through the canonical native…             | see git history |
-| SVC-GATEWAY-RLS-NOOP-01                               | High     | Fixed (2026-07-15; live Neon probe remains external)                                                                   | Backend/data lead                             | —     | The gateway no longer treats a user-id filter or privileged retry as RLS. Migration 0054 enables and forces RLS for the eight canonical gateway-owned user tables verified in repo migrations;…                 | see git history |
-| XSURF-PROVIDER-STREAM-DUP-01                          | High     | Fixed (TS complete) — desktop Rust pending Wave 5c2                                                                    | Platform lead                                 | —     | Provider request building, SSE decoding, and tool-call delta assembly were implemented ~6x across surfaces. FIXED 2026-07-09 (restructure Wave 2): EVERY TypeScript consumer runs on the canonical…             | see git history |
-| MOBILE-IOS-PREBUILD-DRIFT-01                          | Medium   | Fixed (2026-07-16: root ios/ DELETED after exhaustive proof it was dead — no build script, EAS config, or CI…          | Mobile lead                                   | —     | Tracked canonical root ios/ project (name agiworkforce) diverges from what expo prebuild generates into gitignored apps/mobile/ios/ (name AGIWorkforce), and PrivacyInfo.xcprivacy is maintained in…            | see git history |
-| TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01             | Medium   | Fixed                                                                                                                  | Platform lead                                 | —     | Found while migrating tool-loop.ts's Anthropic dispatch off apps/web/lib/llm-providers onto packages/ai/providers/anthropic (XSURF-PROVIDER-STREAM-DUP-01's tool-loop slice). When extended thinking…           | see git history |
-| MCP-APPROVAL-RESUME                                   | High     | Fixed (2026-07-09)                                                                                                     | Web lead                                      | —     | ORIGINAL GAP: manual-mode (the default) MCP-class tools (operator MCP + user connectors) never executed end-to-end on web. The v1 tool-loop fail-closed to awaiting_approval, emitted an…                       | see git history |
-| WEB-CONNECTOR-FLOW-DEADENDS-01                        | High     | Fixed (2026-07-11)                                                                                                     | Web lead                                      | —     | REPEATED BUG CLASS — integration flows shipped with dead ends at every hop, each individually plausible so nothing failed loudly. Four instances found in ONE flow (GitHub, the only connector with…            | see git history |
-| GOOGLE-SSE-CRLF-FRAMING-01                            | High     | Fixed (2026-07-10)                                                                                                     | Web lead                                      | —     | Live Gemini alt=sse streams separate SSE frames with CRLF pairs, but parseGeminiStream split only on double-LF, so no frame boundary ever matched: the whole response fell into the trailing-buffer…            | see git history |
-| SVC-GATEWAY-MANAGED-GATE-INVERTED-01                  | High     | Fixed (2026-07-15: gateway gate aligned byte-identical to web's kill-switch semantics; a SECOND undocumented…          | Backend/data lead                             | —     | The two AGI_MANAGED_COMPUTE_PRIVATE_BETA gates have inverted semantics. Web (managed-compute-gate.ts:33) implements the founder's 2026-06-27 public-alpha ruling correctly: open by default, env value…         | see git history |
-| WEB-APIKEY-CSRF-BLOCK-01                              | High     | Fixed (2026-07-15: csrf.ts isBearerTokenValid now cryptographically verifies sk-prefixed bearers via ApiKeyService…    | Web lead                                      | —     | Follow-on gap from the API-key unification: issued sk*live*/sk*test* keys now authenticate correctly through getClerkAuthUser Path 2a, but requireCsrfToken/isBearerTokenValid only exempt…                     | see git history |
-| WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01        | Medium   | Fixed (2026-07-16: a present Bearer header is now authoritative in getClerkAuthUser — resolves via API-key/Clerk-JWT…  | Web lead                                      | —     | Pre-existing auth-layer quirk documented during the WEB-APIKEY-CSRF-BLOCK-01 fix (present for Clerk-JWT bearers before API keys existed; API keys do not worsen it): when a request carries BOTH a…             | see git history |
-| DESKTOP-SCHEDULER-WEEKLY-DECAY-CRON-01                | Medium   | Fixed (2026-07-15)                                                                                                     | Desktop                                       | —     | The memory*weekly_decay default job NEVER registered since the code shipped: its cron string "0 0 4 \* * 0" is invalid in the crate's 6-field format (day-of-week is 1–7 or SUN–SAT; 0 does not…                | see git history |
-| WEB-ROUTE-PROD-SCHEMA-MISMATCH-01                     | High     | Fixed-by-deletion (2026-07-16)                                                                                         | Web lead                                      | —     | Both offending routes deleted with their full dead stacks (2026-07-16 dead-feature-stack removal): /api/chat/folders plus folder-management-service/FolderManagement/FolderContextSelector…                     | see git history |
-| WEB-STAR-ARCHIVE-NONPERSIST-01                        | Medium   | Fixed (2026-07-17) — 0059 applied to prod Neon; persistence path committed (67ee5f687); reload-verify on deployed web… | Web lead                                      | —     | Star + Archive conversation controls were client-only; 2026-07-16 fix adds `starred`/`archived` columns (migration 0059, additive, NOT YET APPLIED), extends the update contract + [id] PATCH +…                | see git history |
-| WEB-PROJECT-DETAIL-CHATLIST-UNPOPULATED-01            | Medium   | Fixed (2026-07-18)                                                                                                     | Web lead                                      | —     | The detail page no longer reads the never-populated `project.conversationIds` field. It uses the canonical conversations API with an owner-scoped `projectId` filter, validates the shared Cloud…               | see git history |
-| WEB-CONVERSATIONS-PROJECTID-NO-OWNERSHIP-01           | Low      | Fixed (2026-07-18)                                                                                                     | Web lead                                      | —     | Project-scoped conversation creation now verifies the project exists, belongs to the authenticated user, and is not archived before inserting. Missing, foreign, and archived projects share a…                 | see git history |
-| WEB-PROJECT-UPLOAD-DUPLICATION-01                     | Medium   | Fixed (2026-07-18)                                                                                                     | Web lead                                      | —     | The two reachable project source views independently implemented the checksum → presign → R2 PUT → metadata registration transaction. They had already drifted: Sources enforced a private 10 MiB cap…          | see git history |
-| DESKTOP-PROJECT-SCOPING-UNWIRED-01                    | High     | Fixed (2026-07-17: all three seams landed and unit-tested in the current tree — the Open row predated the fix;…        | Desktop lead                                  | —     | Desktop project→chat scoping is dead at three stacked seams (Local mode; Cloud should ride the web API's project param). SEAM A (IPC drop): TauriRuntime.createConversation sends projectId but the…            | see git history |
-| DESKTOP-PLANSMODAL-WAITLIST-STALE-CTA-01              | High     | Fixed (2026-07-16: paid CTAs now open the web pricing page — WEB_APP_URL/pricing, the canonical Stripe checkout…       | Desktop lead                                  | —     | LIVE stale-monetization defect: PlansModal routes every paid CTA (basic, pro, max) to onOpenCloudWaitlist → InviteCodeModal, i.e. invite/waitlist framing that cloudAvailability.ts itself forbids…             | see git history |
-| SVC-MANAGED-USAGE-0056-DEPLOY-SEQ-01                  | High     | Fixed (2026-07-17) — full pre-merge pass 0043+0052-0059 applied to prod Neon in order after green branch rehearsal;…   | Web + platform leads                          | —     | The W5 idempotency lane adds a managed-usage RESERVATION gate: every managed send calls public.reserve_managed_usage_request(...), a PG function created by migration 0056. On the local dev server…            | see git history |
-| WEB-CORE-LEGACY-DEADCODE-LAYER-01                     | Medium   | Fixed (2026-07-16/17 in two passes: commit 132b9ceaa deleted the 44-file dead core subgraphs — including grok-ai in…   | Web lead                                      | —     | apps/web/core/ is a large parallel/legacy business-logic layer whose file names betray a superseded earlier product vision (types/ai-employee.ts, security/employee-input-sanitizer.ts,…                        | see git history |
-| DESKTOP-RUST-ECONOMY-ROUTING-DRIFT-2026-07-10         | Medium   | Fixed (2026-07-10) via SSOT-derivation                                                                                 | Desktop lead                                  | —     | Running the desktop src-tauri suite (`cargo test --lib`, NOT run this session until 2026-07-10 — same "committed but suite unverified" gap as the mobile jest regression) surfaced 5 failures (4345…            | see git history |
-| DESKTOP-RUST-THINKING-DISABLE-TEST-2026-07-10         | Low      | Fixed (2026-07-10)                                                                                                     | Desktop lead                                  | —     | STALE TEST found in the same desktop src-tauri run. `resolve_thinking_parameter` with explicit `thinking_mode=Some(false)` was intentionally changed (§2, with a comment) to return…                            | see git history |
-| DESKTOP-OPENAI-REASONING-RESPONSES-01                 | High     | Fixed (2026-07-15; live-key smoke still external)                                                                      | Desktop lead                                  | —     | The shared Rust LLM owner now has an explicit `openai_responses` dialect instead of treating Responses as OpenAI-compatible Chat Completions. Registry-classified OpenAI reasoning models route to…             | see git history |
-| MOBILE-JEST-REGRESSION-2026-07-10                     | High     | FIXED 2026-07-11 — full mobile jest suite GREEN (174 suites / 1744 tests, 0 failed; was 7 suites / 16 tests failing)   | Mobile lead                                   | —     | This session's committed mobile feature work (`6b792d0b3` model-picker/voice/connectors/chat-input rewrite; `892e9f514` connectors redesign) was committed on tsc-clean ONLY and broke the jest suite:…         | see git history |
-| CROSS-SURFACE-MEDIA-CONTRACT-DRIFT-2026-07-11         | High     | Fixed (2026-07-15) — canonical managed-media contract and one Desktop native adapter                                   | Desktop + web + mobile leads                  | —     | Image and video requests now share strict schemas owned by @agiworkforce/cloud-contracts. Web validates those schemas and resolves canonical catalog IDs to provider API IDs server-side. Desktop maps…         | see git history |
-| WEB-SYNC-PAGE-STALE-WAITLIST-01                       | Low      | Fixed (2026-07-11)                                                                                                     | Web lead                                      | —     | Page showed a "Request hosted sync access" waitlist CTA for cross-device settings+chat sync that is actually live today for any signed-in AGI Cloud account (contradicted AGENTS.md:56…                         | see git history |
-| MOBILE-CONNECTORS-ROUTE-THEATER-01                    | High     | Fixed (2026-07-11)                                                                                                     | Mobile lead                                   | —     | All three chat entry points into connectors (AddToChatSheet, the chat tab, chat/[id]) pushed `/(app)/connectors`, which rendered a fully separate, hardcoded 11-item catalog backed only by…                    | see git history |
-| WEB-IMAGE-CHAT-PERSISTENCE-01                         | High     | Fixed (2026-07-11, uncommitted tree) — persistence extracted to features/chat/lib/imageGenerationPersistence.ts (new,… | Web lead                                      | —     | The composer "Create image" path — the primary user-facing image-generation entry point — NEVER persists the chat record. handleGenerateImage/handleRegenerateImageInPlace build the user+assistant…            | see git history |
-| MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01                | Medium   | Fixed (2026-07-11, uncommitted tree) — round 3: repo-wide sweep done, 6 more live instances found and fixed; round…    | Mobile lead                                   | —     | During the Connectors-screen visual redesign, ConnectorCard rendered visibly wrong (icon stacked above the name, full-width outlined button) although the source JSX correctly set…                             | see git history |
-| DESKTOP-OLLAMA-TOOL-INJECTION-TIMEOUT-01              | High     | Fixed (2026-07-11, uncommitted tree)                                                                                   | Desktop lead                                  | —     | Local-mode chat with a non-tool-native local model (the then-default catalog entry) reliably timed out: the FULL enabled-tool catalog (111 tools observed) was serialized into the system prompt on every send… | see git history |
-| MODEL-COMPACT-OPENAI-TIER-UNVERIFIED-01               | Medium   | Fixed (2026-07-14)                                                                                                     | Platform / models SSOT (manifests on Desktop) | —     | Historical founder directive corrected a compact OpenAI model's catalog identity and tier after official pricing and live verification; the latest-family-only policy later removed that generation…            | see git history |
-| WEB-API-HOST-REWRITES-INERT-01                        | High     | Fixed in repo (2026-07-17, commits 4b883196e + cron/vercel.json follow-up) — verify post-deploy                        | Web lead                                      | —     | The api.agiworkforce.com host-conditional rewrites (/v1/\* + /health → web-twin API routes) never fired in prod: every /v1 path served the Next.js /\_not-found page (verified live via…                        | see git history |
-| WEB-CLOUD-AGENT-RUNS-MIGRATION-UNAPPLIED-01           | High     | Fixed (2026-07-21) — migrations 0060-0066 applied to prod + verified                                                   | Platform / DB                                 | —     | Migrations 0061-0066 (cloud_agent_runs, cloud_agent_events, approval checkpoints, execution operations) are NOT applied to the environment's Neon DB. Verified read-only 2026-07-21:…                           | see git history |
-| WEB-DEPLOY-SEQ-MIGRATION-AHEAD-OF-CODE-01             | High     | Fixed (2026-07-21) — deployed matching code                                                                            | Platform / Deploy                             | —     | Deploy-sequencing incident. Migrations 0060-0066 were applied to the production Neon DB (see WEB-CLOUD-AGENT-RUNS-MIGRATION-UNAPPLIED-01) while the DEPLOYED code (origin/main, ~2 days and 119…                | see git history |
+| ID                                                    | Severity | Status                                                                                                                                                | Owner                                         | Paths | Finding                                                                                                                                                                                                         | Verification               |
+| ----------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| WEB-APPSHELL-MOBILE-SIDEBAR-01                        | High     | Fixed (2026-07-15: matchMedia-gated modal drawer with backdrop, Escape, focus return, aria-expanded, compact mobile…                                  | Web                                           | —     | At narrow viewports (390px and below) WebAppShell keeps the persistent ~260px desktop sidebar beside main content, reducing the page to a clipped unusable strip; `overflow-hidden` suppresses…                 | see git history            |
+| DX-NODE-01                                            | Low      | Fixed                                                                                                                                                 | Platform                                      | —     | The repository, CI, release tooling, and local shell now standardize on Node 24 LTS with pnpm 9.15.x.                                                                                                           | see git history            |
+| CLI-TUI-ORPHAN-01                                     | High     | Fixed                                                                                                                                                 | CLI lead                                      | —     | ~370 orphan .rs files (108K LOC) across `bottom_pane/`, `chatwidget/`, `app/`, `notifications/`, `public_widgets/`, `render/`, `status/`, `streaming/`, `exec_cell/`, and loose `tui/*.rs` files were…          | see git history            |
+| DESKTOP-RUST-ORPHAN-01                                | High     | Fixed                                                                                                                                                 | Desktop native                                | —     | `pnpm check:module-reachability` found 23 pre-existing Desktop Tauri `.rs` files that were not reachable from `lib.rs`, `main.rs`, or bin roots. Real modules were declared so they compile; stale…             | see git history            |
+| WEB-PROVIDER-DRIFT-01                                 | High     | Fixed (2026-07-15)                                                                                                                                    | Web + providers                               | —     | The legacy `apps/web/lib/llm-providers/` owner is absent. All TypeScript leaf-adapter construction now dispatches through `@agiworkforce/providers-factory`; Web and Gateway retain only…                       | see git history            |
+| GATEWAY-STREAM-RESILIENCE-01                          | High     | Fixed (2026-07-15)                                                                                                                                    | API Gateway                                   | —     | The OpenAI-compatible streaming route previously flushed HTTP 200 before provider iteration, converted canonical provider errors into ordinary stop chunks followed by `[DONE]`, silently closed on…            | see git history            |
+| GATEWAY-METERING-IDEMPOTENCY-01                       | Critical | Fixed in code and migration (2026-07-15); live migration proof pending                                                                                | API Gateway + billing                         | —     | Managed Gateway and Web chat now require a stable client operation key, fingerprint the request, reserve credits in one RLS-bound transition before provider execution, mark provider start, settle…            | see git history            |
+| UI-TAILWIND-SOURCE-01                                 | High     | Fixed                                                                                                                                                 | Web + desktop                                 | —     | Tailwind v4 does not auto-scan sibling workspace packages. App `@source` globs only covered each app's own `src`, so utilities used ONLY inside shared TSX packages — notably arbitrary classes like…           | see git history            |
+| UI-MODEL-GATING-01                                    | High     | Fixed                                                                                                                                                 | Desktop + unified-chat                        | —     | Production path is `DesktopShellV3` → unified-chat `ChatInterface` → unified-chat `ModelSelector` (the appMode-gated `v3/ModelPopover.tsx` is dead code — rendered nowhere). `ModelSelector` IS…                | see git history            |
+| UI-WEBSEARCH-TOGGLE-01                                | Medium   | Fixed (2026-07-15)                                                                                                                                    | unified-chat                                  | —     | The composer "+" menu's "Web search" toggle is a DEAD control. `ChatInput` holds it as a local `useState(true)` (lines ~78, 402-403) whose `onWebSearchToggle` only flips that local state; it is…              | see git history            |
+| UI-AGENTMODE-DEFAULT-01                               | Medium   | Fixed (2026-07-15)                                                                                                                                    | unified-chat                                  | —     | The composer "Edit automatically" Agent Mode control is well-built (Ask before edits / Edit automatically / Plan mode / Bypass permissions [DANGER]), but the GLOBAL DEFAULT is `mode: 'auto'` = "Edit…         | see git history            |
+| LOCAL-CHAT-NOINVOKE-01                                | Critical | Fixed                                                                                                                                                 | Desktop + tauri + unified-chat                | —     | In the REAL Tauri desktop app (Local mode, real local Ollama backend), sending a chat renders the user bubble but NEVER invokes the local model. Ollama's `~/.ollama/logs/server.log` shows only…               | see git history            |
+| UI-CLI-PALETTE-ARG-01                                 | Medium   | Fixed                                                                                                                                                 | CLI                                           | —     | The slash-command palette (`CommandPopup`) dropped the space character (`KeyAction::Char(c) if c != ' '`), so a parametrized command like `/privacy-mode local` collapsed to the filter…                        | see git history            |
+| UI-CLI-STATUSBAR-MODE-01                              | Medium   | Fixed                                                                                                                                                 | CLI                                           | —     | The status-bar access chip showed only the active model's provider tier (`provider_access_mode`) — e.g. `◉ byok` — and never the SESSION privacy mode. In Local mode with a BYOK/Cloud model (the…              | see git history            |
+| BYOK-HANDOFF-CONSENT-01                               | Critical | Fixed                                                                                                                                                 | CLI                                           | —     | Trust-boundary leak (introduced by an earlier loop-fix, caught by the cli-bug-sweep workflow): `/continue-with-byok` (and `/byok`, `/fork-byok`) called `set_privacy_mode(provider_privacy_mode())` at…         | see git history            |
+| UI-CLI-PICKER-LOCAL-01                                | Medium   | Fixed                                                                                                                                                 | CLI                                           | —     | The `/model` picker built its list from `catalog().all()` + cached OpenRouter models only — it never merged `local_models::discovered_models()`, so installed Ollama/LM Studio models (the local-first…         | see git history            |
+| UI-CLI-EFFORT-REASONING-01                            | High     | Fixed                                                                                                                                                 | CLI                                           | —     | The `/model` picker showed the reasoning-effort selector for NON-reasoning catalog entries because `show_effort_bar()` gated on the provider's `supports_effort` (all Anthropic = true)…                        | see git history            |
+| UI-CLI-OVERLAY-DOUBLEBORDER-01                        | Medium   | Fixed                                                                                                                                                 | CLI                                           | —     | Every `InteractiveView` overlay routed through `render_overlay` (command palette, diff-review, approval, elicitation) rendered a DOUBLE border: each widget's `render()` already emits a complete…              | see git history            |
+| DESKTOP-WDIO-COMPOSER-MOUNT-FLAKY-01                  | High     | Fixed                                                                                                                                                 | Desktop QA infra                              | —     | The React app intermittently fails to fully mount inside WDIO/embedded-webdriver sessions: `document.title` correctly shows "AGI" (native window/Tauri layer fine) but `document.body.innerHTML` stays…         | see git history            |
+| DESKTOP-MARKDOWN-NO-HEADING-01                        | Medium   | Fixed (2026-07-15)                                                                                                                                    | Desktop + unified-chat                        | —     | The lightweight shared markdown renderer styled ATX headings but emitted generic `div` elements, so Desktop and every other unified-chat consumer had no semantic heading structure. It now emits the…          | see git history            |
+| UI-CLI-TOOLDROP-SILENT-01                             | High     | Fixed                                                                                                                                                 | CLI                                           | —     | In the TUI, when a local Ollama model's per-turn `/api/show` tool-support probe returned `Ok(false)` OR hit a transient `Err` (Ollama busy/loading, connection reset), `streaming.rs` set…                      | see git history            |
+| AUDIT-IMMUT-01                                        | High     | Fixed (2026-07-17) — 0043 applied to prod Neon after disposable-branch rehearsal; app_rls verified INSERT+SELECT-only…                                | Backend + security                            | —     | `public.security_audit_logs` is freely mutable/deletable — no REVOKE or trigger, so `app_rls` can tamper with the audit trail (the enterprise risk implies immutability but it is NOT enforced). The…           | see git history            |
+| NETLIFY-PROXY-01                                      | High     | Fixed-by-deletion (2026-07-16)                                                                                                                        | Web + providers                               | —     | All `/.netlify/functions/*` callers deleted in the 2026-07-16 web/core dead-code pass. The original "12 files" figure was stale: the live tree had 5 non-test callers (grok-ai, web-search-handler,…            | see git history            |
+| MOBILE-GUARDRAILS-01                                  | Medium   | Fixed                                                                                                                                                 | Mobile                                        | —     | Both guardrails from the cloud-settings feature (commit 9e867abb1) are now GREEN. `check:no-hex-mobile`: all 21 cloud-connectors literals VERIFIED as official connector `iconBg` brand colors (incl.…          | see git history            |
+| DESKTOP-TOOLTIMELINE-01                               | Medium   | Fixed                                                                                                                                                 | Desktop chat                                  | —     | 4 tool-timeline tests failed. CORRECTED ROOT CAUSE (the earlier "routing rewrite" hypothesis was wrong — useTauriStreamListeners.ts was unchanged since 2026-05-21): a test-harness environment gap,…           | see git history            |
+| DESKTOP-CLOUDROLLBACK-01                              | Medium   | Fixed (data-loss core) — UI-surface runtime-confirm                                                                                                   | Desktop chat                                  | —     | Pre-existing UX gap found while fixing DESKTOP-TOOLTIMELINE-01: when `createConversation()` runs in cloud mode and `createCloudConversation()` rejects (network/auth failure), the `.catch()` rollback…         | see git history            |
+| CI-TIER-SCRIPTS-01                                    | High     | Fixed                                                                                                                                                 | Platform / CI                                 | —     | The root priority-tier test scripts ran `vitest run --include='**/priority-level-N/**'` from the repo root. Broken two ways: (1) vitest 4 removed the `--include` CLI flag, so the command…                     | see git history            |
+| CI-INSTEP-REDS-01                                     | High     | Fixed                                                                                                                                                 | Platform / CI                                 | —     | Systematic sweep of every command `ci.yml`/`test-l*.yml` invoke in a step (run locally; distinct from the logless `startup_failure` which fails BEFORE steps). Found + fixed all blocking in-step…              | see git history            |
+| CLI-DAEMON-AUTO-APPROVAL-01                           | Critical | Fixed (2026-07-14, uncommitted tree)                                                                                                                  | CLI daemon / automations                      | —     | Daemon triggers accepted `auto-*`as if it were a provider model and passed it into`AgentSession`; provider inference could therefore send the pseudo ID upstream. Worse, every unattended trigger set…          | see git history            |
+| DESKTOP-ECONOMY-ROUTING-01                            | High     | Fixed (Option A — regression restore)                                                                                                                 | Desktop Rust / routing                        | —     | LIKELY UNINTENDED PRODUCTION ROUTING REGRESSION. Commit bc3e43c3a ("chore(models): clean catalog for fresh launch") cleared `managed_cloud.taskRouting`believing it dead ("no active users consuming…           | see git history            |
+| CI-RUST-AUDIT-01                                      | High     | Fixed                                                                                                                                                 | Desktop Rust / deps                           | —     | `cargo audit`(ci.yml blocking gates:`--deny warnings`critical + plain`cargo audit`high) flagged 1 high vuln + 3 unsound warnings (advisory DB is fetched fresh each CI run, so these went red as the…           | see git history            |
+| BILLING-DEDUCT-DURABILITY-01                          | High     | Fixed in code (2026-07-15; production migration/cron proof pending)                                                                                   | Web + billing                                 | —     | Source re-verification found that the cited `apps/web/core/billing/token-enforcement-service.ts` no longer exists and the active managed-compute paths reserve credits before provider execution, then…         | see git history            |
+| MODELS-CURATION-DRIFT-01                              | High     | Fixed, RECURRED once, re-fixed                                                                                                                        | Platform / models SSOT                        | —     | `models.json` is GENERATED from `models.curation.json` + `models.synced.json`, but the committed `models.json` had been hand-edited for months while curation lagged: curation was missing…                     | see git history            |
+| DESK-SETTINGS-IA-01                                   | Medium   | Fixed (DESK-1 sections present + wired; visual e2e pending)                                                                                           | Desktop settings                              | —     | The desktop settings IA is converging on the locked spec in `docs/current/source-of-truth.md` §"Settings must converge on these sections"…                                                                      | see git history            |
+| MOB-CLOUD-SIGNIN-DISMISS-01                           | High     | Fixed in code 2026-07-18; signed-build confirmation pending                                                                                           | Mobile authentication                         | —     | The native Clerk `AuthView` close control did not reliably deliver its dismissal event through the Expo native boundary, so a signed-out user who entered Cloud mode could not return to the Local…             | see git history            |
+| MOB-CLERK-PENDING-SESSION-01                          | High     | Fixed in code 2026-07-18; signed-build confirmation pending                                                                                           | Mobile authentication                         | —     | Mobile's native Clerk consumers called `useAuth()` with the default pending-session behavior. During an additional-verification flow Clerk could therefore surface the pending session as signed out,…          | see git history            |
+| MOB-IOS-WEBRTC-SHIM-01                                | Critical | Fixed in code 2026-07-18; signed-build confirmation pending                                                                                           | Mobile startup                                | —     | The iOS development app crashed before Expo Router mounted with `Super expression must either be null or a function` while evaluating `react-native-webrtc`. Metro's manual `event-target-shim/index`…          | see git history            |
+| DESK-CLOUD-COPY-01                                    | Medium   | RESOLVED (PA-3, `66ce9c8a1`)                                                                                                                          | Desktop cloud                                 | —     | RESOLVED by PA-3 (runbook `docs/strategy/PUBLIC-ALPHA-CUTOVER.md`). The product decision the prior triage was waiting on is in the runbook: desktop managed cloud is a fast-follow (DCL-1..4), not…             | see git history            |
+| DESKTOP-CHAT-SILENT-FAIL-01                           | Critical | Fixed                                                                                                                                                 | Desktop Rust / chat + telemetry               | —     | Three compounding bugs made every first Local-mode chat send in a new conversation fail with no visible error ("user message shows, assistant never replies"), reproduced end-to-end via a real native…         | see git history            |
+| DESKTOP-V3-COMPOSER-DEADCODE-01                       | Medium   | Fixed 2026-07-15                                                                                                                                      | Desktop v3                                    | —     | The shipped v3 shell uses the canonical `@agiworkforce/unified-chat` composer. The unreachable private `Composer`, `PlusMenu`, `ModelPopover`, and `MicSettings` family, its isolated test, and its…            | see git history            |
+| DESKTOP-CHAT-CONVO-ACTIONS-PERSIST-01                 | High     | Fixed                                                                                                                                                 | Desktop TS                                    | —     | QA pass on the 11 Chat conversation-actions (Stop/Continue/Retry/Regenerate/Edit/Delete/Copy/Share/Export/Rename/Branch/Archive) driven end-to-end via a real native WebDriver session. Found two…              | see git history            |
+| DESKTOP-PLAN-TIER-DISPLAY-STALE-01                    | High     | Fixed 2026-07-15                                                                                                                                      | Desktop                                       | —     | The pricing modal and Settings General page read the backend-populated unified auth plan. Paying accounts no longer render the unwritten app-mode default as their current plan.                                | see git history            |
+| DESKTOP-PLAN-TIER-DUPLICATE-OWNER-01                  | Medium   | Fixed 2026-07-15                                                                                                                                      | Desktop state                                 | —     | `planTier` and `setPlanTier` were removed from `appModeStore`. Store version 3 sanitizes legacy persisted state and strips the old field; Cloud admission, managed-model reloads, and…                          | see git history            |
+| DESKTOP-BYOK-PROVIDER-UI-COVERAGE-01                  | Medium   | Fixed (this session, partial by design)                                                                                                               | Desktop                                       | —     | Corrects an earlier claim made this session that BYOK covers "~25 providers, all reachable from ModelsKeys". Re-counted from source (catalog changed this session — lmstudio/llamacpp/vllm/openrouter…          | see git history            |
+| DESKTOP-BYOK-OPENROUTER-VERIFY-01                     | Critical | Fixed (this session)                                                                                                                                  | Desktop                                       | —     | Tier-1 checklist "verify and complete OpenRouter support" pass. OpenRouter's own wiring (`Provider::OpenRouter`, `Provider::from_string("open_router"\|"openrouter"\|"open-router")`,…                          | see git history            |
+| DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01            | High     | Fixed (2026-07-03)                                                                                                                                    | Desktop                                       | —     | Two parallel, disconnected MCP server-configuration UIs both lived in Settings simultaneously. One worked: `ConnectorGallery.tsx`'s "Add custom" → `CustomRemoteMcpConnectorDialog.tsx` →…                      | see git history            |
+| DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01               | Critical | Fixed (send-wire) — docx/xlsx/pptx parsing still open (2026-07-03)                                                                                    | Desktop                                       | —     | Feature-inventory audit found that EVERY attachment type that successfully passes client-side validation (images, PDFs, CSV, text/markdown/code files) is picked, previewed, and held correctly in…             | see git history            |
+| DESKTOP-VOICE-DICTATION-STORE-MISMATCH-01             | Medium   | Fixed 2026-07-15 (store ownership only)                                                                                                               | Desktop                                       | —     | The hotkey and live overlay now use the canonical settings-owned voice store. The unreferenced duplicate `apps/desktop/src/stores/voiceInputStore.ts` and its isolated test were deleted, together…             | see git history            |
+| DESKTOP-SONNER-TOASTER-UNMOUNTED-01                   | Medium   | Fixed                                                                                                                                                 | Desktop                                       | —     | Found while adding e2e coverage for desktop QA task #10 (folder-selection composer trigger). `apps/desktop/src/main.tsx` mounts only the app's custom `useToast`-backed `<Toaster/>`…                           | see git history            |
+| DESKTOP-SETTINGS-BILLING-RENDER-LOOP-01               | Critical | Fixed (this session)                                                                                                                                  | Desktop settings                              | —     | Live-interaction QA (native WDIO harness, `apps/desktop/wdio/specs/settings-tour.spec.ts`) found that clicking Settings → Billing reliably (100% of attempts pre-fix) crashed the ENTIRE Settings…              | see git history            |
+| DESKTOP-WDIO-FIXED-PORT-CONTENTION-01                 | Low      | Fixed                                                                                                                                                 | Desktop test infra                            | —     | While running the Settings live-interaction pass, the native WDIO harness intermittently threw `ECONNREFUSED` against `http://127.0.0.1:4445` mid-run (once after "Personalization", once after…                | see git history            |
+| DESKTOP-SIDEBAR-COLLAPSE-NOT-PERSISTED-01             | Low      | Fixed (this session)                                                                                                                                  | Desktop                                       | —     | Live QA on the v3 Sidebar (`wdio/specs/sidebar-navigation.spec.ts`): the collapse/expand toggle used a plain `useState(false)` local to `Sidebar.tsx`, so a full reload/restart always reset it to…             | see git history            |
+| DESKTOP-SONNER-TOAST-LIGHT-THEME-ONLY-01              | Low      | Fixed (this session)                                                                                                                                  | Desktop                                       | —     | Live QA on the Local/Cloud sidebar toggle's "coming soon" toast (`wdio/specs/sidebar-navigation.spec.ts`): `<SonnerToaster richColors position="bottom-right" />` was mounted with no `theme` prop, so…         | see git history            |
+| DESKTOP-SIDEBAR-SEARCHMODALCMDK-DEAD-CODE-01          | Low      | Fixed (2026-07-15: deleted in the W8 dead-code sweep with zero-importer proof; barrel export removed; desktop suite…                                  | Desktop                                       | —     | Found while tracing the Sidebar's search button/Cmd+K wiring for live QA. `SearchModalCmdK.tsx` is a fully-built, separate spotlight-search component (own query/filter/keyboard-nav logic) exported…           | see git history            |
+| EXT-DUPLICATE-MODULE-FORKS-01                         | Medium   | Fixed                                                                                                                                                 | Chrome extension                              | —     | Exhaustive QA pass on `apps/extension` found six duplicate module forks with zero importers confirmed by grep across `src` and `__tests__` (pure dead code, not an alternate live path): the…                   | see git history            |
+| VSCODE-CYCLEMODE-KEYBIND-DEAD-01                      | Low      | Fixed                                                                                                                                                 | VS Code extension                             | —     | Exhaustive QA pass on`apps/extension-vscode`(commands, settings, keybindings). Commit 098b97157 added the Shift+Tab "Cycle Agent Mode" keybinding scoped with`when: agi-workforce.sidebarFocus or…              | see git history            |
+| VSCODE-MODEL-DEFAULT-MISMATCH-01                      | Low      | Fixed (2026-07-25)                                                                                                                                    | VS Code extension / model catalog             | —     | The fresh-install setting, typed config fallback, Quick Pick, and webview now use the single routing alias`auto`. Each developer turn is classified and supplied to the app-server as…                          | see git history            |
+| DESKTOP-BYOK-STALE-TESTKEY-TRUSTBOUNDARY-01           | Medium   | Fixed (was stale QA test data, not a code bug)                                                                                                        | Desktop + BYOK                                | —     | Founder screenshot showed retired OpenAI models available in Local mode with no BYOK indicator, despite believing no key was configured — investigated as a potential…                                          | see git history            |
+| DESKTOP-CHAT-LEGACY-ORPHANED-01                       | Medium   | Fixed — core orphaned entry removed; wider legacy subtree still open (see note)                                                                       | Desktop                                       | —     | Found while porting `AgiMark` for the "Auto" model badge (UI-parity work): `apps/desktop/src/features/chat/index.tsx`'s `UnifiedAgenticChat` was never mounted anywhere in the live app — `App.tsx`…            | see git history            |
+| DESKTOP-TERMINAL-SANDBOX-NOT-APPLIED-TO-AGENT-EXEC-01 | High     | Fixed (2026-07-15)                                                                                                                                    | Desktop                                       | —     | The LLM-agent `terminal_execute` path now resolves the same persisted `TerminalSandboxPreferences` and allowed directories as the manual terminal, builds its process through the canonical native…             | see git history            |
+| SVC-GATEWAY-RLS-NOOP-01                               | High     | Fixed (2026-07-15; live Neon probe remains external)                                                                                                  | Backend/data lead                             | —     | The gateway no longer treats a user-id filter or privileged retry as RLS. Migration 0054 enables and forces RLS for the eight canonical gateway-owned user tables verified in repo migrations;…                 | see git history            |
+| XSURF-PROVIDER-STREAM-DUP-01                          | High     | Fixed (TS complete) — desktop Rust pending Wave 5c2                                                                                                   | Platform lead                                 | —     | Provider request building, SSE decoding, and tool-call delta assembly were implemented ~6x across surfaces. FIXED 2026-07-09 (restructure Wave 2): EVERY TypeScript consumer runs on the canonical…             | see git history            |
+| MOBILE-IOS-PREBUILD-DRIFT-01                          | Medium   | Fixed (2026-07-16: root ios/ DELETED after exhaustive proof it was dead — no build script, EAS config, or CI…                                         | Mobile lead                                   | —     | Tracked canonical root ios/ project (name agiworkforce) diverges from what expo prebuild generates into gitignored apps/mobile/ios/ (name AGIWorkforce), and PrivacyInfo.xcprivacy is maintained in…            | see git history            |
+| TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01             | Medium   | Fixed                                                                                                                                                 | Platform lead                                 | —     | Found while migrating tool-loop.ts's Anthropic dispatch off apps/web/lib/llm-providers onto packages/ai/providers/anthropic (XSURF-PROVIDER-STREAM-DUP-01's tool-loop slice). When extended thinking…           | see git history            |
+| MCP-APPROVAL-RESUME                                   | High     | Fixed (2026-07-09)                                                                                                                                    | Web lead                                      | —     | ORIGINAL GAP: manual-mode (the default) MCP-class tools (operator MCP + user connectors) never executed end-to-end on web. The v1 tool-loop fail-closed to awaiting_approval, emitted an…                       | see git history            |
+| WEB-CONNECTOR-FLOW-DEADENDS-01                        | High     | Fixed (2026-07-11)                                                                                                                                    | Web lead                                      | —     | REPEATED BUG CLASS — integration flows shipped with dead ends at every hop, each individually plausible so nothing failed loudly. Four instances found in ONE flow (GitHub, the only connector with…            | see git history            |
+| GOOGLE-SSE-CRLF-FRAMING-01                            | High     | Fixed (2026-07-10)                                                                                                                                    | Web lead                                      | —     | Live Gemini alt=sse streams separate SSE frames with CRLF pairs, but parseGeminiStream split only on double-LF, so no frame boundary ever matched: the whole response fell into the trailing-buffer…            | see git history            |
+| SVC-GATEWAY-MANAGED-GATE-INVERTED-01                  | High     | Fixed (2026-07-15: gateway gate aligned byte-identical to web's kill-switch semantics; a SECOND undocumented…                                         | Backend/data lead                             | —     | The two AGI_MANAGED_COMPUTE_PRIVATE_BETA gates have inverted semantics. Web (managed-compute-gate.ts:33) implements the founder's 2026-06-27 public-alpha ruling correctly: open by default, env value…         | see git history            |
+| WEB-APIKEY-CSRF-BLOCK-01                              | High     | Fixed (2026-07-15: csrf.ts isBearerTokenValid now cryptographically verifies sk-prefixed bearers via ApiKeyService…                                   | Web lead                                      | —     | Follow-on gap from the API-key unification: issued sk*live*/sk*test* keys now authenticate correctly through getClerkAuthUser Path 2a, but requireCsrfToken/isBearerTokenValid only exempt…                     | see git history            |
+| WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01        | Medium   | Fixed (2026-07-16: a present Bearer header is now authoritative in getClerkAuthUser — resolves via API-key/Clerk-JWT…                                 | Web lead                                      | —     | Pre-existing auth-layer quirk documented during the WEB-APIKEY-CSRF-BLOCK-01 fix (present for Clerk-JWT bearers before API keys existed; API keys do not worsen it): when a request carries BOTH a…             | see git history            |
+| DESKTOP-SCHEDULER-WEEKLY-DECAY-CRON-01                | Medium   | Fixed (2026-07-15)                                                                                                                                    | Desktop                                       | —     | The memory*weekly_decay default job NEVER registered since the code shipped: its cron string "0 0 4 \* * 0" is invalid in the crate's 6-field format (day-of-week is 1–7 or SUN–SAT; 0 does not…                | see git history            |
+| WEB-ROUTE-PROD-SCHEMA-MISMATCH-01                     | High     | Fixed-by-deletion (2026-07-16)                                                                                                                        | Web lead                                      | —     | Both offending routes deleted with their full dead stacks (2026-07-16 dead-feature-stack removal): /api/chat/folders plus folder-management-service/FolderManagement/FolderContextSelector…                     | see git history            |
+| WEB-STAR-ARCHIVE-NONPERSIST-01                        | Medium   | Fixed (2026-07-17) — 0059 applied to prod Neon; persistence path committed (67ee5f687); reload-verify on deployed web…                                | Web lead                                      | —     | Star + Archive conversation controls were client-only; 2026-07-16 fix adds `starred`/`archived` columns (migration 0059, additive, NOT YET APPLIED), extends the update contract + [id] PATCH +…                | see git history            |
+| WEB-PROJECT-DETAIL-CHATLIST-UNPOPULATED-01            | Medium   | Fixed (2026-07-18)                                                                                                                                    | Web lead                                      | —     | The detail page no longer reads the never-populated `project.conversationIds` field. It uses the canonical conversations API with an owner-scoped `projectId` filter, validates the shared Cloud…               | see git history            |
+| WEB-CONVERSATIONS-PROJECTID-NO-OWNERSHIP-01           | Low      | Fixed (2026-07-18)                                                                                                                                    | Web lead                                      | —     | Project-scoped conversation creation now verifies the project exists, belongs to the authenticated user, and is not archived before inserting. Missing, foreign, and archived projects share a…                 | see git history            |
+| WEB-PROJECT-UPLOAD-DUPLICATION-01                     | Medium   | Fixed (2026-07-18)                                                                                                                                    | Web lead                                      | —     | The two reachable project source views independently implemented the checksum → presign → R2 PUT → metadata registration transaction. They had already drifted: Sources enforced a private 10 MiB cap…          | see git history            |
+| DESKTOP-PROJECT-SCOPING-UNWIRED-01                    | High     | Fixed (2026-07-17: all three seams landed and unit-tested in the current tree — the Open row predated the fix;…                                       | Desktop lead                                  | —     | Desktop project→chat scoping is dead at three stacked seams (Local mode; Cloud should ride the web API's project param). SEAM A (IPC drop): TauriRuntime.createConversation sends projectId but the…            | see git history            |
+| DESKTOP-PLANSMODAL-WAITLIST-STALE-CTA-01              | High     | Fixed (2026-07-16: paid CTAs now open the web pricing page — WEB_APP_URL/pricing, the canonical Stripe checkout…                                      | Desktop lead                                  | —     | LIVE stale-monetization defect: PlansModal routes every paid CTA (basic, pro, max) to onOpenCloudWaitlist → InviteCodeModal, i.e. invite/waitlist framing that cloudAvailability.ts itself forbids…             | see git history            |
+| SVC-MANAGED-USAGE-0056-DEPLOY-SEQ-01                  | High     | Fixed (2026-07-17) — full pre-merge pass 0043+0052-0059 applied to prod Neon in order after green branch rehearsal;…                                  | Web + platform leads                          | —     | The W5 idempotency lane adds a managed-usage RESERVATION gate: every managed send calls public.reserve_managed_usage_request(...), a PG function created by migration 0056. On the local dev server…            | see git history            |
+| WEB-CORE-LEGACY-DEADCODE-LAYER-01                     | Medium   | Fixed (2026-07-16/17 in two passes: commit 132b9ceaa deleted the 44-file dead core subgraphs — including grok-ai in…                                  | Web lead                                      | —     | apps/web/core/ is a large parallel/legacy business-logic layer whose file names betray a superseded earlier product vision (types/ai-employee.ts, security/employee-input-sanitizer.ts,…                        | see git history            |
+| DESKTOP-RUST-ECONOMY-ROUTING-DRIFT-2026-07-10         | Medium   | Fixed (2026-07-10) via SSOT-derivation                                                                                                                | Desktop lead                                  | —     | Running the desktop src-tauri suite (`cargo test --lib`, NOT run this session until 2026-07-10 — same "committed but suite unverified" gap as the mobile jest regression) surfaced 5 failures (4345…            | see git history            |
+| DESKTOP-RUST-THINKING-DISABLE-TEST-2026-07-10         | Low      | Fixed (2026-07-10)                                                                                                                                    | Desktop lead                                  | —     | STALE TEST found in the same desktop src-tauri run. `resolve_thinking_parameter` with explicit `thinking_mode=Some(false)` was intentionally changed (§2, with a comment) to return…                            | see git history            |
+| DESKTOP-OPENAI-REASONING-RESPONSES-01                 | High     | Fixed (2026-07-15; live-key smoke still external)                                                                                                     | Desktop lead                                  | —     | The shared Rust LLM owner now has an explicit `openai_responses` dialect instead of treating Responses as OpenAI-compatible Chat Completions. Registry-classified OpenAI reasoning models route to…             | see git history            |
+| MOBILE-JEST-REGRESSION-2026-07-10                     | High     | FIXED 2026-07-11 — full mobile jest suite GREEN (174 suites / 1744 tests, 0 failed; was 7 suites / 16 tests failing)                                  | Mobile lead                                   | —     | This session's committed mobile feature work (`6b792d0b3` model-picker/voice/connectors/chat-input rewrite; `892e9f514` connectors redesign) was committed on tsc-clean ONLY and broke the jest suite:…         | see git history            |
+| CROSS-SURFACE-MEDIA-CONTRACT-DRIFT-2026-07-11         | High     | Fixed (2026-07-15) — canonical managed-media contract and one Desktop native adapter                                                                  | Desktop + web + mobile leads                  | —     | Image and video requests now share strict schemas owned by @agiworkforce/cloud-contracts. Web validates those schemas and resolves canonical catalog IDs to provider API IDs server-side. Desktop maps…         | see git history            |
+| WEB-SYNC-PAGE-STALE-WAITLIST-01                       | Low      | Fixed (2026-07-11)                                                                                                                                    | Web lead                                      | —     | Page showed a "Request hosted sync access" waitlist CTA for cross-device settings+chat sync that is actually live today for any signed-in AGI Cloud account (contradicted AGENTS.md:56…                         | see git history            |
+| MOBILE-CONNECTORS-ROUTE-THEATER-01                    | High     | Fixed (2026-07-11)                                                                                                                                    | Mobile lead                                   | —     | All three chat entry points into connectors (AddToChatSheet, the chat tab, chat/[id]) pushed `/(app)/connectors`, which rendered a fully separate, hardcoded 11-item catalog backed only by…                    | see git history            |
+| WEB-IMAGE-CHAT-PERSISTENCE-01                         | High     | Fixed (2026-07-11, uncommitted tree) — persistence extracted to features/chat/lib/imageGenerationPersistence.ts (new,…                                | Web lead                                      | —     | The composer "Create image" path — the primary user-facing image-generation entry point — NEVER persists the chat record. handleGenerateImage/handleRegenerateImageInPlace build the user+assistant…            | see git history            |
+| MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01                | Medium   | Fixed (2026-07-11, uncommitted tree) — round 3: repo-wide sweep done, 6 more live instances found and fixed; round…                                   | Mobile lead                                   | —     | During the Connectors-screen visual redesign, ConnectorCard rendered visibly wrong (icon stacked above the name, full-width outlined button) although the source JSX correctly set…                             | see git history            |
+| DESKTOP-OLLAMA-TOOL-INJECTION-TIMEOUT-01              | High     | Fixed (2026-07-11, uncommitted tree)                                                                                                                  | Desktop lead                                  | —     | Local-mode chat with a non-tool-native local model (the then-default catalog entry) reliably timed out: the FULL enabled-tool catalog (111 tools observed) was serialized into the system prompt on every send… | see git history            |
+| MODEL-COMPACT-OPENAI-TIER-UNVERIFIED-01               | Medium   | Fixed (2026-07-14)                                                                                                                                    | Platform / models SSOT (manifests on Desktop) | —     | Historical founder directive corrected a compact OpenAI model's catalog identity and tier after official pricing and live verification; the latest-family-only policy later removed that generation…            | see git history            |
+| WEB-API-HOST-REWRITES-INERT-01                        | High     | Reopened (2026-08-09) — Next `proxy.ts` redirects raw `/v1/*` before host rewrites run; source and OpenAPI still document the API host as unavailable | Web lead                                      | —     | The api.agiworkforce.com host-conditional rewrites (/v1/\* + /health → web-twin API routes) never fired in prod: every /v1 path served the Next.js /\_not-found page (verified live via…                        | see `ExecutionPlan.md` #96 |
+| WEB-CLOUD-AGENT-RUNS-MIGRATION-UNAPPLIED-01           | High     | Fixed (2026-07-21) — migrations 0060-0066 applied to prod + verified                                                                                  | Platform / DB                                 | —     | Migrations 0061-0066 (cloud_agent_runs, cloud_agent_events, approval checkpoints, execution operations) are NOT applied to the environment's Neon DB. Verified read-only 2026-07-21:…                           | see git history            |
+| WEB-DEPLOY-SEQ-MIGRATION-AHEAD-OF-CODE-01             | High     | Fixed (2026-07-21) — deployed matching code                                                                                                           | Platform / Deploy                             | —     | Deploy-sequencing incident. Migrations 0060-0066 were applied to the production Neon DB (see WEB-CLOUD-AGENT-RUNS-MIGRATION-UNAPPLIED-01) while the DEPLOYED code (origin/main, ~2 days and 119…                | see git history            |
 
 ## Update Rules
 
@@ -3295,50 +3344,77 @@ they are recoverable from this file's git history. Do not re-expand them here.
 
 ## 2026-08-06 Stream usage accounting divergence between the two response builders
 
-- **WEB-STREAM-USAGE-PARITY-01 — OPEN, needs a billing owner.** Discovered while
-  adding a terminal usage frame to the SSE stream. `stream-transform.byte-parity.test.ts`
-  feeds the SAME Anthropic event fixture to both `buildStreamResponse` (legacy,
-  raw-SSE parse) and `buildAdapterStreamResponse` (canonical
-  `packages/ai/providers/*` path). The fixture's `message_start` carries
-  `input_tokens: 500` and `cache_read_input_tokens: 100`. At flush the adapter
-  path holds `inputTokens: 500` / `cacheReadInputTokens: 100`; the legacy path
-  holds `inputTokens: 0` and no cache-read value.
-  Both paths pass those same variables to `settleStreamBilling`, so if the
-  legacy builder serves any Anthropic-native traffic in production it is
-  settling with **zero input tokens** — under-counting the largest half of a
-  cached prompt's cost. The legacy parse at
-  `stream-transform.ts` (`event.type === 'message_start' && event.message?.usage`)
-  looks correct on inspection, so the cause is not obvious from reading it;
-  it needs a runtime trace of which builder serves which provider today.
-  This was invisible before because neither builder published usage on the wire
-  and the parity test only compares bytes, which matched while both emitted
-  nothing.
-  **Do not "fix" this by making the two emit identical bytes.** That would hide
-  a real accounting difference behind a passing test.
+- **WEB-STREAM-USAGE-PARITY-01 — FIXED AND FOCUSED-REGRESSION VERIFIED
+  (2026-08-13).** The root cause is now source-proven. In
+  `buildStreamResponse`, Anthropic's wire-silent `message_start` reached the
+  provider transform first; that branch executed `continue`, so the usage
+  capture below it was unreachable. The current patch captures
+  `input_tokens`, cache-read tokens, total cache-creation tokens, and the 1h
+  cache-creation subset before the provider transform filters the event.
+  `message_delta` continues to supply output tokens. Those variables feed
+  `settleStreamBilling` and the post-stream usage tracker, so the legacy path no
+  longer settles a successful Anthropic stream as zero-input.
+- **Regression ownership is now explicit.**
+  `stream-transform-usage.test.ts` feeds a native Anthropic `message_start` plus
+  `message_delta` and asserts all five counters passed to `recordModelUsage`.
+  The older `stream-transform.byte-parity.test.ts` remains wire-only and must
+  not be treated as accounting evidence. The focused command
+  `pnpm --filter @agiworkforce/web exec vitest run app/api/llm/v1/chat/completions/__tests__/stream-transform-usage.test.ts`
+  passed 9/9 checks on 2026-08-13.
+- **Separate metering residual remains open.** This token-accounting patch does
+  not close `WEB-BILLING-TRUTH-01`'s existing gap: external per-call fees for
+  generic web search and E2B sandbox execution are still excluded from managed
+  reservations, so tool-heavy loops can exceed a rolling spend ceiling by
+  those fees.
 
 ## 2026-08-06 Upload exposure window is bounded by the public R2 bucket
 
-- **WEB-UPLOAD-PUBLIC-BUCKET-01 — OPEN, needs a product/cost decision.** Content
-  inspection now runs on the real bytes at `/api/uploads/chat-attachment/complete`
-  (`lib/security/upload-scan.ts`: type-confusion polyglots, disguised
-  executables, script-bearing SVGs, auto-executing PDFs, plus an optional
-  external AV webhook that fails CLOSED when configured). A file that fails is
-  refused AND deleted from storage.
-  That is the most a `/complete`-time scan can do, and it is deliberately not
-  the whole fix: R2 is a PUBLIC bucket (`lib/server/object-storage.ts:14-16`,
-  chosen for zero egress cost), so the object is world-readable from the instant
-  the client's presigned PUT lands — before `/complete` runs at all. Scanning
-  here shrinks the exposure from "forever, and reachable via `/api/files/[id]`
-  and share links" to "the seconds between PUT and completion, at an
-  unguessable URL".
-  Closing it entirely needs ONE of:
-  (a) private bucket + proxy every read through the already auth-gated
-  `/api/files/[id]` — costs egress; or
-  (b) scan at presign, which means proxying uploads through the server and
-  giving up direct-to-R2 (Vercel caps request bodies ~4.5MB).
-  Both are cost/architecture calls. Until one is taken, do not describe uploads
-  as "scanned before they are accessible" — they are scanned before they are
-  _registered_, which is a weaker and different claim.
+- **WEB-UPLOAD-PUBLIC-BUCKET-01 — NEW GENERATED MEDIA + CHAT + PROJECT-KNOWLEDGE
+  PATHS PATCHED IN THE CURRENT TREE (2026-08-13); avatar/retention decision
+  remains open.** The
+  old cost premise was stale: registered chat attachments and project sources
+  were already read only through authenticated owner/workspace routes
+  (`/api/files/[id]` and
+  `/api/projects/[id]/knowledge-files/[fileId]`). The distinct private R2 bucket
+  and account-scoped token were also provisioned for video on 2026-08-12.
+  Current source now presigns chat attachments and project knowledge into that
+  private bucket, returns no public locator, scans the real private bytes before
+  registration, stores only opaque keys, and reads/deletes them through their
+  existing owner gates. Legacy public rows have an explicit read/delete
+  fallback during rollout; new uploads never use it. The Web CSP allows the
+  exact validated private-bucket upload origin. New generated images, videos,
+  and files now write owner-hashed `private-media/{kind}/...` keys into the
+  private bucket and are addressable only through the catalog-backed,
+  authenticated `/api/files/{id}` route. Generated-file persistence no longer
+  returns an uncataloged raw storage locator when the media table is absent; it
+  removes the staged object and reports a storage failure instead.
+- **What this closes.** A malicious attachment or project source is no longer
+  world-readable between the browser PUT and content inspection. A rejected
+  object is deleted from private storage. Account/media deletion follows the
+  private locator; database pointers remain on delete failure so a later retry
+  cannot lose the only object identity.
+- **What remains and must not be blurred into this fix.** Avatar upload still
+  presigns directly to the public bucket and persists its permanent URL. It has
+  a 5 MiB/image-type admission check but no byte-inspection completion step,
+  and replacing an avatar overwrites the only database pointer to the prior
+  object. Generated objects written before this change retain their legacy
+  public locations until a migration policy is approved. Incomplete private
+  presigns create unregistered private objects with no database pointer and
+  therefore no account-erasure/retention owner.
+- **Exact remaining product/infrastructure decision.** Choose whether avatars
+  are intentionally public. If yes, stage them privately, inspect the bytes,
+  publish only the accepted image, and delete the previous owned object. If no,
+  serve them from an authenticated/signed route. Independently, give presigned
+  uploads a pending prefix plus a bounded R2 lifecycle or a durable pending-row
+  cleanup job, so clients that never call completion cannot accumulate orphaned
+  objects. Decide whether legacy generated public objects are migrated or the
+  public bucket/custom domain remains supported. Until that is ratified and
+  deployed, do not claim that every upload is private or that every stored byte
+  participates in retention/account erasure.
+- **Verification is pending by instruction.** This reconciliation was
+  source-only while the one-app VS Code runtime was active; focused Web tests,
+  a direct private PUT/complete/read/delete flow, and post-deploy acceptance
+  still have to run when Web owns the single runtime slot.
 
 ## 2026-08-06 Web test suite has parallel-load flakes
 
@@ -3407,22 +3483,44 @@ they are recoverable from this file's git history. Do not re-expand them here.
   retry reuses the same identity and settles once instead of billing twice.
   Reported from a device by the founder, 2026-08-06.
 
-- **MOBILE-MEDIA-MODEL-PICKER-MISSING-01 — OPEN, feature gap.** Mobile has no
-  image or video model picker. `apps/mobile/lib/models.ts:77` builds its list
-  from `getModelsForTierAndSurface('max', 'mobile/cloud-chat', ...)` with
-  `modelTypes: ['chat','reasoning','multimodal','search','code']` — image and
-  video types are excluded, so toggling the Image tool offers nothing to choose
-  and the server's default is used silently.
-  Web solves this differently and does NOT go through tier lists: `IMAGE_MODELS`
-  / `VIDEO_MODELS` in `ChatComposerNew.tsx:277,308` come from
-  `getModels({ modelTypes: ['image'|'video'] })`, gated by an explicit provider
-  allowlist (`VIDEO_PICKER_PROVIDERS` = Google/Veo only, because Runway
-  provisioning is unverified — a deliberate capability-honesty decision).
-  **Note for whoever builds this:** the catalog-selected Runway and Google video
-  models are absent from EVERY entry of `tierAllowedModels` in
-  `models.json`, which is chat-only and feeds the chat picker. So "show video
-  models on the Max 15x tier" is not a tier-list edit — porting web's
-  provider-allowlist approach to mobile is the shape that matches how video is
-  already gated. Do not add video ids to `tierAllowedModels` without deciding
-  what that means for the chat picker, and do not enable Runway without
-  confirming provisioning.
+- **MOBILE-MEDIA-MODEL-PICKER-MISSING-01 — FIXED FOR THE MISSING-PICKER
+  DEFECT; VIDEO DEVICE ACCEPTANCE PENDING.** `AddToChatSheet` now derives image
+  and video candidates from canonical catalog media capabilities instead of
+  the chat-only tier list. The selected media model and catalog-supported image
+  aspect or video aspect/resolution flow through
+  `resolveMobileImageGenerationRequest` / `resolveMobileVideoGenerationRequest`
+  into the real generation actions.
+  The iOS Simulator browser evidence in `ExecutionPlan.md` verified a selected
+  image model and Portrait 9:16 output. Source exposes the corresponding video
+  model/aspect/quality path, but video aspect/quality has not yet been exercised
+  on device after the change; keep that runtime acceptance open rather than
+  reopening the now-fixed “no picker exists” claim.
+
+## 2026-08-13 Desktop arbitrary-public native egress boundary
+
+- **DESKTOP-RUST-PUBLIC-EGRESS-CHOKEPOINT-01 — FIXED IN SOURCE; FOCUSED RUST
+  VERIFICATION PENDING.** The Rust URL classifier existed, but several live
+  arbitrary-public transports still created raw reqwest clients: Discord
+  webhooks, generic outgoing webhooks, scheduler webhooks, the LLM API
+  upload/download tools, and physical page scraping. The AGI/LLM API call path
+  also selected `ApiState::execute_request`, whose redirect policy intentionally
+  preserves same-origin loopback redirects for app-owned development servers.
+  Initial validation alone did not protect a request after `Location` changed
+  its destination.
+- `sys/security/egress_policy.rs` now owns `PublicHttpClient`: its private inner
+  client refuses to build the initial request until the URL resolves entirely
+  to public addresses, fails closed on DNS error/empty answers, and re-runs the
+  same judgement on every redirect without the local-client compatibility
+  exemption. The named webhook/API-tool/scrape surfaces use that type or the
+  equivalent public-only `ApiClient`; source-wiring and initial-destination
+  regressions were added. Intentional loopback Ollama, CDP, local API-server,
+  and BYOK transports were not moved onto the public-only client.
+- **Residual risk remains explicit.** This closes the static internal-host,
+  failed-first-lookup, and redirect-to-internal classes for the converted
+  surfaces. It does not pin DNS answers at connect time, so a hostname that
+  answers public during validation and private during reqwest's connection
+  lookup can still race the boundary. Rust also does not yet have one mandatory
+  type across every fixed-provider, account, OAuth, and integration transport.
+  A focused Rust compile/test was deliberately not started while Electron owned
+  the single live-app/RAM lane; do not mark runtime-verified until that check
+  runs.

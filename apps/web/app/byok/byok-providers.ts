@@ -17,7 +17,8 @@ import { modelsCatalogJson } from '@agiworkforce/types';
  * true and makes a retired provider impossible to advertise: an id the catalog
  * no longer carries resolves to `undefined` and is dropped from the row.
  *
- * Local runtimes (Ollama, LM Studio) are rendered separately by the page.
+ * Local runtimes are rendered separately by the page from the canonical
+ * Desktop runtime list in `marketing-constants.ts`.
  */
 export const BYOK_PROVIDER_IDS = [
   'anthropic',

@@ -10,10 +10,23 @@ describe('capability preamble', () => {
       extractToolNames([
         { type: 'function', function: { name: 'execute_code' } },
         { type: 'web_search_20250305', name: 'web_search' },
+        { type: 'web_search' },
+        { google_search: {} },
         { type: 'function', function: { name: 'execute_code' } },
         null,
       ]),
     ).toEqual(['execute_code', 'web_search']);
+  });
+
+  it.each([
+    ['OpenAI Responses', { type: 'web_search' }],
+    ['Google grounding', { google_search: {} }],
+  ])('describes automatic search for %s hosted-tool requests', (_provider, tool) => {
+    const preamble = buildCapabilityPreamble({ tools: [tool] });
+
+    expect(preamble).toContain('- web_search — search the live web and cite what you find');
+    expect(preamble).toContain('Web search is already enabled.');
+    expect(preamble).not.toContain('No tools are available on this turn');
   });
 
   it('tells the model that automatic search and downloadable deliverables are available', () => {

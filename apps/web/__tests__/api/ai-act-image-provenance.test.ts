@@ -76,7 +76,6 @@ const assetMocks = vi.hoisted(() => ({
 vi.mock('@/lib/server/media-assets', () => ({
   insertMediaAsset: assetMocks.insert,
   insertMediaAssetsAtomically: assetMocks.insertMany,
-  getMediaAssetById: assetMocks.byId,
   getActiveWorkspaceMediaAssetById: assetMocks.byId,
   isMediaAssetStoreReady: assetMocks.ready,
 }));
@@ -222,6 +221,68 @@ describe('Article 50(2) — generated image provenance', () => {
     expect((written?.metadata?.aiAct as { model?: string } | undefined)?.model).toBe(
       body.catalog_model,
     );
+  });
+
+  it('loads an owned edit source through its private storage pathname', async () => {
+    const sourceAssetId = '22222222-2222-4222-8222-222222222222';
+    const sourcePathname =
+      'private-media/image/0123456789abcdef0123456789abcdef/22222222-2222-4222-8222-222222222222.png';
+    const sourceBytes = Buffer.from(PNG_B64, 'base64');
+    assetMocks.byId.mockResolvedValue({
+      id: sourceAssetId,
+      userId: TEST_USER.userId,
+      kind: 'image',
+      mimeType: 'image/png',
+      byteSize: sourceBytes.byteLength,
+      storageUrl: sourcePathname,
+      storagePathname: sourcePathname,
+      metadata: {},
+      deletedAt: null,
+    });
+    storageMocks.read.mockResolvedValue({ data: sourceBytes, contentType: 'image/png' });
+
+    const response = await POST(
+      authedRequest({
+        prompt: 'make the background warmer',
+        provider: 'openai',
+        operation: 'edit',
+        source_image: { asset_id: sourceAssetId },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(assetMocks.byId).toHaveBeenCalledWith(TEST_USER.userId, sourceAssetId);
+    expect(storageMocks.read).toHaveBeenCalledWith(sourcePathname);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(String(mockFetch.mock.calls[0]?.[0])).toContain('api.openai.com');
+  });
+
+  it('rejects a non-image asset before reading private bytes or calling the provider', async () => {
+    const sourceAssetId = '33333333-3333-4333-8333-333333333333';
+    assetMocks.byId.mockResolvedValue({
+      id: sourceAssetId,
+      userId: TEST_USER.userId,
+      kind: 'file',
+      mimeType: 'application/pdf',
+      byteSize: 12,
+      storageUrl: 'private-media/file/owner/source.pdf',
+      storagePathname: 'private-media/file/owner/source.pdf',
+      metadata: {},
+      deletedAt: null,
+    });
+
+    const response = await POST(
+      authedRequest({
+        prompt: 'edit this source',
+        provider: 'openai',
+        operation: 'edit',
+        source_image: { asset_id: sourceAssetId },
+      }),
+    );
+
+    expect(response.status).toBe(422);
+    expect(storageMocks.read).not.toHaveBeenCalled();
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('removes every staged sibling and refunds when a multi-image batch cannot persist', async () => {

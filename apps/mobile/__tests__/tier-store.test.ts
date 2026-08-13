@@ -64,7 +64,10 @@ jest.mock('../services/api', () => {
 // Imports
 // ---------------------------------------------------------------------------
 
-import { useTierStore } from '../src/features/billing/store';
+import {
+  useTierStore,
+  ensureCloudEntitlementsReadyForRequest,
+} from '../src/features/billing/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { api } from '../services/api';
 import {
@@ -145,11 +148,14 @@ function resetStore() {
     billingTier: 'free',
     billingStatus: 'none',
     billingSource: 'unknown',
+    billingPeriodEnd: null,
+    billingCancelsAtPeriodEnd: false,
     isRefreshing: false,
     lastRefreshedAt: null,
     currentConversationProvider: null,
     grantedCapabilities: [],
     capabilityHandshakeVersion: null,
+    capabilityHandshakeReceived: false,
     codeExecutionAvailable: false,
     genericWebSearchAvailable: false,
   } as never);
@@ -189,6 +195,10 @@ describe('tierStore defaults', () => {
 
   it('starts with lastRefreshedAt = null', () => {
     expect(getState().lastRefreshedAt).toBeNull();
+  });
+
+  it('starts without claiming that a capability handshake was received', () => {
+    expect(getState().capabilityHandshakeReceived).toBe(false);
   });
 });
 
@@ -294,6 +304,7 @@ describe('refreshTier — success cases', () => {
       'canUseConnectors',
     ]);
     expect(state.capabilityHandshakeVersion).toBe('mobile-capabilities-v1');
+    expect(getState().capabilityHandshakeReceived).toBe(true);
   });
 
   it('requires both deployment availability and the per-account cloud-execution grant', async () => {
@@ -385,6 +396,41 @@ describe('refreshTier — concurrent call de-duplication', () => {
       grantedCapabilities: [],
     });
   });
+
+  it('lets the first Cloud request join an in-flight entitlement refresh', async () => {
+    let resolveRefresh!: (value: unknown) => void;
+    mockApiGet.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+
+    const backgroundRefresh = getState().refreshTier();
+    await Promise.resolve();
+    let requestReady = false;
+    const requestGate = ensureCloudEntitlementsReadyForRequest().then(() => {
+      requestReady = true;
+    });
+    await Promise.resolve();
+
+    expect(requestReady).toBe(false);
+    expect(mockApiGet).toHaveBeenCalledTimes(1);
+
+    resolveRefresh(
+      mePayload('max', {
+        granted: ['canChat', 'canUseWebSearch'],
+      }),
+    );
+    await Promise.all([backgroundRefresh, requestGate]);
+
+    expect(requestReady).toBe(true);
+    expect(getState()).toMatchObject({
+      tier: 'max',
+      capabilityHandshakeReceived: true,
+      grantedCapabilities: ['canChat', 'canUseWebSearch'],
+      genericWebSearchAvailable: true,
+    });
+  });
 });
 
 describe('setTier', () => {
@@ -408,9 +454,12 @@ describe('clearAccountEntitlements', () => {
       billingTier: 'enterprise',
       billingStatus: 'active',
       billingSource: 'stripe',
+      billingPeriodEnd: 1_800_000_000,
+      billingCancelsAtPeriodEnd: true,
       lastRefreshedAt: '2026-07-26T00:00:00.000Z',
       grantedCapabilities: ['canUseDeepResearch', 'canUseConnectors'],
       capabilityHandshakeVersion: 'version-user-a',
+      capabilityHandshakeReceived: true,
       codeExecutionAvailable: true,
       genericWebSearchAvailable: true,
       currentConversationProvider: 'anthropic',
@@ -427,9 +476,12 @@ describe('clearAccountEntitlements', () => {
       billingTier: string;
       billingStatus: string;
       billingSource: string;
+      billingPeriodEnd: number | null;
+      billingCancelsAtPeriodEnd: boolean;
       lastRefreshedAt: string | null;
       grantedCapabilities: string[];
       capabilityHandshakeVersion: string | null;
+      capabilityHandshakeReceived: boolean;
       codeExecutionAvailable: boolean;
       genericWebSearchAvailable: boolean;
       currentConversationProvider: string | null;
@@ -439,9 +491,12 @@ describe('clearAccountEntitlements', () => {
       billingTier: 'free',
       billingStatus: 'none',
       billingSource: 'unknown',
+      billingPeriodEnd: null,
+      billingCancelsAtPeriodEnd: false,
       lastRefreshedAt: null,
       grantedCapabilities: [],
       capabilityHandshakeVersion: null,
+      capabilityHandshakeReceived: false,
       codeExecutionAvailable: false,
       genericWebSearchAvailable: false,
       currentConversationProvider: null,

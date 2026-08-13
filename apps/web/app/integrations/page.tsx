@@ -5,12 +5,12 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { ProductFrame } from '@/features/marketing/components/ProductFrame';
 import { CapabilityGrid, FinalCta } from '@/features/marketing/components/FlagshipSections';
 import { LedgerSection } from '@/features/marketing/components/LandingSections';
-import { LAUNCH, MARKETING } from '../../lib/marketing-constants';
+import { DESKTOP_LOCAL_RUNTIMES, LAUNCH, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Integrations',
   description:
-    'How AGI connects to other tools: MCP plugins, the native messaging bridge, and BYOK provider keys on Desktop and CLI.',
+    'How AGI connects to other tools: MCP plugins, the native messaging bridge, and BYOK provider keys on Desktop, CLI, and VS Code.',
   path: '/integrations',
 });
 
@@ -31,8 +31,8 @@ export default function IntegrationsPage() {
           </h1>
           <p className="agi-fl-lede">
             Three patterns connect AGI to the tools you already use: MCP plugins for the agent, the
-            native messaging bridge between Chrome and Desktop, and BYOK provider keys on Desktop
-            and CLI. Every connection runs behind explicit, visible permissions.
+            native messaging bridge between Chrome and Desktop, and BYOK provider keys on Desktop,
+            CLI, and VS Code. Every connection runs behind explicit, visible permissions.
           </p>
           <div className="agi-fl-cta-row">
             <Link href="/apps" className="agi-fl-cta agi-fl-cta--primary">
@@ -71,7 +71,7 @@ export default function IntegrationsPage() {
             {
               meta: 'Keys',
               title: 'Provider BYOK',
-              body: 'Bring keys for Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, or Zhipu on Desktop and CLI. Or any OpenAI-compatible endpoint.',
+              body: 'Bring keys for Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, or Zhipu on Desktop, CLI, and VS Code. Or any OpenAI-compatible endpoint.',
               href: '/byok',
             },
           ]}
@@ -83,11 +83,11 @@ export default function IntegrationsPage() {
           rows={[
             {
               k: 'Providers',
-              v: `${MARKETING.providers.display} providers across cloud APIs and local runtimes. BYOK on Desktop and CLI. Pay providers directly.`,
+              v: `${MARKETING.providers.display} providers across cloud APIs and local runtimes. BYOK on Desktop, CLI, and VS Code. Pay providers directly.`,
             },
             {
               k: 'Local runtimes',
-              v: 'Ollama and LM Studio. Free, offline-capable, no account required.',
+              v: `${DESKTOP_LOCAL_RUNTIMES.label} on Desktop. Free, offline-capable after setup, no account required. CLI runtime support is documented separately.`,
             },
             {
               k: 'MCP transports',

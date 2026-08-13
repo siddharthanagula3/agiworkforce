@@ -125,8 +125,16 @@ export interface StreamDelta {
   x_code_result?: unknown;
   /** Whole content_block object for a finished server web-search tool. */
   x_search_results?: unknown;
-  /** Durable descriptors for files generated in the E2B sandbox this turn. */
+  /** Durable descriptors for files generated in the sandbox this turn. */
   x_generated_files?: { files?: StreamGeneratedFile[] };
+  /**
+   * One interactive card (map search, clarify, ...). Left `unknown` on purpose:
+   * the shape is validated by `parseInteractiveCardDelta` from
+   * `@agiworkforce/cloud-contracts`, which NEVER throws and degrades an
+   * unrecognised kind to `recognized: false` with its authored fallback text.
+   * Typing it here would duplicate that contract and invite drift.
+   */
+  x_interactive_card?: unknown;
   /**
    * Additive marker for a mid-stream provider failure (after the response
    * had already committed a 200) — the classified error payload. The
@@ -274,10 +282,20 @@ interface InitialStreamRequest {
   research?: boolean;
   /** When true, the server injects its built-in E2B code-execution tool for this turn. */
   code_execution?: boolean;
+  /** When true, the server offers sandbox-backed document/file creation tools. */
+  office_creation?: boolean;
   /** Paid Cloud product mode; independent from approval/permission policy. */
   work_mode?: CloudWorkMode;
   /** Exact Managed Cloud catalog name. Mobile never resolves or sends the body. */
   skill_name?: string;
+  /**
+   * Interactive-card kinds this client can RENDER. The server offers a
+   * card-producing tool only when the caller proves it can display the result
+   * (`applyMapSearchCardCapability` in the web request processor), so omitting
+   * this is why mobile never received a map card: the tool was never attached.
+   * Advertise only what is actually implemented here.
+   */
+  x_interactive_cards?: { supported: string[]; canRespond: boolean };
 }
 
 interface ApprovalResumeRequest {

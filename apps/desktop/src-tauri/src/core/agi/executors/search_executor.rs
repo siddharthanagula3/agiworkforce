@@ -103,10 +103,18 @@ impl SearchType {
     pub fn system_prompt_suffix(self) -> &'static str {
         match self {
             Self::General => "",
-            Self::Code => "Focus on code examples, documentation, and programming best practices. Include relevant code snippets when available.",
-            Self::Academic => "Focus on peer-reviewed research, academic papers, and scholarly sources. Cite specific studies and findings.",
-            Self::News => "Focus on recent news articles and current events. Prioritize recent and authoritative news sources.",
-            Self::Research => "Conduct comprehensive research across multiple sources. Provide in-depth analysis with detailed citations.",
+            Self::Code => {
+                "Focus on code examples, documentation, and programming best practices. Include relevant code snippets when available."
+            }
+            Self::Academic => {
+                "Focus on peer-reviewed research, academic papers, and scholarly sources. Cite specific studies and findings."
+            }
+            Self::News => {
+                "Focus on recent news articles and current events. Prioritize recent and authoritative news sources."
+            }
+            Self::Research => {
+                "Conduct comprehensive research across multiple sources. Provide in-depth analysis with detailed citations."
+            }
         }
     }
 }

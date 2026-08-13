@@ -710,6 +710,7 @@ export interface AutomationPermissions {
   accessibility: boolean;
   screenRecording: boolean;
   inputMonitoring: boolean;
+  automationServiceReady: boolean;
 }
 
 export async function checkAutomationPermissions(): Promise<AutomationPermissions> {
@@ -717,11 +718,13 @@ export async function checkAutomationPermissions(): Promise<AutomationPermission
     accessibility: boolean;
     screen_recording: boolean;
     input_monitoring: boolean;
+    automation_service_ready: boolean;
   }>('check_automation_permissions');
   return {
     accessibility: permissions.accessibility,
     screenRecording: permissions.screen_recording,
     inputMonitoring: permissions.input_monitoring,
+    automationServiceReady: permissions.automation_service_ready,
   };
 }
 

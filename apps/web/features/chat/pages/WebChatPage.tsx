@@ -138,6 +138,7 @@ import {
   UpgradeConfirmDialog,
   type UpgradeConfirmRequest,
 } from '@features/billing/components/UpgradeConfirmDialog';
+import { billingOwnerPlanChangeMessage } from '@features/billing/lib/subscription-owner-presentation';
 import {
   buildAcceptedHandoffSystemMessage,
   buildWebLocalToByokPreview,
@@ -181,6 +182,7 @@ import {
   useMediaGeneration,
   MediaGenerationApiError,
   type GeneratedImageResult,
+  type GenerateVideoOptions,
   type MediaPaywallRecoveryAction,
 } from '@/lib/hooks/useMediaGeneration';
 import { classifyTaskLocally } from '@agiworkforce/routing';
@@ -190,6 +192,7 @@ import {
   type ImageAspectRatio,
 } from '../lib/imageGenerationOptions';
 import { resolveMediaPaywallSlot, runMediaPaywallRecovery } from '../lib/mediaPaywallRecovery';
+import { useDocumentTitleSync } from '../components/DocumentTitleSync';
 import {
   imageTranscriptMutationKeys,
   useImageTranscriptRecoveryStore,
@@ -996,6 +999,15 @@ export default function WebChatPage() {
       // screen, so confirm the exact prorated amount first instead of charging
       // silently. UpgradeConfirmDialog owns the preview + the actual charge.
       if (hasActivePaidPlan) {
+        if (!billingPolicyReady) {
+          toast.error('Billing details are still loading. Please try again in a moment.');
+          return;
+        }
+        if (subscription?.subscription_source !== 'stripe') {
+          toast.error(billingOwnerPlanChangeMessage(subscription?.subscription_source));
+          openSettings('billing');
+          return;
+        }
         setUpgradeConfirm({ plan, billingInterval: billingPeriod });
         return;
       }
@@ -1026,7 +1038,7 @@ export default function WebChatPage() {
         toast.error(err instanceof Error ? err.message : 'Failed to start checkout.');
       }
     },
-    [subscription, user],
+    [billingPolicyReady, openSettings, subscription, user],
   );
 
   /**
@@ -1127,6 +1139,7 @@ export default function WebChatPage() {
     updateConversation,
     setActiveConversation,
   } = useConversations();
+  const adoptPendingComposerToggles = useChatStore((s) => s.adoptPendingComposerToggles);
   const {
     groupsByMessageId: branchGroupsByMessageId,
     branchingMessageId,
@@ -1223,6 +1236,10 @@ export default function WebChatPage() {
   // a disclosure/expiry dialog, and only the dialog's explicit confirmation
   // creates a public snapshot.
   const activeConversationTitle = displayedConversation?.title;
+  // Tab title follows the open conversation. Reuses the title already derived
+  // above rather than re-selecting it, so the two can never disagree — the
+  // Share dialog and the browser tab always name the same chat.
+  useDocumentTitleSync(activeConversationId, activeConversationTitle);
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const hasMessages = displayedMessages.length > 0;
 
@@ -1357,6 +1374,11 @@ export default function WebChatPage() {
           (await createConversation('New Chat', activeModelId, sendProjectId).then((c) => {
             if (c) {
               freshConvId = c.id;
+              // The composer's toggles live under the pending key until this
+              // conversation exists. Move them now, before the send reads them
+              // and before the route swaps — otherwise a chat started in Video
+              // or Image mode reverts to text the moment it gets an id.
+              adoptPendingComposerToggles(c.id);
               if (!urlConversationId) setBareChatSessionId(c.id);
               return c.id;
             }
@@ -1444,6 +1466,7 @@ export default function WebChatPage() {
       urlConversationId,
       bareChatSessionId,
       createConversation,
+      adoptPendingComposerToggles,
       sendMessage,
       activeModelId,
       activeProjectId,
@@ -2267,7 +2290,15 @@ export default function WebChatPage() {
   // handleGenerateVideo – durable ChatGPT-style start/watch split.
   // ---------------------------------------------------------------------------
   const handleGenerateVideo = useCallback(
-    (prompt: string, videoOptions?: { modelId?: string }) => {
+    (
+      prompt: string,
+      videoOptions?: {
+        modelId?: string;
+        aspectRatio?: string;
+        resolution?: string;
+        durationSecs?: number;
+      },
+    ) => {
       const videoGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
       if (sendingConversationsRef.current.has(videoGuardKey)) return;
       sendingConversationsRef.current.add(videoGuardKey);
@@ -2359,6 +2390,25 @@ export default function WebChatPage() {
               start: () =>
                 startVideoGeneration(prompt, {
                   ...(videoOptions?.modelId ? { modelId: videoOptions.modelId } : {}),
+                  // Composer's aspect/quality pills. Omitted when absent so the
+                  // route keeps applying its own defaults for other callers.
+                  ...(videoOptions?.aspectRatio
+                    ? {
+                        aspectRatio: videoOptions.aspectRatio as NonNullable<
+                          GenerateVideoOptions['aspectRatio']
+                        >,
+                      }
+                    : {}),
+                  ...(videoOptions?.resolution
+                    ? {
+                        resolution: videoOptions.resolution as NonNullable<
+                          GenerateVideoOptions['resolution']
+                        >,
+                      }
+                    : {}),
+                  ...(videoOptions?.durationSecs !== undefined
+                    ? { durationSecs: videoOptions.durationSecs }
+                    : {}),
                   ...(!isTemporaryConversation
                     ? { conversationId: convId, assistantMessageId }
                     : {}),

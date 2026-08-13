@@ -47,57 +47,5 @@
       "path": "/api/cron/health-probe",
       "schedule": "15 6 * * *"
     }
-  ],
-  "rewrites": [
-    {
-      "source": "/v1/chat/completions",
-      "destination": "/api/llm/v1/chat/completions",
-      "has": [
-        {
-          "type": "host",
-          "value": "api.agiworkforce.com"
-        }
-      ]
-    },
-    {
-      "source": "/v1/models",
-      "destination": "/api/llm/v1/models",
-      "has": [
-        {
-          "type": "host",
-          "value": "api.agiworkforce.com"
-        }
-      ]
-    },
-    {
-      "source": "/v1/credits/balance",
-      "destination": "/api/llm/v1/credits/balance",
-      "has": [
-        {
-          "type": "host",
-          "value": "api.agiworkforce.com"
-        }
-      ]
-    },
-    {
-      "source": "/v1/audio/transcriptions",
-      "destination": "/api/llm/v1/audio/transcriptions",
-      "has": [
-        {
-          "type": "host",
-          "value": "api.agiworkforce.com"
-        }
-      ]
-    },
-    {
-      "source": "/health",
-      "destination": "/api/health",
-      "has": [
-        {
-          "type": "host",
-          "value": "api.agiworkforce.com"
-        }
-      ]
-    }
   ]
 }

@@ -114,6 +114,12 @@ export interface ChromeManagedChatDependencies {
   onRouting?: (routing: ChromeManagedRoutingResult) => void | Promise<void>;
   onText: (text: string) => void | Promise<void>;
   onAgentEvent?: (chunk: Extract<FreeTrialChunk, { type: 'agent-event' }>) => void | Promise<void>;
+  onGeneratedFiles?: (
+    chunk: Extract<FreeTrialChunk, { type: 'generated-files' }>,
+  ) => void | Promise<void>;
+  onInteractiveCard?: (
+    chunk: Extract<FreeTrialChunk, { type: 'interactive-card' }>,
+  ) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
 }
 
@@ -140,6 +146,12 @@ export interface ChromeManagedApprovalDependencies {
   streamApproval: typeof streamManagedChatApproval;
   onText: (text: string) => void | Promise<void>;
   onAgentEvent?: (chunk: Extract<FreeTrialChunk, { type: 'agent-event' }>) => void | Promise<void>;
+  onGeneratedFiles?: (
+    chunk: Extract<FreeTrialChunk, { type: 'generated-files' }>,
+  ) => void | Promise<void>;
+  onInteractiveCard?: (
+    chunk: Extract<FreeTrialChunk, { type: 'interactive-card' }>,
+  ) => void | Promise<void>;
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
 }
 
@@ -391,12 +403,11 @@ export async function executeChromeManagedChat(
     };
   }
 
-  if (!canUseBillingPlanCapability(access.subscriptionTier, 'developer_surfaces')) {
+  if (!canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
     return {
       status: 'error',
       code: 'plan_required',
-      message:
-        'AGI in Chrome requires Pro or higher. Managed chat remains available on Web, Mobile, and Desktop for eligible plans.',
+      message: 'Managed Cloud chat is not available for this AGI account.',
     };
   }
 
@@ -491,6 +502,14 @@ export async function executeChromeManagedChat(
       await dependencies.onAgentEvent?.(chunk);
       continue;
     }
+    if (chunk.type === 'generated-files') {
+      await dependencies.onGeneratedFiles?.(chunk);
+      continue;
+    }
+    if (chunk.type === 'interactive-card') {
+      await dependencies.onInteractiveCard?.(chunk);
+      continue;
+    }
     if (chunk.type === 'run') {
       if (chunk.run.state) latestTaskState = chunk.run.state;
       await dependencies.onRunReference?.(chunk.run);
@@ -563,6 +582,14 @@ export async function executeChromeManagedApproval(
       await dependencies.onAgentEvent?.(chunk);
       continue;
     }
+    if (chunk.type === 'generated-files') {
+      await dependencies.onGeneratedFiles?.(chunk);
+      continue;
+    }
+    if (chunk.type === 'interactive-card') {
+      await dependencies.onInteractiveCard?.(chunk);
+      continue;
+    }
     if (chunk.type === 'run') {
       await dependencies.onRunReference?.(chunk.run);
       continue;
@@ -584,7 +611,7 @@ export function createChromeManagedChatDependencies(
   onText: ChromeManagedChatDependencies['onText'],
   callbacks: Pick<
     ChromeManagedChatDependencies,
-    'onRouting' | 'onAgentEvent' | 'onRunReference'
+    'onRouting' | 'onAgentEvent' | 'onGeneratedFiles' | 'onInteractiveCard' | 'onRunReference'
   > = {},
 ): ChromeManagedChatDependencies {
   return { ...DEFAULT_DEPENDENCIES, onText, ...callbacks };
@@ -592,7 +619,10 @@ export function createChromeManagedChatDependencies(
 
 export function createChromeManagedApprovalDependencies(
   onText: ChromeManagedApprovalDependencies['onText'],
-  callbacks: Pick<ChromeManagedApprovalDependencies, 'onAgentEvent' | 'onRunReference'> = {},
+  callbacks: Pick<
+    ChromeManagedApprovalDependencies,
+    'onAgentEvent' | 'onGeneratedFiles' | 'onInteractiveCard' | 'onRunReference'
+  > = {},
 ): ChromeManagedApprovalDependencies {
   return { ...DEFAULT_APPROVAL_DEPENDENCIES, onText, ...callbacks };
 }

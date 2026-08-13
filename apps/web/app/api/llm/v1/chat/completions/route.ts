@@ -484,6 +484,20 @@ async function dispatchChatCompletions(
           ...getSecurityHeaders(),
         };
         addAgentRunHeaders(headers, run);
+        // The model that ACTUALLY answered, after routing and any fallback.
+        //
+        // The client labels each assistant message with what it REQUESTED, so
+        // an Auto-routed turn was labelled `auto` — not a catalog id — and the
+        // transcript rendered "Unavailable model" under every reply. Same class
+        // of wrongness when a credit fallback silently swaps the model: the
+        // footer named a model that never ran. Report the resolved id and let
+        // the client show the truth.
+        // `chatRequest.model` is the routed value — routing and fallback both
+        // mutate it in place, whereas `requestedModel`/`originalModel` keep the
+        // caller's pre-routing string.
+        if (processed.chatRequest.model) {
+          headers['X-AGI-Resolved-Model'] = processed.chatRequest.model;
+        }
         if (processed.quotaWarningHeader) {
           headers['X-Quota-Warning'] = processed.quotaWarningHeader;
         }

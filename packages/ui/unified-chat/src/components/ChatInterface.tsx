@@ -13,7 +13,7 @@ import {
 import { Search, X } from 'lucide-react';
 import { useUiTranslation } from '@agiworkforce/ui';
 import { HostBridgeContext, type ChatHostBridge, useHostBridge } from '../lib/hostBridge';
-import type { ChatRuntime } from '../lib/runtime';
+import type { ChatRuntime, LocalToolScope } from '../lib/runtime';
 import type {
   Artifact,
   ChatMessage,
@@ -312,6 +312,8 @@ export interface ChatInterfaceProps {
   projectPicker?: ChatInputProjectPicker;
   /** Managed-account entitlement for AGI Work; ordinary project chat remains available when false. */
   canUseAgiWork?: boolean;
+  /** Host-owned capability/entitlement explanation shown when AGI Work is unavailable. */
+  agiWorkUnavailableReason?: string;
   /** Host/account overrides layered over runtime quick-action capabilities. */
   /**
    * Host-owned, enforcement-backed controls rendered in the shared composer.
@@ -411,6 +413,7 @@ export function ChatInterface({
   onClearFolder,
   projectPicker,
   canUseAgiWork = true,
+  agiWorkUnavailableReason,
   composerHostControls,
   usageWarning,
   onUpgradeUsage,
@@ -596,6 +599,7 @@ export function ChatInterface({
       writingStyle?: WritingStyle,
       workScope?: ChatWorkScope,
       skillName?: string,
+      localToolScope?: LocalToolScope,
     ) => {
       sendMessage(
         content,
@@ -608,6 +612,7 @@ export function ChatInterface({
         workScope?.projectId,
         undefined,
         skillName,
+        localToolScope,
       );
     },
     [sendMessage],
@@ -940,6 +945,7 @@ export function ChatInterface({
                 onClearFolder={onClearFolder}
                 projectPicker={projectPicker}
                 canUseAgiWork={canUseAgiWork}
+                agiWorkUnavailableReason={agiWorkUnavailableReason}
                 isStreamingOverride={isStreaming}
                 hasMessages={hasMessages}
                 disabled={!runtime}
@@ -948,6 +954,7 @@ export function ChatInterface({
                 projectId={projectPicker?.activeProjectId ?? null}
                 supportsCodeExecution={runtime?.supportsCodeExecution ?? false}
                 supportsResearch={runtime?.supportsResearch ?? false}
+                supportsExplicitLocalWebSearch={runtime?.supportsExplicitLocalWebSearch ?? false}
                 attachmentPolicy={runtime?.attachmentPolicy}
                 pendingAttachments={pendingAttachments}
                 attachmentContextKey={attachmentContextKey}

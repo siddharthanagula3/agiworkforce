@@ -24,21 +24,26 @@ import {
   createManagedCloudAgentRunClient,
   MAX_CHAT_ATTACHMENT_BYTES,
   parseAgentEventDelta,
+  parseGeneratedFilesDelta,
+  parseInteractiveCardDelta,
   readManagedCloudAgentRunHandle,
   reconcileManagedCloudPublicText,
   TOOL_APPROVAL_RESUME_PATH,
   ToolApprovalResumeErrorResponseSchema,
   ToolApprovalResumeRequestSchema,
   type ManagedCloudAgentRunReference,
+  type GeneratedFileWire,
   type ToolApprovalDecisionWire,
   type ToolApprovalResumeRequest,
 } from '@agiworkforce/cloud-contracts';
 import {
   effectivePlanTier,
   getRoutingSlotModel,
+  INTERACTIVE_CARD_REQUEST_KEY,
   MAX_ATTACHMENT_BYTES,
   parseManagedUsageSummaryResponse,
   type Effort,
+  type InteractiveCard,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { BoundedSseDecoder, SseFrameLimitError } from './boundedSseDecoder';
@@ -519,6 +524,8 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
 export type FreeTrialChunk =
   | { type: 'text'; text: string }
   | { type: 'agent-event'; envelope: AgentEventEnvelope; durableReplay?: true }
+  | { type: 'generated-files'; files: GeneratedFileWire[] }
+  | { type: 'interactive-card'; card: InteractiveCard }
   | { type: 'run'; run: ManagedCloudAgentRunReference }
   | { type: 'done' }
   | {
@@ -571,6 +578,8 @@ function normalizeStreamOptions(
 interface ParsedSseFrame {
   text?: string;
   agentEvent?: AgentEventEnvelope;
+  generatedFiles?: GeneratedFileWire[];
+  interactiveCard?: InteractiveCard;
   terminal?: boolean;
   recognized?: boolean;
   error?: Extract<FreeTrialChunk, { type: 'error' }>;
@@ -630,6 +639,8 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
   let recognized = false;
   let deltaContent: unknown;
   let agentEvent: AgentEventEnvelope | null = null;
+  let generatedFiles: GeneratedFileWire[] = [];
+  let interactiveCard: InteractiveCard | null = null;
   let finishReason: unknown;
   const choices = event['choices'];
   if (choices !== undefined) {
@@ -649,6 +660,8 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
         const deltaRecord = delta as Record<string, unknown>;
         deltaContent = deltaRecord['content'];
         agentEvent = parseAgentEventDelta(deltaRecord['x_agent_event']);
+        generatedFiles = parseGeneratedFilesDelta(deltaRecord['x_generated_files']);
+        interactiveCard = parseInteractiveCardDelta(deltaRecord['x_interactive_card']);
 
         const streamError = deltaRecord['x_stream_error'];
         if (streamError !== undefined && streamError !== null) {
@@ -682,6 +695,7 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
           'tool_calls',
           'reasoning_content',
           'x_generated_files',
+          'x_interactive_card',
           'x_tool_status',
           'x_tool_approval_request',
           'x_tool_result',
@@ -733,6 +747,8 @@ function parseSseData(dataPayload: string): ParsedSseFrame {
           ? directContent
           : undefined,
     ...(agentEvent ? { agentEvent } : {}),
+    ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
+    ...(interactiveCard ? { interactiveCard } : {}),
     terminal: done === true || (typeof finishReason === 'string' && finishReason.length > 0),
     recognized: true,
   };
@@ -893,6 +909,13 @@ export async function* streamFreeChat(
             model,
             messages: cappedMessages,
             stream: true,
+            // Chrome owns a validated, display-only map-card renderer. It does
+            // not own the suspended-run response path, so `canRespond` must
+            // remain false and clarification tools stay unavailable here.
+            [INTERACTIVE_CARD_REQUEST_KEY]: {
+              supported: ['map-search.v1'],
+              canRespond: false,
+            },
             ...(options.workMode ? { work_mode: options.workMode } : {}),
             ...(options.extendedThinking ? { thinking_mode: true } : {}),
             ...(options.effort ? { effort: options.effort } : {}),
@@ -1003,6 +1026,7 @@ export async function* streamFreeChat(
     const sseDecoder = new BoundedSseDecoder(MANAGED_CHAT_MAX_SSE_FRAME_CHARS);
     let sawVisibleText = false;
     let sawAgentActivity = false;
+    let sawRichOutput = false;
     let streamedTextCharacters = 0;
     let unacknowledgedPublicText = '';
 
@@ -1054,8 +1078,16 @@ export async function* streamFreeChat(
           const runChunk = publishRunReference({ lastSequence: frame.agentEvent.sequence });
           if (runChunk) chunks.push(runChunk);
         }
+        if (frame.generatedFiles) {
+          sawRichOutput = true;
+          chunks.push({ type: 'generated-files', files: frame.generatedFiles });
+        }
+        if (frame.interactiveCard) {
+          sawRichOutput = true;
+          chunks.push({ type: 'interactive-card', card: frame.interactiveCard });
+        }
         if (frame.terminal) {
-          if (!sawVisibleText && !sawAgentActivity) {
+          if (!sawVisibleText && !sawAgentActivity && !sawRichOutput) {
             chunks.push({
               type: 'error',
               message: 'AGI Cloud completed without a result this surface can render.',

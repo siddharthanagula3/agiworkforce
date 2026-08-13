@@ -3,19 +3,14 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * The sidebar panel uses a FIXED palette by founder decision (2026-07-27, see
- * packages/ui/design-tokens/src/index.ts) so it looks identical across VS Code,
- * Cursor, Windsurf and Antigravity.
+ * The sidebar lives directly above native VS Code views, so its surfaces and
+ * text follow the host theme while AGI tokens remain complete fallbacks. The
+ * previous fixed-dark policy made the extension look split in light and
+ * high-contrast themes.
  *
- * That decision is only safe if it is applied consistently. Compositing a
- * host-themed colour onto a fixed-palette surface — or the reverse — produces
- * pairings nobody chose: the runtime banner rendered #ececec text on Light+'s
- * pale-yellow warning background at about 1.10:1, and hovering a composer chip
- * put near-white on a light grey. Each side of a pairing is defensible alone;
- * together they are unreadable.
- *
- * This asserts the invariant rather than any particular colour: within one rule,
- * background and foreground must come from the SAME family.
+ * Stateful pairs must still come from one family. Compositing a host warning
+ * background with fixed near-white text once produced about 1.10:1 contrast in
+ * Light+, even though each token was reasonable in isolation.
  */
 const source = readFileSync(
   resolve(import.meta.dirname, '../features/sidebar-webview/webviewContent.ts'),
@@ -49,19 +44,29 @@ describe('sidebar panel palette', () => {
   it('never pairs a host-themed colour with a fixed-palette one in the same rule', () => {
     expect(
       mixedRules(),
-      'These rules mix --vscode-* with the fixed panel palette. Pick one family per rule: ' +
-        'the panel is deliberately fixed-dark, so pin BOTH sides to --agi-vscode-* / --bg-* / --text-*.',
+      'These rules mix a direct host token with an AGI-only token. Use the shared ' +
+        'host/fallback aliases so foreground and background change together.',
     ).toEqual([]);
   });
 
   it('states the colour policy truthfully in its own header', () => {
-    // Asserted POSITIVELY. A "must not contain <phrase>" check is fragile in the
-    // obvious way: it fires on the header quoting the old wording to explain why
-    // it was wrong. What matters is that the header says what the tokens do.
     const header = source.slice(0, source.indexOf('export function getWebviewContent'));
-    expect(header).toMatch(/does NOT follow the host theme/i);
-    expect(header).toMatch(/fixed dark palette/i);
-    // And that the rule the policy implies is written down where it is needed.
+    expect(header).toMatch(
+      /surfaces,\s*text, controls, focus, and state colours follow the host theme/i,
+    );
+    expect(header).toMatch(/terra brand accent (?:is|are) AGI-owned/i);
+    expect(header).toMatch(/agiVsCodeCssVars.*fallback/i);
     expect(header).toMatch(/same family/i);
+  });
+
+  it('defines host-themed surface and text aliases with AGI fallbacks', () => {
+    expect(source).toContain('--bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));');
+    expect(source).toContain('--text-primary: var(--vscode-foreground, var(--agi-vscode-text));');
+    expect(source).toContain(
+      '--warning-bg: var(--vscode-inputValidation-warningBackground, var(--agi-vscode-warning-bg));',
+    );
+    expect(source).toContain(
+      '--button-text: var(--vscode-button-foreground, var(--agi-vscode-button-text));',
+    );
   });
 });

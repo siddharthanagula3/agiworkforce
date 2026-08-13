@@ -481,6 +481,8 @@ export function ModelSelector({
 }: ModelSelectorProps) {
   const { t } = useUiTranslation('models');
   const { models, selectedModelId, displayName, selectModel } = useModel();
+  const modelCatalogStatus = useModelStore((state) => state.modelCatalogStatus);
+  const modelCatalogError = useModelStore((state) => state.modelCatalogError);
   const hostBridge = useHostBridge();
   const activeConversation = useChatStore((state) =>
     state.conversations.find((conversation) => conversation.id === state.activeConversationId),
@@ -493,7 +495,10 @@ export function ModelSelector({
     activeConversation?.executionMode ?? resolveClientChatExecutionMode();
 
   const usingFallback =
-    allowFallbackModels && models.length === 0 && executionMode === 'cloud_managed';
+    allowFallbackModels &&
+    modelCatalogStatus === 'ready' &&
+    models.length === 0 &&
+    executionMode === 'cloud_managed';
   const candidateModels = usingFallback ? CLOUD_FALLBACK_MODELS : models;
   const displayModels = useMemo(
     () => getModelsAdmittedForExecutionMode(candidateModels, executionMode),
@@ -503,9 +508,18 @@ export function ModelSelector({
     () => displayModels.filter(isChatModelSelectable),
     [displayModels],
   );
+  const catalogLoadingWithoutModels =
+    modelCatalogStatus === 'loading' && displayModels.length === 0;
+  const catalogErrorWithoutModels = modelCatalogStatus === 'error' && displayModels.length === 0;
   const previousConversationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // A host may retain the last verified same-boundary models while it
+    // refreshes reachability. Do not turn a transient discovery state into a
+    // model-authority change; the host clears synchronously on real boundary
+    // switches.
+    if (modelCatalogStatus === 'loading') return;
+
     const conversationId = activeConversation?.id ?? null;
     const conversationChanged = previousConversationIdRef.current !== conversationId;
     previousConversationIdRef.current = conversationId;
@@ -522,7 +536,9 @@ export function ModelSelector({
           ? selectedModelId
           : preferredIsAdmitted
             ? preferredModelId!
-            : (selectableModels[0]?.id ?? '');
+            : executionMode === 'cloud_managed'
+              ? (selectableModels[0]?.id ?? '')
+              : '';
 
     if (nextModelId !== selectedModelId) {
       selectModel(nextModelId);
@@ -533,6 +549,7 @@ export function ModelSelector({
     selectModel,
     selectableModels,
     selectedModelId,
+    modelCatalogStatus,
   ]);
 
   // Provider-switch gate — when a user whose tier cannot switch provider
@@ -649,7 +666,11 @@ export function ModelSelector({
             className,
           )}
         >
-          <span className="max-w-[140px] truncate font-medium">{displayName}</span>
+          <span className="max-w-[140px] truncate font-medium">
+            {catalogLoadingWithoutModels
+              ? t('selector.detectingModels', 'Detecting models…')
+              : displayName}
+          </span>
           <ChevronDown size={12} className="shrink-0 opacity-60" />
         </button>
       </Popover.Trigger>
@@ -662,8 +683,6 @@ export function ModelSelector({
           className={cn(
             'z-50 w-80 overflow-hidden rounded-xl shadow-lg',
             'border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]',
-            'animate-in fade-in-0 zoom-in-95',
-            'data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2',
           )}
         >
           {/* Provider count badge — surfaces differentiator */}
@@ -688,38 +707,119 @@ export function ModelSelector({
 
           {/* Scrollable model list */}
           <div className="max-h-80 overflow-y-auto p-1">
-            {displayModels.length === 0 && (
-              <div className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]">
+            {modelCatalogStatus === 'loading' && displayModels.length > 0 && (
+              <div
+                role="status"
+                data-testid="model-catalog-refreshing"
+                className="px-3 py-2 text-xs text-[var(--chat-text-muted)]"
+              >
+                {executionMode === 'local_only'
+                  ? t('selector.refreshingLocalModels', 'Refreshing local models…')
+                  : t('selector.refreshingModels', 'Refreshing available models…')}
+              </div>
+            )}
+
+            {catalogLoadingWithoutModels && (
+              <div
+                role="status"
+                data-testid="model-catalog-loading"
+                className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]"
+              >
                 <div className="font-medium text-[var(--chat-text-primary)]">
                   {executionMode === 'local_only'
-                    ? t('selector.noLocalModels', 'No local models detected')
-                    : executionMode === 'byok'
-                      ? t('selector.noByokModels', 'No BYOK models configured')
-                      : t('selector.noManagedModels', 'No managed models available')}
+                    ? t('selector.detectingLocalModels', 'Looking for available local models…')
+                    : t('selector.detectingAvailableModels', 'Loading available models…')}
                 </div>
                 <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
                   {executionMode === 'local_only'
-                    ? t('selector.noLocalModelsHint', 'Start a local runtime and download a model.')
-                    : executionMode === 'byok'
-                      ? t('selector.noByokModelsHint', 'Add a provider API key in Models & Keys.')
-                      : t(
-                          'selector.noManagedModelsHint',
-                          'Managed model capacity is currently unavailable.',
-                        )}
+                    ? t(
+                        'selector.detectingLocalModelsHint',
+                        'Checking the local runtimes configured on this device.',
+                      )
+                    : t('selector.detectingModelsHint', 'Verifying models for this session.')}
                 </p>
-                {onSettingsClick && (
+              </div>
+            )}
+
+            {catalogErrorWithoutModels && (
+              <div
+                role="alert"
+                data-testid="model-catalog-failed"
+                className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]"
+              >
+                <div className="font-medium text-[var(--chat-text-primary)]">
+                  {executionMode === 'local_only'
+                    ? t('selector.localCatalogFailed', 'Local models could not be refreshed')
+                    : t('selector.catalogFailed', 'Models could not be refreshed')}
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
+                  {modelCatalogError ??
+                    t('selector.catalogFailedHint', 'Check the runtime connection and try again.')}
+                </p>
+                {onSettingsClick && executionMode !== 'cloud_managed' && (
                   <Popover.Close asChild>
                     <button
                       type="button"
                       onClick={onSettingsClick}
                       className="mt-3 rounded-lg border border-[var(--chat-border)] px-3 py-1.5 text-xs font-medium text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
                     >
-                      Open Models & Keys
+                      {executionMode === 'local_only'
+                        ? t('selector.openLocalModelSettings', 'Open local model settings')
+                        : t('selector.configureByok', 'Configure a provider key')}
                     </button>
                   </Popover.Close>
                 )}
               </div>
             )}
+
+            {displayModels.length === 0 &&
+              modelCatalogStatus !== 'loading' &&
+              modelCatalogStatus !== 'error' && (
+                <div className="px-3 py-4 text-sm text-[var(--chat-text-secondary)]">
+                  <div className="font-medium text-[var(--chat-text-primary)]">
+                    {executionMode === 'local_only'
+                      ? t('selector.noLocalModels', 'No local models detected')
+                      : executionMode === 'byok'
+                        ? t('selector.noByokModels', 'No BYOK models configured')
+                        : t('selector.noManagedModels', 'No managed models available')}
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-[var(--chat-text-muted)]">
+                    {executionMode === 'local_only'
+                      ? t(
+                          'selector.noLocalModelsHint',
+                          'Start a local runtime and download a model.',
+                        )
+                      : executionMode === 'byok'
+                        ? t('selector.noByokModelsHint', 'Add a provider API key in Models & Keys.')
+                        : t(
+                            'selector.noManagedModelsHint',
+                            'Managed model capacity is currently unavailable.',
+                          )}
+                  </p>
+                  {onSettingsClick && (
+                    <Popover.Close asChild>
+                      <button
+                        type="button"
+                        onClick={onSettingsClick}
+                        aria-label={
+                          executionMode === 'local_only'
+                            ? t('selector.setUpLocalModel', 'Set up a local model')
+                            : executionMode === 'byok'
+                              ? t('selector.configureByok', 'Configure a provider key')
+                              : t('selector.openModelsAndKeys', 'Open Models & Keys')
+                        }
+                        className="mt-3 rounded-lg border border-[var(--chat-border)] px-3 py-1.5 text-xs font-medium text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+                      >
+                        {executionMode === 'local_only'
+                          ? t('selector.setUpLocalModel', 'Set up a local model')
+                          : executionMode === 'byok'
+                            ? t('selector.configureByok', 'Configure a provider key')
+                            : t('selector.openModelsAndKeys', 'Open Models & Keys')}
+                      </button>
+                    </Popover.Close>
+                  )}
+                </div>
+              )}
 
             {/* Best (auto) synthetic option at top */}
             {autoModels.length > 0 && bestAutoId && (
@@ -765,7 +865,30 @@ export function ModelSelector({
                     provModels.map((m) => {
                       const isSelected = m.id === selectedModelId;
                       const isSelectable = isChatModelSelectable(m);
-                      const capability = getCapability(m);
+                      // Quality tiers are product claims, so show them only
+                      // for exact catalog entries (or canonical Auto routing
+                      // profiles). Dynamic runtime discovery proves concrete
+                      // capabilities such as vision/function calling, but it
+                      // does not prove that a model is "balanced", "fast", or
+                      // "premium".
+                      const hasCatalogQuality =
+                        MODEL_CAPABILITY[m.id] !== undefined || isAutoModeModelId(m.id);
+                      const capability = hasCatalogQuality ? getCapability(m) : null;
+                      const runtimeCapabilityLabel =
+                        m.metadataSource === 'runtime'
+                          ? [
+                              m.supportsVision ? t('selector.visionCapability', 'Vision') : null,
+                              m.supportsTools
+                                ? t('selector.functionToolsCapability', 'Function tools')
+                                : null,
+                              m.supportsThinking
+                                ? t('selector.thinkingCapability', 'Thinking')
+                                : null,
+                            ]
+                              .filter((label): label is string => Boolean(label))
+                              .join(' · ') ||
+                            t('selector.runtimeMetadataOnly', 'Runtime-reported model')
+                          : t('selector.capabilitiesUnverified', 'Capabilities unverified');
                       const isThinkingEnabled = isSelected && effort != null;
                       const reasoning = getModelReasoning(m.id);
                       const showThinkingToggle =
@@ -812,7 +935,7 @@ export function ModelSelector({
                                     </span>
                                   )}
                                 </div>
-                                {/* Capability sub-label + tier badge + context */}
+                                {/* Verified capability/quality metadata + context */}
                                 <div className="mt-0.5 flex flex-wrap items-center gap-1">
                                   <span
                                     className={cn(
@@ -822,12 +945,18 @@ export function ModelSelector({
                                         : 'text-[var(--chat-text-muted)]',
                                     )}
                                   >
-                                    {CAPABILITY_LABEL[capability]}
+                                    {capability
+                                      ? CAPABILITY_LABEL[capability]
+                                      : runtimeCapabilityLabel}
                                   </span>
-                                  <span className="text-[var(--chat-text-muted)] text-[10px]">
-                                    ·
-                                  </span>
-                                  <TierBadge tier={m.tier} />
+                                  {capability && (
+                                    <>
+                                      <span className="text-[var(--chat-text-muted)] text-[10px]">
+                                        ·
+                                      </span>
+                                      <TierBadge tier={m.tier} />
+                                    </>
+                                  )}
                                   <span className="text-[10px] text-[var(--chat-text-muted)]">
                                     {formatContext(m.contextWindow)} ctx
                                   </span>
@@ -869,7 +998,7 @@ export function ModelSelector({
           </div>
 
           {/* Footer — manage API keys */}
-          {onSettingsClick && !usingFallback && (
+          {onSettingsClick && !usingFallback && displayModels.length > 0 && (
             <div className="border-t border-[var(--chat-border)] p-1">
               <Popover.Close asChild>
                 <button
@@ -882,7 +1011,11 @@ export function ModelSelector({
                   )}
                 >
                   <Settings size={13} />
-                  <span>{t('selector.manageApiKeys', 'Manage API Keys')}</span>
+                  <span>
+                    {executionMode === 'local_only'
+                      ? t('selector.manageLocalModels', 'Manage local models')
+                      : t('selector.manageApiKeys', 'Manage API Keys')}
+                  </span>
                 </button>
               </Popover.Close>
             </div>

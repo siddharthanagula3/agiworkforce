@@ -251,6 +251,7 @@ import {
   isExecutableVideoModel,
   isModelLive,
   modelsCatalog,
+  resolveVideoGenerationOutputSize,
   type ModelMetadata,
 } from '@agiworkforce/types';
 import { MANAGED_COMPUTE_PRIVATE_BETA_ENV } from '@/lib/managed-compute-gate';
@@ -297,11 +298,21 @@ const GOOGLE_ECONOMY_MODEL = requireCatalogVideoModel(
   (model) =>
     model.provider === 'google' &&
     model.id !== GOOGLE_DEFAULT_MODEL_ID &&
+    !resolveVideoGenerationOutputSize(model, '4k', '16:9') &&
     (model.videoPerSecondCostByResolution?.['720p'] ?? Number.POSITIVE_INFINITY) <
       (GOOGLE_DEFAULT_MODEL.videoPerSecondCostByResolution?.['720p'] ?? Number.POSITIVE_INFINITY),
-  'a lower-cost Google video model',
+  'a lower-cost Google video model without 4k output',
 );
 const GOOGLE_ECONOMY_MODEL_ID = GOOGLE_ECONOMY_MODEL.id;
+const googleEconomyPricePerSecond =
+  GOOGLE_ECONOMY_MODEL.videoPerSecondCostByResolution?.['720p'] ??
+  GOOGLE_ECONOMY_MODEL.videoPerSecondCost;
+if (googleEconomyPricePerSecond == null) {
+  throw new Error('Catalog fixture is missing economy Google video pricing.');
+}
+const GOOGLE_ECONOMY_DEFAULT_COST_CENTS = Math.ceil(
+  Number((googleEconomyPricePerSecond * 4 * 100).toFixed(8)),
+);
 
 const NON_VIDEO_MODEL_ID = Object.values(modelsCatalog.models).find(
   (model) => model.modelType !== 'video' && isModelLive(model),
@@ -1596,7 +1607,10 @@ describe('POST /api/media/video/generate', () => {
 
       expect(response.status).toBe(200);
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ model: GOOGLE_ECONOMY_MODEL_ID, estimatedCostCents: 20 }),
+        expect.objectContaining({
+          model: GOOGLE_ECONOMY_MODEL_ID,
+          estimatedCostCents: GOOGLE_ECONOMY_DEFAULT_COST_CENTS,
+        }),
       );
       const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
       expect(JSON.parse(String(googleRequest.body))).toMatchObject({

@@ -14,10 +14,9 @@
  * anywhere). This regressed once: `agi-workforce.sidebarFocus` /
  * `agi-workforce.chatFocus` were added to gate the Shift+Tab "Cycle Agent
  * Mode" binding but were never wired to `setContext`, so the binding could
- * never trigger. Fixed by switching to the built-in `focusedView` /
- * `activeWebviewPanelId` contexts, which VS Code sets automatically for our
- * own sidebar webview view (`agi-workforce.sidebar`) and chat-in-editor
- * webview panel (`agi-workforce.chatPanel`) respectively.
+ * never trigger. The binding was ultimately removed: Shift+Tab is reverse
+ * focus traversal and must never mutate agent authority. This guard remains
+ * for the other contributed keybindings.
  *
  * This test asserts every custom `agi-workforce.*` context key referenced in
  * a keybinding `when` clause is set somewhere in `src/` via `setContext`.

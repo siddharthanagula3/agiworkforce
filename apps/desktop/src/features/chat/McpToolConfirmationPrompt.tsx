@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { AlertTriangle, Check, ShieldAlert, X } from 'lucide-react';
 import { Button } from '@/ui/Button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/ui/Dialog';
 import { useApprovalActions } from '@/hooks/useApprovalActions';
 import { useToolStore, type ApprovalRequest } from '@/stores/chat/toolStore';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,13 @@ function formatArguments(approval: ApprovalRequest): string {
   return readDetail(approval, 'parametersSummary') ?? '{}';
 }
 
+function formatApprovalLabel(value: string): string {
+  return value
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replaceAll('_', ' ')
+    .replace(/\bMcp\b/gi, 'MCP');
+}
+
 export function McpToolConfirmationPrompt() {
   const pendingApprovals = useToolStore((state) => state.pendingApprovals);
   const { resolveApproval } = useApprovalActions();
@@ -51,7 +59,9 @@ export function McpToolConfirmationPrompt() {
   const approval = confirmations[0];
 
   const toolName = approval
-    ? (readDetail(approval, 'tool') ?? readDetail(approval, 'toolName') ?? 'MCP tool')
+    ? formatApprovalLabel(
+        readDetail(approval, 'tool') ?? readDetail(approval, 'toolName') ?? 'MCP tool',
+      )
     : 'MCP tool';
   const reason = approval ? readDetail(approval, 'reason') : null;
   const safetyTier = approval ? readDetail(approval, 'safetyTier') : null;
@@ -86,31 +96,6 @@ export function McpToolConfirmationPrompt() {
     [approval, resolveApproval],
   );
 
-  useEffect(() => {
-    if (!approval || isFolderAccess || isResolving) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target;
-      if (
-        target instanceof HTMLElement &&
-        (target.matches('input, textarea, select, button') || target.isContentEditable)
-      ) {
-        return;
-      }
-      if (event.repeat) return;
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        void resolve('approve');
-      } else if (event.key === 'Escape') {
-        event.preventDefault();
-        void resolve('reject');
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [approval, isFolderAccess, isResolving, resolve]);
-
   if (!approval) {
     return null;
   }
@@ -120,24 +105,29 @@ export function McpToolConfirmationPrompt() {
   }
 
   return (
-    <div
-      className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm"
-      role="alertdialog"
-      aria-modal="true"
-      aria-labelledby="mcp-tool-confirmation-title"
-      aria-describedby="mcp-tool-confirmation-description"
-      data-testid="mcp-tool-confirmation-prompt"
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        // Closing the modal is the safe decision: a privileged native request
+        // must never continue merely because the overlay was dismissed.
+        if (!open && !isResolving) void resolve('reject');
+      }}
     >
-      <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+      <DialogContent
+        disableAnimation
+        hideCloseButton
+        className="z-[var(--z-fullscreen)] flex max-h-[calc(100vh-3rem)] w-[min(42rem,calc(100vw-3rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-card p-0 shadow-2xl"
+        overlayProps={{ className: 'z-[var(--z-fullscreen)] bg-background/80' }}
+        role="alertdialog"
+        data-testid="mcp-tool-confirmation-prompt"
+      >
         <div className="flex items-start gap-3 border-b border-border px-5 py-4">
           <span className="rounded-xl bg-destructive/10 p-2 text-destructive">
             <ShieldAlert className="h-5 w-5" aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 id="mcp-tool-confirmation-title" className="text-base font-semibold">
-                Tool approval required
-              </h2>
+              <DialogTitle className="text-base font-semibold">Tool approval required</DialogTitle>
               <span
                 className={cn(
                   'rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide',
@@ -157,9 +147,9 @@ export function McpToolConfirmationPrompt() {
         </div>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-          <p id="mcp-tool-confirmation-description" className="text-sm text-foreground">
+          <DialogDescription className="text-sm text-foreground">
             {approval.description}
-          </p>
+          </DialogDescription>
 
           {(reason || safetyTier) && (
             <dl className="grid gap-2 text-xs sm:grid-cols-2">
@@ -172,7 +162,7 @@ export function McpToolConfirmationPrompt() {
               {safetyTier && (
                 <div>
                   <dt className="font-medium text-muted-foreground">Safety policy</dt>
-                  <dd className="mt-1 text-foreground">{safetyTier}</dd>
+                  <dd className="mt-1 text-foreground">{formatApprovalLabel(safetyTier)}</dd>
                 </div>
               )}
             </dl>
@@ -225,6 +215,7 @@ export function McpToolConfirmationPrompt() {
           <Button
             type="button"
             variant="outline"
+            autoFocus
             disabled={isResolving}
             onClick={() => void resolve('reject')}
             aria-label="Deny"
@@ -241,12 +232,9 @@ export function McpToolConfirmationPrompt() {
           >
             <Check className="mr-2 h-4 w-4" aria-hidden="true" />
             Approve
-            <kbd className="ml-2 rounded border border-primary-foreground/30 px-1 text-[10px]">
-              Return
-            </kbd>
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

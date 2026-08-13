@@ -64,6 +64,15 @@ afterEach(() => {
 });
 
 describe('SignalingClient — server-sent reconnect messages', () => {
+  it('reports whether the local websocket accepted an outbound signal', () => {
+    const { socket, client } = connect();
+
+    expect(client.sendSignal('control', { action: 'heartbeat' })).toBe(true);
+    socket.readyState = 0;
+    expect(client.sendSignal('control', { action: 'heartbeat' })).toBe(false);
+    client.close();
+  });
+
   it('surfaces sync_request so the desktop can republish state', () => {
     const { socket, events, client } = connect();
 

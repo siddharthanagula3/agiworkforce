@@ -1,4 +1,5 @@
 use super::*;
+use crate::sys::security::egress_policy::PublicHttpClient;
 use regex::Regex;
 use std::sync::LazyLock;
 
@@ -427,13 +428,15 @@ impl ToolExecutor {
         let selector = args.get("selector").and_then(|v| v.as_str());
 
         // Use a real browser user agent to avoid bot detection
-        let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            .build()
+        let client = PublicHttpClient::with_builder(
+            reqwest::Client::builder()
+                .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+        )
             .map_err(|e| anyhow!("Failed to create client: {}", e))?;
 
         let response = client
             .get(url)
+            .map_err(|error| anyhow!("Scrape destination blocked: {error}"))?
             .header(
                 "Accept",
                 "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",

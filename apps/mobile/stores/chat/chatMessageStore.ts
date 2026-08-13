@@ -33,6 +33,8 @@ import {
   normalizeManagedCloudConversation,
   normalizeManagedCloudMessage,
   type ManagedCloudConversation,
+  type ManagedCloudConversationHistoryStats,
+  type ManagedCloudMessageWire,
 } from '@agiworkforce/cloud-contracts';
 import { markConversationForSync, markMessageForSync, syncNow } from '@/services/cloudSyncEngine';
 import { setCloudMessageReactionRemote } from '@/src/features/chat/services/cloudMessageMutations';
@@ -184,23 +186,33 @@ export const useChatMessageStore = create<MessageState>()(
           // to useChatCloudMessageStore, never written into this local store.
           // This store only holds Local Mode conversations.
           if (shouldLoadCloudConversationList()) {
-            const data = ManagedCloudConversationListResponseSchema.parse(
+            const conversations: ManagedCloudConversation[] = [];
+            let offset = 0;
+            let hasMore = true;
+            let historyStats: ManagedCloudConversationHistoryStats | undefined;
+            while (hasMore) {
               // `archived=exclude` matters: the server default is `include`, so
-              // omitting it put chats the user archived (on any surface) straight
-              // back into the Mobile chat list — archiving looked broken. Web
-              // reads them separately via `archived=only` in Settings → Archived
-              // chats; Mobile now does the same.
-              await api.get<unknown>(
-                '/api/chat/conversations?includeHistoryStats=1&archived=exclude',
-              ),
-            );
+              // omitting it put chats archived on another surface straight back
+              // into Mobile. Paginate to exhaustion: Chrome Managed Cloud chats
+              // older than the first page must remain visible here too.
+              const data = ManagedCloudConversationListResponseSchema.parse(
+                await api.get<unknown>(
+                  `/api/chat/conversations?limit=100&offset=${offset}&includeHistoryStats=${offset === 0 ? '1' : '0'}&archived=exclude`,
+                ),
+              );
+              conversations.push(...data.conversations.map(normalizeManagedCloudConversation));
+              if (offset === 0) historyStats = data.historyStats;
+              hasMore = data.hasMore;
+              if (hasMore && data.nextOffset <= offset) {
+                throw new Error('Cloud conversation pagination did not advance.');
+              }
+              offset = data.nextOffset;
+            }
             getCloudStore()
               .getState()
               .setCloudConversations(
-                data.conversations
-                  .map(normalizeManagedCloudConversation)
-                  .map(normalizeManagedCloudConversationForMobile),
-                data.historyStats,
+                conversations.map(normalizeManagedCloudConversationForMobile),
+                historyStats,
               );
           }
         } catch {
@@ -372,7 +384,12 @@ export const useChatMessageStore = create<MessageState>()(
         const existingLocalMsgs = get().messages[conversationId];
         const existingCloudMsgs = cloudStore.getState().messages[conversationId];
         const existing = localConversation ? existingLocalMsgs : existingCloudMsgs;
-        if (existing && existing.length > 0 && !existing.some((m) => m.isStreaming)) {
+        if (
+          localConversation &&
+          existing &&
+          existing.length > 0 &&
+          !existing.some((m) => m.isStreaming)
+        ) {
           // Derive from the cache too, not only from a network response.
           //
           // This early return is the common path — a transcript is cached after
@@ -399,10 +416,24 @@ export const useChatMessageStore = create<MessageState>()(
         set({ isLoadingMessages: true });
         try {
           if (!shouldLoadRemoteMessages(conversation)) return;
-          const data = ManagedCloudConversationResponseSchema.parse(
-            await api.get<unknown>(managedCloudConversationPath(conversationId)),
-          );
-          const normalizedMessages = data.messages.map((message) =>
+          const messageRows: ManagedCloudMessageWire[] = [];
+          let messageOffset = 0;
+          let hasMoreMessages = true;
+          while (hasMoreMessages) {
+            const data = ManagedCloudConversationResponseSchema.parse(
+              await api.get<unknown>(
+                `${managedCloudConversationPath(conversationId)}?limit=500&offset=${messageOffset}`,
+              ),
+            );
+            messageRows.push(...data.messages);
+            hasMoreMessages = data.hasMore;
+            const nextOffset = messageOffset + data.messages.length;
+            if (hasMoreMessages && nextOffset <= messageOffset) {
+              throw new Error('Cloud message pagination did not advance.');
+            }
+            messageOffset = nextOffset;
+          }
+          const normalizedMessages = messageRows.map((message) =>
             normalizeManagedCloudMessage(message, conversationId),
           ) as ChatMessage[];
           // Route messages to the correct store.
@@ -664,7 +695,19 @@ export const useChatMessageStore = create<MessageState>()(
               executionModeForConversation(conversation) === 'cloud',
           );
         const newMessageId = () => (isCloudConversation ? uuidv7() : generateMessageId());
-        const now = new Date().toISOString();
+        // The reply must be timestamped strictly AFTER the prompt.
+        //
+        // Both rows previously shared one `now`, and cloud transcripts sort by
+        // `createdAt` then by `id` (compareCloudMessagesByCreatedAtThenId). The
+        // tie therefore fell through to the ids — and because `assistantMessageId`
+        // is minted before the user row's id, monotonic uuidv7 made the
+        // ASSISTANT sort first: every generated image rendered above the prompt
+        // that asked for it (founder 2026-08-13). Distinct timestamps put the
+        // answer in the comparator's primary key, so the order also survives a
+        // cross-device pull rather than depending on id minting order.
+        const userCreatedAt = new Date();
+        const now = userCreatedAt.toISOString();
+        const assistantCreatedAt = new Date(userCreatedAt.getTime() + 1).toISOString();
         const assistantMessageId = newMessageId();
         const userMessage: ChatMessage = {
           id: newMessageId(),
@@ -679,7 +722,7 @@ export const useChatMessageStore = create<MessageState>()(
           conversationId,
           role: 'assistant',
           content: '',
-          createdAt: now,
+          createdAt: assistantCreatedAt,
           model,
           isGeneratingImage: true,
           imageGenStatus: 'generating',
@@ -712,6 +755,12 @@ export const useChatMessageStore = create<MessageState>()(
         if (isCloudConversation) {
           markConversationForSync(conversationId);
           markMessageForSync(conversationId, userMessage.id);
+          // Keep the in-flight assistant row authoritative while the newly
+          // opened Cloud chat hydrates from the server. Without marking this
+          // row dirty, a concurrent initial pull can treat the locally-created
+          // placeholder as stale, remove it, and leave the terminal media
+          // callback with no message to update.
+          markMessageForSync(conversationId, assistantMessage.id);
         }
 
         return assistantMessageId;
@@ -802,7 +851,7 @@ export const useChatMessageStore = create<MessageState>()(
 
       failImageGeneration: (conversationId, assistantMessageId, errorMessage) => {
         const now = new Date().toISOString();
-        const finalContent = `Image generation failed: ${errorMessage}`;
+        const finalContent = `Image generation failed: ${presentableMediaError(errorMessage)}`;
 
         const ownerStore = getConversationMessageStore(conversationId);
         const isCloudConversation = ownerStore
@@ -859,7 +908,12 @@ export const useChatMessageStore = create<MessageState>()(
               executionModeForConversation(conversation) === 'cloud',
           );
         const newMessageId = () => (isCloudConversation ? uuidv7() : generateMessageId());
-        const now = new Date().toISOString();
+        // Same ordering contract as beginImageGeneration above: the reply is
+        // timestamped strictly after the prompt so the cloud comparator never
+        // has to break a tie on ids that were minted in the opposite order.
+        const userCreatedAt = new Date();
+        const now = userCreatedAt.toISOString();
+        const assistantCreatedAt = new Date(userCreatedAt.getTime() + 1).toISOString();
         const assistantMessageId = newMessageId();
         const userMessage: ChatMessage = {
           id: newMessageId(),
@@ -874,7 +928,7 @@ export const useChatMessageStore = create<MessageState>()(
           conversationId,
           role: 'assistant',
           content: '',
-          createdAt: now,
+          createdAt: assistantCreatedAt,
           model,
           isGeneratingVideo: true,
           videoGenStatus: 'queued',
@@ -907,6 +961,10 @@ export const useChatMessageStore = create<MessageState>()(
         if (isCloudConversation) {
           markConversationForSync(conversationId);
           markMessageForSync(conversationId, userMessage.id);
+          // The queued assistant row must survive the same initial Cloud
+          // transcript hydration race as image generation above. It is synced
+          // only when the terminal video state calls syncNow().
+          markMessageForSync(conversationId, assistantMessage.id);
         }
 
         return assistantMessageId;
@@ -995,7 +1053,7 @@ export const useChatMessageStore = create<MessageState>()(
 
       failVideoGeneration: (conversationId, assistantMessageId, errorMessage) => {
         const now = new Date().toISOString();
-        const finalContent = `Video generation failed: ${errorMessage}`;
+        const finalContent = `Video generation failed: ${presentableMediaError(errorMessage)}`;
 
         const ownerStore = getConversationMessageStore(conversationId);
         const isCloudConversation = ownerStore
@@ -1111,6 +1169,27 @@ function isCloudChatEnabled(): boolean {
 
 function generateMessageId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Turn a transport/runtime failure into something a user can act on.
+ *
+ * A failed generation used to print the raw throw straight into the transcript,
+ * so a cancelled request read "fetch failed: FetchRequestCanceledException:
+ * Fetch request has been canceled (at Expo/NativeResponse.swift:63)" — a Swift
+ * file path and an exception class name in the middle of a chat. Recognised
+ * transport failures get plain sentences; anything unrecognised still shows its
+ * message (dropping it entirely would hide real provider errors like a content
+ * policy refusal), but the internal frame suffix is stripped.
+ */
+function presentableMediaError(errorMessage: string): string {
+  if (/cancell?ed/i.test(errorMessage)) return 'the request was cancelled.';
+  if (/timed?\s*out|timeout/i.test(errorMessage)) return 'the request timed out. Try again.';
+  if (/network|offline|internet|ENOTFOUND|ECONNREFUSED/i.test(errorMessage)) {
+    return 'no network connection. Reconnect and try again.';
+  }
+  // Drop " (at Some/Native/Frame.swift:63)"-style location suffixes.
+  return errorMessage.replace(/\s*\(at\s+[^)]*\)\s*$/, '').trim() || 'please try again.';
 }
 
 /** Extract the HTTP status from an api-client error (it throws `HTTP <status>: …`). */

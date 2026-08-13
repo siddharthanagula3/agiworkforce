@@ -3,13 +3,74 @@ use crate::core::agi::knowledge::KnowledgeEntry;
 use crate::core::agi::process_ontology::ProcessOntology;
 use crate::core::agi::process_reasoning::ProcessReasoning;
 use crate::core::llm::{
-    ChatMessage, LLMRequest, LLMRouter, Provider, RouterPreferences, RoutingStrategy, TaskType,
+    ChatMessage, LLMRequest, LLMRouter, Provider, RouterPreferences, RoutingStrategy,
+    ThinkingParameter,
 };
 use anyhow::Result;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
+
+/// Plans are compact machine-readable control data, not user-facing prose. A
+/// large completion allowance can leave small local models generating for
+/// minutes before the first executable step exists.
+const TASK_PLAN_MAX_TOKENS: u32 = 2_048;
+const TASK_PLAN_TIMEOUT: Duration = Duration::from_secs(60);
+
+fn task_plan_request(
+    prompt: String,
+    target_model: Option<&str>,
+    temperature: Option<f32>,
+) -> LLMRequest {
+    LLMRequest {
+        messages: vec![ChatMessage {
+            role: "user".to_string(),
+            content: prompt,
+            tool_calls: None,
+            tool_call_id: None,
+            multimodal_content: None,
+        }],
+        model: target_model.unwrap_or_default().to_string(),
+        temperature,
+        max_tokens: Some(TASK_PLAN_MAX_TOKENS),
+        stream: false,
+        tools: None,
+        tool_choice: None,
+        // Planning needs concise JSON. Explicitly disabling cross-provider
+        // thinking also prevents reasoning-capable Ollama models from using
+        // their provider-default thinking mode for this control request.
+        thinking_mode: None,
+        thinking: Some(ThinkingParameter::Enabled(false)),
+        ..Default::default()
+    }
+}
+
+fn reasoning_only_plan_json(goal: &Goal, tools: &[Tool]) -> Result<Option<String>> {
+    let [reasoning_tool] = tools else {
+        return Ok(None);
+    };
+    if reasoning_tool.id != "llm_reason" {
+        return Ok(None);
+    }
+
+    // A single reasoning action does not need a second model call to invent a
+    // plan. Building this control structure locally is both more reliable for
+    // small on-device models and safer than accepting model-invented tool IDs.
+    Ok(Some(serde_json::to_string(&vec![json!({
+        "id": "step_1",
+        "tool_id": "llm_reason",
+        "description": "Reason through the requested task with the selected model",
+        "parameters": {
+            "prompt": goal.description.clone(),
+            "temperature": 0.2,
+            "max_tokens": 2_000,
+            "stream": false,
+        },
+        "estimated_resources": reasoning_tool.estimated_resources.clone(),
+        "dependencies": [],
+    })])?))
+}
 
 pub struct AGIPlanner {
     router: Arc<RwLock<LLMRouter>>,
@@ -19,8 +80,15 @@ pub struct AGIPlanner {
     process_ontology: Option<Arc<ProcessOntology>>,
 }
 
-fn planning_model() -> &'static str {
-    Provider::Anthropic.get_model_for_task(TaskType::Chat)
+fn goal_routing_target(goal: &Goal) -> Result<(Option<Provider>, Option<String>)> {
+    match goal.execution_target() {
+        Some((model, provider)) => {
+            let provider = Provider::from_string(provider)
+                .ok_or_else(|| anyhow::anyhow!("Unsupported Task provider: {provider}"))?;
+            Ok((Some(provider), Some(model.to_string())))
+        }
+        None => Ok((None, None)),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -101,11 +169,58 @@ impl AGIPlanner {
 
         let suggested_tools: Vec<_> = self.tool_registry.suggest_tools(&goal.description);
 
+        if let Some(plan_json) = reasoning_only_plan_json(goal, &suggested_tools)? {
+            return self.parse_plan(goal, &plan_json);
+        }
+
         let plan_json = self
             .plan_with_llm(goal, context, &knowledge, &suggested_tools, &best_practices)
             .await?;
 
         self.parse_plan(goal, &plan_json)
+    }
+
+    async fn invoke_plan_candidate(
+        &self,
+        request: &LLMRequest,
+        preferences: &RouterPreferences,
+        selected_target: bool,
+        plan_kind: &str,
+    ) -> Result<Option<String>> {
+        let router = self.router.read().await;
+        let candidates = router.candidates(request, preferences);
+        drop(router);
+
+        let Some(candidate) = candidates.first() else {
+            if selected_target {
+                return Err(anyhow::anyhow!(
+                    "The selected Task model is unavailable inside this execution boundary"
+                ));
+            }
+            return Ok(None);
+        };
+
+        let router = self.router.read().await;
+        match tokio::time::timeout(
+            TASK_PLAN_TIMEOUT,
+            router.invoke_candidate(candidate, request),
+        )
+        .await
+        {
+            Ok(Ok(outcome)) => Ok(Some(outcome.response.content)),
+            Ok(Err(error)) if selected_target => Err(anyhow::anyhow!(
+                "The selected Task model could not create {plan_kind}: {error}"
+            )),
+            Ok(Err(_)) => Ok(None),
+            Err(_) if selected_target => Err(anyhow::anyhow!(
+                "The selected Task model did not create {plan_kind} within {} seconds",
+                TASK_PLAN_TIMEOUT.as_secs()
+            )),
+            Err(_) => Err(anyhow::anyhow!(
+                "No Task model created {plan_kind} within {} seconds",
+                TASK_PLAN_TIMEOUT.as_secs()
+            )),
+        }
     }
 
     async fn plan_with_llm(
@@ -216,9 +331,10 @@ Return ONLY the JSON array."#,
             context.tool_results.len()
         );
 
+        let (target_provider, target_model) = goal_routing_target(goal)?;
         let preferences = RouterPreferences {
-            provider: Some(crate::core::llm::Provider::Anthropic),
-            model: Some(planning_model().to_string()),
+            provider: target_provider,
+            model: target_model.clone(),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
@@ -230,33 +346,13 @@ Return ONLY the JSON array."#,
             trust_mode: goal.trust_mode,
         };
 
-        let request = LLMRequest {
-            messages: vec![ChatMessage {
-                role: "user".to_string(),
-                content: prompt.clone(),
-                tool_calls: None,
-                tool_call_id: None,
-                multimodal_content: None,
-            }],
-            model: planning_model().to_string(),
-            temperature: None,
-            max_tokens: Some(64000),
-            stream: false,
-            tools: None,
-            tool_choice: None,
-            thinking_mode: Some(true),
-            ..Default::default()
-        };
+        let request = task_plan_request(prompt, target_model.as_deref(), None);
 
-        let router = self.router.read().await;
-        let candidates = router.candidates(&request, &preferences);
-        drop(router);
-
-        if !candidates.is_empty() {
-            let router = self.router.read().await;
-            if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
-                return Ok(outcome.response.content);
-            }
+        if let Some(plan) = self
+            .invoke_plan_candidate(&request, &preferences, target_model.is_some(), "a plan")
+            .await?
+        {
+            return Ok(plan);
         }
 
         self.generate_basic_plan(goal, tools, best_practices).await
@@ -518,10 +614,9 @@ Respond with ONLY "true" or "false"."#,
         match router.send_message(&prompt, None).await {
             Ok(response) => {
                 let response_lower = response.trim().to_lowercase();
-
-                let is_met = response_lower.contains("true")
-                    || response_lower.starts_with("yes")
-                    || (response_lower.contains("met") && !response_lower.contains("not met"));
+                // The prompt requires an exact boolean. Fail closed on prose,
+                // negations (for example "not true"), or malformed output.
+                let is_met = response_lower == "true";
 
                 tracing::info!(
                     "[Planner] Criterion '{}' evaluation: {} (response: {})",
@@ -598,6 +693,10 @@ Respond with ONLY "true" or "false"."#,
         tools: &[Tool],
         strategy_hint: &str,
     ) -> Result<String> {
+        if let Some(plan_json) = reasoning_only_plan_json(goal, tools)? {
+            return Ok(plan_json);
+        }
+
         let knowledge_summary: Vec<String> = knowledge
             .iter()
             .map(|k| format!("- {}: {}", k.category, k.content))
@@ -655,9 +754,10 @@ Return ONLY a JSON array of steps with this structure:
             context.tool_results.len()
         );
 
+        let (target_provider, target_model) = goal_routing_target(goal)?;
         let preferences = RouterPreferences {
-            provider: Some(crate::core::llm::Provider::Anthropic),
-            model: Some(planning_model().to_string()),
+            provider: target_provider,
+            model: target_model.clone(),
             strategy: RoutingStrategy::Auto,
             context: None,
             prefer_cloud_credits: false,
@@ -669,35 +769,79 @@ Return ONLY a JSON array of steps with this structure:
             trust_mode: goal.trust_mode,
         };
 
-        let request = LLMRequest {
-            messages: vec![ChatMessage {
-                role: "user".to_string(),
-                content: prompt,
-                tool_calls: None,
-                tool_call_id: None,
-                multimodal_content: None,
-            }],
-            model: planning_model().to_string(),
-            temperature: Some(0.8),
-            max_tokens: Some(4000),
-            stream: false,
-            tools: None,
-            tool_choice: None,
-            thinking_mode: None,
-            ..Default::default()
-        };
+        let request = task_plan_request(prompt, target_model.as_deref(), Some(0.2));
 
-        let router = self.router.read().await;
-        let candidates = router.candidates(&request, &preferences);
-        drop(router);
-
-        if !candidates.is_empty() {
-            let router = self.router.read().await;
-            if let Ok(outcome) = router.invoke_candidate(&candidates[0], &request).await {
-                return Ok(outcome.response.content);
-            }
+        if let Some(plan) = self
+            .invoke_plan_candidate(
+                &request,
+                &preferences,
+                target_model.is_some(),
+                "a parallel plan",
+            )
+            .await?
+        {
+            return Ok(plan);
         }
 
         self.generate_basic_plan(goal, tools, &[]).await
+    }
+}
+
+#[cfg(test)]
+mod task_plan_request_tests {
+    use super::*;
+
+    #[test]
+    fn planner_requests_are_bounded_and_disable_thinking() {
+        let request = task_plan_request(
+            "Return a JSON plan".to_string(),
+            Some("synthetic-local-model"),
+            None,
+        );
+
+        assert_eq!(request.model, "synthetic-local-model");
+        assert_eq!(request.max_tokens, Some(TASK_PLAN_MAX_TOKENS));
+        assert!(!request.stream);
+        assert!(matches!(
+            request.thinking,
+            Some(ThinkingParameter::Enabled(false))
+        ));
+        assert_eq!(request.thinking_mode, None);
+    }
+
+    #[test]
+    fn reasoning_only_tasks_use_a_local_deterministic_plan() {
+        let goal = Goal {
+            id: "goal-fixture".to_string(),
+            description: "Calculate 6 × 7".to_string(),
+            priority: Priority::Medium,
+            deadline: None,
+            success_criteria: Vec::new(),
+            constraints: Vec::new(),
+            trust_mode: None,
+        };
+        let tool = Tool {
+            id: "llm_reason".to_string(),
+            name: "Reason".to_string(),
+            description: "Reason with the selected model".to_string(),
+            capabilities: Vec::new(),
+            parameters: Vec::new(),
+            estimated_resources: ResourceUsage {
+                cpu_percent: 1.0,
+                memory_mb: 2,
+                network_mb: 0.0,
+            },
+            dependencies: Vec::new(),
+        };
+
+        let value: serde_json::Value = serde_json::from_str(
+            &reasoning_only_plan_json(&goal, &[tool])
+                .expect("plan should serialize")
+                .expect("reasoning-only plan should exist"),
+        )
+        .expect("plan should be valid JSON");
+
+        assert_eq!(value[0]["tool_id"], "llm_reason");
+        assert_eq!(value[0]["parameters"]["prompt"], goal.description);
     }
 }

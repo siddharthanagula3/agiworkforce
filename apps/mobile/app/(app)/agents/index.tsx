@@ -471,7 +471,7 @@ function Header({ onBack, colors }: { onBack: () => void; colors: ColorScheme })
       </Pressable>
       <View style={{ flex: 1, marginLeft: 4 }}>
         <Text variant="subheading" style={{ color: colors.textPrimary }}>
-          Tasks
+          AGI Work
         </Text>
         <Text style={{ color: colors.textMuted, fontSize: 11 }}>AGI Cloud</Text>
       </View>

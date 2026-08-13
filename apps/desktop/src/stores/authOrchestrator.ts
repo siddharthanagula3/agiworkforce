@@ -375,16 +375,16 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       unifiedAuthStore.setStripeCustomer(null);
     }
 
-    // Set Stripe subscription if available.
+    // Preserve the account subscription record, including its billing owner.
     //
     // FIX (audit 2026-05-20, §14): the empty-string fallbacks below are
     // intentional — they only fire inside the `if (authState.subscription)`
     // guard, which already proves the user has *some* subscription record.
-    // An absent stripe_subscription_id at this level means "subscription
-    // row exists but Stripe provisioning has not completed yet"; the empty
-    // string is the canonical UI sentinel for that state and is consumed
-    // by the billing UI as "provisioning". Do not change to null without
-    // updating every consumer.
+    // An absent stripe_subscription_id is expected for Apple, Google, and
+    // manually provisioned records. The legacy store field is still named
+    // `stripeSubscription`, so `subscription_source` must travel with the
+    // record and every Stripe action must check it before offering a portal or
+    // checkout.
     if (authState.subscription) {
       const sub = authState.subscription;
       unifiedAuthStore.setStripeSubscription({
@@ -405,7 +405,8 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
         current_period_end: sub.current_period_end
           ? Math.floor(new Date(sub.current_period_end).getTime() / 1000)
           : 0,
-        cancel_at_period_end: sub.cancel_at_period_end || false,
+        cancel_at_period_end: sub.cancel_at_period_end ?? false,
+        subscription_source: sub.subscription_source ?? 'unknown',
         cancel_at: undefined,
         canceled_at: sub.canceled_at
           ? Math.floor(new Date(sub.canceled_at).getTime() / 1000)
@@ -449,6 +450,8 @@ async function processAuthStateChange(authState: AuthState): Promise<void> {
       currentPeriodEnd: authState.subscription?.current_period_end
         ? new Date(authState.subscription.current_period_end).getTime()
         : null,
+      subscriptionCancelAtPeriodEnd: authState.subscription?.cancel_at_period_end ?? false,
+      subscriptionSource: authState.subscription?.subscription_source ?? 'unknown',
       stripeCustomerId: authState.subscription?.stripe_customer_id || null,
       featureFlags: authState.featureFlags,
       credits,

@@ -58,7 +58,7 @@ async function handlePatchMessage(request: NextRequest, context: RouteContext) {
   const patch = result.data;
 
   const db = getNeonChatDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
   const [conv] = await db.query<{ id: string }>(
     `select id
        from web_conversations
@@ -128,7 +128,7 @@ async function handleDeleteMessage(request: NextRequest, context: RouteContext) 
   const { id: conversationId, messageId } = await context.params;
 
   const db = getNeonChatDb();
-  const organizationId = await resolveActiveOrganizationId(db, userId);
+  const organizationId = await resolveActiveOrganizationId(db, userId, request);
 
   // Verify conversation ownership first (mirrors PATCH pattern)
   const [conv] = await db.query<{ id: string }>(

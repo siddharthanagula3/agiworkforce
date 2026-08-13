@@ -78,9 +78,13 @@ never names — do not expect the alert to tell you which variable is missing.
 
 ### `stripe: unhealthy`
 
-`stripe.products.list` failed or `STRIPE_SECRET_KEY` is unset. Chat, sign-in
-and every non-billing surface keep working. Check status.stripe.com first; if
-Stripe is up, the key was rotated or revoked.
+`STRIPE_SECRET_KEY` is unset, `stripe.products.list` failed, or one of the
+canonical `STRIPE_PRICE_*` objects is unreachable/inactive/non-recurring under
+that key. Chat, sign-in and every non-billing surface keep working. Check
+status.stripe.com first; if Stripe is up, confirm the secret, webhook endpoint,
+publishable key, and every configured Price belong to the same Stripe account
+and test/live mode. Price IDs do not encode their mode, so verify them in the
+Stripe Dashboard rather than inferring it from the ID text.
 
 ### `probe_failed`
 

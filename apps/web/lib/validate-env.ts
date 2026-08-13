@@ -89,7 +89,14 @@ export function validateRequiredEnvVars(): ValidationResult {
   ];
 
   // Stripe price IDs (required for checkout to work)
-  const priceIdVars = ['STRIPE_PRICE_PRO_MONTHLY', 'STRIPE_PRICE_PRO_YEARLY'];
+  const priceIdVars = [
+    'STRIPE_PRICE_BASIC_MONTHLY_USD',
+    'STRIPE_PRICE_BASIC_MONTHLY_INR',
+    'STRIPE_PRICE_PRO_MONTHLY',
+    'STRIPE_PRICE_PRO_YEARLY',
+    'STRIPE_PRICE_MAX_MONTHLY',
+    'STRIPE_PRICE_MAX_15X_MONTHLY',
+  ];
 
   // Optional tiers (waitlist or not yet launched), plus Team.
   //
@@ -98,11 +105,10 @@ export function validateRequiredEnvVars(): ValidationResult {
   // file entirely, in both the error and the warning list. So a deployment
   // could boot clean while every Team checkout failed, and nothing said so.
   //
-  // Warning rather than error, matching Max and Enterprise: a deployment that
-  // does not sell Team is correctly configured without these, and failing boot
-  // would be wrong for it. lib/pricing.ts already fails CLOSED at checkout
-  // time when a Price ID is missing; this only makes the gap visible at boot
-  // instead of at a customer's first purchase attempt.
+  // Team remains a warning until the founder-owned Stripe Product/Prices are
+  // provisioned; Enterprise is contract-led rather than ordinary self-serve.
+  // lib/pricing.ts fails CLOSED at checkout when any of these are absent, so
+  // this makes the gap visible at boot without inventing provider objects.
   //
   // INR monthly is listed because Team is sold in USD and INR; INR yearly is
   // deliberately absent — there is no Team yearly INR Price (founder
@@ -111,7 +117,6 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_PRICE_TEAM_MONTHLY_USD',
     'STRIPE_PRICE_TEAM_MONTHLY_INR',
     'STRIPE_PRICE_TEAM_YEARLY_USD',
-    'STRIPE_PRICE_MAX_MONTHLY',
     'STRIPE_PRICE_ENTERPRISE_MONTHLY',
     'STRIPE_PRICE_ENTERPRISE_YEARLY',
   ];
@@ -155,10 +160,10 @@ export function validateRequiredEnvVars(): ValidationResult {
     }
   }
 
-  // Check optional enterprise price IDs (warn only)
+  // Check optional Team/Enterprise price IDs (warn only)
   for (const varName of optionalPriceVars) {
     if (!process.env[varName]) {
-      warnings.push(`Optional Stripe price ID not set: ${varName} (enterprise tier)`);
+      warnings.push(`Optional Stripe price ID not set: ${varName} (checkout remains closed)`);
     }
   }
 
@@ -217,9 +222,9 @@ export function validatePriceIdConsistency(): ValidationResult {
     }
 
     const expectedMappings = {
-      pro_monthly: process.env['STRIPE_PRICE_PRO_MONTHLY'],
-      pro_yearly: process.env['STRIPE_PRICE_PRO_YEARLY'],
-      max_monthly: process.env['STRIPE_PRICE_MAX_MONTHLY'],
+      pro_monthly: STRIPE_PRICE_IDS.pro.monthly,
+      pro_yearly: STRIPE_PRICE_IDS.pro.yearly,
+      max_monthly: STRIPE_PRICE_IDS.max.monthly,
       max_yearly: undefined, // Max is monthly-only
     };
 
@@ -253,9 +258,10 @@ export function validatePriceIdConsistency(): ValidationResult {
  * Chrome now blocks) — every authenticated page reload-loops. Stripe test keys in
  * production silently accept no real payments.
  *
- * These are warnings, not hard errors: a misconfigured deploy still serves the
- * marketing site, and an emergency hotfix deploy is never blocked. But the
- * misconfiguration is now impossible to miss in build/startup logs.
+ * These diagnostics remain warnings so direct callers get the full provider
+ * key report. Stripe mode additionally has a fatal Production guard in
+ * validateStripeKeyModeConsistency(); AGI_ALLOW_INVALID_ENV=1 remains the
+ * explicit incident-only escape hatch in instrumentation.ts.
  */
 export function validateProductionKeyTypes(): ValidationResult {
   const errors: string[] = [];
@@ -291,6 +297,12 @@ export function validateProductionKeyTypes(): ValidationResult {
       impact:
         'a Stripe test secret key in production accepts no real payments. Use an sk_live_ key.',
     },
+    {
+      env: 'STRIPE_SECRET_KEY',
+      prefix: 'rk_test_',
+      impact:
+        'a Stripe test-mode restricted key in production accepts no real payments. Use a live-mode key.',
+    },
   ];
 
   for (const { env, prefix, impact } of testKeyChecks) {
@@ -298,6 +310,60 @@ export function validateProductionKeyTypes(): ValidationResult {
     if (value && value.startsWith(prefix)) {
       warnings.push(`${env} is a ${prefix}… development/test key in production — ${impact}`);
     }
+  }
+
+  return { valid: errors.length === 0, errors, warnings };
+}
+
+type StripeMode = 'test' | 'live';
+
+function getStripeKeyMode(
+  value: string | undefined,
+  kind: 'secret' | 'publishable',
+): StripeMode | null {
+  if (!value) return null;
+  if (kind === 'secret') {
+    if (/^(?:sk|rk)_test_/.test(value)) return 'test';
+    if (/^(?:sk|rk)_live_/.test(value)) return 'live';
+    return null;
+  }
+  if (value.startsWith('pk_test_')) return 'test';
+  if (value.startsWith('pk_live_')) return 'live';
+  return null;
+}
+
+/**
+ * Reject a browser/server Stripe mode split before Checkout is attempted.
+ *
+ * Stripe Price IDs deliberately do not encode test/live mode, so exact Price
+ * ownership is verified through the read-only health check. The key pair does
+ * encode mode and can be checked synchronously during server initialization.
+ */
+export function validateStripeKeyModeConsistency(): ValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const secretMode = getStripeKeyMode(process.env['STRIPE_SECRET_KEY'], 'secret');
+  const publishableMode = getStripeKeyMode(
+    process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'],
+    'publishable',
+  );
+
+  if (secretMode && publishableMode && secretMode !== publishableMode) {
+    errors.push(
+      'Stripe key mode mismatch: STRIPE_SECRET_KEY and ' +
+        'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY must both be test or both be live.',
+    );
+  }
+
+  if (
+    process.env['VERCEL_ENV'] === 'production' &&
+    (secretMode === 'test' || publishableMode === 'test')
+  ) {
+    errors.push(
+      'Stripe test mode is not valid for the Production deployment. Configure live-mode ' +
+        'server and publishable keys, or use AGI_ALLOW_INVALID_ENV=1 only for an explicit ' +
+        'billing-degraded incident deployment.',
+    );
   }
 
   return { valid: errors.length === 0, errors, warnings };
@@ -347,6 +413,7 @@ export function validateEnvironment(): ValidationResult {
     validatePriceIdConsistency(),
     validateAppUrl(),
     validateProductionKeyTypes(),
+    validateStripeKeyModeConsistency(),
   ];
 
   const allErrors = results.flatMap((r) => r.errors);

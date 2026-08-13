@@ -11,7 +11,6 @@ const initialState: SettingsPanelState = {
     apiEndpoint: 'https://agiworkforce.com/api/llm/v1',
     model: 'auto',
     cliPath: 'agi',
-    streamingEnabled: true,
     'composer.followUpBehavior': 'queue',
     contextLines: 50,
     telemetryEnabled: false,
@@ -24,18 +23,15 @@ const initialState: SettingsPanelState = {
     'agent.mode': 'auto',
     'agent.effort': 'medium',
     'agent.thinking': false,
-    'mcp.enabled': false,
     'desktopBridge.enabled': false,
     'desktopBridge.port': 8787,
     telemetryEndpoint: 'https://telemetry.agiworkforce.com/v1/events',
-    useProviderStream: false,
-    gatewayUrl: 'https://api.agiworkforce.com',
-    tier: 'byok',
     currentTier: 'pro',
   },
   workspaceOverrides: [],
   workspaceTrusted: true,
   accountConnected: false,
+  accountStatus: 'signed-out',
   agentConfigPath: '/host/.agiworkforce/config.toml',
   instructionContext: {
     host: 'Prefer focused tests.',
@@ -121,10 +117,60 @@ describe('settings webview', () => {
       control.getAttribute('data-setting'),
     );
 
-    expect(navSections).toEqual(SETTINGS_SECTIONS);
+    expect([...navSections].sort()).toEqual([...SETTINGS_SECTIONS].sort());
+    const navGroups = Array.from(doc.querySelectorAll<HTMLElement>('.nav-group'));
+    expect(navGroups).toHaveLength(3);
+    expect(
+      navGroups.map((group) => {
+        const labelledBy = group.getAttribute('aria-labelledby');
+        return {
+          label: labelledBy === null ? null : doc.getElementById(labelledBy)?.textContent,
+          sections: Array.from(group.querySelectorAll<HTMLElement>('[data-section]')).map(
+            (button) => button.dataset.section,
+          ),
+        };
+      }),
+    ).toEqual([
+      {
+        label: 'Workspace',
+        sections: ['general', 'configuration', 'personalization'],
+      },
+      {
+        label: 'Integrations',
+        sections: ['mcp', 'plugins', 'hooks'],
+      },
+      {
+        label: 'Account',
+        sections: ['usage', 'account'],
+      },
+    ]);
+    expect(
+      navSections.map(
+        (section) =>
+          doc.querySelector<HTMLElement>(`.nav-button[data-section="${section}"]`)?.textContent,
+      ),
+    ).toEqual([
+      'Session',
+      'Runtime',
+      'Instructions & editor',
+      'MCP servers',
+      'Plugins',
+      'Hooks',
+      'Usage & billing',
+      'Cloud account',
+    ]);
     expect([...new Set(renderedSettings)].sort()).toEqual([...SETTINGS_PANEL_SETTING_KEYS].sort());
     expect(renderedSettings).not.toContain('agent.planMode');
-    expect(doc.querySelector('[data-command="openRawSettings"]')).not.toBeNull();
+    expect(doc.querySelector('[data-command="openRawSettings"]')?.textContent?.trim()).toBe(
+      'Open VS Code settings',
+    );
+    const developerDiagnostics = doc.querySelector<HTMLDetailsElement>('details.diagnostic-card');
+    expect(developerDiagnostics?.open).toBe(false);
+    expect(developerDiagnostics?.querySelector('summary')?.textContent).toBe(
+      'Developer diagnostics',
+    );
+    expect(developerDiagnostics?.querySelector('[data-setting="tier"]')).toBeNull();
+    expect(developerDiagnostics?.textContent).toContain('Resolved entitlement');
     expect(doc.querySelectorAll('[id]').length).toBe(
       new Set(Array.from(doc.querySelectorAll('[id]')).map((element) => element.id)).size,
     );
@@ -163,6 +209,81 @@ describe('settings webview', () => {
       'Available in Desktop app and Chrome extension.',
     );
     expect(doc.querySelector('[aria-label="Capability availability in VS Code"]')).not.toBeNull();
+  });
+
+  it('keeps plan and instruction actions usable in narrow and forced-color layouts', () => {
+    const doc = parse();
+    const style = Array.from(doc.querySelectorAll('style'))
+      .map((element) => element.textContent ?? '')
+      .join('\n');
+
+    expect(doc.querySelector('#planSignInButton')?.parentElement?.classList).toContain(
+      'plan-actions',
+    );
+    expect(style).toMatch(/\.plan-actions\s*\{[^}]*flex-wrap:\s*wrap;/su);
+    expect(style).toMatch(/\.instruction-footer\s*\{[^}]*flex-wrap:\s*wrap;/su);
+    expect(style).toContain('@media (forced-colors: active)');
+    expect(style).toMatch(/\.nav-button\[aria-current='page'\][^{]*\{[^}]*Highlight/su);
+    expect(style).toContain('border: 1px solid CanvasText;');
+  });
+
+  it('shows the server-owned billing source and scheduled cancellation without revoking access early', () => {
+    boot();
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'settings.snapshot',
+          state: {
+            ...initialState,
+            accountConnected: true,
+            accountStatus: 'signed-in',
+            accountIdentity: {
+              displayName: 'Ada Lovelace',
+              email: 'ada@example.com',
+              accountType: 'Personal account',
+              planName: 'Pro',
+              tier: 'pro',
+              subscriptionStatus: 'active',
+              currentPeriodEnd: '2026-09-01T00:00:00.000Z',
+              cancelAtPeriodEnd: true,
+              subscriptionSource: 'stripe',
+            },
+            tierInfo: {
+              tier: 'pro',
+              subscriptionStatus: 'active',
+              usagePercentage: 20,
+            },
+          },
+        },
+      }),
+    );
+
+    expect(document.getElementById('currentTierLabel')?.textContent).toBe('Pro plan');
+    expect(document.getElementById('planStatus')?.textContent).toMatch(
+      /remains active through .*then ends\. Billing owner: Web billing\./u,
+    );
+    expect(document.getElementById('planStatus')?.dataset.kind).toBe('');
+  });
+
+  it('shows accessible overflow controls only in the directions that can scroll', () => {
+    boot();
+    const nav = document.getElementById('settingsNav') as HTMLElement;
+    const back = document.getElementById('navScrollBack') as HTMLButtonElement;
+    const forward = document.getElementById('navScrollForward') as HTMLButtonElement;
+    Object.defineProperties(nav, {
+      clientWidth: { configurable: true, value: 320 },
+      scrollWidth: { configurable: true, value: 760 },
+    });
+
+    window.dispatchEvent(new Event('resize'));
+    expect(back.hidden).toBe(true);
+    expect(forward.hidden).toBe(false);
+    expect(forward.getAttribute('aria-label')).toBe('Show more settings sections');
+
+    nav.scrollLeft = 440;
+    nav.dispatchEvent(new Event('scroll'));
+    expect(back.hidden).toBe(false);
+    expect(forward.hidden).toBe(true);
   });
 
   it('navigates sections and emits a typed numeric settings update', () => {
@@ -207,7 +328,9 @@ describe('settings webview', () => {
     expect(document.getElementById('trustPill')?.textContent).toBe('Restricted workspace');
     expect(document.getElementById('overrideNotice')?.textContent).toContain('Model');
     expect(document.getElementById('overrideNotice')?.hidden).toBe(false);
-    expect(document.getElementById('accountStatus')?.textContent).toBe('Connected to AGI Cloud');
+    expect(document.getElementById('accountStatus')?.textContent).toBe(
+      'Connected to AGI Cloud · account details unavailable',
+    );
     expect((document.getElementById('signOutButton') as HTMLButtonElement).hidden).toBe(false);
   });
 

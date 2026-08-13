@@ -46,18 +46,17 @@ describe('Chrome side-panel surface ownership', () => {
     expect(blockedStateSource).toContain("if (blocked) {\n    blockedEl.classList.add('visible')");
     expect(sidePanelSource).toContain("role: 'status'");
     expect(sidePanelSource).toContain('You can still chat');
-    expect(sidePanelSource).toContain("chips.classList.toggle('hidden', restrictedPage)");
   });
 
-  it('cancels active cloud work before owner, new-chat, current-delete, and clear transitions', () => {
-    expect(sidePanelSource.match(/cancelCurrentManagedStream\(false\)/g)).toHaveLength(4);
+  it('cancels active cloud work before owner, new-chat, and current-delete transitions', () => {
+    expect(sidePanelSource.match(/cancelCurrentManagedStream\(false\)/g)).toHaveLength(3);
     expect(sidePanelSource).toContain('requestStreamCancellation(streamId)');
   });
 
   it('claims stream ownership before asynchronous page capture begins', () => {
     const branchStart = sidePanelSource.indexOf('if (slashCmd?.captureContext)');
     expect(
-      sidePanelSource.indexOf('const streamId = beginManagedStream()', branchStart),
+      sidePanelSource.indexOf('const streamId = beginManagedStream(_ctx.quickMode)', branchStart),
     ).toBeLessThan(sidePanelSource.indexOf('capturePageContext()', branchStart));
     expect(sidePanelSource).not.toContain('stream-${Date.now()}');
   });

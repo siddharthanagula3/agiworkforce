@@ -1,5 +1,6 @@
 const STRIPE_SUBSCRIPTION_ID = /^sub_[A-Za-z0-9]+$/;
 const STRIPE_CUSTOMER_ID = /^cus_[A-Za-z0-9]+$/;
+const STRIPE_CHECKOUT_SESSION_ID = /^cs_(?:test|live)_[A-Za-z0-9]+$/;
 
 export function isStripeSubscriptionId(value: unknown): value is string {
   return typeof value === 'string' && STRIPE_SUBSCRIPTION_ID.test(value);
@@ -7,4 +8,8 @@ export function isStripeSubscriptionId(value: unknown): value is string {
 
 export function isStripeCustomerId(value: unknown): value is string {
   return typeof value === 'string' && STRIPE_CUSTOMER_ID.test(value);
+}
+
+export function isStripeCheckoutSessionId(value: unknown): value is string {
+  return typeof value === 'string' && STRIPE_CHECKOUT_SESSION_ID.test(value);
 }

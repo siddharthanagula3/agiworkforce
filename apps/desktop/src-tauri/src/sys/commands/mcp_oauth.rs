@@ -2006,18 +2006,13 @@ const KNOWN_CONNECTOR_PROVIDERS: &[&str] = &[
 ///   there is no MCP server that could ever back it, so it can never count
 ///   as connected — regardless of stray credentials.
 /// - If it does have a mapping, it only counts as connected when that
-///   mapping's `server_name` is present in `configured_servers` — i.e.
-///   `mcp_connect_connector` actually succeeded and persisted a real server
-///   entry (see `mcp_connect_connector`'s `None` branch, which never touches
-///   `config.mcp_servers`, vs. its success path, which inserts into it and
-///   rolls back on failure). This is a fast, race-free check against the
-///   persisted config rather than the live `get_connected_servers()` set,
-///   which is briefly empty during every config reload (startup, `mcp_update_config`,
-///   dotfile add/remove) and would otherwise flash real, working connectors
-///   (GitHub, Slack, ...) as falsely disconnected.
+///   mapping's `server_name` is both configured and present in the live MCP
+///   client's connected set. Configuration is intentionally discovery-only:
+///   saving or enabling a server never means the user approved a connection.
 fn resolve_connected_providers(
     conn: &rusqlite::Connection,
     configured_servers: &std::collections::HashSet<String>,
+    live_connected_servers: &std::collections::HashSet<String>,
     known_providers: &[&str],
 ) -> Result<Vec<String>, String> {
     let mut providers = Vec::new();
@@ -2044,12 +2039,13 @@ fn resolve_connected_providers(
 
         match get_connector_mcp_mapping(provider) {
             Some(mapping) => {
-                if configured_servers.contains(mapping.server_name) {
+                if configured_servers.contains(mapping.server_name)
+                    && live_connected_servers.contains(mapping.server_name)
+                {
                     providers.push(provider.to_string());
                 }
-                // else: credentials exist but no MCP server was ever
-                // actually provisioned for this connector — do not
-                // fake-badge it as connected.
+                // Else: credentials/config may exist, but no approved live
+                // connection backs the connector — do not fake-badge it.
             }
             None => {
                 // No MCP-backed server exists for this id at all. Credential
@@ -2063,8 +2059,8 @@ fn resolve_connected_providers(
     // AUDIT-FIX (custom-connectors-never-show-connected-01): a user-added
     // remote MCP connector (CustomRemoteMcpConnectorDialog.tsx) is written
     // straight into `config.mcp_servers` under a `custom-<slug>` key via
-    // `mcp_update_config` — which reconnects enabled servers immediately, so
-    // by the time the dialog reports success the server is genuinely live.
+    // `mcp_update_config`, then connected only through the explicit approval
+    // action.
     // It never goes through `get_connector_mcp_mapping` or the OAuth/API-key
     // credential tables (there is no catalog id for it, nothing to look up
     // above), so the loop over `known_providers` can never surface it,
@@ -2072,10 +2068,12 @@ fn resolve_connected_providers(
     // ConnectorGallery's "Connected" section — permanently blind to it even
     // though it works in chat. It meets the identical bar the loop above
     // uses for catalog connectors (server name present in the persisted
-    // config), so include it here on that same basis.
-    let mut custom_server_names: Vec<String> = configured_servers
+    // config), so include it only when the live client confirms it is active.
+    let mut custom_server_names: Vec<String> = live_connected_servers
         .iter()
-        .filter(|name| name.starts_with(CUSTOM_MCP_SERVER_PREFIX))
+        .filter(|name| {
+            name.starts_with(CUSTOM_MCP_SERVER_PREFIX) && configured_servers.contains(*name)
+        })
         .cloned()
         .collect();
     custom_server_names.sort();
@@ -2095,7 +2093,17 @@ pub async fn mcp_list_connected_providers(
         let config = mcp_state.config.lock();
         config.mcp_servers.keys().cloned().collect()
     };
-    resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
+    let live_connected_servers = mcp_state
+        .client
+        .get_connected_servers()
+        .into_iter()
+        .collect();
+    resolve_connected_providers(
+        &conn,
+        &configured_servers,
+        &live_connected_servers,
+        KNOWN_CONNECTOR_PROVIDERS,
+    )
 }
 
 fn has_stored_tokens_for_provider(
@@ -2692,8 +2700,14 @@ mod tests {
             store_tokens(McpOAuthProvider::Google, &stored_tokens).expect("store tokens");
 
             let configured_servers = std::collections::HashSet::new();
-            resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
-                .expect("resolve connected providers")
+            let live_connected_servers = std::collections::HashSet::new();
+            resolve_connected_providers(
+                &conn,
+                &configured_servers,
+                &live_connected_servers,
+                KNOWN_CONNECTOR_PROVIDERS,
+            )
+            .expect("resolve connected providers")
         })
         .await;
 
@@ -2722,9 +2736,15 @@ mod tests {
 
             let mut configured_servers = std::collections::HashSet::new();
             configured_servers.insert("connector-gmail".to_string());
+            let live_connected_servers = configured_servers.clone();
 
-            resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
-                .expect("resolve connected providers")
+            resolve_connected_providers(
+                &conn,
+                &configured_servers,
+                &live_connected_servers,
+                KNOWN_CONNECTOR_PROVIDERS,
+            )
+            .expect("resolve connected providers")
         })
         .await;
 
@@ -2755,9 +2775,15 @@ mod tests {
             // unrelated name, an unmapped provider must still never resolve.
             let mut configured_servers = std::collections::HashSet::new();
             configured_servers.insert("connector-something-else".to_string());
+            let live_connected_servers = configured_servers.clone();
 
-            resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
-                .expect("resolve connected providers")
+            resolve_connected_providers(
+                &conn,
+                &configured_servers,
+                &live_connected_servers,
+                KNOWN_CONNECTOR_PROVIDERS,
+            )
+            .expect("resolve connected providers")
         })
         .await;
 
@@ -2776,9 +2802,15 @@ mod tests {
             let mut configured_servers = std::collections::HashSet::new();
             configured_servers.insert("custom-acme-mcp".to_string());
             configured_servers.insert("connector-something-else".to_string());
+            let live_connected_servers = configured_servers.clone();
 
-            resolve_connected_providers(&conn, &configured_servers, KNOWN_CONNECTOR_PROVIDERS)
-                .expect("resolve connected providers")
+            resolve_connected_providers(
+                &conn,
+                &configured_servers,
+                &live_connected_servers,
+                KNOWN_CONNECTOR_PROVIDERS,
+            )
+            .expect("resolve connected providers")
         })
         .await;
 
@@ -2786,6 +2818,26 @@ mod tests {
         // A non-custom, non-catalog server name must still never resolve —
         // this test doesn't loosen the existing unmapped-id guarantee.
         assert!(!providers.contains(&"connector-something-else".to_string()));
+    }
+
+    #[tokio::test]
+    async fn configured_custom_mcp_server_is_not_connected_until_live() {
+        let providers = with_temp_settings_db(|conn| async move {
+            let mut configured_servers = std::collections::HashSet::new();
+            configured_servers.insert("custom-saved-only".to_string());
+            let live_connected_servers = std::collections::HashSet::new();
+
+            resolve_connected_providers(
+                &conn,
+                &configured_servers,
+                &live_connected_servers,
+                KNOWN_CONNECTOR_PROVIDERS,
+            )
+            .expect("resolve connected providers")
+        })
+        .await;
+
+        assert!(!providers.contains(&"custom-saved-only".to_string()));
     }
 
     #[test]

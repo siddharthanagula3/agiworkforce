@@ -17,6 +17,8 @@ import {
 
 export type ChatConversationRow = {
   id: string;
+  /** Server-confirmed workspace scope; null is Personal. */
+  organization_id?: string | null;
   title: string;
   model: string | null;
   project_id: string | null;

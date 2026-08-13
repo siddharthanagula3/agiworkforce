@@ -26,7 +26,11 @@ import { storageFallback } from '../lib/storageFallback';
 import { cloudAccountAuth } from '../services/cloudAccountAuth';
 import type { CustomerInfo, SubscriptionInfo } from '../types/billing';
 import { PLAN_FEATURES, type PlanFeatures } from '../constants/planFeatures';
-import { type PlanTier, PLAN_DISPLAY_NAMES } from '../lib/cloudAccountTypes';
+import {
+  type PlanTier,
+  PLAN_DISPLAY_NAMES,
+  type SubscriptionSource,
+} from '../lib/cloudAccountTypes';
 import { isFreePlan, normalizeUIPlanTier, PLAN_DESCRIPTION } from '@agiworkforce/types';
 
 // =============================================================================
@@ -108,6 +112,8 @@ interface DesktopAccountShape {
   subscriptionStatus: SubscriptionStatus;
   subscriptionFetchStatus: SubscriptionFetchStatus;
   currentPeriodEnd: number | null;
+  subscriptionCancelAtPeriodEnd: boolean;
+  subscriptionSource: SubscriptionSource;
   stripeCustomerId?: string | null;
   featureFlags: Record<string, boolean>;
   credits?: CreditBalance | null;
@@ -163,6 +169,8 @@ interface AuthState {
   subscriptionStatus: SubscriptionStatus;
   subscriptionFetchStatus: SubscriptionFetchStatus;
   currentPeriodEnd: number | null;
+  subscriptionCancelAtPeriodEnd: boolean;
+  subscriptionSource: SubscriptionSource;
 
   // Tier flags (derived from plan)
   isPro: boolean;
@@ -301,6 +309,8 @@ interface AccountUpdates {
   subscriptionStatus: SubscriptionStatus;
   subscriptionFetchStatus: SubscriptionFetchStatus;
   currentPeriodEnd: number | null;
+  subscriptionCancelAtPeriodEnd: boolean;
+  subscriptionSource: SubscriptionSource;
   stripeCustomerId: string | null;
   featureFlags: Record<string, boolean>;
   credits: CreditBalance | null;
@@ -443,6 +453,8 @@ function getDefaultState(): AuthState {
     subscriptionStatus: 'none',
     subscriptionFetchStatus: 'idle',
     currentPeriodEnd: null,
+    subscriptionCancelAtPeriodEnd: false,
+    subscriptionSource: 'unknown',
     isPro: isPaidCloudPlan(plan),
     isEnterprise: plan === 'enterprise',
     featureFlags: {},
@@ -483,6 +495,8 @@ function getDefaultState(): AuthState {
       subscriptionStatus: 'none' as SubscriptionStatus,
       subscriptionFetchStatus: 'idle' as SubscriptionFetchStatus,
       currentPeriodEnd: null,
+      subscriptionCancelAtPeriodEnd: false,
+      subscriptionSource: 'unknown',
       stripeCustomerId: null,
       featureFlags: {},
       credits: null,
@@ -546,6 +560,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 subscriptionStatus: 'none' as SubscriptionStatus,
                 subscriptionFetchStatus: 'idle' as SubscriptionFetchStatus,
                 currentPeriodEnd: null,
+                subscriptionCancelAtPeriodEnd: false,
+                subscriptionSource: 'unknown' as SubscriptionSource,
                 isPro: false,
                 isEnterprise: false,
                 featureFlags: {},
@@ -572,6 +588,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                   subscriptionStatus: 'none' as SubscriptionStatus,
                   subscriptionFetchStatus: 'idle' as SubscriptionFetchStatus,
                   currentPeriodEnd: null,
+                  subscriptionCancelAtPeriodEnd: false,
+                  subscriptionSource: 'unknown' as SubscriptionSource,
                   stripeCustomerId: null,
                   featureFlags: {},
                   credits: null,
@@ -611,6 +629,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               subscriptionStatus: 'none',
               subscriptionFetchStatus: 'idle',
               currentPeriodEnd: null,
+              subscriptionCancelAtPeriodEnd: false,
+              subscriptionSource: 'unknown',
               isPro: false,
               isEnterprise: false,
               featureFlags: {},
@@ -637,6 +657,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 subscriptionStatus: 'none',
                 subscriptionFetchStatus: 'idle',
                 currentPeriodEnd: null,
+                subscriptionCancelAtPeriodEnd: false,
+                subscriptionSource: 'unknown',
                 stripeCustomerId: null,
                 featureFlags: {},
                 credits: null,
@@ -861,6 +883,18 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                   : identityChanged
                     ? null
                     : state.currentPeriodEnd;
+              const newSubscriptionCancelAtPeriodEnd =
+                updates.subscriptionCancelAtPeriodEnd !== undefined
+                  ? updates.subscriptionCancelAtPeriodEnd
+                  : identityChanged
+                    ? false
+                    : state.subscriptionCancelAtPeriodEnd;
+              const newSubscriptionSource =
+                updates.subscriptionSource !== undefined
+                  ? updates.subscriptionSource
+                  : identityChanged
+                    ? 'unknown'
+                    : state.subscriptionSource;
               const newStripeCustomerId =
                 updates.stripeCustomerId !== undefined
                   ? updates.stripeCustomerId
@@ -938,6 +972,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 subscriptionStatus: newSubscriptionStatus,
                 subscriptionFetchStatus: newSubscriptionFetchStatus,
                 currentPeriodEnd: newCurrentPeriodEnd,
+                subscriptionCancelAtPeriodEnd: newSubscriptionCancelAtPeriodEnd,
+                subscriptionSource: newSubscriptionSource,
                 stripeCustomerId: newStripeCustomerId,
                 featureFlags: newFeatureFlags,
                 credits: newCredits,
@@ -960,6 +996,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                   subscriptionStatus: newSubscriptionStatus,
                   subscriptionFetchStatus: newSubscriptionFetchStatus,
                   currentPeriodEnd: newCurrentPeriodEnd,
+                  subscriptionCancelAtPeriodEnd: newSubscriptionCancelAtPeriodEnd,
+                  subscriptionSource: newSubscriptionSource,
                   stripeCustomerId: newStripeCustomerId,
                   featureFlags: newFeatureFlags,
                   credits: newCredits,
@@ -1185,6 +1223,8 @@ export const selectAccount = (state: UnifiedAuthStore) => ({
   subscriptionStatus: state.subscriptionStatus,
   subscriptionFetchStatus: state.subscriptionFetchStatus,
   currentPeriodEnd: state.currentPeriodEnd,
+  subscriptionCancelAtPeriodEnd: state.subscriptionCancelAtPeriodEnd,
+  subscriptionSource: state.subscriptionSource,
   stripeCustomerId: state.stripeCustomerId,
   featureFlags: state.featureFlags,
   credits: state.credits,
@@ -1341,6 +1381,8 @@ export interface DesktopAccount {
   subscriptionStatus: SubscriptionStatus;
   subscriptionFetchStatus: SubscriptionFetchStatus;
   currentPeriodEnd: number | null;
+  subscriptionCancelAtPeriodEnd: boolean;
+  subscriptionSource: SubscriptionSource;
   stripeCustomerId?: string | null;
   featureFlags: Record<string, boolean>;
   credits?: CreditBalance | null;

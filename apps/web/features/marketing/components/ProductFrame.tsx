@@ -30,19 +30,32 @@ export interface ProductFrameProps {
   /** Real screenshot; replaces the scene when provided. */
   image?: ProductFrameImage;
   className?: string;
+  /** Trust route represented inside Desktop or Terminal mock content. */
+  routeMode?: 'local' | 'byok' | 'managed';
 }
 
-export function ProductFrame({ variant, title, badge, image, className }: ProductFrameProps) {
+export function ProductFrame({
+  variant,
+  title,
+  badge,
+  image,
+  className,
+  routeMode,
+}: ProductFrameProps) {
   if (image) {
     return <ImageWindow title={title} badge={badge} image={image} className={className} />;
   }
   switch (variant) {
     case 'desktop':
-      return <DesktopWindow title={title} badge={badge} className={className} />;
+      return (
+        <DesktopWindow title={title} badge={badge} className={className} routeMode={routeMode} />
+      );
     case 'web':
       return <WebWindow title={title} badge={badge} className={className} />;
     case 'terminal':
-      return <TerminalWindow title={title} badge={badge} className={className} />;
+      return (
+        <TerminalWindow title={title} badge={badge} className={className} routeMode={routeMode} />
+      );
     case 'browser':
       return <SidePanelCard title={title} badge={badge} className={className} />;
     case 'editor':

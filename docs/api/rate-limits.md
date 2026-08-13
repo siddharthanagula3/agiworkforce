@@ -2,24 +2,31 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-09
+Last updated: 2026-08-13
 
 Every number below is read from `apps/web/lib/rate-limit.ts` (`rateLimitConfigs`)
 and pinned by
 `apps/web/app/api/llm/v1/__tests__/developer-api-contract.test.ts`, so the table
 cannot drift from the limiter without a red test.
 
-## Base URL
+## Base URLs
 
 ```
 https://agiworkforce.com/api/llm/v1
 ```
 
-`api.agiworkforce.com` is advertised but is **not** a working base URL: the host
-rewrites in `vercel.json` are inert for a Next.js project, so `/v1/*` never
-reaches a route and `apps/web/proxy.ts` bounces the request (307) to the apex,
-where it 404s. Tracked as ExecutionPlan #62; until that lands, clients must use
-the path above.
+The complete first-party API uses the base above. The checked-in deployment
+contract also exposes these OpenAI-compatible aliases at
+`https://api.agiworkforce.com`: `/v1/models`, `/v1/chat/completions`,
+`/v1/embeddings`, `/v1/audio/transcriptions`, and `/v1/credits/balance`.
+
+Those aliases are owned by `apps/web/lib/api-host-route-contract.ts`; both
+Next's host rewrite table and Proxy's pass-through decision consume that same
+list. The prior `vercel.json` copy was removed because Vercel ignored it for
+this Next.js project. The source correction still requires a production deploy
+and a live authenticated request before the API hostname can be treated as
+release-verified; use the complete base URL above until that verification is
+recorded.
 
 ## Limits
 

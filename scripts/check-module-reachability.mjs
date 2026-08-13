@@ -401,7 +401,6 @@ const tsTargets = [
       'apps/desktop/src/lib/retry.ts',
       'apps/desktop/src/lib/skillLoader.ts',
       'apps/desktop/src/lib/streamContentRuntime.ts',
-      'apps/desktop/src/lib/tauri-electron/bridgeContract.ts',
       'apps/desktop/src/lib/tauri-electron/core.ts',
       'apps/desktop/src/lib/tauri-electron/deep-link.ts',
       'apps/desktop/src/lib/tauri-electron/dialog.ts',

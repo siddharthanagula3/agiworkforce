@@ -78,6 +78,32 @@ describe('createChatModelInfo', () => {
     });
   });
 
+  it('uses provider-reported runtime capabilities for a dynamic local model', () => {
+    expect(
+      createChatModelInfo({
+        id: 'fixture-local-runtime-model',
+        name: 'Local Runtime Fixture',
+        provider: 'ollama',
+        isLocal: true,
+        isByok: false,
+        runtimeCapabilities: {
+          tools: true,
+          vision: false,
+          thinking: true,
+          contextWindow: 8192,
+        },
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        supportsTools: true,
+        supportsVision: false,
+        supportsThinking: true,
+        contextWindow: 8192,
+        metadataSource: 'runtime',
+      }),
+    );
+  });
+
   it('carries current live registry availability into the selector DTO', () => {
     expect(
       createChatModelInfo({

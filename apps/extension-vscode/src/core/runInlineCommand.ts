@@ -10,6 +10,7 @@ import { Config } from '../platform/config';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../platform/applyEdit';
 import * as telemetry from './telemetry';
+import { showCloudUtilityErrorActions } from './cloudUtilityErrorActions';
 
 export type InlineCommand = 'explain' | 'fix' | 'refactor' | 'tests' | 'docs';
 
@@ -22,28 +23,6 @@ export function commandLabel(command: string): string {
     docs: 'Generate Docs',
   };
   return labels[command] ?? command;
-}
-
-/**
- * Whether a failure is one that setting an API key would fix.
- *
- * Deliberately narrow: anything unrecognised is treated as *not* a credential
- * problem, because offering the key dialog for an unrelated failure is the
- * defect being fixed. A missed auth case costs one extra click through
- * settings; a false positive sends the user to change working credentials.
- */
-export function isCredentialFailure(message: string): boolean {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes('api key') ||
-    normalized.includes('apikey') ||
-    normalized.includes('unauthorized') ||
-    normalized.includes('unauthenticated') ||
-    normalized.includes('authentication') ||
-    normalized.includes('invalid_api_key') ||
-    normalized.includes('401') ||
-    normalized.includes('403')
-  );
 }
 
 export async function runInlineCommand(
@@ -168,31 +147,11 @@ export async function runInlineCommand(
           return;
         }
 
-        const message = err instanceof Error ? err.message : String(err);
-        telemetry.logError(err instanceof Error ? err : message, { command });
-
-        // Every failure used to offer a single "Set API Key" button, so a
-        // network drop or a rate limit told the user to fix their credentials —
-        // the action contradicted the message it sat next to. Offer the key
-        // dialog only for failures a key can actually resolve.
-        if (isCredentialFailure(message)) {
-          void vscode.window
-            .showErrorMessage(`AGI Workforce error: ${message}`, 'Set API Key')
-            .then((choice) => {
-              if (choice === 'Set API Key') {
-                void vscode.commands.executeCommand('agi-workforce.setApiKey');
-              }
-            });
-          return;
-        }
-
-        void vscode.window
-          .showErrorMessage(`AGI Workforce error: ${message}`, 'Retry')
-          .then((choice) => {
-            if (choice === 'Retry') {
-              void runInlineCommand(context, command, targetRange);
-            }
-          });
+        telemetry.logError(err instanceof Error ? err : String(err), { command });
+        await showCloudUtilityErrorActions(err, {
+          title: `AGI Workforce: ${commandLabel(command)} failed`,
+          retry: () => runInlineCommand(context, command, targetRange),
+        });
       }
     },
   );

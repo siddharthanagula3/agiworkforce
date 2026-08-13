@@ -101,7 +101,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const syncInlineCompletionProvider = providerState?.syncInlineCompletionProvider;
 
   // One Rust app-server per workspace root. The pool is lazy, so activation
-  // never launches a process until a local developer session is actually used.
+  // never launches a process until a workspace developer session is actually used.
   const localRuntimes = new LocalRuntimePool(
     (cwd) =>
       new LocalRuntimeClient({
@@ -156,7 +156,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   function updateStatusBar(): void {
     const model = normalizeConfiguredModelId(Config.model());
-    statusBar.text = buildExtensionStatusBarText(model, Config.agentMode(), Config.mcpEnabled());
+    statusBar.text = buildExtensionStatusBarText(model, Config.agentMode());
     statusBar.show();
   }
 
@@ -198,7 +198,6 @@ export function activate(context: vscode.ExtensionContext): void {
         e.affectsConfiguration('agiWorkforce.agent.planMode') ||
         e.affectsConfiguration('agiWorkforce.agent.mode') ||
         e.affectsConfiguration('agiWorkforce.agent.effort') ||
-        e.affectsConfiguration('agiWorkforce.mcp.enabled') ||
         e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
         e.affectsConfiguration('agiWorkforce.desktopBridge.port')
       ) {
@@ -230,7 +229,6 @@ export function activate(context: vscode.ExtensionContext): void {
 
       if (
         e.affectsConfiguration('agiWorkforce.inlineCompletions.enabled') ||
-        e.affectsConfiguration('agiWorkforce.mcp.enabled') ||
         e.affectsConfiguration('agiWorkforce.desktopBridge.enabled') ||
         e.affectsConfiguration('agiWorkforce.desktopBridge.port')
       ) {

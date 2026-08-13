@@ -17,6 +17,7 @@ static CAPABILITY_CACHE: LazyLock<RwLock<HashMap<String, ModelCapabilities>>> =
 pub struct ModelCapabilities {
     pub supports_tools: bool,
     pub supports_vision: bool,
+    pub supports_thinking: bool,
     pub supports_completion: bool,
     pub supports_embedding: bool,
     pub context_length: usize,
@@ -149,6 +150,7 @@ fn capabilities_from_show(show: &OllamaShowResponse) -> ModelCapabilities {
     ModelCapabilities {
         supports_tools: declares("tools") || template_has_tools,
         supports_vision: declares("vision"),
+        supports_thinking: declares("thinking"),
         supports_completion: declares("completion"),
         supports_embedding: declares("embedding"),
         context_length,
@@ -161,6 +163,7 @@ pub fn default_capabilities(_model: &str) -> ModelCapabilities {
     ModelCapabilities {
         supports_tools: false,
         supports_vision: false,
+        supports_thinking: false,
         supports_completion: false,
         supports_embedding: false,
         context_length: 4096,
@@ -240,6 +243,7 @@ mod tests {
                 "tools".to_string(),
                 "vision".to_string(),
                 "embedding".to_string(),
+                "thinking".to_string(),
             ],
             model_info: Some(serde_json::json!({
                 "fixture.context_length": 32_768
@@ -248,6 +252,7 @@ mod tests {
         let caps = capabilities_from_show(&show);
         assert!(caps.supports_tools);
         assert!(caps.supports_vision);
+        assert!(caps.supports_thinking);
         assert!(caps.supports_completion);
         assert!(caps.supports_embedding);
         assert_eq!(caps.context_length, 32_768);
@@ -263,6 +268,7 @@ mod tests {
         let caps = capabilities_from_show(&show);
         assert!(caps.supports_tools);
         assert!(!caps.supports_vision);
+        assert!(!caps.supports_thinking);
         assert!(caps.supports_completion);
         assert!(!caps.supports_embedding);
     }
@@ -273,6 +279,7 @@ mod tests {
             let caps = default_capabilities(model);
             assert!(!caps.supports_tools);
             assert!(!caps.supports_vision);
+            assert!(!caps.supports_thinking);
             assert!(!caps.supports_completion);
             assert!(!caps.supports_embedding);
             assert_eq!(caps.context_length, 4096);
@@ -339,6 +346,7 @@ mod tests {
                 ModelCapabilities {
                     supports_tools: true,
                     supports_vision: false,
+                    supports_thinking: false,
                     supports_completion: true,
                     supports_embedding: false,
                     context_length: 8192,
@@ -349,6 +357,7 @@ mod tests {
                 ModelCapabilities {
                     supports_tools: false,
                     supports_vision: true,
+                    supports_thinking: false,
                     supports_completion: true,
                     supports_embedding: false,
                     context_length: 4096,
@@ -395,6 +404,7 @@ mod tests {
         let original = ModelCapabilities {
             supports_tools: true,
             supports_vision: false,
+            supports_thinking: true,
             supports_completion: true,
             supports_embedding: false,
             context_length: 16384,
@@ -402,6 +412,7 @@ mod tests {
         let cloned = original.clone();
         assert_eq!(original.supports_tools, cloned.supports_tools);
         assert_eq!(original.supports_vision, cloned.supports_vision);
+        assert_eq!(original.supports_thinking, cloned.supports_thinking);
         assert_eq!(original.supports_completion, cloned.supports_completion);
         assert_eq!(original.supports_embedding, cloned.supports_embedding);
         assert_eq!(original.context_length, cloned.context_length);

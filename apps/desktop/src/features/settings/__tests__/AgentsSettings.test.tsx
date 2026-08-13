@@ -1,8 +1,8 @@
 /**
  * H44 — AgentsSettings tests
  *
- * Covers: render with default settings, approval mode radio buttons,
- * custom agent CRUD mounting, and execution preference updates.
+ * Covers the execution preferences and approval override that are backed by
+ * the live runtime, plus the custom-agent CRUD surface.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -30,11 +30,7 @@ global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 // ── Store mock ────────────────────────────────────────────────────────────────
 
 const mockSetAutoApproveTools = vi.fn().mockResolvedValue(undefined);
-const mockSetAlwaysUseAgentMode = vi.fn();
 const mockSetMaxTimeoutMinutes = vi.fn();
-const mockSetEnableCheckpointing = vi.fn();
-const mockSetCheckpointInterval = vi.fn();
-const mockSetAutoResumeOnRestart = vi.fn();
 const mockSetEnableTimeoutWarnings = vi.fn();
 
 let mockChatPreferences = {
@@ -58,11 +54,7 @@ vi.mock('../../../stores/settingsStore', () => ({
       chatPreferences: mockChatPreferences,
       executionPreferences: mockExecutionPreferences,
       setAutoApproveTools: mockSetAutoApproveTools,
-      setAlwaysUseAgentMode: mockSetAlwaysUseAgentMode,
       setMaxTimeoutMinutes: mockSetMaxTimeoutMinutes,
-      setEnableCheckpointing: mockSetEnableCheckpointing,
-      setCheckpointInterval: mockSetCheckpointInterval,
-      setAutoResumeOnRestart: mockSetAutoResumeOnRestart,
       setEnableTimeoutWarnings: mockSetEnableTimeoutWarnings,
     }),
   ),
@@ -97,11 +89,6 @@ describe('AgentsSettings', () => {
       expect(() => render(<AgentsSettings />)).not.toThrow();
     });
 
-    it('shows Agent Configuration section heading', () => {
-      render(<AgentsSettings />);
-      expect(screen.getByText(/agent configuration/i)).toBeInTheDocument();
-    });
-
     it('shows Execution section heading', () => {
       render(<AgentsSettings />);
       expect(screen.getByText(/execution/i)).toBeInTheDocument();
@@ -112,74 +99,11 @@ describe('AgentsSettings', () => {
       expect(screen.getByText(/^custom agents$/i)).toBeInTheDocument();
     });
 
-    it('shows three approval mode radio options', () => {
-      render(<AgentsSettings />);
-      expect(screen.getByText(/ask before actions/i)).toBeInTheDocument();
-      expect(screen.getByText(/auto-approve safe actions/i)).toBeInTheDocument();
-      // "AGI Mode" label text (the bypass-all approval option)
-      expect(screen.getAllByText(/agi mode/i).length).toBeGreaterThan(0);
-    });
-
     it('does not expose unproven sub-agent or team toggles in demo settings', () => {
       render(<AgentsSettings />);
       expect(screen.queryByText(/sub-agents & teams/i)).not.toBeInTheDocument();
       expect(screen.queryByRole('switch', { name: /enable sub-agents/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('switch', { name: /enable agent teams/i })).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Always Use Agent Mode toggle', () => {
-    it('renders with checked=false by default', () => {
-      render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /always use agent mode/i });
-      expect(toggle).toBeInTheDocument();
-      expect(toggle).toHaveAttribute('aria-checked', 'false');
-    });
-
-    it('calls setAlwaysUseAgentMode when toggled', async () => {
-      render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /always use agent mode/i });
-      await userEvent.click(toggle);
-      expect(mockSetAlwaysUseAgentMode).toHaveBeenCalledWith(true);
-    });
-  });
-
-  describe('Approval mode radio buttons', () => {
-    it('"Ask before actions" radio is checked when both flags are false', () => {
-      render(<AgentsSettings />);
-      // The "Ask before actions" radio is the first in the approval-mode group.
-      // We locate it by the label text of its parent label element.
-      const radios = screen.getAllByRole('radio');
-      const askRadio = radios.find((r) =>
-        r.closest('label')?.textContent?.toLowerCase().includes('ask before actions'),
-      );
-      expect(askRadio).toBeDefined();
-      if (askRadio) {
-        expect((askRadio as HTMLInputElement).checked).toBe(true);
-      }
-    });
-
-    it('clicking "AGI Mode" calls setAutoApproveTools(true)', async () => {
-      render(<AgentsSettings />);
-      // Find the "AGI Mode" radio (the bypass-all approval option).
-      const radios = screen.getAllByRole('radio');
-      const agiModeRadio = radios.find((r) =>
-        r.closest('label')?.textContent?.toLowerCase().includes('agi mode'),
-      );
-      expect(agiModeRadio).toBeDefined();
-      await userEvent.click(agiModeRadio!);
-      expect(mockSetAutoApproveTools).toHaveBeenCalledWith(true);
-    });
-
-    it('clicking "Auto-approve safe actions" calls setAlwaysUseAgentMode(true)', async () => {
-      render(<AgentsSettings />);
-      const radios = screen.getAllByRole('radio');
-      const safeRadio = radios.find((r) =>
-        r.closest('label')?.textContent?.toLowerCase().includes('safe actions'),
-      );
-      expect(safeRadio).toBeDefined();
-      await userEvent.click(safeRadio!);
-      expect(mockSetAlwaysUseAgentMode).toHaveBeenCalledWith(true);
     });
   });
 
@@ -189,41 +113,21 @@ describe('AgentsSettings', () => {
       expect(screen.getByText('60m')).toBeInTheDocument();
     });
 
-    it('shows Checkpointing switch as unchecked by default', () => {
+    it('does not expose dormant checkpoint or restart controls', () => {
       render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /enable checkpointing/i });
-      expect(toggle).toHaveAttribute('aria-checked', 'false');
-    });
-
-    it('calls setEnableCheckpointing(true) when checkpointing is toggled on', async () => {
-      render(<AgentsSettings />);
-      const toggle = screen.getByRole('switch', { name: /enable checkpointing/i });
-      await userEvent.click(toggle);
-      expect(mockSetEnableCheckpointing).toHaveBeenCalledWith(true);
-    });
-
-    it('does not show checkpoint interval slider when checkpointing is disabled', () => {
-      render(<AgentsSettings />);
-      // "Checkpoint Interval" label only appears when checkpointing is enabled
+      expect(
+        screen.queryByRole('switch', { name: /enable checkpointing/i }),
+      ).not.toBeInTheDocument();
       expect(screen.queryByText(/checkpoint interval/i)).not.toBeInTheDocument();
-    });
-
-    it('shows checkpoint interval slider when checkpointing is enabled', () => {
-      mockExecutionPreferences = { ...mockExecutionPreferences, enableCheckpointing: true };
-      render(<AgentsSettings />);
-      expect(screen.getByText(/checkpoint interval/i)).toBeInTheDocument();
+      expect(
+        screen.queryByRole('switch', { name: /auto-resume on restart/i }),
+      ).not.toBeInTheDocument();
     });
 
     it('shows Timeout Warnings switch', () => {
       render(<AgentsSettings />);
       const toggle = screen.getByRole('switch', { name: /timeout warnings/i });
       expect(toggle).toBeInTheDocument();
-    });
-
-    it('shows auto-resume switch disabled when checkpointing is off', () => {
-      render(<AgentsSettings />);
-      const autoResumeSwitch = screen.getByRole('switch', { name: /auto-resume on restart/i });
-      expect(autoResumeSwitch).toBeDisabled();
     });
   });
 

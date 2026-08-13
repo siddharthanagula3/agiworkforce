@@ -2155,6 +2155,39 @@
   box-shadow: -40px 0 100px var(--agi-shadow);
   animation: agi-drawer-in var(--agi-dur-base) var(--agi-ease-out);
 }
+[data-design='agi'] .agi-top-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+  gap: 16px;
+}
+[data-design='agi'] .agi-top-mobile-header .agi-top-mobile-group {
+  margin-top: 0;
+}
+[data-design='agi'] .agi-top-mobile-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  color: var(--agi-ink-muted);
+  background: var(--agi-surface-wash);
+  border: 1px solid var(--agi-rule);
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    color var(--agi-dur-fast) var(--agi-ease-out),
+    background var(--agi-dur-fast) var(--agi-ease-out),
+    border-color var(--agi-dur-fast) var(--agi-ease-out);
+}
+[data-design='agi'] .agi-top-mobile-close:hover,
+[data-design='agi'] .agi-top-mobile-close:focus-visible {
+  color: var(--agi-ink);
+  background: var(--agi-surface-raised);
+  border-color: var(--agi-rule-strong);
+}
 [data-design='agi'] .agi-top-mobile-products {
   display: flex;
   flex-direction: column;

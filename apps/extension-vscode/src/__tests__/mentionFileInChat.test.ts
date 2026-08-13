@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 import { activate } from '../extension';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
+import { ContextItem, ContextPanelProvider } from '../features/trees';
 
 function makeMockContext(): vscode.ExtensionContext {
   return {
@@ -114,6 +115,29 @@ describe('agi-workforce.mentionFileInChat', () => {
     expect(chatCall).toBeDefined();
     const opts = chatCall![1] as { query: string };
     expect(opts.query).toBe('@agi #file:src/bar.ts ');
+  });
+
+  it('accepts the ContextItem passed by the context-tree menu', async () => {
+    const handler = handlers.get('agi-workforce.mentionFileInChat')!;
+    const item = new ContextItem('/mock/workspace/src/context-item.ts', true, 128, 'typescript');
+    vi.spyOn(vscode.workspace, 'asRelativePath').mockReturnValue('src/context-item.ts');
+
+    await handler(item);
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('workbench.action.chat.open', {
+      query: '@agi #file:src/context-item.ts ',
+    });
+  });
+
+  it('removes the ContextItem file rather than treating the tree item as a Uri', async () => {
+    const removeFile = vi.spyOn(ContextPanelProvider.prototype, 'removeFile');
+    const handler = handlers.get('agi-workforce.removeFromContext')!;
+    const item = new ContextItem('/mock/workspace/src/pinned.ts', true, 64, 'typescript');
+
+    await handler(item);
+
+    expect(removeFile).toHaveBeenCalledOnce();
+    expect(removeFile.mock.calls[0]?.[0].fsPath).toBe('/mock/workspace/src/pinned.ts');
   });
 
   it('uses the native #selection reference for a selected range in the target editor', async () => {

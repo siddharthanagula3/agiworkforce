@@ -16,6 +16,7 @@ import * as vscode from 'vscode';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
 import { applyLlmEdit } from '../platform/applyEdit';
 import { logEvent, logError, TelemetryEvents } from '../core/telemetry';
+import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -140,16 +141,11 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
         cancelSource.dispose();
         if (err instanceof Error && err.message.includes('CANCELLED')) return;
 
-        const message = err instanceof Error ? err.message : String(err);
-        logError(err instanceof Error ? err : message, { command: 'explainError' });
-
-        vscode.window
-          .showErrorMessage(`AGI Workforce error: ${message}`, 'Set API Key')
-          .then((choice) => {
-            if (choice === 'Set API Key') {
-              vscode.commands.executeCommand('agi-workforce.setApiKey');
-            }
-          });
+        logError(err instanceof Error ? err : String(err), { command: 'explainError' });
+        await showCloudUtilityErrorActions(err, {
+          title: 'AGI Workforce: Explain Error failed',
+          retry: () => explainErrorCommand(context),
+        });
       }
     },
   );
@@ -225,16 +221,11 @@ async function askAboutCodeCommand(context: vscode.ExtensionContext): Promise<vo
         cancelSource.dispose();
         if (err instanceof Error && err.message.includes('CANCELLED')) return;
 
-        const message = err instanceof Error ? err.message : String(err);
-        logError(err instanceof Error ? err : message, { command: 'askAboutCode' });
-
-        vscode.window
-          .showErrorMessage(`AGI Workforce error: ${message}`, 'Set API Key')
-          .then((choice) => {
-            if (choice === 'Set API Key') {
-              vscode.commands.executeCommand('agi-workforce.setApiKey');
-            }
-          });
+        logError(err instanceof Error ? err : String(err), { command: 'askAboutCode' });
+        await showCloudUtilityErrorActions(err, {
+          title: 'AGI Workforce: Ask About Code failed',
+          retry: () => askAboutCodeCommand(context),
+        });
       }
     },
   );

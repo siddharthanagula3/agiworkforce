@@ -22,6 +22,14 @@ let mockChatInputOnOpenCompare: (() => void) | undefined;
 let mockChatInputSelectedSkillName: string | undefined;
 
 jest.mock('expo-router', () => ({
+  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
+  // @react-navigation/native: the monorepo resolves several copies of that
+  // package and importing from it crashed the app at launch. The mock has to
+  // follow the production import or every screen using them throws here.
+  useFocusEffect: (cb: () => void | (() => void)) => {
+    const React = require('react');
+    React.useEffect(() => cb(), []);
+  },
   useRouter: () => ({ push: mockPush }),
   useNavigation: () => ({}),
 }));
@@ -259,6 +267,28 @@ describe('Chat tab mode toggle', () => {
     expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
   });
 
+  it('does not overwrite a persisted Cloud preference while Clerk is still loading', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: false });
+    useAuthStore.setState({
+      isClerkLoaded: false,
+      isClerkSignedIn: false,
+      clerkUserId: null,
+    });
+
+    render(<ChatTabScreen />);
+
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+
+    // A definitive signed-out result still closes the Cloud boundary.
+    act(() => {
+      useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
+    });
+    await waitFor(() => {
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
+    });
+  });
+
   it('binds the new-chat draft to Local or the signed-in Cloud owner', () => {
     const localScreen = render(<ChatTabScreen />);
     expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
@@ -432,6 +462,11 @@ describe('Chat tab mode toggle', () => {
       expect(mockGenerateImage).toHaveBeenCalledWith({
         prompt: 'a red circle on a white background',
         model: expect.any(String),
+        // The route accepted and validated `aspect_ratio` all along, but no
+        // surface sent one, so every generated image silently took the legacy
+        // square default. Assert it reaches the wire so the picker cannot
+        // regress to decoration.
+        aspect_ratio: expect.any(String),
       });
     });
     await waitFor(() => {
@@ -479,6 +514,7 @@ describe('Chat tab mode toggle', () => {
     expect(mockGenerateImage).toHaveBeenCalledWith({
       prompt: 'Create an image of a blue observatory on Mars',
       model: expect.any(String),
+      aspect_ratio: expect.any(String),
     });
   });
 

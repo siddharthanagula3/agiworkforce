@@ -5,6 +5,7 @@
  * Mobile-specific fields are added via `MobileChatMessage`.
  */
 
+import type { InteractiveCard } from '@agiworkforce/types';
 import type {
   ArtifactManifest,
   ChatMessage as CanonicalChatMessage,
@@ -175,6 +176,13 @@ export interface ChatMessage extends Omit<CanonicalChatMessage, 'attachments'> {
   videoGenPrompt?: string;
   /** Citations from RAG or web search */
   citations?: Array<{ url: string; title?: string; snippet?: string }>;
+  /**
+   * Server-produced interactive cards for this turn (map search today).
+   * Validated by `parseInteractiveCardDelta` before it lands here, so an
+   * unrecognised kind arrives as `recognized: false` carrying its authored
+   * fallback text rather than being dropped from the answer.
+   */
+  interactiveCards?: InteractiveCard[];
   /** True when the message is waiting in the offline queue to be sent */
   isQueued?: boolean;
   /** ID of the corresponding offlineQueue entry (cleared after successful send) */

@@ -187,7 +187,7 @@ export default function CompanionScreen() {
     [approvalModalReject, currentApproval],
   );
 
-  if (!FEATURES.companion) return <FeatureUnavailable feature="Desktop companion" />;
+  if (!FEATURES.companion) return <FeatureUnavailable feature="Remote" />;
 
   if (showScanner) {
     return <QRScanner onScan={handleScan} onClose={() => setShowScanner(false)} />;
@@ -208,7 +208,7 @@ export default function CompanionScreen() {
           <ArrowLeft size={20} color={colors.textSecondary} />
         </Pressable>
         <Text variant="subheading" className="ml-2 flex-1">
-          Desktop Companion
+          Remote
         </Text>
         <Pressable
           onPress={() => setShowDemo(true)}

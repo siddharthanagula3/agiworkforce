@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { isTauri } from '../../lib/tauri-mock';
+import { isElectronHost, isTauri } from '../../lib/tauri-mock';
 import { useToast } from '../../hooks/useToast';
 import { useUpdater } from './useUpdater';
 import { useUpdaterStore, waitForUpdaterHydration } from '../../stores/updaterStore';
@@ -9,7 +9,7 @@ import { UpdateDialog } from './UpdateDialog';
 interface UpdateCheckerProps {
   /** Delay before checking for updates on startup (ms) */
   startupDelay?: number;
-  /** Callback when user clicks "Update Now" in toast */
+  /** Callback when the user opens the available-update flow. */
   onUpdateNow?: () => void;
 }
 
@@ -49,7 +49,7 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
               Later
             </ToastAction>
             <ToastAction
-              altText="Update Now"
+              altText={isElectronHost ? 'Download Installer' : 'Update Now'}
               onClick={() => {
                 if (onUpdateNow) {
                   onUpdateNow();
@@ -59,7 +59,7 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
               }}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              Update Now
+              {isElectronHost ? 'Download Installer' : 'Update Now'}
             </ToastAction>
           </div>
         ),
@@ -71,7 +71,7 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
   // Check for updates on startup
   useEffect(() => {
     // Skip update check in web mode
-    if (!isTauri) {
+    if (!isTauri && !isElectronHost) {
       return;
     }
 
@@ -140,7 +140,7 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
     showUpdateToast,
   ]);
 
-  // Show dialog when update is available and user clicks "Update Now"
+  // Show the appropriate Tauri install or Electron installer dialog.
   if (status === 'available' && updateInfo) {
     return <UpdateDialog open={dialogOpen} onOpenChange={setDialogOpen} />;
   }

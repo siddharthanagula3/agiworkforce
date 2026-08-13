@@ -50,17 +50,15 @@ function livePreviewKind(artifact: Artifact): PreviewableKind | null {
 }
 
 /**
- * Returns true if this artifact type/language qualifies for the preview/source
- * toggle. For non-previewable artifacts we go straight to source view with no
- * toggle shown.
+ * Returns true if this artifact language qualifies for the preview/source
+ * toggle. Remote PDF/Office files have a secure download flow but no in-app
+ * renderer, so offering a Preview segment for them would lead to a generic
+ * source-only notice instead of a preview. They go straight to the generated
+ * file details and Download/Share controls.
  */
 function isPreviewable(artifact: Artifact): boolean {
   const lang = artifact.language?.toLowerCase() ?? '';
-  if (PREVIEWABLE_LANGUAGES.has(lang)) return true;
-  // pdf/docx by MIME when there's a generatedFile
-  const mime = artifact.generatedFile?.mimeType?.toLowerCase() ?? '';
-  if (mime === 'application/pdf' || mime.includes('officedocument')) return true;
-  return false;
+  return PREVIEWABLE_LANGUAGES.has(lang);
 }
 
 /**
@@ -113,7 +111,9 @@ export function ArtifactFullScreen({
         fallbackKind: artifact?.generatedFile?.kind ?? artifact?.language ?? artifact?.type,
         fallbackMimeType: artifact?.generatedFile?.mimeType,
         fallbackUri: artifact?.generatedFile?.uri,
-        fallbackStatus: artifact?.computeSession?.status,
+        fallbackStatus:
+          (typeof artifact?.metadata?.status === 'string' ? artifact.metadata.status : undefined) ??
+          artifact?.computeSession?.status,
       }),
     [artifact],
   );
@@ -370,23 +370,29 @@ export function ArtifactFullScreen({
               </Pressable>
             ) : null}
 
-            {/* Copy */}
-            <Pressable
-              onPress={handleCopy}
-              style={{
-                padding: 8,
-                borderRadius: 8,
-                backgroundColor: colors.neutralSurface,
-              }}
-              accessibilityLabel="Copy content"
-              accessibilityRole="button"
-            >
-              {copied ? (
-                <Check size={17} color={colors.agentSuccess} />
-              ) : (
-                <Copy size={17} color={colors.textSecondary} />
-              )}
-            </Pressable>
+            {/* Copy only when there is actual source text. Generated-file
+                descriptors intentionally carry empty content because their
+                bytes live behind the authenticated file route; a Copy button
+                there used to succeed while placing an empty string on the
+                clipboard. */}
+            {artifact.content.trim().length > 0 ? (
+              <Pressable
+                onPress={handleCopy}
+                style={{
+                  padding: 8,
+                  borderRadius: 8,
+                  backgroundColor: colors.neutralSurface,
+                }}
+                accessibilityLabel="Copy content"
+                accessibilityRole="button"
+              >
+                {copied ? (
+                  <Check size={17} color={colors.agentSuccess} />
+                ) : (
+                  <Copy size={17} color={colors.textSecondary} />
+                )}
+              </Pressable>
+            ) : null}
 
             {/* Close */}
             <Pressable

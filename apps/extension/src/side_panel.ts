@@ -1,5 +1,8 @@
 import { QueueFullError, type AgentActivityToolEntry } from '@agiworkforce/client-runtime';
-import type { ManagedCloudAgentRunReference } from '@agiworkforce/cloud-contracts';
+import type {
+  GeneratedFileWire,
+  ManagedCloudAgentRunReference,
+} from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { getExtensionTokensCssAuto } from './tokens';
 import { t } from './i18n';
@@ -9,12 +12,15 @@ import {
   formatUsageRemaining,
   formatUsageResetIn,
   getBillingPlanPricing,
+  getModelMetadataById,
+  INTERACTIVE_CARDS_MAX_PER_MESSAGE,
   EFFORT_LABEL,
   isEntitledSubscriptionStatus,
   normalizeModelId,
   PROVIDER_DISPLAY,
   resolveModelEffort,
   type Effort,
+  type InteractiveCard,
   type ProviderId,
   type RoutingTaskType,
 } from '@agiworkforce/types';
@@ -31,11 +37,14 @@ import {
   filterConversations,
   getActiveConversation,
   getConversation,
+  isCloudPersistenceEligible,
   listConversations,
+  pendingCloudMessages,
   deleteConversation,
   persistConversationSeed,
   upsertConversation,
   startNewConversation,
+  BROWSER_STORE_KEY,
   type ConversationEntry,
 } from './features/background/conversation-history';
 import {
@@ -66,24 +75,18 @@ import {
 import { setupVoiceInput } from './features/side-panel/voice';
 import { markOnboardingComplete, isOnboardingComplete } from './features/side-panel/onboarding';
 import { getChromeSurfaceAvailability } from './features/side-panel/surface-policy';
-import {
-  createActiveWebMCPPageIdentity,
-  isWebMCPUpdateHintForActivePage,
-  selectWebMCPToolsForActivePage,
-  type ActiveWebMCPPageIdentity,
-} from './features/side-panel/webmcp-tools';
 import { ManagedCloudOwnerRequestFence } from './features/side-panel/managed-owner-request-fence';
 import { ALLOWED_BRIDGE_HOSTS, validateBridgeUrl, sanitizePageText } from './background/policy';
 import {
   FilePen,
   Loader2,
   Folder,
-  Plug,
   ArrowUp,
   Clock,
   Trash2,
   MessageSquare,
   Monitor,
+  Globe,
   Mic,
   Camera,
   FileImage,
@@ -150,6 +153,8 @@ import {
   sameManagedCloudOwner,
   type ManagedCloudOwner,
 } from './features/cloud-bridge/managedCloudAuthority';
+import { normalizeShortcutStartUrl } from './features/shortcuts/origin';
+import { withTimeout } from './utils';
 
 const extensionSendQueue = getExtensionSendQueue();
 
@@ -197,6 +202,152 @@ let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
 const scheduledTasksRequestFence = new ManagedCloudOwnerRequestFence();
 const scheduledTaskCreateRequestFence = new ManagedCloudOwnerRequestFence();
+/**
+ * Account-backed chat mirroring, renderer side.
+ *
+ * The panel never fetches. It only (a) stamps provenance at dispatch, (b)
+ * nudges the service worker, and (c) paints what the stored `cloudSync` record
+ * says. The worker owns provenance enforcement, owner fencing, and every
+ * request. Eligible Managed Cloud conversations sync automatically.
+ */
+/** Repaints the "where is this chat stored" pill. Installed by buildUI(). */
+let updatePersistencePill: () => void = () => {
+  /* no-op until buildUI() creates the composer */
+};
+let activePersistenceEntry: ConversationEntry | undefined;
+let activePersistenceReadGeneration = 0;
+
+type PersistencePresentation = {
+  state: 'cloud' | 'pending' | 'error' | 'local';
+  label: string;
+  detail: string;
+  cloudIcon: boolean;
+};
+
+function conversationPersistencePresentation(
+  entry: ConversationEntry | undefined,
+): PersistencePresentation {
+  if (!entry) {
+    return {
+      state: 'local',
+      label: 'New chat',
+      detail: 'Managed Cloud chats start syncing to your AGI account after the first message.',
+      cloudIcon: false,
+    };
+  }
+  const sync = entry.cloudSync;
+  if (!isCloudPersistenceEligible(entry) || sync?.blockedReason === 'non-cloud-runtime') {
+    return {
+      state: 'local',
+      label: 'Saved on this device',
+      detail: 'This chat includes a Local, BYOK, or unknown-provenance turn, so it stays here.',
+      cloudIcon: false,
+    };
+  }
+  if (sync?.blockedReason === 'auth') {
+    return {
+      state: 'local',
+      label: 'Sign in to sync',
+      detail: 'This chat is saved on this device until you sign in again.',
+      cloudIcon: false,
+    };
+  }
+  if (sync?.blockedReason === 'not-found') {
+    return {
+      state: 'local',
+      label: 'Saved on this device',
+      detail: 'The account copy was removed and this browser-local chat is no longer syncing.',
+      cloudIcon: false,
+    };
+  }
+  if (sync?.blockedReason === 'workspace') {
+    return {
+      state: 'local',
+      label: 'Saved on this device',
+      detail:
+        'The original Cloud workspace could not be proven, so this chat is no longer syncing.',
+      cloudIcon: false,
+    };
+  }
+  if (sync?.state === 'error') {
+    return {
+      state: 'error',
+      label: 'Sync needs attention',
+      detail: 'The latest version is saved on this device and will retry automatically.',
+      cloudIcon: false,
+    };
+  }
+  if (sync?.state === 'pending' || pendingCloudMessages(entry).length > 0) {
+    return {
+      state: 'pending',
+      label: 'Syncing to your account',
+      detail: 'The browser-local chat stays authoritative while the account copy catches up.',
+      cloudIcon: true,
+    };
+  }
+  if (sync?.state === 'idle' && sync.conversationId) {
+    return {
+      state: 'cloud',
+      label: 'Saved to your account',
+      detail: 'Available on Web, Mobile Cloud, Tauri Desktop Cloud, and Electron Desktop Cloud.',
+      cloudIcon: true,
+    };
+  }
+  return {
+    state: 'pending',
+    label: 'Syncing to your account',
+    detail: 'The browser-local chat stays authoritative while the account copy is created.',
+    cloudIcon: true,
+  };
+}
+
+function clearActivePersistenceState(): void {
+  activePersistenceReadGeneration += 1;
+  activePersistenceEntry = undefined;
+  updatePersistencePill();
+}
+
+async function refreshActivePersistenceState(): Promise<void> {
+  const owner = _ctx.managedCloudOwner;
+  const conversationId = _ctx.conversationId;
+  const readGeneration = ++activePersistenceReadGeneration;
+  if (!owner || _ctx.messages.length === 0) {
+    activePersistenceEntry = undefined;
+    updatePersistencePill();
+    return;
+  }
+  const entry = await getConversation(owner, conversationId).catch(() => undefined);
+  if (
+    readGeneration !== activePersistenceReadGeneration ||
+    conversationId !== _ctx.conversationId ||
+    !sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+  ) {
+    return;
+  }
+  activePersistenceEntry = entry;
+  updatePersistencePill();
+}
+/** Re-reads Chrome's active-tab group and repaints every group control. */
+let refreshTabGroupUI: () => void = () => {
+  /* no-op until buildUI() registers the controls */
+};
+
+/**
+ * Whether the CURRENT in-memory conversation could be mirrored.
+ *
+ * Mirrors the worker's `isCloudPersistenceEligible`: every turn must carry
+ * Managed Cloud provenance, and an unstamped turn (a pre-feature restore) fails
+ * closed. This is only used to choose a label — the worker re-derives the same
+ * answer from stored state before any write.
+ */
+function currentConversationCloudEligible(): boolean {
+  return (
+    _ctx.messages.length > 0 &&
+    _ctx.messages
+      .filter((message) => !message.error)
+      .every((message) => message.runtime === 'managed-cloud')
+  );
+}
 let resetScheduledTaskDraftForOwnerTransition: () => void = () => {
   /* no-op until buildUI() creates the Workflows form */
 };
@@ -280,6 +431,8 @@ interface ChatChunk {
   agentEvent?: AgentEventEnvelope;
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
+  generatedFiles?: GeneratedFileWire[];
+  interactiveCard?: InteractiveCard;
   routing?: {
     modelKey: string;
     taskType: RoutingTaskType;
@@ -418,6 +571,28 @@ function applyRoutingContinuation(routing: ChatChunk['routing']): boolean {
   return changed;
 }
 
+function captureResolvedRoute(streamId: string, routing: ChatChunk['routing']): boolean {
+  if (!routing) return false;
+  const metadata = getModelMetadataById(routing.modelKey);
+  if (!metadata) return false;
+  resolvedRouteByStreamId.set(streamId, {
+    model: metadata.id,
+    provider: metadata.provider,
+  });
+  const assistant = _ctx.messages.find((message) => message.id === streamId);
+  if (!assistant) return false;
+  assistant.model = metadata.id;
+  assistant.provider = metadata.provider;
+  return true;
+}
+
+function stampResolvedRoute(streamId: string, assistant: ChatMessage): void {
+  const route = resolvedRouteByStreamId.get(streamId);
+  if (!route) return;
+  assistant.model = route.model;
+  assistant.provider = route.provider;
+}
+
 function managedOutboundEffortPayload(usePersistedSelection = false): { effort?: Effort } {
   if (_ctx.quickMode && !usePersistedSelection) return {};
   const routingSelection = _ctx.selectedModel;
@@ -462,14 +637,9 @@ const PROVIDER_GROUP_ORDER: ProviderId[] = [
 function getModelBadgeLabel(modelId: string): string {
   return getManagedModelBadgeLabel(modelId);
 }
-interface WebMCPToolEntry {
-  name: string;
-  description: string;
-}
-let discoveredTools: WebMCPToolEntry[] = [];
-
 let isRecording = false;
 let recordingActionCount = 0;
+let recordingStartUrl: string | null = null;
 
 /**
  * Pending image attachments added via the composer + menu.
@@ -477,7 +647,11 @@ let recordingActionCount = 0;
  * next outgoing message. Cleared after send.
  */
 const pendingAttachments: string[] = [];
+/** File reads and screenshot captures that must settle before a turn can send. */
+let composerAttachmentIntakeCount = 0;
 const cloudRunsByStreamId = new Map<string, ManagedCloudAgentRunReference>();
+/** Exact catalog route captured for each in-flight assistant turn. */
+const resolvedRouteByStreamId = new Map<string, { model: string; provider: string }>();
 /** Snapshot request-only Quick state per stream; UI toggles may change mid-run. */
 const quickModeByStreamId = new Map<string, boolean>();
 /** Exact account/session incarnation captured when each stream was admitted. */
@@ -488,12 +662,11 @@ const ownerByStreamId = new Map<string, ManagedCloudOwner>();
  * Updated whenever the side panel receives focus or a tab-changed message.
  */
 let currentPageHostname = '';
-let activeWebMCPPage: ActiveWebMCPPageIdentity | null = null;
-let webMCPPageGeneration = 0;
 
 type SidePanelTab = 'chat' | 'workflows' | 'computer-use';
 
 const MAX_STORED_MESSAGES = 50;
+const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
 
 function trimLiveMessages(): void {
   if (trimChatMessages(_ctx.messages, MAX_STORED_MESSAGES) > 0) {
@@ -510,6 +683,10 @@ function serializeMessagesForHistory() {
       role: message.role,
       content: message.content,
       timestamp: message.timestamp,
+      // Unconditional and for BOTH roles: this is the field the worker gates
+      // account persistence on, and a user turn with no provenance would
+      // disqualify the whole thread.
+      ...(message.runtime ? { runtime: message.runtime } : {}),
       ...(message.role === 'assistant' && message.agentEvents
         ? { agentEvents: message.agentEvents }
         : {}),
@@ -525,25 +702,78 @@ function serializeMessagesForHistory() {
       ...(message.role === 'assistant' && message.managedQuickMode
         ? { managedQuickMode: true }
         : {}),
+      ...(message.role === 'assistant' && message.model ? { model: message.model } : {}),
+      ...(message.role === 'assistant' && message.provider ? { provider: message.provider } : {}),
+      ...(message.role === 'assistant' && message.generatedFiles
+        ? { generatedFiles: message.generatedFiles }
+        : {}),
+      ...(message.role === 'assistant' && message.interactiveCards
+        ? { interactiveCards: message.interactiveCards }
+        : {}),
     }));
 }
 
 function persistMessages(): Promise<void> {
   const owner = _ctx.managedCloudOwner;
   if (!owner) return Promise.resolve();
+  const conversationId = _ctx.conversationId;
   persistCurrentConversationOwner();
-  return upsertConversation(owner, _ctx.conversationId, serializeMessagesForHistory(), {
+  return upsertConversation(owner, conversationId, serializeMessagesForHistory(), {
     selectedModel: _ctx.selectedModel,
     currentModelKey: _ctx.currentModelKey,
     previousTaskType: _ctx.previousTaskType,
     effort: _ctx.reasoningEffort,
-  }).then(() => undefined);
+  }).then((entry) => {
+    if (
+      entry &&
+      conversationId === _ctx.conversationId &&
+      sameManagedCloudOwner(owner, _ctx.managedCloudOwner)
+    ) {
+      activePersistenceEntry = entry;
+      updatePersistencePill();
+    }
+  });
 }
 
 function saveMessages(): void {
-  void persistMessages().catch((err) => {
-    console.warn('[SidePanel] Failed to persist messages:', err);
-  });
+  updatePersistencePill();
+  void persistMessages()
+    .then(() => {
+      requestCloudConversationSync();
+    })
+    .catch((err) => {
+      console.warn('[SidePanel] Failed to persist messages:', err);
+    });
+}
+
+/**
+ * Ask the service worker to (eventually) mirror this conversation.
+ *
+ * Fire-and-forget by design. The worker debounces, re-checks provenance, and
+ * fences on the owner; a dead worker or a rejected send is ignored because the
+ * worker's sweep alarm catches up from stored state. Local history NEVER
+ * depends on this succeeding — nothing awaits it and it cannot throw.
+ */
+function requestCloudConversationSync(): void {
+  const owner = _ctx.managedCloudOwner;
+  if (!owner) return;
+  try {
+    chrome.runtime.sendMessage(
+      {
+        type: 'SYNC_CONVERSATION',
+        owner,
+        conversationId: _ctx.conversationId,
+        // Tells the worker the trailing turn is still growing, so it does not
+        // write a copy it already knows will be superseded.
+        streaming: _ctx.isStreaming,
+      },
+      () => {
+        void chrome.runtime.lastError;
+      },
+    );
+  } catch {
+    // The worker is unavailable (restarting). The sweep alarm will pick it up.
+  }
 }
 
 async function loadMessages(): Promise<void> {
@@ -598,6 +828,8 @@ async function loadMessages(): Promise<void> {
       return;
     if (persistedSeed) active = persistedSeed;
   }
+  activePersistenceEntry = active;
+  updatePersistencePill();
   _ctx.selectedModel = normalizeModelId(active.routing.selectedModel) ?? 'auto';
   _ctx.currentModelKey = active.routing.currentModelKey;
   _ctx.previousTaskType = active.routing.previousTaskType;
@@ -661,6 +893,7 @@ function clearStoredMessages(): void {
   historyRestoreToken += 1;
   _ctx.conversationGeneration += 1;
   _ctx.conversationId = createBrowserConversationId();
+  clearActivePersistenceState();
   persistCurrentConversationOwner();
   _ctx.selectedModel = 'auto';
   _ctx.currentModelKey = undefined;
@@ -702,6 +935,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
 
   historyRestoreToken += 1;
+  clearActivePersistenceState();
   _ctx.conversationGeneration += 1;
   scheduledTasksRequestFence.invalidate();
   scheduledTaskCreateRequestFence.invalidate();
@@ -726,6 +960,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   _ctx.previousTaskType = undefined;
   _ctx.reasoningEffort = undefined;
   cloudRunsByStreamId.clear();
+  resolvedRouteByStreamId.clear();
   quickModeByStreamId.clear();
   ownerByStreamId.clear();
   refreshModelPickerUI();
@@ -734,6 +969,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   updateSendButton();
   removeThinking();
   renderMessages();
+  updatePersistencePill();
 
   if (previousOwner) {
     try {
@@ -777,6 +1013,28 @@ function injectStyles(): void {
       overflow: hidden;
       font-size: 13px;
     }
+
+    #sp-tab-group-notice {
+      position: fixed;
+      top: 52px;
+      right: 10px;
+      z-index: 9000;
+      max-width: min(300px, calc(100vw - 20px));
+      padding: 8px 10px;
+      border: 1px solid var(--agi-ext-success-border);
+      border-radius: 7px;
+      background: var(--agi-ext-success-bg);
+      color: var(--agi-ext-success);
+      box-shadow: 0 8px 24px var(--agi-ext-modal-shadow);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    #sp-tab-group-notice[data-kind='error'] {
+      border-color: var(--agi-ext-danger-border);
+      background: var(--agi-ext-danger-bg);
+      color: var(--agi-ext-danger);
+    }
+    #sp-tab-group-notice[hidden] { display: none; }
 
     /* ── Explicit Chrome → Desktop context handoff ── */
     .sp-context-handoff-overlay {
@@ -974,33 +1232,6 @@ function injectStyles(): void {
       max-width: 220px;
     }
 
-    /* ── Inline prompt chips under the composer (design-spec §8.2) ── */
-    #sp-prompt-chips {
-      /* Slash commands remain available from the composer. Keep the empty
-         surface visually quiet, matching the chat-first reference panels. */
-      display: none;
-      flex-wrap: nowrap;
-      gap: 6px;
-      overflow: hidden;
-      padding: 6px 10px 0;
-    }
-    #sp-prompt-chips.hidden { display: none; }
-    .sp-cmd-chip {
-      display: inline-flex;
-      align-items: center;
-      height: 28px;
-      padding: 0 10px;
-      font-size: 11px;
-      background: var(--agi-ext-surface);
-      color: var(--agi-ext-text-muted);
-      border-radius: 999px;
-      cursor: pointer;
-      transition: background 0.15s, color 0.15s;
-      border: 1px solid var(--agi-ext-border);
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .sp-cmd-chip:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
 
     /* ── Restricted-page notice; chat remains available ── */
     #sp-blocked {
@@ -1186,6 +1417,125 @@ function injectStyles(): void {
       border-top: 1px solid var(--agi-ext-border);
       margin: 6px 0;
     }
+
+    /* ── Validated structured result cards ── */
+    .sp-interactive-card-stack {
+      display: flex;
+      width: min(100%, 420px);
+      flex-direction: column;
+      gap: 8px;
+    }
+    .sp-interactive-card {
+      width: 100%;
+      overflow: hidden;
+      padding: 12px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 16px;
+      background: var(--agi-ext-surface);
+      color: var(--agi-ext-text);
+      box-shadow: 0 10px 28px color-mix(in srgb, black 10%, transparent);
+    }
+    .sp-interactive-card__heading {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .sp-interactive-card__heading > .agi-icon {
+      flex: 0 0 15px;
+      color: var(--agi-ext-accent);
+    }
+    .sp-interactive-card__headline {
+      min-width: 0;
+      font-size: 12.5px;
+      font-weight: 650;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .sp-interactive-card__text {
+      margin-top: 5px;
+      color: var(--agi-ext-text-muted);
+      font-size: 11.5px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .sp-interactive-card__status {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--agi-ext-border);
+      color: var(--agi-ext-warning);
+      font-size: 10.5px;
+      line-height: 1.4;
+    }
+    .sp-interactive-card__places {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin: 9px 0 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: sp-card-place;
+    }
+    .sp-interactive-card__places li {
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      gap: 6px;
+      align-items: center;
+      color: var(--agi-ext-text);
+      font-size: 11px;
+      counter-increment: sp-card-place;
+    }
+    .sp-interactive-card__places li::before {
+      content: counter(sp-card-place);
+      display: grid;
+      width: 18px;
+      height: 18px;
+      place-items: center;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--agi-ext-accent) 18%, transparent);
+      color: var(--agi-ext-accent);
+      font-size: 9px;
+      font-weight: 700;
+    }
+    .sp-interactive-card__places li > span {
+      grid-column: 2;
+      margin-top: -5px;
+      color: var(--agi-ext-text-muted);
+      font-size: 9.5px;
+      text-transform: capitalize;
+    }
+    .sp-interactive-card__actions {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      margin-top: 10px;
+      padding-top: 9px;
+      border-top: 1px solid var(--agi-ext-border);
+    }
+    .sp-interactive-card__action {
+      display: flex;
+      width: 100%;
+      min-height: 34px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 6px 9px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 10px;
+      background: var(--agi-ext-bg);
+      color: var(--agi-ext-text);
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 550;
+      text-align: left;
+    }
+    .sp-interactive-card__action:hover { background: var(--agi-ext-hover); }
+    .sp-interactive-card__action:focus-visible {
+      outline: 2px solid var(--agi-ext-focus);
+      outline-offset: 2px;
+    }
+    .sp-interactive-card__action > .agi-icon { flex: 0 0 12px; opacity: 0.7; }
 
     /* ── Cursor blink for streaming ── */
     .sp-cursor::after {
@@ -1469,6 +1819,7 @@ function injectStyles(): void {
     .sp-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-tool-btn.active { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 15%, transparent); }
     .sp-tool-btn.has-context { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
+    .sp-tool-btn:disabled { opacity: 0.5; cursor: wait; }
 
     /* ── Mic pulsing indicator ── */
     .sp-mic-pulse {
@@ -1572,62 +1923,6 @@ function injectStyles(): void {
     }
     .sp-save-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
     .sp-save-shortcut-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-
-    /* ── AI Tools dropdown ── */
-    .sp-tools-wrapper {
-      position: relative;
-    }
-    #sp-tools-dropdown {
-      display: none;
-      position: absolute;
-      bottom: 100%;
-      left: 0;
-      margin-bottom: 4px;
-      min-width: 220px;
-      max-height: 240px;
-      overflow-y: auto;
-      background: var(--agi-ext-surface);
-      border: 1px solid var(--agi-ext-border);
-      border-radius: 8px;
-      padding: 4px;
-      z-index: 100;
-      box-shadow: var(--agi-ext-shadow-panel);
-    }
-    #sp-tools-dropdown.open { display: block; }
-    #sp-tools-dropdown::-webkit-scrollbar { width: 4px; }
-    #sp-tools-dropdown::-webkit-scrollbar-track { background: transparent; }
-    #sp-tools-dropdown::-webkit-scrollbar-thumb { background: var(--agi-ext-border); border-radius: 4px; }
-    .sp-tools-empty {
-      padding: 10px 8px;
-      color: var(--agi-ext-text-muted);
-      font-size: 11px;
-      text-align: center;
-    }
-    .sp-tool-item {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      padding: 6px 8px;
-      border-radius: 5px;
-      cursor: pointer;
-      transition: background 0.12s;
-    }
-    .sp-tool-item:hover { background: var(--agi-ext-hover); }
-    .sp-tool-item-name {
-      font-size: 12px;
-      color: var(--agi-ext-text);
-      font-weight: 500;
-    }
-    .sp-tool-item-desc {
-      font-size: 10px;
-      color: var(--agi-ext-text-muted);
-      line-height: 1.35;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-    }
 
     /* ── Input row (composer §7) ── */
     #sp-input-area {
@@ -1871,6 +2166,12 @@ function injectStyles(): void {
       font-size: 11px;
       line-height: 1.4;
     }
+    .sp-attachment-retention {
+      flex: 1 1 100%;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      line-height: 1.4;
+    }
 
     /* ── Composer bottom bar: persistent page-context chip ── */
     #sp-composer-bar {
@@ -1984,6 +2285,42 @@ function injectStyles(): void {
     }
     #sp-quick-mode-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
 
+    /* Where this chat is stored. Required by the trust-boundary rule: the user
+       must be able to see, without opening a menu, whether a conversation is
+       browser-local or mirrored to their account. Modeled on the
+       #sp-bridge-notice pattern. */
+    .sp-persistence-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--agi-ext-overlay);
+      border: 1px solid var(--agi-ext-border);
+      border-radius: 12px;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 8px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      user-select: none;
+      cursor: default;
+    }
+    .sp-persistence-pill .agi-icon { flex-shrink: 0; }
+    .sp-persistence-pill[data-state="cloud"] { color: var(--agi-ext-accent); }
+    .sp-persistence-pill[data-state="pending"] { color: var(--agi-ext-info); }
+    .sp-persistence-pill[data-state="error"] { color: var(--agi-ext-warning); }
+    /* Per-row provenance badge in the history drawer. */
+    .sp-drawer-history-badge {
+      display: inline-flex;
+      align-items: center;
+      color: var(--agi-ext-text-muted);
+      flex-shrink: 0;
+      margin-right: 4px;
+    }
+    .sp-drawer-history-badge[data-state="cloud"] { color: var(--agi-ext-accent); }
+    .sp-drawer-history-badge[data-state="pending"] { color: var(--agi-ext-info); }
+    .sp-drawer-history-badge[data-state="error"] { color: var(--agi-ext-warning); }
+
     /* Catalog-driven reasoning effort. The popover opens upward so it remains
        usable in the short side-panel composer. */
     #sp-effort-control {
@@ -2052,37 +2389,6 @@ function injectStyles(): void {
       font-size: 10px;
       line-height: 1.35;
     }
-
-    /* ── Offline onboarding screen (BLOCKER-02b) ── */
-    #sp-offline-onboarding {
-      display: none;
-      flex: 1;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      text-align: center;
-      padding: 32px 20px;
-    }
-    #sp-offline-onboarding.visible { display: flex; }
-    #sp-offline-onboarding-icon {
-      width: 48px;
-      height: 48px;
-      opacity: 0.5;
-    }
-    #sp-offline-onboarding-title { font-size: 14px; font-weight: 600; color: var(--agi-ext-text); }
-    #sp-offline-onboarding-desc { font-size: 12px; color: var(--agi-ext-text-muted); line-height: 1.55; max-width: 220px; }
-    #sp-offline-onboarding-cta {
-      font-size: 12px;
-      padding: 6px 14px;
-      border-radius: 8px;
-      border: 1px solid var(--agi-ext-accent);
-      background: transparent;
-      color: var(--agi-ext-accent);
-      cursor: pointer;
-      transition: background 0.12s;
-    }
-    #sp-offline-onboarding-cta:hover { background: color-mix(in srgb, var(--agi-ext-accent) 10%, transparent); }
 
     /* ── Settings bar (Phase 3: removed — bridge URL now in drawer) ── */
 
@@ -2254,8 +2560,10 @@ function injectStyles(): void {
     .sp-wf-shortcut-btns { display: flex; gap: 4px; flex-shrink: 0; }
     .sp-wf-btn-replay { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 3px 9px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-btn-replay:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
+    .sp-wf-btn-replay:disabled { cursor: wait; opacity: 0.6; }
     .sp-wf-btn-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
     .sp-wf-btn-delete:hover { color: var(--agi-ext-danger); border-color: var(--agi-ext-danger-border); }
+    .sp-wf-btn-delete:disabled, .sp-wf-task-delete:disabled { cursor: wait; opacity: 0.55; }
     .sp-wf-tasks-list { display: flex; flex-direction: column; gap: 6px; }
     .sp-wf-task-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; background: var(--agi-ext-bg); border: 1px solid var(--agi-ext-border); border-radius: 7px; }
     .sp-wf-task-info { flex: 1; min-width: 0; }
@@ -2263,6 +2571,7 @@ function injectStyles(): void {
     .sp-wf-task-schedule-badge { display: inline-block; font-size: 9px; color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 3px; padding: 1px 5px; margin-top: 2px; }
     .sp-wf-task-toggle { appearance: none; width: 30px; height: 16px; border-radius: 8px; background: var(--agi-ext-hover); position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
     .sp-wf-task-toggle:checked { background: var(--agi-ext-accent); }
+    .sp-wf-task-toggle:disabled { cursor: wait; opacity: 0.55; }
     .sp-wf-task-toggle::after { content: ''; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: white; top: 2px; left: 2px; transition: transform 0.2s; }
     .sp-wf-task-toggle:checked::after { transform: translateX(14px); }
     .sp-wf-task-delete { background: none; border: 1px solid var(--agi-ext-border); color: var(--agi-ext-text-muted); font-size: 11px; padding: 3px 7px; border-radius: 5px; cursor: pointer; transition: color 0.12s, border-color 0.12s; }
@@ -2288,6 +2597,15 @@ function injectStyles(): void {
     .sp-wf-form-cancel-btn:hover { color: var(--agi-ext-text); }
     .sp-wf-form-actions { display: flex; gap: 6px; justify-content: flex-end; }
     .sp-wf-form-error { min-height: 15px; color: var(--agi-ext-danger); font-size: 11px; line-height: 1.35; }
+    .sp-wf-mutation-status {
+      min-height: 18px;
+      padding: 0 14px;
+      color: var(--agi-ext-text-muted);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .sp-wf-mutation-status[data-kind="success"] { color: var(--agi-ext-success); }
+    .sp-wf-mutation-status[data-kind="error"] { color: var(--agi-ext-danger); }
     .sp-wf-create-shortcut-btn { background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); color: var(--agi-ext-accent); font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; transition: background 0.12s; }
     .sp-wf-create-shortcut-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); }
     .sp-create-shortcut-overlay { display: none; position: fixed; inset: 0; background: var(--agi-ext-scrim); z-index: 9999; align-items: center; justify-content: center; }
@@ -2318,6 +2636,7 @@ function injectStyles(): void {
     .sp-wf-group-action-btn { display: flex; align-items: center; gap: 5px; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: 6px; color: var(--agi-ext-text-muted); font-size: 11px; padding: 5px 11px; cursor: pointer; transition: color 0.15s, border-color 0.15s, background 0.15s; }
     .sp-wf-group-action-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-wf-group-action-btn.active { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
+    .sp-wf-group-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .sp-wf-record-bar { display: flex; align-items: center; gap: 8px; }
     .sp-wf-record-btn { display: flex; align-items: center; gap: 6px; background: var(--agi-ext-danger); border: none; color: white; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 8px; cursor: pointer; transition: background 0.15s, transform 0.1s; flex-shrink: 0; }
     .sp-wf-record-btn:hover { background: color-mix(in srgb, var(--agi-ext-danger) 85%, black); transform: scale(1.02); }
@@ -2328,6 +2647,8 @@ function injectStyles(): void {
     .sp-wf-record-btn.recording .sp-wf-record-dot { background: var(--agi-ext-danger); animation: sp-pulse 1s infinite; }
     .sp-wf-action-counter { font-size: 11px; color: var(--agi-ext-text-muted); flex: 1; }
     .sp-wf-action-counter strong { color: var(--agi-ext-text); }
+    .sp-wf-record-status { min-height: 18px; margin-top: 7px; color: var(--agi-ext-text-muted); font-size: 11px; line-height: 1.4; }
+    .sp-wf-record-status[data-kind="error"] { color: var(--agi-ext-danger); }
     .sp-wf-capture-values { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 11px; color: var(--agi-ext-text-muted); cursor: pointer; }
     .sp-wf-capture-values input { cursor: pointer; }
     .sp-wf-save-dialog { display: none; flex-direction: column; gap: 6px; padding: 10px; background: var(--agi-ext-bg); border: 1px solid color-mix(in srgb, var(--agi-ext-accent) 30%, transparent); border-radius: 8px; }
@@ -2702,6 +3023,7 @@ function injectStyles(): void {
     }
     .sp-drawer-tool-btn:hover { color: var(--agi-ext-accent); border-color: var(--agi-ext-accent); background: color-mix(in srgb, var(--agi-ext-accent) 8%, transparent); }
     .sp-drawer-tool-btn.active { color: var(--agi-ext-success); border-color: var(--agi-ext-success-border); background: var(--agi-ext-success-bg); }
+    .sp-drawer-tool-btn:disabled { opacity: 0.5; cursor: wait; }
     /* History sub-list inside the drawer.
        CSP note (style-src 'self'): these rules used to be applied via
        element.style.cssText at runtime, which Chrome blocks on extension
@@ -2731,23 +3053,42 @@ function injectStyles(): void {
       outline-offset: 1px;
     }
     #sp-drawer-history-search[hidden] { display: none; }
+    .sp-drawer-history-error {
+      margin-top: 6px;
+      color: var(--agi-ext-danger);
+      font-size: 10px;
+      line-height: 1.35;
+    }
     .sp-drawer-history-empty { font-size: 11px; color: var(--agi-ext-text-muted); padding: 4px 2px; }
     .sp-drawer-history-item {
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 8px;
+      gap: 2px;
       border-radius: 5px;
-      cursor: pointer;
       background: var(--agi-ext-surface);
       border: 1px solid var(--agi-ext-border);
-      /* Button reset — the element is a <button> for keyboard access, so undo
-         the UA defaults that would otherwise centre and re-font the row. */
+    }
+    .sp-drawer-history-open {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      padding: 6px 8px;
+      border: none;
+      border-radius: 4px;
+      background: transparent;
+      cursor: pointer;
       width: 100%;
       text-align: left;
       font: inherit;
       color: inherit;
     }
+    .sp-drawer-history-open:hover { background: var(--agi-ext-hover); }
+    .sp-drawer-history-open:disabled {
+      cursor: not-allowed;
+      opacity: 0.55;
+    }
+    .sp-drawer-history-open:disabled:hover { background: transparent; }
     .sp-drawer-history-text { flex: 1; min-width: 0; }
     .sp-drawer-history-title {
       font-size: 11px;
@@ -2764,6 +3105,7 @@ function injectStyles(): void {
       font-size: 12px;
       cursor: pointer;
       padding: 2px 4px;
+      margin-right: 4px;
       border-radius: 3px;
       line-height: 1;
       flex-shrink: 0;
@@ -3002,6 +3344,14 @@ function injectStyles(): void {
       transition: transform 0.2s;
     }
     .sp-drawer-toggle-switch:checked::after { transform: translateX(16px); }
+    .sp-drawer-toggle-status {
+      min-height: 15px;
+      margin-top: 5px;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+    .sp-drawer-toggle-status[data-kind="error"] { color: var(--agi-ext-danger); }
     /* Bridge URL inside drawer */
     .sp-drawer-bridge-row { display: flex; gap: 6px; margin-top: 4px; }
     .sp-drawer-bridge-input {
@@ -3511,6 +3861,373 @@ function injectStyles(): void {
     }
     .sp-ob-btn-next:hover { background: color-mix(in srgb, var(--agi-ext-accent) 80%, black); }
     .sp-ob-btn-next:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
+
+    /* ── 2026-08 browser-surface polish ───────────────────────────────────
+       Chrome's side panel is a narrow, long-lived surface. Keep its hierarchy
+       calm: one quiet header, a spacious transcript, and one rounded composer.
+       Trust state remains visible, but secondary controls no longer compete
+       with the message field. */
+    body {
+      color-scheme: dark;
+      letter-spacing: -0.005em;
+    }
+    @media (prefers-color-scheme: light) {
+      body { color-scheme: light; }
+    }
+    #sp-header {
+      min-height: 56px;
+      padding: 10px 12px 10px 14px;
+      background: color-mix(in srgb, var(--agi-ext-bg) 94%, transparent);
+      border-bottom-color: color-mix(in srgb, var(--agi-ext-border) 70%, transparent);
+      backdrop-filter: blur(18px);
+    }
+    #sp-header-left {
+      flex: 1 1 auto;
+      gap: 9px;
+      overflow: hidden;
+    }
+    #sp-header-right { flex: 0 0 auto; }
+    #sp-logo,
+    #sp-logo svg { width: 26px; height: 26px; }
+    #sp-title { font-size: 14px; letter-spacing: -0.02em; }
+    .sp-icon-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 10px;
+    }
+    #sp-model-selector-btn {
+      min-height: 30px;
+      padding: 5px 7px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+    }
+    #sp-model-selector-btn:hover,
+    #sp-model-selector-btn.open {
+      border-color: transparent;
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text);
+    }
+    #sp-model-badge {
+      max-width: 118px;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: inherit;
+      font-size: 11px;
+      font-weight: 500;
+    }
+
+    #sp-messages {
+      padding: 18px 14px 10px;
+      gap: 18px;
+    }
+    #sp-empty {
+      padding: 52px 22px 28px;
+      gap: 11px;
+    }
+    #sp-empty-icon {
+      display: flex;
+      width: 56px;
+      height: 56px;
+      margin-bottom: 8px;
+      color: var(--agi-ext-text-muted);
+      opacity: 0.58;
+    }
+    #sp-empty-headline {
+      display: block;
+      font-size: 18px;
+      font-weight: 550;
+      letter-spacing: -0.025em;
+    }
+    #sp-empty-subtext {
+      display: block;
+      max-width: 260px;
+      font-size: 12px;
+      line-height: 1.55;
+      opacity: 0.82;
+    }
+    .sp-msg { max-width: 92%; gap: 5px; }
+    .sp-msg-assistant { max-width: 100%; }
+    .sp-bubble {
+      padding: 9px 12px;
+      border-radius: 17px;
+      font-size: 13.5px;
+      line-height: 1.58;
+    }
+    .sp-bubble-user {
+      background: var(--agi-ext-overlay);
+      border: 1px solid color-mix(in srgb, var(--agi-ext-border) 76%, transparent);
+      border-bottom-right-radius: 17px;
+    }
+    .sp-bubble-assistant {
+      padding: 4px 2px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+
+    #sp-input-area {
+      padding: 8px 10px 10px;
+      border-top: 0;
+      background: linear-gradient(
+        to bottom,
+        color-mix(in srgb, var(--agi-ext-bg) 0%, transparent),
+        var(--agi-ext-bg) 20px
+      );
+    }
+    #sp-composer-shell {
+      min-height: 118px;
+      padding: 11px 11px 8px;
+      gap: 8px;
+      border-color: var(--agi-ext-border-strong);
+      border-radius: 20px;
+      background: var(--agi-ext-surface);
+      box-shadow: 0 14px 34px color-mix(in srgb, black 16%, transparent);
+    }
+    #sp-composer-shell:focus-within {
+      border-color: color-mix(in srgb, var(--agi-ext-accent) 55%, var(--agi-ext-border));
+      box-shadow:
+        0 0 0 2px color-mix(in srgb, var(--agi-ext-accent) 12%, transparent),
+        0 14px 34px color-mix(in srgb, black 18%, transparent);
+    }
+    #sp-input-row { align-items: stretch; }
+    #sp-input {
+      min-height: 52px;
+      padding: 3px 4px 5px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    #sp-input::placeholder { opacity: 0.68; }
+    #sp-composer-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      overflow: visible;
+      padding: 0;
+    }
+    .sp-composer-controls-start,
+    .sp-composer-controls-end {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+    .sp-composer-controls-start { flex: 1 1 auto; }
+    .sp-composer-controls-end { flex: 0 0 auto; }
+    .sp-attach-btn,
+    #sp-mic-btn {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      justify-content: center;
+    }
+    .sp-attach-btn:hover,
+    #sp-mic-btn:hover {
+      border-color: transparent;
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text);
+    }
+    .sp-context-chip {
+      min-height: 32px;
+      max-width: 108px;
+      padding: 6px 8px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      font-size: 10.5px;
+      line-height: 18px;
+    }
+    .sp-context-chip::before { margin-right: 6px; }
+    .sp-context-chip:hover { border-color: transparent; background: var(--agi-ext-hover); }
+    .sp-context-chip.has-context { border: 0; }
+    .sp-autonomy-control { position: relative; }
+    .sp-autonomy-chip {
+      height: 20px;
+      padding: 0 4px 0 7px;
+      border-color: transparent;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      font-size: 10.5px;
+      font-weight: 550;
+    }
+    .sp-autonomy-chip:hover { background: var(--agi-ext-hover); filter: none; }
+    .sp-autonomy-chip[data-mode='full'] {
+      border-color: var(--agi-ext-warning-border);
+      background: var(--agi-ext-warning-bg);
+    }
+    #sp-autonomy-popover {
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 8px);
+      z-index: 100;
+      display: none;
+      width: min(270px, calc(100vw - 24px));
+      padding: 7px;
+      border: 1px solid var(--agi-ext-border-strong);
+      border-radius: 14px;
+      background: var(--agi-ext-surface);
+      box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
+    }
+    #sp-autonomy-popover.open { display: block; }
+    .sp-autonomy-heading {
+      padding: 5px 8px 7px;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .sp-autonomy-option {
+      width: 100%;
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      padding: 9px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      cursor: pointer;
+      text-align: left;
+    }
+    .sp-autonomy-option:hover,
+    .sp-autonomy-option.selected { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-autonomy-option-warning.selected,
+    .sp-autonomy-option-warning:hover { color: var(--agi-ext-warning); }
+    .sp-autonomy-option-copy { display: flex; flex: 1; flex-direction: column; gap: 2px; }
+    .sp-autonomy-option-copy strong { font-size: 11.5px; font-weight: 600; }
+    .sp-autonomy-option-copy small { color: var(--agi-ext-text-muted); font-size: 10px; line-height: 1.35; }
+    #sp-effort-control { margin-left: 0; }
+    #sp-effort-btn {
+      height: 32px;
+      padding: 0 8px;
+      border-color: transparent;
+      border-radius: 10px;
+      background: transparent;
+      font-size: 10.5px;
+    }
+    #sp-effort-btn:hover,
+    #sp-effort-btn[aria-expanded='true'] {
+      border-color: transparent;
+      background: var(--agi-ext-hover);
+      color: var(--agi-ext-text);
+    }
+    #sp-send-btn {
+      width: 34px;
+      height: 34px;
+      box-shadow: 0 5px 14px color-mix(in srgb, var(--agi-ext-accent) 22%, transparent);
+    }
+    #sp-send-btn:disabled { box-shadow: none; }
+    .sp-trust-strip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 18px;
+      color: var(--agi-ext-text-muted);
+    }
+    .sp-trust-strip .sp-autonomy-control {
+      padding-left: 6px;
+      border-left: 1px solid var(--agi-ext-border);
+    }
+    .sp-persistence-pill {
+      padding: 0 4px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      color: var(--agi-ext-text-muted);
+      font-size: 10px;
+      font-weight: 450;
+      opacity: 0.82;
+    }
+    .sp-persistence-pill[data-state='cloud'] { color: var(--agi-ext-accent); opacity: 0.9; }
+    .sp-persistence-pill[data-state='pending'] { color: var(--agi-ext-info); opacity: 0.9; }
+    .sp-persistence-pill[data-state='error'] { color: var(--agi-ext-warning); opacity: 0.95; }
+    #sp-quick-mode-toggle {
+      width: 100%;
+      min-height: 34px;
+      justify-content: center;
+      margin-top: 10px;
+      border-radius: 9px;
+      font-size: 11px;
+    }
+
+    #sp-model-dropdown,
+    #sp-attach-menu,
+    #sp-slash-menu,
+    #sp-effort-popover,
+    #sp-history-dropdown,
+    #sp-shortcuts-dropdown {
+      padding: 6px;
+      border-color: var(--agi-ext-border-strong);
+      border-radius: 14px;
+      box-shadow: 0 18px 46px var(--agi-ext-modal-shadow);
+    }
+    #sp-model-dropdown { margin-top: 8px; min-width: 232px; }
+    .sp-model-option,
+    .sp-attach-menu-item,
+    .sp-slash-item,
+    .sp-history-item,
+    .sp-shortcut-item { border-radius: 9px; }
+    .sp-model-option { padding: 9px; }
+
+    #sp-cloud-gate,
+    #sp-blocked,
+    .sp-agent-approval,
+    .sp-create-shortcut-modal,
+    .sp-ob-row { border-radius: 14px; }
+    #sp-drawer-header { min-height: 56px; padding: 10px 14px; }
+    .sp-drawer-section { border-radius: 14px; }
+
+    @media (max-width: 390px) {
+      #sp-header { padding-inline: 10px; }
+      #sp-title { display: none; }
+      #sp-quota-badge.visible {
+        display: inline-flex;
+        max-width: 38px;
+        padding-inline: 4px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 9px;
+      }
+      #sp-model-badge { max-width: 82px; }
+      #sp-messages { padding-inline: 11px; }
+      #sp-input-area { padding-inline: 8px; }
+      #sp-composer-shell { padding-inline: 9px; }
+      .sp-context-chip { max-width: 82px; }
+      #sp-effort-btn { max-width: 58px; overflow: hidden; text-overflow: ellipsis; }
+    }
+    @media (max-width: 340px) {
+      .sp-context-chip { max-width: 64px; text-overflow: ellipsis; overflow: hidden; }
+      #sp-effort-btn { max-width: 48px; padding-inline: 5px; }
+      .sp-composer-controls-start,
+      .sp-composer-controls-end { gap: 2px; }
+    }
+    @media (forced-colors: active) {
+      * { forced-color-adjust: auto; }
+      .sp-model-upgrade-tag {
+        color: HighlightText;
+        background: Highlight;
+        border: 1px solid CanvasText;
+      }
+      .sp-drawer-toggle-switch::after,
+      .sp-wf-task-toggle::after,
+      .sp-toggle-switch::after {
+        background: CanvasText;
+        box-shadow: none;
+      }
+    }
   `;
   // M-08 audit 2026-05-19: Constructable Stylesheet — CSP-compliant
   // because it's a DOM API call, not a <style> tag.
@@ -3631,13 +4348,9 @@ function iconButton(attrs: Record<string, string>, icon: string): HTMLElement {
 
 function renderMessages(): void {
   const container = document.getElementById('sp-messages')!;
-  const chips = document.getElementById('sp-prompt-chips');
   const emptyEl = document.getElementById('sp-empty');
-  const restrictedPage =
-    document.getElementById('sp-blocked')?.classList.contains('visible') === true;
 
   if (_ctx.messages.length === 0) {
-    if (chips) chips.classList.toggle('hidden', restrictedPage);
     if (emptyEl) emptyEl.classList.remove('hidden');
     // Remove all message nodes and reset counter
     container.querySelectorAll('.sp-msg, .sp-thinking-wrap').forEach((n) => n.remove());
@@ -3646,7 +4359,6 @@ function renderMessages(): void {
     return;
   }
 
-  if (chips) chips.classList.add('hidden');
   if (emptyEl) emptyEl.classList.add('hidden');
 
   // Only append messages that haven't been rendered yet — avoids full DOM rebuild on each
@@ -3685,8 +4397,6 @@ function renderMessages(): void {
 
 function showThinking(): void {
   const container = document.getElementById('sp-messages')!;
-  const chips = document.getElementById('sp-prompt-chips');
-  if (chips) chips.classList.add('hidden');
 
   const wrap = el('div', { class: 'sp-msg sp-msg-assistant sp-thinking-wrap' });
   const thinking = el('div', { class: 'sp-thinking' });
@@ -3750,19 +4460,13 @@ interface SlashCommandMeta {
   captureContext: boolean;
   /** One-line description shown in the autocomplete menu. */
   hint: string;
-  /**
-   * When true the command also gets a one-tap chip under the composer. The
-   * chip row used to repeat its own array of command names, so renaming a
-   * command here left a chip that sent an unexpandable string as chat text.
-   */
-  chip?: boolean;
 }
 
 /**
  * The panel's slash commands, in menu order.
  *
- * Single source of truth: `expandSlashCommand` (submit-time), the autocomplete
- * menu, and the composer chip row all read this. Four separate strings promised
+ * Single source of truth: `expandSlashCommand` (submit-time) and the autocomplete
+ * menu both read this. Four separate strings promised
  * "/ for commands" while nothing listened for the key, so the commands were
  * undiscoverable unless you already knew them.
  */
@@ -3773,7 +4477,6 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
       'Summarize this page concisely. Include key points, main arguments, and any important details.',
     captureContext: true,
     hint: 'Key points and main arguments of this page',
-    chip: true,
   },
   '/tldr': {
     display: '/tldr',
@@ -3786,7 +4489,6 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
     prompt: 'Explain the content of this page in simple terms. Break down any complex concepts.',
     captureContext: true,
     hint: 'Plain-language explanation of this page',
-    chip: true,
   },
   '/translate': {
     display: '/translate',
@@ -3801,7 +4503,6 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
       'Extract the key structured data from this page: names, dates, numbers, prices, and any tabular information.',
     captureContext: true,
     hint: 'Pull out names, dates, numbers and tables',
-    chip: true,
   },
   '/code': {
     display: '/code',
@@ -3809,17 +4510,8 @@ const SLASH_COMMANDS: Record<string, SlashCommandMeta> = {
       'Extract and explain all code snippets on this page. For each snippet, describe what it does and suggest improvements.',
     captureContext: true,
     hint: 'Find and explain code on this page',
-    chip: true,
   },
 };
-
-/**
- * Composer chips, derived from the one command list so a chip can never name a
- * command the expander does not know.
- */
-const PROMPT_CHIP_COMMANDS: SlashCommandMeta[] = Object.values(SLASH_COMMANDS).filter(
-  (meta) => meta.chip === true,
-);
 
 /** Commands whose name starts with `fragment` (`/tr` -> `/translate`). */
 function matchSlashCommands(fragment: string): Array<[string, SlashCommandMeta]> {
@@ -4011,6 +4703,7 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
   if (streamId) {
     const existing = _ctx.messages.find((message) => message.id === streamId);
     if (existing) existing.streaming = false;
+    resolvedRouteByStreamId.delete(streamId);
     quickModeByStreamId.delete(streamId);
     ownerByStreamId.delete(streamId);
   }
@@ -4025,9 +4718,9 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
 }
 
 function sendMessage(text: string): void {
-  const prompt = resolveComposerPrompt(text, pendingAttachments.length);
-  const owner = _ctx.managedCloudOwner;
-  if (!prompt || !owner || _ctx.isStreaming || historyRestoreInProgress) return;
+  if (!canAdmitComposerMessage(text)) return;
+  const prompt = resolveComposerPrompt(text, pendingAttachments.length)!;
+  const owner = _ctx.managedCloudOwner!;
   _ctx.conversationGeneration += 1;
 
   // Route through the shared priority send queue for backpressure /
@@ -4065,6 +4758,12 @@ function sendMessage(text: string): void {
       role: 'user',
       content: displayText,
       timestamp: Date.now(),
+      // PROVENANCE — must be derived from the runtime that will actually
+      // handle this turn, never assumed. The CHAT_MESSAGE dispatch below goes
+      // to `executeChromeManagedChat`, i.e. Managed Cloud. If a Desktop-bridge
+      // or on-device send path is ever added here it must stamp 'local', which
+      // permanently disqualifies this thread from account persistence.
+      runtime: 'managed-cloud',
     };
     _ctx.messages.push(userMsg);
     trimLiveMessages();
@@ -4120,6 +4819,9 @@ function sendMessage(text: string): void {
     role: 'user',
     content: prompt,
     timestamp: Date.now(),
+    // PROVENANCE — see the note on the slash-command dispatch above. This turn
+    // is sent to Managed Cloud; a local send path must stamp 'local' instead.
+    runtime: 'managed-cloud',
   };
   _ctx.messages.push(userMsg);
   trimLiveMessages();
@@ -4206,6 +4908,7 @@ function retryFailedMessage(messageId: string): void {
 function handleStreamError(id: string, errorText: string): void {
   if (_ctx.currentStreamId !== id) return;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
+  resolvedRouteByStreamId.delete(id);
   quickModeByStreamId.delete(id);
   ownerByStreamId.delete(id);
   stopManagedChatKeepalive();
@@ -4276,19 +4979,6 @@ function updateNativeBridgeAvailabilityUI(): void {
   }
 }
 
-// Legacy Desktop-required onboarding is always hidden: native tools are optional.
-function hideLegacyOfflineOnboarding(): void {
-  const el2 = document.getElementById('sp-offline-onboarding');
-  const msgsEl = document.getElementById('sp-messages');
-  if (!el2) return;
-  el2.classList.remove('visible');
-  if (msgsEl) {
-    msgsEl.querySelectorAll('.sp-msg, .sp-thinking-wrap, #sp-empty').forEach((n) => {
-      (n as HTMLElement).style.display = '';
-    });
-  }
-}
-
 let contextBtn: HTMLButtonElement | null = null;
 
 function updateContextButton(): void {
@@ -4324,12 +5014,57 @@ function updateSendButton(): void {
     clearChildren(btn);
     btn.appendChild(renderIcon(Square, 14));
   } else {
-    btn.disabled = managedCloudChatState !== 'ready' || historyRestoreInProgress;
+    const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+    btn.disabled = !canAdmitComposerMessage(input?.value ?? '');
     btn.setAttribute('data-mode', 'send');
     btn.title = t('spSendSend');
     btn.setAttribute('aria-label', t('spSendSendAria'));
     clearChildren(btn);
     btn.appendChild(renderIcon(ArrowUp, 16));
+  }
+  updateComposerAdmissionControls();
+  updateHistoryRestoreControls();
+}
+
+function updateHistoryRestoreControls(): void {
+  const disabled = _ctx.isStreaming || historyRestoreInProgress;
+  for (const control of document.querySelectorAll<HTMLButtonElement>(
+    '[data-conversation-restore="true"]',
+  )) {
+    control.disabled = disabled;
+    control.setAttribute('aria-disabled', String(disabled));
+  }
+}
+
+function canAdmitComposerMessage(text: string): boolean {
+  return (
+    managedCloudChatState === 'ready' &&
+    _ctx.managedCloudOwner !== null &&
+    !_ctx.isStreaming &&
+    !historyRestoreInProgress &&
+    composerAttachmentIntakeCount === 0 &&
+    resolveComposerPrompt(text, pendingAttachments.length) !== null
+  );
+}
+
+function updateComposerAdmissionControls(): void {
+  const controlsReady =
+    managedCloudChatState === 'ready' &&
+    _ctx.managedCloudOwner !== null &&
+    !_ctx.isStreaming &&
+    !historyRestoreInProgress &&
+    composerAttachmentIntakeCount === 0;
+  for (const control of document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
+    '#sp-attach-btn, #sp-attach-menu button, #sp-attach-file-input, #sp-mic-btn',
+  )) {
+    control.disabled = !controlsReady;
+    control.setAttribute('aria-disabled', String(!controlsReady));
+  }
+  const pageContextBlocked =
+    document.getElementById('sp-blocked')?.classList.contains('visible') === true;
+  if (contextBtn) {
+    contextBtn.disabled = !controlsReady || pageContextBlocked;
+    contextBtn.setAttribute('aria-disabled', String(contextBtn.disabled));
   }
 }
 
@@ -4347,7 +5082,12 @@ function readFileAsDataUrl(file: File): Promise<string | null> {
       resolve(typeof result === 'string' ? result : null);
     };
     reader.onerror = () => resolve(null);
-    reader.readAsDataURL(file);
+    reader.onabort = () => resolve(null);
+    try {
+      reader.readAsDataURL(file);
+    } catch {
+      resolve(null);
+    }
   });
 }
 
@@ -4451,20 +5191,40 @@ function acceptIncomingComposerFiles(files: File[] | FileList): void {
     return;
   }
 
-  void Promise.all(incoming.map(readFileAsDataUrl)).then((results) => {
-    for (const dataUrl of results) {
-      if (dataUrl) admitComposerAttachment(dataUrl);
-    }
-    updateAttachmentPreview();
-  });
+  composerAttachmentIntakeCount += 1;
+  updateAttachmentPreview();
+  void Promise.all(incoming.map(readFileAsDataUrl))
+    .then((results) => {
+      let readFailed = false;
+      for (const dataUrl of results) {
+        if (dataUrl) admitComposerAttachment(dataUrl);
+        else readFailed = true;
+      }
+      if (readFailed && !composerAttachmentNotice) {
+        composerAttachmentNotice =
+          results.length === 1 ? t('spAttachmentReadFailed') : t('spAttachmentReadMultipleFailed');
+      }
+    })
+    .catch(() => {
+      composerAttachmentNotice = t('spAttachmentReadAllFailed');
+    })
+    .finally(() => {
+      composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
+      updateAttachmentPreview();
+    });
 }
 
 function updateAttachmentPreview(): void {
   const bar = document.getElementById('sp-attachment-bar');
   if (!bar) return;
   clearChildren(bar);
-  if (pendingAttachments.length === 0 && !composerAttachmentNotice) {
+  if (
+    pendingAttachments.length === 0 &&
+    !composerAttachmentNotice &&
+    composerAttachmentIntakeCount === 0
+  ) {
     bar.style.display = 'none';
+    updateSendButton();
     return;
   }
   bar.style.display = 'flex';
@@ -4506,99 +5266,27 @@ function updateAttachmentPreview(): void {
         composerAttachmentNotice,
       ),
     );
+  } else if (composerAttachmentIntakeCount > 0) {
+    bar.appendChild(
+      el(
+        'div',
+        { class: 'sp-attachment-retention', role: 'status', 'aria-live': 'polite' },
+        t('spAttachmentAdding'),
+      ),
+    );
   }
+  if (pendingAttachments.length > 0) {
+    bar.appendChild(
+      el('div', { class: 'sp-attachment-retention' }, t('spAttachmentHistoryLimitation')),
+    );
+  }
+  updateSendButton();
 }
 
-function updateToolsButton(): void {
-  const btn = document.getElementById('sp-tools-btn');
-  const dropdown = document.getElementById('sp-tools-dropdown');
-  if (!btn || !dropdown) return;
-
-  const count = discoveredTools.length;
-  btn.replaceChildren(renderIcon(Plug, 14), document.createTextNode(` Tools (${count})`));
-
-  if (count === 0) {
-    btn.classList.remove('has-context');
-    setChild(dropdown, {
-      tag: 'div',
-      className: 'sp-tools-empty',
-      text: 'No tools discovered on this page',
-    });
-    return;
-  }
-
-  btn.classList.add('has-context');
-  clearChildren(dropdown);
-  for (const tool of discoveredTools) {
-    const item = el('div', { class: 'sp-tool-item' });
-    item.appendChild(el('div', { class: 'sp-tool-item-name' }, tool.name));
-    if (tool.description) {
-      // SECURITY (M-09 audit 2026-05-19): prefix tool descriptions with the
-      // source hostname so users can distinguish extension-supplied copy
-      // from page-supplied copy. Defends against page tool-poisoning
-      // attempts that imitate extension UI prompts (Invariant Labs TPA).
-      const prefixed = currentPageHostname
-        ? `(from ${currentPageHostname}) ${tool.description}`
-        : tool.description;
-      item.appendChild(el('div', { class: 'sp-tool-item-desc' }, prefixed));
-    }
-    item.addEventListener('click', () => {
-      const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
-      if (inputEl) {
-        inputEl.value = `Use the ${tool.name} tool to `;
-        inputEl.focus();
-        autoResizeInput(inputEl);
-      }
-      dropdown.classList.remove('open');
-    });
-    dropdown.appendChild(item);
-  }
-}
-
-function clearDiscoveredTools(): void {
-  if (discoveredTools.length === 0) return;
-  discoveredTools = [];
-  updateToolsButton();
-}
-
-function applyWebMCPToolsUpdate(message: unknown): boolean {
-  const tools = selectWebMCPToolsForActivePage(message, activeWebMCPPage);
-  if (!tools) return false;
-  discoveredTools = tools;
-  updateToolsButton();
-  return true;
-}
-
-function updateActivePageIdentity(tabId: unknown, url: string, forceInvalidate = false): void {
-  let nextIdentity = createActiveWebMCPPageIdentity(tabId, url, webMCPPageGeneration);
-  const identityChanged =
-    nextIdentity?.tabId !== activeWebMCPPage?.tabId || nextIdentity?.url !== activeWebMCPPage?.url;
-  if (forceInvalidate || identityChanged) {
-    webMCPPageGeneration += 1;
-    clearDiscoveredTools();
-    nextIdentity = createActiveWebMCPPageIdentity(tabId, url, webMCPPageGeneration);
-  }
-  activeWebMCPPage = nextIdentity;
+function updateActivePage(url: string): void {
   currentPageHostname = pageChipLabel(url);
   setBlockedState(isRestrictedUrl(url));
   updateContextButton();
-}
-
-function refreshWebMCPToolsForActivePage(identity: ActiveWebMCPPageIdentity): void {
-  void chrome.runtime
-    .sendMessage({
-      type: 'WEBMCP_DISCOVER_TOOLS',
-      tabId: identity.tabId,
-      pageGeneration: identity.pageGeneration,
-    })
-    .then((response: unknown) => {
-      // The request may resolve after a tab switch/navigation. Attribution is
-      // rechecked against the current identity before anything is displayed.
-      applyWebMCPToolsUpdate(response);
-    })
-    .catch(() => {
-      // Restricted/unallowlisted pages legitimately have no content script.
-    });
 }
 
 function autoResizeInput(ta: HTMLTextAreaElement): void {
@@ -4622,7 +5310,6 @@ function isRestrictedUrl(url: string): boolean {
  */
 function setBlockedState(blocked: boolean): void {
   const blockedEl = document.getElementById('sp-blocked');
-  const promptChips = document.getElementById('sp-prompt-chips');
   const inputEl = document.getElementById('sp-input') as HTMLTextAreaElement | null;
 
   if (!blockedEl) return;
@@ -4633,12 +5320,9 @@ function setBlockedState(blocked: boolean): void {
 
   if (blocked) {
     blockedEl.classList.add('visible');
-    if (promptChips) promptChips.classList.add('hidden');
     _ctx.pendingPageContext = null;
   } else {
     blockedEl.classList.remove('visible');
-    // Re-show prompt chips only if there are no messages yet
-    if (promptChips && _ctx.messages.length === 0) promptChips.classList.remove('hidden');
   }
   if (inputEl) {
     inputEl.disabled = !availability.chat || managedCloudChatState !== 'ready';
@@ -4650,7 +5334,7 @@ function setBlockedState(blocked: boolean): void {
   }
   updateContextButton();
   if (contextBtn) {
-    contextBtn.disabled = !availability.pageContext;
+    contextBtn.disabled = !availability.pageContext || managedCloudChatState !== 'ready';
     contextBtn.title = availability.pageContext
       ? t('spContextBtnAttach')
       : t('spContextBtnUnavailable');
@@ -4662,14 +5346,14 @@ function setBlockedState(blocked: boolean): void {
  * Queries the active tab URL and updates the persistent context chip label.
  * Safe to call multiple times; falls back gracefully when tab API is unavailable.
  */
-function refreshPageHostname(forceInvalidate = false): void {
+function refreshPageHostname(): void {
   try {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (chrome.runtime.lastError) return;
       const tab = tabs[0];
       const url = tab?.url ?? '';
-      updateActivePageIdentity(tab?.id, url, forceInvalidate);
-      if (activeWebMCPPage) refreshWebMCPToolsForActivePage(activeWebMCPPage);
+      updateActivePage(url);
+      refreshTabGroupUI();
     });
   } catch {
     // chrome.tabs unavailable in test/SSR environment — ignore
@@ -4770,6 +5454,8 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     role: 'dialog',
     'aria-modal': 'true',
     'aria-label': 'Welcome to AGI — first-time setup',
+    'aria-hidden': 'true',
+    inert: '',
   });
 
   // ── Skip button ─────────────────────────────────────────────────────────
@@ -4789,8 +5475,9 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   const step0 = el('div', {
     class: 'sp-ob-step active',
     'data-step': '0',
-    role: 'tabpanel',
+    role: 'group',
     'aria-label': 'Step 1 of 5',
+    'aria-hidden': 'false',
   });
   step0.appendChild(el('div', { class: 'sp-ob-title' }, 'This is a beta feature'));
   const rows0 = el('div', { class: 'sp-ob-rows' });
@@ -4847,8 +5534,9 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   const step1 = el('div', {
     class: 'sp-ob-step',
     'data-step': '1',
-    role: 'tabpanel',
+    role: 'group',
     'aria-label': 'Step 2 of 5',
+    'aria-hidden': 'true',
   });
   const step1Hero = el('div', { class: 'sp-ob-hero' });
   appendSvgString(step1Hero, browserStackSvg);
@@ -4867,8 +5555,9 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   const step2 = el('div', {
     class: 'sp-ob-step',
     'data-step': '2',
-    role: 'tabpanel',
+    role: 'group',
     'aria-label': 'Step 3 of 5',
+    'aria-hidden': 'true',
   });
   const step2Hero = el('div', { class: 'sp-ob-hero' });
   appendSvgString(step2Hero, tabGroupSvg);
@@ -4887,8 +5576,9 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   const step3 = el('div', {
     class: 'sp-ob-step',
     'data-step': '3',
-    role: 'tabpanel',
+    role: 'group',
     'aria-label': 'Step 4 of 5',
+    'aria-hidden': 'true',
   });
   const step3Hero = el('div', { class: 'sp-ob-hero' });
   appendSvgString(step3Hero, shortcutMenuSvg);
@@ -4907,8 +5597,9 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   const step4 = el('div', {
     class: 'sp-ob-step',
     'data-step': '4',
-    role: 'tabpanel',
+    role: 'group',
     'aria-label': 'Step 5 of 5',
+    'aria-hidden': 'true',
   });
   const step4Hero = el('div', { class: 'sp-ob-hero' });
   appendSvgString(step4Hero, pinHintSvg);
@@ -4930,15 +5621,18 @@ function buildOnboardingOverlay(onComplete: () => void): void {
 
   const dotsRow = el('div', {
     class: 'sp-ob-dots',
-    role: 'tablist',
-    'aria-label': 'Onboarding steps',
+    role: 'progressbar',
+    'aria-label': 'Onboarding progress',
+    'aria-valuemin': '1',
+    'aria-valuemax': String(TOTAL_STEPS),
+    'aria-valuenow': '1',
+    'aria-valuetext': `Step 1 of ${TOTAL_STEPS}`,
   });
   const dots: HTMLElement[] = [];
   for (let i = 0; i < TOTAL_STEPS; i++) {
     const dot = el('div', {
       class: i === 0 ? 'sp-ob-dot active' : 'sp-ob-dot',
-      role: 'tab',
-      'aria-label': `Step ${i + 1}`,
+      'aria-hidden': 'true',
     });
     dots.push(dot);
     dotsRow.appendChild(dot);
@@ -4982,18 +5676,26 @@ function buildOnboardingOverlay(onComplete: () => void): void {
   function dismiss(): void {
     markOnboardingComplete();
     overlay.classList.remove('visible');
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.setAttribute('inert', '');
     onComplete();
+    const composer = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+    const fallback = document.getElementById('sp-menu-btn') as HTMLButtonElement | null;
+    (composer && !composer.disabled ? composer : fallback)?.focus();
   }
 
   function goToStep(step: number): void {
     const steps = body.querySelectorAll<HTMLElement>('.sp-ob-step');
     steps.forEach((s, i) => {
       s.classList.toggle('active', i === step);
+      s.setAttribute('aria-hidden', String(i !== step));
     });
     dots.forEach((d, i) => {
       d.classList.toggle('active', i === step);
     });
     currentStep = step;
+    dotsRow.setAttribute('aria-valuenow', String(step + 1));
+    dotsRow.setAttribute('aria-valuetext', `Step ${step + 1} of ${TOTAL_STEPS}`);
     // Back button: hidden on step 0
     if (step === 0) {
       backBtn.setAttribute('hidden', '');
@@ -5028,6 +5730,27 @@ function buildOnboardingOverlay(onComplete: () => void): void {
     if (e.key === 'Escape') {
       e.preventDefault();
       dismiss();
+      return;
+    }
+    if (e.key === 'Tab') {
+      const focusable = Array.from(
+        overlay.querySelectorAll<HTMLElement>(
+          'button:not([disabled]):not([hidden]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((element) => {
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+      if (focusable.length === 0) return;
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   });
 
@@ -5042,6 +5765,8 @@ function showOnboardingOverlay(): void {
   const overlay = document.getElementById('sp-onboarding-overlay');
   if (!overlay) return;
   overlay.classList.add('visible');
+  overlay.setAttribute('aria-hidden', 'false');
+  overlay.removeAttribute('inert');
   // Focus the primary CTA for keyboard users
   const nextBtn = overlay.querySelector<HTMLButtonElement>('.sp-ob-btn-next');
   if (nextBtn) {
@@ -5052,6 +5777,86 @@ function showOnboardingOverlay(): void {
 
 function buildUI(): void {
   clearChildren(document.body);
+
+  const tabGroupNotice = el('div', {
+    id: 'sp-tab-group-notice',
+    role: 'status',
+    'aria-live': 'polite',
+    hidden: '',
+  });
+  document.body.appendChild(tabGroupNotice);
+  let tabGroupNoticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function showTabGroupNotice(message: string, kind: 'success' | 'error'): void {
+    if (tabGroupNoticeTimer) clearTimeout(tabGroupNoticeTimer);
+    tabGroupNotice.textContent = message;
+    tabGroupNotice.dataset['kind'] = kind;
+    tabGroupNotice.removeAttribute('hidden');
+    tabGroupNoticeTimer = setTimeout(() => {
+      tabGroupNotice.setAttribute('hidden', '');
+      tabGroupNoticeTimer = null;
+    }, 3500);
+  }
+
+  // One active-tab group state drives the drawer, Workflows, and composer
+  // toolbar controls. The former three independent booleans immediately
+  // diverged after changing tabs or using a different control.
+  type TabGroupStateRenderer = (grouped: boolean, known: boolean) => void;
+  const tabGroupStateRenderers = new Set<TabGroupStateRenderer>();
+  let currentTabGrouped = false;
+  let tabGroupStateKnown = false;
+  let tabGroupRequestGeneration = 0;
+
+  function publishTabGroupState(grouped: boolean, known: boolean): void {
+    currentTabGrouped = grouped;
+    tabGroupStateKnown = known;
+    for (const renderState of tabGroupStateRenderers) renderState(grouped, known);
+  }
+
+  function registerTabGroupStateRenderer(renderState: TabGroupStateRenderer): void {
+    tabGroupStateRenderers.add(renderState);
+    renderState(currentTabGrouped, tabGroupStateKnown);
+  }
+
+  refreshTabGroupUI = (): void => {
+    const requestGeneration = ++tabGroupRequestGeneration;
+    publishTabGroupState(currentTabGrouped, false);
+    chrome.runtime.sendMessage(
+      { type: 'GET_TAB_GROUP_STATE' },
+      (response: { success?: boolean; grouped?: boolean; error?: string } | undefined) => {
+        if (requestGeneration !== tabGroupRequestGeneration) return;
+        if (chrome.runtime.lastError || response?.success !== true) {
+          publishTabGroupState(currentTabGrouped, false);
+          return;
+        }
+        publishTabGroupState(response.grouped === true, true);
+      },
+    );
+  };
+
+  function requestTabGroupChange(grouped: boolean): void {
+    const requestGeneration = ++tabGroupRequestGeneration;
+    publishTabGroupState(currentTabGrouped, false);
+    chrome.runtime.sendMessage(
+      { type: grouped ? 'ADD_TAB_TO_GROUP' : 'REMOVE_TAB_FROM_GROUP' },
+      (response: { success?: boolean; grouped?: boolean; error?: string } | undefined) => {
+        if (requestGeneration !== tabGroupRequestGeneration) return;
+        if (chrome.runtime.lastError || response?.success !== true) {
+          showTabGroupNotice(
+            response?.error ?? chrome.runtime.lastError?.message ?? t('spTabGroupUpdateFailed'),
+            'error',
+          );
+          refreshTabGroupUI();
+          return;
+        }
+        publishTabGroupState(response.grouped === true, true);
+        showTabGroupNotice(
+          response.grouped === true ? t('spGroupTabAdded') : t('spGroupTabRemoved'),
+          'success',
+        );
+      },
+    );
+  }
 
   const header = el('div', { id: 'sp-header' });
   const headerLeft = el('div', { id: 'sp-header-left' });
@@ -5248,6 +6053,7 @@ function buildUI(): void {
       modelSelectorBtn.classList.remove('open');
       modelSelectorBtn.setAttribute('aria-expanded', 'false');
       saveMessages();
+      modelSelectorBtn.focus();
     });
 
     return opt;
@@ -5334,11 +6140,14 @@ function buildUI(): void {
       id: 'sp-thinking-toggle',
       class: 'sp-thinking-toggle',
       type: 'checkbox',
+      role: 'menuitemcheckbox',
       'aria-label': 'Extended thinking',
+      'aria-checked': String(_ctx.thinkingEnabled),
     }) as HTMLInputElement;
     toggleInput.checked = _ctx.thinkingEnabled;
     toggleInput.addEventListener('change', () => {
       _ctx.thinkingEnabled = toggleInput.checked;
+      toggleInput.setAttribute('aria-checked', String(_ctx.thinkingEnabled));
       chrome.storage.local.set({ agi_thinking_enabled: _ctx.thinkingEnabled }).catch(() => {});
       if (_ctx.thinkingEnabled) {
         toggleLabel.classList.add('active');
@@ -5355,14 +6164,73 @@ function buildUI(): void {
     renderModelDropdown();
     refreshEffortUI();
   };
+  function positionModelDropdown(): void {
+    const trigger = modelSelectorBtn.getBoundingClientRect();
+    const menuWidth = Math.min(232, window.innerWidth - 24);
+    const left = Math.max(12, Math.min(trigger.left, window.innerWidth - menuWidth - 12));
+    const viewportPadding = 12;
+    const gap = 6;
+    const availableBelow = Math.max(0, window.innerHeight - trigger.bottom - viewportPadding);
+    const availableAbove = Math.max(0, trigger.top - viewportPadding);
+    const openBelow = availableBelow >= 220 || availableBelow >= availableAbove;
+    const available = openBelow ? availableBelow : availableAbove;
+    modelDropdownEl.style.position = 'fixed';
+    modelDropdownEl.style.top = openBelow ? `${trigger.bottom + gap}px` : 'auto';
+    modelDropdownEl.style.right = 'auto';
+    modelDropdownEl.style.bottom = openBelow
+      ? 'auto'
+      : `${window.innerHeight - trigger.top + gap}px`;
+    modelDropdownEl.style.left = `${left}px`;
+    modelDropdownEl.style.marginTop = '0';
+    modelDropdownEl.style.maxHeight = `${Math.max(80, Math.min(280, available - gap))}px`;
+  }
   modelSelectorBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const isOpenNow = modelDropdownEl.classList.toggle('open');
     modelSelectorBtn.classList.toggle('open', isOpenNow);
     modelSelectorBtn.setAttribute('aria-expanded', String(isOpenNow));
     if (isOpenNow) {
+      positionModelDropdown();
       modelDropdownEl.querySelector<HTMLButtonElement>('.sp-model-option.selected')?.focus();
     }
+  });
+  window.addEventListener('resize', () => {
+    if (modelDropdownEl.classList.contains('open')) positionModelDropdown();
+  });
+  modelDropdownEl.addEventListener('keydown', (event: KeyboardEvent) => {
+    const options = Array.from(
+      modelDropdownEl.querySelectorAll<HTMLElement>(
+        '.sp-model-option:not(:disabled), .sp-thinking-toggle:not(:disabled)',
+      ),
+    );
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      modelDropdownEl.classList.remove('open');
+      modelSelectorBtn.classList.remove('open');
+      modelSelectorBtn.setAttribute('aria-expanded', 'false');
+      modelSelectorBtn.focus();
+      return;
+    }
+    if (event.key === 'Tab') {
+      modelDropdownEl.classList.remove('open');
+      modelSelectorBtn.classList.remove('open');
+      modelSelectorBtn.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key) || options.length === 0) {
+      return;
+    }
+    event.preventDefault();
+    const current = Math.max(0, options.indexOf(document.activeElement as HTMLElement));
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? options.length - 1
+          : event.key === 'ArrowDown'
+            ? (current + 1) % options.length
+            : (current - 1 + options.length) % options.length;
+    options[nextIndex]?.focus();
   });
   document.addEventListener('click', (e: MouseEvent) => {
     if (!modelSelectorWrap.contains(e.target as Node)) {
@@ -5493,6 +6361,8 @@ function buildUI(): void {
       // Opening history is a read. Adopt the selected id directly unless the
       // atomic session-owner claim found another live window using it.
       _ctx.conversationId = conversationOwner.conversationId;
+      activePersistenceEntry = conversationOwner.forked ? undefined : entry;
+      updatePersistencePill();
       _ctx.selectedModel = normalizeModelId(entry.routing.selectedModel) ?? 'auto';
       _ctx.currentModelKey = entry.routing.currentModelKey;
       _ctx.previousTaskType = entry.routing.previousTaskType;
@@ -5624,6 +6494,7 @@ function buildUI(): void {
     void refreshDrawerMemory();
     void refreshDrawerStats();
     void refreshDrawerTabInfo();
+    refreshTabGroupUI();
     drawerClose.focus();
   }
   function closeDrawer(): void {
@@ -5646,6 +6517,23 @@ function buildUI(): void {
     if (event.key === 'Escape') {
       event.preventDefault();
       closeDrawer();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(
+      drawer.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((node) => node.getAttribute('aria-hidden') !== 'true' && !node.hasAttribute('hidden'));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   });
 
@@ -5687,6 +6575,12 @@ function buildUI(): void {
     autocomplete: 'off',
     hidden: '',
   }) as HTMLInputElement;
+  const drawerHistoryError = el('div', {
+    class: 'sp-drawer-history-error',
+    role: 'status',
+    'aria-live': 'polite',
+    hidden: '',
+  });
   let drawerHistoryEntries: ConversationEntry[] = [];
 
   function renderDrawerHistory(entries: ConversationEntry[]): void {
@@ -5700,18 +6594,42 @@ function buildUI(): void {
       return;
     }
     for (const entry of filteredEntries) {
-      // A real <button>: these rows have a click handler, so as <div>s they were
-      // unreachable by keyboard and had no focus ring. The global
-      // button:focus-visible rule supplies the ring for free.
-      const item = el('button', { class: 'sp-drawer-history-item', type: 'button' });
+      // Two sibling buttons avoid invalid nested interactive controls while
+      // keeping both open and delete actions keyboard-reachable.
+      const item = el('div', { class: 'sp-drawer-history-item' });
+      const openButton = el('button', {
+        class: 'sp-drawer-history-open',
+        type: 'button',
+        'data-conversation-restore': 'true',
+        'aria-label': `Open chat: ${entry.title}`,
+      }) as HTMLButtonElement;
+      openButton.disabled = _ctx.isStreaming || historyRestoreInProgress;
+
+      // Provenance badge, derived from the record already in hand — no extra
+      // storage read. The aria-label states it in words; a glyph alone is not
+      // an accessible way to tell a user where their transcript lives.
+      const persistence = conversationPersistencePresentation(entry);
+      const badge = el('span', {
+        class: 'sp-drawer-history-badge',
+        'data-state': persistence.state,
+        'aria-label': `${persistence.label}. ${persistence.detail}`,
+      });
+      badge.setAttribute('title', badge.getAttribute('aria-label') ?? '');
+      badge.appendChild(renderIcon(persistence.cloudIcon ? Globe : Monitor, 12));
+      openButton.appendChild(badge);
+
       const textCol = el('div', { class: 'sp-drawer-history-text' });
       const title = el('div', { class: 'sp-drawer-history-title' }, entry.title);
       const date = el('div', { class: 'sp-drawer-history-date' }, formatHistoryDate(entry.savedAt));
       textCol.appendChild(title);
       textCol.appendChild(date);
-      item.appendChild(textCol);
+      openButton.appendChild(textCol);
+      item.appendChild(openButton);
 
-      const delBtn = iconButton({ class: 'sp-drawer-history-delete', title: 'Delete' }, Trash2);
+      const delBtn = iconButton(
+        { class: 'sp-drawer-history-delete', title: 'Delete' },
+        Trash2,
+      ) as HTMLButtonElement;
       delBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         const deletingCurrentConversation = entry.id === _ctx.conversationId;
@@ -5719,27 +6637,65 @@ function buildUI(): void {
         if (deletingCurrentConversation) cancelCurrentManagedStream(false);
         const owner = _ctx.managedCloudOwner;
         if (!owner) return;
-        deleteConversation(owner, entry.id)
-          .then(() => {
-            if (
-              deletingCurrentConversation &&
-              _ctx.conversationId === entry.id &&
-              _ctx.conversationGeneration === deletionGeneration
-            ) {
-              resetConversationView();
+        delBtn.disabled = true;
+        drawerHistoryError.textContent = t('spHistoryDeleting');
+        drawerHistoryError.removeAttribute('hidden');
+        void (async () => {
+          // Queue the durable account-side tombstone BEFORE removing the only
+          // local record that knows the cloud id. If the worker restarts or
+          // storage is unavailable, leave the row intact so the user can retry.
+          const cloudConversationId = entry.cloudSync?.conversationId;
+          if (cloudConversationId) {
+            const organizationId = entry.cloudSync?.organizationId;
+            if (organizationId === undefined) {
+              throw new Error('Could not prove the account workspace for this chat deletion');
             }
+            const response = (await chrome.runtime.sendMessage({
+              type: 'DELETE_CLOUD_CONVERSATION',
+              owner,
+              cloudConversationId,
+              organizationId,
+            })) as { success?: boolean; error?: string } | undefined;
+            if (response?.success !== true) {
+              throw new Error(response?.error ?? 'Could not queue account chat deletion');
+            }
+          }
+          await deleteConversation(owner, entry.id);
+          if (
+            deletingCurrentConversation &&
+            _ctx.conversationId === entry.id &&
+            _ctx.conversationGeneration === deletionGeneration
+          ) {
+            resetConversationView();
+          }
+          await refreshDrawerHistory();
+          drawerHistoryError.textContent = t('spHistoryDeleted');
+          drawerHistoryError.removeAttribute('hidden');
+        })()
+          .catch((err) => {
+            console.warn('[SidePanel] history delete failed:', err);
+            drawerHistoryError.textContent = t('spHistoryDeleteFailed');
+            drawerHistoryError.removeAttribute('hidden');
           })
-          .then(() => refreshDrawerHistory())
-          .catch((err) => console.warn('[SidePanel] history delete failed:', err));
+          .finally(() => {
+            delBtn.disabled = false;
+          });
       });
       item.appendChild(delBtn);
 
-      item.addEventListener('click', () => {
-        void restoreHistoryEntry(entry.id).finally(() => {
-          closeDrawer();
-          // Restoring from Recent chats while in Workflows / Computer Use left the
-          // other view on screen with the restored chat hidden behind it.
-          switchTab('chat');
+      openButton.addEventListener('click', () => {
+        drawerHistoryError.textContent = t('spHistoryOpening');
+        drawerHistoryError.removeAttribute('hidden');
+        void openStoredConversation(entry.id).then((opened) => {
+          if (opened) {
+            drawerHistoryError.setAttribute('hidden', '');
+            closeDrawer();
+            return;
+          }
+          drawerHistoryError.textContent = _ctx.isStreaming
+            ? t('spHistoryStopBeforeOpen')
+            : t('spHistoryOpenFailed');
+          drawerHistoryError.removeAttribute('hidden');
         });
       });
       drawerHistoryList.appendChild(item);
@@ -5794,24 +6750,11 @@ function buildUI(): void {
   });
   chatActionsRow.appendChild(drawerSummarizeBtn);
 
-  // Clear conversation button
-  const drawerClearChatBtn = el('button', {
-    class: 'sp-drawer-tool-btn',
-    id: 'sp-drawer-clear-chat-btn',
-    title: 'Clear conversation',
-  });
-  drawerClearChatBtn.appendChild(renderIcon(Trash2, 13));
-  drawerClearChatBtn.appendChild(document.createTextNode(' Clear'));
-  drawerClearChatBtn.addEventListener('click', () => {
-    closeDrawer();
-    cancelCurrentManagedStream(false);
-    resetConversationView();
-  });
-  chatActionsRow.appendChild(drawerClearChatBtn);
-
   chatActionsSection.appendChild(chatActionsRow);
   chatActionsSection.appendChild(drawerHistorySearch);
+  chatActionsSection.appendChild(drawerHistoryError);
   chatActionsSection.appendChild(drawerHistoryList);
+
   drawerBody.appendChild(chatActionsSection);
 
   // ── Section 1: Automation ──────────────────────────────────────────────────
@@ -5881,10 +6824,17 @@ function buildUI(): void {
         type: 'CAPTURE_SCREENSHOT',
         format: 'png',
         quality: 90,
-      })) as { success: boolean; error?: string };
-      if (res.success) {
+      })) as { success: boolean; data?: string; error?: string };
+      if (res.success && res.data) {
+        composerAttachmentNotice = null;
+        const admitted = admitComposerAttachment(res.data);
+        updateAttachmentPreview();
+        if (!admitted) throw new Error(composerAttachmentNotice ?? 'Screenshot could not be added');
         drawerCaptureBtn.textContent = t('spDrawerCaptured');
         drawerCaptureBtn.classList.add('active');
+        closeDrawer();
+        switchTab('chat');
+        inputEl.focus();
         setTimeout(() => {
           drawerCaptureBtn.replaceChildren(
             renderIcon(Camera, 13),
@@ -5894,7 +6844,7 @@ function buildUI(): void {
           (drawerCaptureBtn as HTMLButtonElement).disabled = false;
         }, 1500);
       } else {
-        throw new Error(res.error ?? 'Failed');
+        throw new Error(res.error ?? 'No screenshot data returned');
       }
     } catch {
       drawerCaptureBtn.textContent = t('spDrawerCaptureFailed');
@@ -5939,22 +6889,20 @@ function buildUI(): void {
     title: 'Add current tab to group',
   });
   drawerGroupBtn.appendChild(renderIcon(Folder, 13));
-  let drawerGrouped = false;
   const drawerGroupLabel = document.createTextNode(t('spDrawerGroupTab'));
   drawerGroupBtn.appendChild(drawerGroupLabel);
   drawerGroupBtn.addEventListener('click', () => {
-    const msgType = drawerGrouped ? 'REMOVE_TAB_FROM_GROUP' : 'ADD_TAB_TO_GROUP';
-    chrome.runtime.sendMessage(
-      { type: msgType },
-      (response: { success?: boolean; grouped?: boolean } | undefined) => {
-        if (chrome.runtime.lastError || !response?.success) return;
-        drawerGrouped = response.grouped ?? false;
-        drawerGroupLabel.textContent = drawerGrouped
-          ? t('spDrawerUngroupTab')
-          : t('spDrawerGroupTab');
-        drawerGroupBtn.classList.toggle('active', drawerGrouped);
-      },
-    );
+    requestTabGroupChange(!currentTabGrouped);
+  });
+  registerTabGroupStateRenderer((grouped, known) => {
+    drawerGroupBtn.disabled = !known;
+    drawerGroupLabel.textContent = grouped ? t('spDrawerUngroupTab') : t('spDrawerGroupTab');
+    drawerGroupBtn.classList.toggle('active', grouped && known);
+    drawerGroupBtn.title = known
+      ? grouped
+        ? t('spTabGroupRemoveTitle')
+        : t('spTabGroupAddTitle')
+      : t('spTabGroupChecking');
   });
   toolsRow.appendChild(drawerGroupBtn);
 
@@ -6090,12 +7038,14 @@ function buildUI(): void {
   const inPageSection = el('div', { class: 'sp-drawer-section' });
   inPageSection.appendChild(el('div', { class: 'sp-drawer-section-title' }, 'In-Page Panel'));
   const inPageRow = el('div', { class: 'sp-drawer-toggle-row' });
-  inPageRow.appendChild(el('span', { class: 'sp-drawer-toggle-label' }, 'Page chat overlay'));
+  inPageRow.appendChild(
+    el('span', { class: 'sp-drawer-toggle-label' }, t('spPageAssistantOverlay')),
+  );
   const inPageToggle = el('input', {
     type: 'checkbox',
     class: 'sp-drawer-toggle-switch',
     id: 'sp-drawer-in-page-toggle',
-    'aria-label': 'Toggle in-page panel',
+    'aria-label': t('spPageAssistantToggleAria'),
   }) as HTMLInputElement;
   inPageToggle.checked = true; // default on
   chrome.storage.local.get(SP_IN_PAGE_PANEL_ENABLED_KEY, (result) => {
@@ -6103,13 +7053,36 @@ function buildUI(): void {
     const val = result[SP_IN_PAGE_PANEL_ENABLED_KEY] as boolean | undefined;
     inPageToggle.checked = val !== false;
   });
-  inPageToggle.addEventListener('change', () => {
-    chrome.storage.local
-      .set({ [SP_IN_PAGE_PANEL_ENABLED_KEY]: inPageToggle.checked })
-      .catch(() => {});
+  const inPageToggleStatus = el('div', {
+    class: 'sp-drawer-toggle-status',
+    role: 'status',
+    'aria-live': 'polite',
+    'aria-atomic': 'true',
+  });
+  inPageToggle.addEventListener('change', async () => {
+    const next = inPageToggle.checked;
+    inPageToggle.disabled = true;
+    inPageToggleStatus.textContent = t('spPageAssistantSaving');
+    inPageToggleStatus.removeAttribute('data-kind');
+    try {
+      await chrome.storage.local.set({ [SP_IN_PAGE_PANEL_ENABLED_KEY]: next });
+      inPageToggleStatus.textContent = next
+        ? t('spPageAssistantEnabled')
+        : t('spPageAssistantDisabled');
+    } catch {
+      inPageToggle.checked = !next;
+      inPageToggleStatus.textContent = t('spPreferenceSaveFailed');
+      inPageToggleStatus.setAttribute('data-kind', 'error');
+    } finally {
+      inPageToggle.disabled = false;
+    }
   });
   inPageRow.appendChild(inPageToggle);
   inPageSection.appendChild(inPageRow);
+  inPageSection.appendChild(
+    el('div', { class: 'sp-drawer-toggle-status' }, t('spPageAssistantOneShot')),
+  );
+  inPageSection.appendChild(inPageToggleStatus);
   drawerBody.appendChild(inPageSection);
 
   // ── Section 5: Site Allowlist ──────────────────────────────────────────────
@@ -6119,7 +7092,7 @@ function buildUI(): void {
     el(
       'p',
       { class: 'sp-drawer-allowlist-help' },
-      'Pages on these origins can run AGI automation in their tab. Add the current site, then reload it.',
+      'Approved origins can run AGI browser automation in their tab. The optional page assistant can also send up to 30,000 characters of redacted visible page text from an approved origin to AGI Managed Cloud. Add the current site, then reload it.',
     ),
   );
 
@@ -6634,7 +7607,7 @@ function buildUI(): void {
   signedInView.appendChild(userInfoEl);
   signedInView.appendChild(signoutBtn);
 
-  // ── Paid-plan gate (Chrome is not part of Claude's free chat surfaces) ───
+  // ── Shared AGI account plan and usage ────────────────────────────────────
   const quotaWrap = el('div', {
     class: 'sp-quota-bar-wrap',
     id: 'sp-quota-bar-wrap',
@@ -6754,10 +7727,33 @@ function buildUI(): void {
   // over signinPrompt, signedInView, quotaWrap, quotaBadgeEl, etc.).
   refreshCloudAccountUI = async function (forceAuthRefresh = false): Promise<void> {
     const refreshGeneration = ++cloudAccountRefreshGeneration;
-    const [authContext, accountProfile] = await Promise.all([
-      getManagedCloudAuthContext(forceAuthRefresh),
-      getClerkAccountProfile().catch(() => null),
-    ]);
+    let authContext: Awaited<ReturnType<typeof getManagedCloudAuthContext>>;
+    let accountProfile: Awaited<ReturnType<typeof getClerkAccountProfile>> | null;
+    try {
+      [authContext, accountProfile] = await withTimeout(
+        Promise.all([
+          getManagedCloudAuthContext(forceAuthRefresh),
+          getClerkAccountProfile().catch(() => null),
+        ]),
+        8_000,
+      );
+    } catch {
+      if (refreshGeneration !== cloudAccountRefreshGeneration) return;
+      managedModelAccess = null;
+      signinPrompt.style.display = 'none';
+      signedInView.style.display = '';
+      quotaWrap.style.display = 'none';
+      cloudLinkHint.style.display = 'none';
+      cloudLinkRow.style.display = 'none';
+      quotaBadgeEl.classList.remove('visible', 'has-prompts', 'exhausted');
+      userTierEl.textContent = t('spCloudAccountUnavailable');
+      setManagedCloudChatState('unavailable', {
+        message: t('spGateVerifyFailed'),
+        action: 'retry',
+        actionLabel: t('spGateRetry'),
+      });
+      return;
+    }
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
     const ownerChanged = await transitionManagedCloudOwner(authContext?.owner ?? null);
     if (refreshGeneration !== cloudAccountRefreshGeneration) return;
@@ -6897,7 +7893,7 @@ function buildUI(): void {
       return;
     }
 
-    if (canUseBillingPlanCapability(access.subscriptionTier, 'developer_surfaces')) {
+    if (canUseBillingPlanCapability(access.subscriptionTier, 'managed_chat')) {
       quotaWrap.style.display = '';
       // Shared vocabulary: web and mobile state what is LEFT, this panel stated
       // what was USED — the same number reading as its own opposite depending on
@@ -6911,6 +7907,21 @@ function buildUI(): void {
       quotaLabelEl.textContent = resets
         ? t('spQuotaCloudUsageWithReset', [usage, resets])
         : t('spQuotaCloudUsage', [usage]);
+      if (access.hasUsageRemaining === false) {
+        quotaExhaustedLabel.textContent = t('spQuotaUsageExhausted');
+        quotaUpgradeBtn.textContent = t('spQuotaManageUsage');
+        quotaUpgradeBtn.dataset['destination'] = 'usage';
+        quotaUpgradeRow.style.display = '';
+        quotaBadgeEl.classList.add('visible', 'exhausted');
+        quotaBadgeEl.classList.remove('has-prompts');
+        quotaBadgeEl.textContent = t('spQuotaManageUsage');
+        setManagedCloudChatState('unavailable', {
+          message: t('spGateUsageLimit'),
+          action: 'usage',
+          actionLabel: t('spQuotaManageUsage'),
+        });
+        return;
+      }
       quotaUpgradeRow.style.display = 'none';
       quotaBadgeEl.classList.add('visible', 'has-prompts');
       quotaBadgeEl.classList.remove('exhausted');
@@ -6960,7 +7971,9 @@ function buildUI(): void {
     const url =
       quotaUpgradeBtn.dataset['destination'] === 'billing'
         ? 'https://agiworkforce.com/settings/billing?from=chrome-extension'
-        : 'https://agiworkforce.com/pricing?from=chrome-extension&feature=developer_surfaces';
+        : quotaUpgradeBtn.dataset['destination'] === 'usage'
+          ? 'https://agiworkforce.com/settings/usage?from=chrome-extension'
+          : 'https://agiworkforce.com/pricing?from=chrome-extension&feature=managed_chat';
     chrome.tabs.create({ url }).catch(() => {});
   });
 
@@ -7092,21 +8105,40 @@ function buildUI(): void {
   const tabBar = el('div', { id: 'sp-tab-bar', role: 'tablist', 'aria-label': 'AGI views' });
   const chatTabBtn = el(
     'button',
-    { class: 'sp-tab', 'data-tab': 'chat', role: 'tab', 'aria-selected': 'false' },
+    {
+      class: 'sp-tab sp-tab-active',
+      id: 'sp-tab-chat',
+      'data-tab': 'chat',
+      role: 'tab',
+      'aria-selected': 'true',
+      'aria-controls': 'sp-chat-panel',
+      tabindex: '0',
+    },
     'Chat',
   );
   const workflowsTabBtn = el(
     'button',
-    { class: 'sp-tab', 'data-tab': 'workflows', role: 'tab', 'aria-selected': 'false' },
+    {
+      class: 'sp-tab',
+      id: 'sp-tab-workflows',
+      'data-tab': 'workflows',
+      role: 'tab',
+      'aria-selected': 'false',
+      'aria-controls': 'sp-workflows',
+      tabindex: '-1',
+    },
     'Workflows',
   );
   const cuTabBtn = el(
     'button',
     {
-      class: 'sp-tab sp-tab-active',
+      class: 'sp-tab',
+      id: 'sp-tab-computer-use',
       'data-tab': 'computer-use',
       role: 'tab',
-      'aria-selected': 'true',
+      'aria-selected': 'false',
+      'aria-controls': 'sp-cu-panel',
+      tabindex: '-1',
     },
     'Computer Use',
   );
@@ -7117,6 +8149,9 @@ function buildUI(): void {
 
   // Build computer-use panel (kept in module scope so event handlers can reach it)
   const cuPanel: ComputerUsePanelAPI = buildComputerUsePanel();
+  cuPanel.panelEl.setAttribute('role', 'tabpanel');
+  cuPanel.panelEl.setAttribute('aria-labelledby', 'sp-tab-computer-use');
+  cuPanel.panelEl.setAttribute('aria-hidden', 'true');
 
   function switchTab(tab: SidePanelTab): void {
     const chatPanelEl = document.getElementById('sp-chat-panel');
@@ -7129,9 +8164,15 @@ function buildUI(): void {
     chatTabBtn.setAttribute('aria-selected', String(tab === 'chat'));
     workflowsTabBtn.setAttribute('aria-selected', String(tab === 'workflows'));
     cuTabBtn.setAttribute('aria-selected', String(tab === 'computer-use'));
+    chatTabBtn.tabIndex = tab === 'chat' ? 0 : -1;
+    workflowsTabBtn.tabIndex = tab === 'workflows' ? 0 : -1;
+    cuTabBtn.tabIndex = tab === 'computer-use' ? 0 : -1;
     if (chatPanelEl) chatPanelEl.classList.toggle('sp-tab-hidden', tab !== 'chat');
     if (workflowsPanelEl) workflowsPanelEl.classList.toggle('sp-tab-visible', tab === 'workflows');
     cuPanel.panelEl.classList.toggle('sp-tab-visible', tab === 'computer-use');
+    chatPanelEl?.setAttribute('aria-hidden', String(tab !== 'chat'));
+    workflowsPanelEl?.setAttribute('aria-hidden', String(tab !== 'workflows'));
+    cuPanel.panelEl.setAttribute('aria-hidden', String(tab !== 'computer-use'));
     if (inputAreaEl) inputAreaEl.style.display = tab === 'chat' ? '' : 'none';
     if (toolbarEl) toolbarEl.style.display = tab === 'chat' ? '' : 'none';
     // Only route back to chat from Workflows / Computer Use.
@@ -7147,8 +8188,30 @@ function buildUI(): void {
   chatTabBtn.addEventListener('click', () => switchTab('chat'));
   workflowsTabBtn.addEventListener('click', () => switchTab('workflows'));
   cuTabBtn.addEventListener('click', () => switchTab('computer-use'));
+  const viewTabs = [chatTabBtn, workflowsTabBtn, cuTabBtn];
+  tabBar.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = Math.max(0, viewTabs.indexOf(document.activeElement as HTMLButtonElement));
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? viewTabs.length - 1
+          : event.key === 'ArrowRight'
+            ? (currentIndex + 1) % viewTabs.length
+            : (currentIndex - 1 + viewTabs.length) % viewTabs.length;
+    const nextTab = viewTabs[nextIndex]!;
+    switchTab(nextTab.dataset['tab'] as SidePanelTab);
+    nextTab.focus();
+  });
 
-  const chatPanel = el('div', { id: 'sp-chat-panel' });
+  const chatPanel = el('div', {
+    id: 'sp-chat-panel',
+    role: 'tabpanel',
+    'aria-labelledby': 'sp-tab-chat',
+    'aria-hidden': 'false',
+  });
 
   const msgsArea = el('div', {
     id: 'sp-messages',
@@ -7160,13 +8223,22 @@ function buildUI(): void {
   const emptyState = el('div', { id: 'sp-empty' });
   const emptyIcon = el('div', { id: 'sp-empty-icon' });
   // L-11 audit 2026-05-19: see logo SVG above.
-  const emptyIconSvg = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="40" height="40" aria-hidden="true">
-    <rect width="40" height="40" rx="10" fill="url(#emGrad)" opacity="0.18"/>
-    <circle cx="20" cy="15" r="5" stroke="url(#emGrad)" stroke-width="1.75"/>
-    <path d="M10 32c0-5.523 4.477-8.5 10-8.5s10 2.977 10 8.5" stroke="url(#emGrad)" stroke-width="1.75" stroke-linecap="round"/>
-    <defs><linearGradient id="emGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#21808d"/><stop offset="1" stop-color="#da7756"/>
-    </linearGradient></defs>
+  const emptyIconSvg = `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" aria-hidden="true">
+    <circle cx="24" cy="24" r="4" fill="var(--agi-ext-brand)" opacity="0.2"/>
+    <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <line x1="24" y1="16" x2="24" y2="8" stroke="var(--agi-ext-brand)"/>
+      <line x1="28" y1="17.072" x2="32" y2="10.144"/>
+      <line x1="30.928" y1="20" x2="37.856" y2="16"/>
+      <line x1="32" y1="24" x2="40" y2="24"/>
+      <line x1="30.928" y1="28" x2="37.856" y2="32"/>
+      <line x1="28" y1="30.928" x2="32" y2="37.856"/>
+      <line x1="24" y1="32" x2="24" y2="40"/>
+      <line x1="20" y1="30.928" x2="16" y2="37.856"/>
+      <line x1="17.072" y1="28" x2="10.144" y2="32"/>
+      <line x1="16" y1="24" x2="8" y2="24"/>
+      <line x1="17.072" y1="20" x2="10.144" y2="16"/>
+      <line x1="20" y1="17.072" x2="16" y2="10.144"/>
+    </g>
   </svg>`;
   appendSvgString(emptyIcon, emptyIconSvg);
   emptyState.appendChild(emptyIcon);
@@ -7230,40 +8302,24 @@ function buildUI(): void {
   blockedState.appendChild(blockedCopy);
   msgsArea.appendChild(blockedState);
 
-  // BLOCKER-02b: offline onboarding — shown when bridge is unreachable on first open
-  const offlineOnboarding = el('div', { id: 'sp-offline-onboarding' });
-  const offlineIcon = el('div', { id: 'sp-offline-onboarding-icon' });
-  const offlineIconSvg = `<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" width="40" height="40" aria-hidden="true">
-    <rect width="40" height="40" rx="10" fill="url(#ofGrad)" opacity="0.18"/>
-    <circle cx="20" cy="15" r="5" stroke="url(#ofGrad)" stroke-width="1.75"/>
-    <path d="M10 32c0-5.523 4.477-8.5 10-8.5s10 2.977 10 8.5" stroke="url(#ofGrad)" stroke-width="1.75" stroke-linecap="round"/>
-    <defs><linearGradient id="ofGrad" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
-      <stop stop-color="var(--agi-ext-text-muted)"/><stop offset="1" stop-color="var(--agi-ext-text-muted)"/>
-    </linearGradient></defs>
-  </svg>`;
-  appendSvgString(offlineIcon, offlineIconSvg);
-  offlineOnboarding.appendChild(offlineIcon);
-  offlineOnboarding.appendChild(
-    el('div', { id: 'sp-offline-onboarding-title' }, 'Desktop app not running'),
-  );
-  offlineOnboarding.appendChild(
-    el(
-      'div',
-      { id: 'sp-offline-onboarding-desc' },
-      'AGI runs locally. Open the AGI desktop app to connect, then refresh this panel.',
-    ),
-  );
-  const offlineCta = el('button', { id: 'sp-offline-onboarding-cta' }, 'Download AGI Desktop');
-  offlineCta.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'https://agi.build/download' }).catch(() => {});
-  });
-  offlineOnboarding.appendChild(offlineCta);
-  msgsArea.appendChild(offlineOnboarding);
-
   chatPanel.appendChild(msgsArea);
   document.body.appendChild(chatPanel);
 
-  const workflowsPanel = el('div', { id: 'sp-workflows' });
+  const workflowsPanel = el('div', {
+    id: 'sp-workflows',
+    role: 'tabpanel',
+    'aria-labelledby': 'sp-tab-workflows',
+    'aria-hidden': 'true',
+  });
+  workflowsPanel.appendChild(
+    el('div', {
+      class: 'sp-wf-mutation-status',
+      id: 'sp-wf-mutation-status',
+      role: 'status',
+      'aria-live': 'polite',
+      'aria-atomic': 'true',
+    }),
+  );
 
   const recordSection = el('div', { class: 'sp-wf-section' });
   const recordHeader = el('div', { class: 'sp-wf-section-header' });
@@ -7287,6 +8343,16 @@ function buildUI(): void {
   recordBar.appendChild(recordBtn);
   recordBar.appendChild(actionCounter);
   recordSection.appendChild(recordBar);
+  const recordStatus = el('div', {
+    class: 'sp-wf-record-status',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  recordSection.appendChild(recordStatus);
+  function setRecordingStatus(message: string, kind: 'info' | 'error' = 'info'): void {
+    recordStatus.textContent = message;
+    recordStatus.setAttribute('data-kind', kind);
+  }
 
   // Value-capture opt-in. The content script fully supports recording typed
   // values (password/cc/OTP fields redacted, API-key-shaped tokens scrubbed —
@@ -7302,13 +8368,34 @@ function buildUI(): void {
   captureRow.appendChild(
     el('span', {}, 'Capture typed values (passwords & sensitive fields redacted)'),
   );
-  function syncCaptureValues(): void {
-    chrome.runtime.sendMessage(
-      { type: 'SET_RECORDING_VALUE_CAPTURE', enabled: captureToggle.checked },
-      () => void chrome.runtime.lastError,
-    );
+  function syncCaptureValues(): Promise<boolean> {
+    const next = captureToggle.checked;
+    captureToggle.disabled = true;
+    announceWorkflowMutation(t('spRecordingPrivacySaving'));
+    return new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        { type: 'SET_RECORDING_VALUE_CAPTURE', enabled: next },
+        (response: { success?: boolean } | undefined) => {
+          const runtimeError = chrome.runtime.lastError;
+          captureToggle.disabled = false;
+          if (runtimeError || !response?.success) {
+            captureToggle.checked = !next;
+            announceWorkflowMutation(t('spRecordingPrivacySaveFailed'), 'error');
+            resolve(false);
+            return;
+          }
+          announceWorkflowMutation(
+            next ? t('spRecordingValueCaptureEnabled') : t('spRecordingValueCaptureDisabled'),
+            'success',
+          );
+          resolve(true);
+        },
+      );
+    });
   }
-  captureToggle.addEventListener('change', syncCaptureValues);
+  captureToggle.addEventListener('change', () => {
+    void syncCaptureValues();
+  });
   recordSection.appendChild(captureRow);
 
   const saveDialog = el('div', { class: 'sp-wf-save-dialog', id: 'sp-wf-save-dialog' });
@@ -7347,45 +8434,77 @@ function buildUI(): void {
       recordingPollInterval = null;
     }
   }
-  recordBtn.addEventListener('click', () => {
+  recordBtn.addEventListener('click', async () => {
     if (isRecording) {
-      chrome.runtime.sendMessage({ type: 'STOP_RECORDING' }, () => {
-        if (chrome.runtime.lastError) {
-          setRecordBtnLabel('Error');
-          setTimeout(() => setRecordBtnLabel('Stop'), 1500);
-          return;
-        }
-        isRecording = false;
-        stopRecordingPoll();
-        recordBtn.classList.remove('recording');
-        setRecordBtnLabel('Record');
-        actionCounter.style.display = 'none';
-        saveDialog.classList.add('open');
-        saveNameInput.value = '';
-        saveNameInput.focus();
-      });
+      chrome.runtime.sendMessage(
+        { type: 'STOP_RECORDING' },
+        (response: { success?: boolean; error?: string } | undefined) => {
+          if (chrome.runtime.lastError || !response?.success) {
+            setRecordingStatus(
+              response?.error ?? chrome.runtime.lastError?.message ?? 'Could not stop recording.',
+              'error',
+            );
+            return;
+          }
+          isRecording = false;
+          stopRecordingPoll();
+          recordBtn.classList.remove('recording');
+          setRecordBtnLabel('Record');
+          actionCounter.style.display = 'none';
+          saveDialog.classList.add('open');
+          saveNameInput.value = '';
+          saveNameInput.focus();
+          setRecordingStatus('Recording stopped. Name it to save the workflow.');
+        },
+      );
     } else {
+      let activeTab: chrome.tabs.Tab | undefined;
+      try {
+        [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      } catch {
+        activeTab = undefined;
+      }
+      recordingStartUrl = normalizeShortcutStartUrl(activeTab?.url);
+      if (!recordingStartUrl) {
+        setRecordingStatus('Open an approved web page before starting a recording.', 'error');
+        return;
+      }
       // Sync the value-capture choice to the active tab's content script before
       // recording begins (the toggle may have been set on a different tab).
-      syncCaptureValues();
-      chrome.runtime.sendMessage({ type: 'START_RECORDING' }, () => {
-        if (chrome.runtime.lastError) {
-          setRecordBtnLabel('Error');
-          setTimeout(() => setRecordBtnLabel('Record'), 1500);
-          return;
-        }
-        isRecording = true;
-        recordingActionCount = 0;
-        recordBtn.classList.add('recording');
-        setRecordBtnLabel('Stop');
-        actionCounter.style.display = '';
-        setActionCounterLabel(0);
-        saveDialog.classList.remove('open');
-        startRecordingPoll();
-      });
+      if (!(await syncCaptureValues())) {
+        recordingStartUrl = null;
+        setRecordingStatus(t('spRecordingPrivacySaveFailed'), 'error');
+        return;
+      }
+      chrome.runtime.sendMessage(
+        { type: 'START_RECORDING' },
+        (response: { success?: boolean; error?: string } | undefined) => {
+          if (chrome.runtime.lastError || !response?.success) {
+            recordingStartUrl = null;
+            setRecordingStatus(
+              response?.error ?? chrome.runtime.lastError?.message ?? 'Could not start recording.',
+              'error',
+            );
+            return;
+          }
+          isRecording = true;
+          recordingActionCount = 0;
+          recordBtn.classList.add('recording');
+          setRecordBtnLabel('Stop');
+          actionCounter.style.display = '';
+          setActionCounterLabel(0);
+          saveDialog.classList.remove('open');
+          startRecordingPoll();
+          setRecordingStatus(`Recording actions on ${new URL(recordingStartUrl!).host}.`);
+        },
+      );
     }
   });
-  saveCancelBtn.addEventListener('click', () => saveDialog.classList.remove('open'));
+  saveCancelBtn.addEventListener('click', () => {
+    saveDialog.classList.remove('open');
+    recordingStartUrl = null;
+    setRecordingStatus('Recording discarded.');
+  });
   saveConfirmBtn.addEventListener('click', () => {
     const name = saveNameInput.value.trim();
     if (!name) {
@@ -7413,20 +8532,31 @@ function buildUI(): void {
           saveDialog.classList.remove('open');
           return;
         }
-        chrome.runtime.sendMessage({ type: 'SAVE_SHORTCUT', name, actions: recActions }, () => {
-          if (chrome.runtime.lastError) {
-            const origPlaceholder = saveNameInput.placeholder;
-            saveNameInput.placeholder = t('spShortcutSaveFailed');
-            saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
-            setTimeout(() => {
-              saveNameInput.placeholder = origPlaceholder;
-              saveNameInput.style.borderColor = '';
-            }, 2000);
-            return;
-          }
-          saveDialog.classList.remove('open');
-          refreshWorkflowsShortcuts();
-        });
+        chrome.runtime.sendMessage(
+          { type: 'SAVE_SHORTCUT', name, actions: recActions, startUrl: recordingStartUrl },
+          (saveResponse: { success?: boolean; error?: string } | undefined) => {
+            if (chrome.runtime.lastError || !saveResponse?.success) {
+              const origPlaceholder = saveNameInput.placeholder;
+              saveNameInput.placeholder = t('spShortcutSaveFailed');
+              saveNameInput.style.borderColor = 'var(--agi-ext-danger)';
+              setRecordingStatus(
+                saveResponse?.error ??
+                  chrome.runtime.lastError?.message ??
+                  'Could not save recording.',
+                'error',
+              );
+              setTimeout(() => {
+                saveNameInput.placeholder = origPlaceholder;
+                saveNameInput.style.borderColor = '';
+              }, 2000);
+              return;
+            }
+            saveDialog.classList.remove('open');
+            recordingStartUrl = null;
+            setRecordingStatus('Workflow saved.');
+            refreshWorkflowsShortcuts();
+          },
+        );
       },
     );
   });
@@ -7468,11 +8598,32 @@ function buildUI(): void {
   const createShortcutOverlay = el('div', {
     class: 'sp-create-shortcut-overlay',
     id: 'sp-create-shortcut-overlay',
+    'aria-hidden': 'true',
   });
-  const createShortcutModal = el('div', { class: 'sp-create-shortcut-modal' });
+  const createShortcutModal = el('div', {
+    class: 'sp-create-shortcut-modal',
+    role: 'dialog',
+    'aria-modal': 'true',
+    'aria-labelledby': 'sp-create-shortcut-title',
+  });
   const modalHeader = el('div', { class: 'sp-create-shortcut-header' });
-  modalHeader.appendChild(el('div', { class: 'sp-create-shortcut-title' }, 'Create shortcut'));
-  const modalCloseBtn = el('button', { class: 'sp-create-shortcut-close', title: 'Close' }, '×');
+  modalHeader.appendChild(
+    el(
+      'div',
+      { class: 'sp-create-shortcut-title', id: 'sp-create-shortcut-title' },
+      'Create shortcut',
+    ),
+  );
+  const modalCloseBtn = el(
+    'button',
+    {
+      class: 'sp-create-shortcut-close',
+      type: 'button',
+      title: 'Close',
+      'aria-label': 'Close create shortcut dialog',
+    },
+    '×',
+  );
   modalHeader.appendChild(modalCloseBtn);
   createShortcutModal.appendChild(modalHeader);
 
@@ -7505,14 +8656,22 @@ function buildUI(): void {
   createShortcutOverlay.appendChild(createShortcutModal);
   document.body.appendChild(createShortcutOverlay);
 
+  let createShortcutReturnFocus: HTMLElement = createShortcutBtn;
+
   function openCreateShortcutModal(): void {
     scNameInput.value = '';
     scPromptInput.value = '';
+    if (document.activeElement instanceof HTMLElement) {
+      createShortcutReturnFocus = document.activeElement;
+    }
+    createShortcutOverlay.setAttribute('aria-hidden', 'false');
     createShortcutOverlay.classList.add('open');
     setTimeout(() => scNameInput.focus(), 50);
   }
   function closeCreateShortcutModal(): void {
     createShortcutOverlay.classList.remove('open');
+    createShortcutOverlay.setAttribute('aria-hidden', 'true');
+    createShortcutReturnFocus.focus();
   }
 
   createShortcutBtn.addEventListener('click', openCreateShortcutModal);
@@ -7520,6 +8679,29 @@ function buildUI(): void {
   scCancelBtn.addEventListener('click', closeCreateShortcutModal);
   createShortcutOverlay.addEventListener('click', (e: MouseEvent) => {
     if (e.target === createShortcutOverlay) closeCreateShortcutModal();
+  });
+  createShortcutModal.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeCreateShortcutModal();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const focusable = Array.from(
+      createShortcutModal.querySelectorAll<HTMLElement>(
+        'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((node) => !node.hasAttribute('hidden'));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   });
 
   scSaveBtn.addEventListener('click', () => {
@@ -7541,26 +8723,28 @@ function buildUI(): void {
     }
     (scSaveBtn as HTMLButtonElement).disabled = true;
     scSaveBtn.textContent = t('spShortcutSaving');
-    chrome.runtime.sendMessage({ type: 'SAVE_SHORTCUT', name, actions: [], prompt }, () => {
-      (scSaveBtn as HTMLButtonElement).disabled = false;
-      scSaveBtn.textContent = t('spShortcutCreate');
-      if (chrome.runtime.lastError) {
-        scNameInput.style.borderColor = 'var(--agi-ext-danger)';
-        setTimeout(() => {
-          scNameInput.style.borderColor = '';
-        }, 2000);
-        return;
-      }
-      closeCreateShortcutModal();
-      refreshWorkflowsShortcuts();
-    });
-  });
-
-  scNameInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape') closeCreateShortcutModal();
-  });
-  scPromptInput.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Escape') closeCreateShortcutModal();
+    chrome.runtime.sendMessage(
+      { type: 'SAVE_SHORTCUT', name, actions: [], prompt },
+      (response: { success?: boolean; error?: string } | undefined) => {
+        (scSaveBtn as HTMLButtonElement).disabled = false;
+        scSaveBtn.textContent = t('spShortcutCreate');
+        const runtimeError = chrome.runtime.lastError;
+        if (runtimeError || !response?.success) {
+          scNameInput.style.borderColor = 'var(--agi-ext-danger)';
+          announceWorkflowMutation(
+            response?.error ?? runtimeError?.message ?? t('spShortcutSaveFailed'),
+            'error',
+          );
+          setTimeout(() => {
+            scNameInput.style.borderColor = '';
+          }, 2000);
+          return;
+        }
+        closeCreateShortcutModal();
+        announceWorkflowMutation(`Shortcut "${name}" created.`, 'success');
+        refreshWorkflowsShortcuts();
+      },
+    );
   });
 
   const tasksSection = el('div', { class: 'sp-wf-section' });
@@ -7723,30 +8907,25 @@ function buildUI(): void {
   const wfGroupAddBtn = el('button', { class: 'sp-wf-group-action-btn' }, t('spGroupTabAdd'));
   const wfGroupRemoveBtn = el('button', { class: 'sp-wf-group-action-btn' }, t('spGroupTabRemove'));
   wfGroupAddBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage(
-      { type: 'ADD_TAB_TO_GROUP' },
-      (resp: { success?: boolean } | undefined) => {
-        if (chrome.runtime.lastError || !resp?.success) return;
-        wfGroupAddBtn.classList.add('active');
-        wfGroupAddBtn.textContent = t('spGroupTabAdded');
-        setTimeout(() => {
-          wfGroupAddBtn.classList.remove('active');
-          wfGroupAddBtn.textContent = t('spGroupTabAdd');
-        }, 1500);
-      },
-    );
+    requestTabGroupChange(true);
   });
   wfGroupRemoveBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage(
-      { type: 'REMOVE_TAB_FROM_GROUP' },
-      (resp: { success?: boolean } | undefined) => {
-        if (chrome.runtime.lastError || !resp?.success) return;
-        wfGroupRemoveBtn.textContent = t('spGroupTabRemoved');
-        setTimeout(() => {
-          wfGroupRemoveBtn.textContent = t('spGroupTabRemove');
-        }, 1500);
-      },
-    );
+    requestTabGroupChange(false);
+  });
+  registerTabGroupStateRenderer((grouped, known) => {
+    wfGroupAddBtn.disabled = !known || grouped;
+    wfGroupRemoveBtn.disabled = !known || !grouped;
+    wfGroupAddBtn.classList.toggle('active', grouped && known);
+    wfGroupAddBtn.title = known
+      ? grouped
+        ? t('spTabGroupAlreadyGrouped')
+        : t('spTabGroupAddTitle')
+      : t('spTabGroupChecking');
+    wfGroupRemoveBtn.title = known
+      ? grouped
+        ? t('spTabGroupRemoveTitle')
+        : t('spTabGroupNotGrouped')
+      : t('spTabGroupChecking');
   });
   groupBtnsRow.appendChild(wfGroupAddBtn);
   groupBtnsRow.appendChild(wfGroupRemoveBtn);
@@ -7947,18 +9126,19 @@ function buildUI(): void {
   groupBtn.appendChild(renderIcon(Folder, 14));
   const groupBtnLabel = document.createTextNode(t('spDrawerGroupTab'));
   groupBtn.appendChild(groupBtnLabel);
-  let isGrouped = false;
   groupBtn.addEventListener('click', () => {
-    const msgType = isGrouped ? 'REMOVE_TAB_FROM_GROUP' : 'ADD_TAB_TO_GROUP';
-    chrome.runtime.sendMessage(
-      { type: msgType },
-      (response: { success?: boolean; grouped?: boolean } | undefined) => {
-        if (chrome.runtime.lastError || !response?.success) return;
-        isGrouped = response.grouped ?? false;
-        groupBtnLabel.textContent = isGrouped ? t('spDrawerUngroupTab') : t('spDrawerGroupTab');
-        groupBtn.classList.toggle('has-context', isGrouped);
-      },
-    );
+    requestTabGroupChange(!currentTabGrouped);
+  });
+  registerTabGroupStateRenderer((grouped, known) => {
+    groupBtn.disabled = !known;
+    groupBtnLabel.textContent = grouped ? t('spDrawerUngroupTab') : t('spDrawerGroupTab');
+    groupBtn.classList.toggle('has-context', grouped && known);
+    groupBtn.setAttribute('aria-pressed', grouped && known ? 'true' : 'false');
+    groupBtn.title = known
+      ? grouped
+        ? t('spTabGroupRemoveTitle')
+        : t('spTabGroupAddTitle')
+      : t('spTabGroupChecking');
   });
   toolbar.appendChild(groupBtn);
 
@@ -7992,36 +9172,6 @@ function buildUI(): void {
   shortcutsWrapper.appendChild(shortcutsDropdown);
   shortcutsWrapper.appendChild(shortcutsBtn);
   toolbar.appendChild(shortcutsWrapper);
-
-  const toolsWrapper = el('div', { class: 'sp-tools-wrapper' });
-  const toolsBtn = el('button', {
-    class: 'sp-tool-btn',
-    id: 'sp-tools-btn',
-    title: 'WebMCP tools discovered on this page',
-  });
-  toolsBtn.appendChild(renderIcon(Plug, 14));
-  toolsBtn.appendChild(document.createTextNode(' Tools (0)'));
-
-  const toolsDropdown = el('div', { id: 'sp-tools-dropdown' });
-  setChild(toolsDropdown, {
-    tag: 'div',
-    className: 'sp-tools-empty',
-    text: 'No tools discovered on this page',
-  });
-
-  toolsBtn.addEventListener('click', () => {
-    toolsDropdown.classList.toggle('open');
-  });
-
-  document.addEventListener('click', (e: MouseEvent) => {
-    if (!toolsWrapper.contains(e.target as Node)) {
-      toolsDropdown.classList.remove('open');
-    }
-  });
-
-  toolsWrapper.appendChild(toolsDropdown);
-  toolsWrapper.appendChild(toolsBtn);
-  toolbar.appendChild(toolsWrapper);
 
   document.body.appendChild(toolbar);
 
@@ -8057,7 +9207,7 @@ function buildUI(): void {
         await chrome.tabs.create({ url: 'https://agiworkforce.com' });
       } else if (action === 'upgrade') {
         await chrome.tabs.create({
-          url: 'https://agiworkforce.com/pricing?from=chrome-extension&feature=developer_surfaces',
+          url: 'https://agiworkforce.com/pricing?from=chrome-extension&feature=managed_chat',
         });
       } else if (action === 'billing') {
         await chrome.tabs.create({
@@ -8180,11 +9330,18 @@ function buildUI(): void {
     }
   });
 
-  inputEl.addEventListener('input', () => autoResizeInput(inputEl));
+  inputEl.addEventListener('input', () => {
+    autoResizeInput(inputEl);
+    // The click target is stateful: without recomputing here, typing enabled
+    // Enter-to-send but left the visible Send button in its empty disabled
+    // state until some unrelated chat/account update happened.
+    updateSendButton();
+  });
   inputEl.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       const text = inputEl.value;
+      if (!canAdmitComposerMessage(text)) return;
       inputEl.value = '';
       autoResizeInput(inputEl);
       sendMessage(text);
@@ -8227,6 +9384,7 @@ function buildUI(): void {
       return;
     }
     const text = inputEl.value;
+    if (!canAdmitComposerMessage(text)) return;
     inputEl.value = '';
     autoResizeInput(inputEl);
     sendMessage(text);
@@ -8261,15 +9419,31 @@ function buildUI(): void {
   screenshotItem.addEventListener('click', () => {
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
-    chrome.runtime.sendMessage(
-      { type: 'CAPTURE_SCREENSHOT', format: 'png', quality: 90 },
-      (resp: { success?: boolean; data?: string } | undefined) => {
-        if (chrome.runtime.lastError || !resp?.success || !resp.data) return;
-        composerAttachmentNotice = null;
+    composerAttachmentNotice = null;
+    composerAttachmentIntakeCount += 1;
+    updateAttachmentPreview();
+    const finishScreenshotCapture = (
+      resp: { success?: boolean; data?: string; error?: string } | undefined,
+    ): void => {
+      const runtimeError = chrome.runtime.lastError;
+      if (runtimeError || !resp?.success || !resp.data) {
+        composerAttachmentNotice = resp?.error ?? t('spAttachmentCaptureFailed');
+      } else {
         admitComposerAttachment(resp.data);
-        updateAttachmentPreview();
-      },
-    );
+      }
+      composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
+      updateAttachmentPreview();
+    };
+    try {
+      chrome.runtime.sendMessage(
+        { type: 'CAPTURE_SCREENSHOT', format: 'png', quality: 90 },
+        finishScreenshotCapture,
+      );
+    } catch {
+      composerAttachmentNotice = t('spAttachmentCaptureFailed');
+      composerAttachmentIntakeCount = Math.max(0, composerAttachmentIntakeCount - 1);
+      updateAttachmentPreview();
+    }
   });
 
   const fileItem = el('button', {
@@ -8310,6 +9484,33 @@ function buildUI(): void {
     attachBtn.setAttribute('aria-expanded', String(isOpen));
     if (isOpen) screenshotItem.focus();
   });
+  attachMenu.addEventListener('keydown', (event: KeyboardEvent) => {
+    const items = [screenshotItem, fileItem];
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      attachMenu.classList.remove('open');
+      attachBtn.setAttribute('aria-expanded', 'false');
+      attachBtn.focus();
+      return;
+    }
+    if (event.key === 'Tab') {
+      attachMenu.classList.remove('open');
+      attachBtn.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const current = Math.max(0, items.indexOf(document.activeElement as HTMLButtonElement));
+    const nextIndex =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? items.length - 1
+          : event.key === 'ArrowDown'
+            ? (current + 1) % items.length
+            : (current - 1 + items.length) % items.length;
+    items[nextIndex]?.focus();
+  });
   document.addEventListener('click', (e: MouseEvent) => {
     if (!attachWrapper.contains(e.target as Node)) {
       attachMenu.classList.remove('open');
@@ -8321,9 +9522,7 @@ function buildUI(): void {
   const attachmentBar = el('div', { id: 'sp-attachment-bar' });
   attachmentBar.style.display = 'none';
 
-  inputRow.appendChild(attachWrapper);
   inputRow.appendChild(inputEl);
-  inputRow.appendChild(sendBtn);
 
   // Above the input row: the panel is short, so a downward menu would clip.
   composerShell.appendChild(slashMenu);
@@ -8331,6 +9530,11 @@ function buildUI(): void {
 
   // Persistent page-context chip in the composer bottom bar
   const composerBar = el('div', { id: 'sp-composer-bar' });
+  const composerBarStart = el('div', { class: 'sp-composer-controls-start' });
+  const composerBarEnd = el('div', { class: 'sp-composer-controls-end' });
+  composerBar.appendChild(composerBarStart);
+  composerBar.appendChild(composerBarEnd);
+  composerBarStart.appendChild(attachWrapper);
   contextBtn = el('button', {
     class: 'sp-context-chip',
     id: 'sp-context-chip',
@@ -8358,7 +9562,7 @@ function buildUI(): void {
     }
     updateContextButton();
   });
-  composerBar.appendChild(contextBtn);
+  composerBarStart.appendChild(contextBtn);
 
   // ── Autonomy chip (EXT-11) ────────────────────────────────────────────────
   // The panel had no visible autonomy control: the ask-before-acting gate lived
@@ -8370,10 +9574,52 @@ function buildUI(): void {
     class: 'sp-autonomy-chip',
     id: 'sp-autonomy-chip',
     type: 'button',
+    'aria-haspopup': 'menu',
+    'aria-expanded': 'false',
   }) as HTMLButtonElement;
   const autonomyLabel = el('span', { id: 'sp-autonomy-label' });
   autonomyChip.appendChild(renderIcon(Shield, 11));
   autonomyChip.appendChild(autonomyLabel);
+
+  const autonomyControl = el('div', { class: 'sp-autonomy-control' });
+  const autonomyPopover = el('div', {
+    id: 'sp-autonomy-popover',
+    role: 'menu',
+    'aria-label': 'Browser action approvals',
+  });
+  const autonomyHeading = el('div', { class: 'sp-autonomy-heading' }, 'Browser actions');
+  const askFirstOption = el('button', {
+    class: 'sp-autonomy-option',
+    type: 'button',
+    role: 'menuitemradio',
+  }) as HTMLButtonElement;
+  askFirstOption.appendChild(renderIcon(Shield, 15));
+  const askFirstCopy = el('span', { class: 'sp-autonomy-option-copy' });
+  askFirstCopy.appendChild(el('strong', {}, t('spAutonomyAskFirst')));
+  askFirstCopy.appendChild(el('small', {}, 'Review browser actions before they run'));
+  askFirstOption.appendChild(askFirstCopy);
+  const fullAccessOption = el('button', {
+    class: 'sp-autonomy-option sp-autonomy-option-warning',
+    type: 'button',
+    role: 'menuitemradio',
+  }) as HTMLButtonElement;
+  fullAccessOption.appendChild(renderIcon(Zap, 15));
+  const fullAccessCopy = el('span', { class: 'sp-autonomy-option-copy' });
+  fullAccessCopy.appendChild(el('strong', {}, t('spAutonomyFullAccess')));
+  fullAccessCopy.appendChild(el('small', {}, 'Allow actions on approved sites without asking'));
+  fullAccessOption.appendChild(fullAccessCopy);
+  autonomyPopover.appendChild(autonomyHeading);
+  autonomyPopover.appendChild(askFirstOption);
+  autonomyPopover.appendChild(fullAccessOption);
+  autonomyControl.appendChild(autonomyChip);
+  autonomyControl.appendChild(autonomyPopover);
+
+  function closeAutonomyPopover(returnFocus = false): void {
+    autonomyPopover.classList.remove('open');
+    autonomyPopover.style.transform = '';
+    autonomyChip.setAttribute('aria-expanded', 'false');
+    if (returnFocus) autonomyChip.focus();
+  }
 
   function renderAutonomyChip(askFirst: boolean): void {
     autonomyChip.setAttribute('data-mode', askFirst ? 'ask' : 'full');
@@ -8386,6 +9632,10 @@ function buildUI(): void {
       'aria-label',
       askFirst ? t('spAutonomyAskFirstAria') : t('spAutonomyFullAccessAria'),
     );
+    askFirstOption.setAttribute('aria-checked', String(askFirst));
+    fullAccessOption.setAttribute('aria-checked', String(!askFirst));
+    askFirstOption.classList.toggle('selected', askFirst);
+    fullAccessOption.classList.toggle('selected', !askFirst);
   }
 
   // Default to the safe state until storage answers, matching the rule
@@ -8396,11 +9646,46 @@ function buildUI(): void {
     renderAutonomyChip(items['agi_cu_ask_before_acting'] !== false);
   });
 
-  autonomyChip.addEventListener('click', () => {
-    const askFirst = autonomyChip.getAttribute('data-mode') === 'ask';
-    const next = !askFirst;
-    renderAutonomyChip(next);
-    void chrome.storage.local.set({ agi_cu_ask_before_acting: next });
+  autonomyChip.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const open = autonomyPopover.classList.toggle('open');
+    autonomyChip.setAttribute('aria-expanded', String(open));
+    if (open) {
+      autonomyPopover.style.transform = '';
+      const bounds = autonomyPopover.getBoundingClientRect();
+      const viewportPadding = 12;
+      const shift =
+        bounds.left < viewportPadding
+          ? viewportPadding - bounds.left
+          : bounds.right > window.innerWidth - viewportPadding
+            ? window.innerWidth - viewportPadding - bounds.right
+            : 0;
+      if (shift !== 0) autonomyPopover.style.transform = `translateX(${shift}px)`;
+      const askFirst = autonomyChip.getAttribute('data-mode') === 'ask';
+      (askFirst ? askFirstOption : fullAccessOption).focus();
+    }
+  });
+
+  askFirstOption.addEventListener('click', () => {
+    renderAutonomyChip(true);
+    void chrome.storage.local.set({ agi_cu_ask_before_acting: true });
+    closeAutonomyPopover(true);
+  });
+  fullAccessOption.addEventListener('click', () => {
+    // Full access is deliberately an explicit menu choice. Clicking the status
+    // chip itself never crosses the approval boundary.
+    renderAutonomyChip(false);
+    void chrome.storage.local.set({ agi_cu_ask_before_acting: false });
+    closeAutonomyPopover(true);
+  });
+  autonomyPopover.addEventListener('keydown', (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAutonomyPopover(true);
+    }
+  });
+  document.addEventListener('click', (event: MouseEvent) => {
+    if (!autonomyControl.contains(event.target as Node)) closeAutonomyPopover();
   });
 
   // Keep the chip and the Computer Use checkbox from drifting apart — they are
@@ -8411,8 +9696,6 @@ function buildUI(): void {
     if (!change) return;
     renderAutonomyChip(change.newValue !== false);
   });
-
-  composerBar.appendChild(autonomyChip);
 
   // ── Catalog-driven reasoning effort ─────────────────────────────────────
   // Auto and Quick do not claim a provider effort ladder before the router has
@@ -8533,7 +9816,7 @@ function buildUI(): void {
     effortButton.setAttribute('aria-expanded', 'false');
   });
   renderEffortControl();
-  composerBar.appendChild(effortControl);
+  composerBarEnd.appendChild(effortControl);
 
   // W5-06: per-turn Auto Economy override for lower-latency replies.
   const quickModeToggle = el('button', {
@@ -8573,17 +9856,54 @@ function buildUI(): void {
         console.warn('[SidePanel] Failed to set quick mode:', err);
       });
   });
-  composerBar.appendChild(quickModeToggle);
+  effortPopover.appendChild(quickModeToggle);
 
-  const promptChipsRow = el('div', { id: 'sp-prompt-chips' });
-  for (const meta of PROMPT_CHIP_COMMANDS) {
-    const cmd = meta.display;
-    const chip = el('button', { class: 'sp-cmd-chip', type: 'button' }, cmd);
-    chip.addEventListener('click', () => sendMessage(cmd));
-    promptChipsRow.appendChild(chip);
-  }
+  // Visible persistence policy label. It describes what happens to the current
+  // transcript without claiming that a best-effort network write has already
+  // completed.
+  const persistencePill = el('span', { class: 'sp-persistence-pill', 'data-state': 'local' });
+  const persistencePillIcon = el('span', { class: 'sp-persistence-pill-icon' });
+  const persistencePillText = el('span');
+  persistencePill.appendChild(persistencePillIcon);
+  persistencePill.appendChild(persistencePillText);
+  updatePersistencePill = () => {
+    const presentation =
+      _ctx.messages.length === 0
+        ? conversationPersistencePresentation(undefined)
+        : !currentConversationCloudEligible()
+          ? {
+              state: 'local' as const,
+              label: 'Saved on this device',
+              detail:
+                'This chat includes a Local, BYOK, or unknown-provenance turn, so it stays here.',
+              cloudIcon: false,
+            }
+          : activePersistenceEntry
+            ? conversationPersistencePresentation(activePersistenceEntry)
+            : {
+                state: 'pending' as const,
+                label: 'Syncing to your account',
+                detail:
+                  'The browser-local chat stays authoritative while the account copy is created.',
+                cloudIcon: true,
+              };
+    persistencePill.setAttribute('data-state', presentation.state);
+    clearChildren(persistencePillIcon);
+    persistencePillIcon.appendChild(renderIcon(presentation.cloudIcon ? Globe : Monitor, 11));
+    persistencePillText.textContent = presentation.label;
+    persistencePill.setAttribute('aria-label', `${presentation.label}. ${presentation.detail}`);
+    persistencePill.setAttribute('title', presentation.detail);
+  };
+  updatePersistencePill();
 
+  const trustStrip = el('div', { class: 'sp-trust-strip' });
+  trustStrip.appendChild(persistencePill);
+  trustStrip.appendChild(autonomyControl);
+
+  composerBarEnd.appendChild(micBtn);
+  composerBarEnd.appendChild(sendBtn);
   composerShell.appendChild(composerBar);
+  composerShell.appendChild(trustStrip);
 
   // Bridge-offline notice — shown at the top of the input area when the
   // desktop bridge is not connected. Includes a reconnect button that
@@ -8613,7 +9933,6 @@ function buildUI(): void {
   inputArea.appendChild(bridgeNotice);
   inputArea.appendChild(attachmentBar);
   inputArea.appendChild(composerShell);
-  inputArea.appendChild(promptChipsRow);
   document.body.appendChild(inputArea);
   setManagedCloudChatState(managedCloudChatState, {
     message: managedCloudGateMessage,
@@ -8680,7 +9999,17 @@ function refreshShortcuts(): void {
           }
         | undefined,
     ) => {
-      if (chrome.runtime.lastError || !response?.success) return;
+      if (chrome.runtime.lastError || !response?.success) {
+        const dropdown = document.getElementById('sp-shortcuts-dropdown');
+        if (dropdown) {
+          setChild(dropdown, {
+            tag: 'div',
+            className: 'sp-shortcuts-status',
+            text: t('spWorkflowLoadFailed'),
+          });
+        }
+        return;
+      }
       const dropdown = document.getElementById('sp-shortcuts-dropdown');
       if (!dropdown) return;
       clearChildren(dropdown);
@@ -8786,6 +10115,7 @@ function refreshShortcuts(): void {
                 type: 'SAVE_SHORTCUT',
                 name,
                 actions: recActions,
+                startUrl: recordingStartUrl,
               },
               (saveResponse: { success?: boolean; error?: string } | undefined) => {
                 if (chrome.runtime.lastError || !saveResponse?.success) {
@@ -8809,6 +10139,16 @@ function refreshShortcuts(): void {
   );
 }
 
+function announceWorkflowMutation(
+  message: string,
+  kind: 'info' | 'success' | 'error' = 'info',
+): void {
+  const status = document.getElementById('sp-wf-mutation-status');
+  if (!status) return;
+  status.textContent = message;
+  status.setAttribute('data-kind', kind);
+}
+
 function refreshWorkflowsShortcuts(): void {
   chrome.runtime.sendMessage(
     { type: 'LIST_SHORTCUTS' },
@@ -8828,7 +10168,10 @@ function refreshWorkflowsShortcuts(): void {
           }
         | undefined,
     ) => {
-      if (chrome.runtime.lastError || !response?.success) return;
+      if (chrome.runtime.lastError || !response?.success) {
+        announceWorkflowMutation(t('spWorkflowLoadFailed'), 'error');
+        return;
+      }
       const list = document.getElementById('sp-wf-shortcuts-list');
       const countBadge = document.getElementById('sp-wf-shortcuts-count');
       if (!list) return;
@@ -8898,21 +10241,35 @@ function renderShortcutRows(
       'button',
       { class: 'sp-wf-btn-replay', title: 'Replay workflow' },
       t('spShortcutPlay'),
-    );
+    ) as HTMLButtonElement;
     playBtn.addEventListener('click', () => {
-      playBtn.textContent = '...';
-      (playBtn as HTMLButtonElement).disabled = true;
+      playBtn.textContent = t('spWorkflowRunningButton');
+      playBtn.disabled = true;
+      announceWorkflowMutation(t('spWorkflowRunning', [sc.name]));
       chrome.runtime.sendMessage(
         { type: 'REPLAY_SHORTCUT', shortcutId: sc.id },
         (resp: { success?: boolean } | undefined) => {
           playBtn.textContent = t('spShortcutPlay');
-          (playBtn as HTMLButtonElement).disabled = false;
+          playBtn.disabled = false;
           // A prompt shortcut produces an answer rather than a page effect.
           // Show it here instead of leaving the user with a spinner that
           // finished and nothing to read.
-          if (chrome.runtime.lastError || !resp?.success) return;
-          if (!isPromptBased || !resultConversationId) return;
-          void openStoredConversation(resultConversationId);
+          if (chrome.runtime.lastError || !resp?.success) {
+            announceWorkflowMutation(t('spWorkflowRunFailed', [sc.name]), 'error');
+            return;
+          }
+          if (!isPromptBased || !resultConversationId) {
+            announceWorkflowMutation(t('spWorkflowCompleted', [sc.name]), 'success');
+            return;
+          }
+          void openStoredConversation(resultConversationId).then((opened) => {
+            announceWorkflowMutation(
+              opened
+                ? t('spWorkflowCompletedOpen', [sc.name])
+                : t('spWorkflowCompletedOpenFailed', [sc.name]),
+              opened ? 'success' : 'error',
+            );
+          });
         },
       );
     });
@@ -8921,17 +10278,33 @@ function renderShortcutRows(
       const resultBtn = iconButton(
         { class: 'sp-wf-task-result', title: 'View last result' },
         MessageSquare,
-      );
+      ) as HTMLButtonElement;
+      resultBtn.dataset['conversationRestore'] = 'true';
+      resultBtn.disabled = _ctx.isStreaming || historyRestoreInProgress;
       resultBtn.addEventListener('click', () => {
         void openStoredConversation(resultConversationId);
       });
       btns.appendChild(resultBtn);
     }
-    const delBtn = iconButton({ class: 'sp-wf-btn-delete', title: 'Delete' }, Trash2);
+    const delBtn = iconButton(
+      { class: 'sp-wf-btn-delete', title: 'Delete' },
+      Trash2,
+    ) as HTMLButtonElement;
     delBtn.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'DELETE_SHORTCUT', shortcutId: sc.id }, () => {
-        if (!chrome.runtime.lastError) refreshWorkflowsShortcuts();
-      });
+      delBtn.disabled = true;
+      announceWorkflowMutation(t('spWorkflowDeleting', [sc.name]));
+      chrome.runtime.sendMessage(
+        { type: 'DELETE_SHORTCUT', shortcutId: sc.id },
+        (response: { success?: boolean } | undefined) => {
+          if (chrome.runtime.lastError || !response?.success) {
+            delBtn.disabled = false;
+            announceWorkflowMutation(t('spWorkflowDeleteFailed', [sc.name]), 'error');
+            return;
+          }
+          announceWorkflowMutation(t('spWorkflowDeleted', [sc.name]), 'success');
+          refreshWorkflowsShortcuts();
+        },
+      );
     });
     btns.appendChild(delBtn);
     item.appendChild(btns);
@@ -8959,7 +10332,10 @@ function refreshWorkflowsTasks(): void {
         | undefined,
     ) => {
       if (!scheduledTasksRequestFence.isCurrent(request, _ctx.managedCloudOwner)) return;
-      if (chrome.runtime.lastError || !response?.success) return;
+      if (chrome.runtime.lastError || !response?.success) {
+        announceWorkflowMutation(t('spTaskLoadFailed'), 'error');
+        return;
+      }
       const list = document.getElementById('sp-wf-tasks-list');
       const countBadge = document.getElementById('sp-wf-tasks-count');
       if (!list) return;
@@ -9013,10 +10389,18 @@ function renderTaskRows(
     const toggle = el('input', {
       type: 'checkbox',
       class: 'sp-wf-task-toggle',
+      'aria-label': task.enabled
+        ? t('spTaskDisableAria', [task.name])
+        : t('spTaskEnableAria', [task.name]),
     }) as HTMLInputElement;
     toggle.checked = task.enabled;
     toggle.addEventListener('change', () => {
       const previousState = !toggle.checked;
+      const nextState = toggle.checked;
+      toggle.disabled = true;
+      announceWorkflowMutation(
+        nextState ? t('spTaskEnabling', [task.name]) : t('spTaskDisabling', [task.name]),
+      );
       chrome.runtime.sendMessage(
         {
           type: 'UPDATE_SCHEDULED_TASK',
@@ -9025,9 +10409,25 @@ function renderTaskRows(
           updates: { enabled: toggle.checked },
         },
         (resp: { success?: boolean } | undefined) => {
+          toggle.disabled = false;
           if (chrome.runtime.lastError || !resp?.success) {
             toggle.checked = previousState;
+            announceWorkflowMutation(
+              nextState
+                ? t('spTaskEnableFailed', [task.name])
+                : t('spTaskDisableFailed', [task.name]),
+              'error',
+            );
+            return;
           }
+          toggle.setAttribute(
+            'aria-label',
+            nextState ? t('spTaskDisableAria', [task.name]) : t('spTaskEnableAria', [task.name]),
+          );
+          announceWorkflowMutation(
+            nextState ? t('spTaskEnabled', [task.name]) : t('spTaskDisabled', [task.name]),
+            'success',
+          );
         },
       );
     });
@@ -9041,18 +10441,31 @@ function renderTaskRows(
       const resultBtn = iconButton(
         { class: 'sp-wf-task-result', title: 'View last result' },
         MessageSquare,
-      );
+      ) as HTMLButtonElement;
+      resultBtn.dataset['conversationRestore'] = 'true';
+      resultBtn.disabled = _ctx.isStreaming || historyRestoreInProgress;
       resultBtn.addEventListener('click', () => {
         void openStoredConversation(resultConversationId);
       });
       item.appendChild(resultBtn);
     }
-    const delBtn = iconButton({ class: 'sp-wf-task-delete', title: 'Delete task' }, Trash2);
+    const delBtn = iconButton(
+      { class: 'sp-wf-task-delete', title: `Delete task ${task.name}` },
+      Trash2,
+    ) as HTMLButtonElement;
     delBtn.addEventListener('click', () => {
+      delBtn.disabled = true;
+      announceWorkflowMutation(t('spWorkflowDeleting', [task.name]));
       chrome.runtime.sendMessage(
         { type: 'DELETE_SCHEDULED_TASK', taskId: task.id, ...(owner ? { owner } : {}) },
-        () => {
-          if (!chrome.runtime.lastError) refreshWorkflowsTasks();
+        (resp: { success?: boolean } | undefined) => {
+          if (chrome.runtime.lastError || !resp?.success) {
+            delBtn.disabled = false;
+            announceWorkflowMutation(t('spWorkflowDeleteFailed', [task.name]), 'error');
+            return;
+          }
+          announceWorkflowMutation(t('spWorkflowDeleted', [task.name]), 'success');
+          refreshWorkflowsTasks();
         },
       );
     });
@@ -9084,15 +10497,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     return;
   }
 
-  if (envelope.type === 'WEBMCP_TOOLS_CHANGED') {
-    // Background broadcasts are hints only. Re-discover with this panel's
-    // current navigation epoch so a delayed payload can never populate UI.
-    if (isWebMCPUpdateHintForActivePage(msg, activeWebMCPPage) && activeWebMCPPage) {
-      refreshWebMCPToolsForActivePage(activeWebMCPPage);
-    }
-    return;
-  }
-
   // Live connection-status updates from the background service worker.
   // Background now also broadcasts these via chrome.runtime.sendMessage so
   // extension views (side panel, popup) receive them — not just content scripts.
@@ -9104,7 +10508,6 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       updateConnectionStatus();
       if (nowConnected) {
         chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
-        hideLegacyOfflineOnboarding();
       }
     }
     return;
@@ -9126,9 +10529,11 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (chunk.id !== _ctx.currentStreamId) return;
   armManagedStreamInactivityWatchdog(chunk.id);
   const streamUsedQuick = quickModeByStreamId.get(chunk.id) === true;
+  const routeStamped = captureResolvedRoute(chunk.id, chunk.routing);
   // Quick is a request-only overlay. Its resolved economy route must not
   // replace the conversation's durable Auto/manual route or effort.
-  if (!streamUsedQuick && applyRoutingContinuation(chunk.routing)) saveMessages();
+  const continuationChanged = !streamUsedQuick && applyRoutingContinuation(chunk.routing);
+  if (routeStamped || continuationChanged) saveMessages();
 
   if (chunk.error) {
     // Cloud free-trial sentinels: show actionable UI instead of a generic error
@@ -9158,6 +10563,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     if (existing) {
       existing.cloudAgentRun = { ...chunk.cloudRun };
       if (streamUsedQuick) existing.managedQuickMode = true;
+      stampResolvedRoute(chunk.id, existing);
     } else {
       // The gateway publishes its durable run handle before the first text
       // frame. Persist an invisible placeholder immediately so closing the
@@ -9168,8 +10574,11 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
         content: '',
         streaming: true,
         timestamp: Date.now(),
+        // Every CHAT_CHUNK originates from a Managed Cloud stream.
+        runtime: 'managed-cloud',
         cloudAgentRun: { ...chunk.cloudRun },
         ...(streamUsedQuick ? { managedQuickMode: true } : {}),
+        ...(resolvedRouteByStreamId.get(chunk.id) ?? {}),
       });
       trimLiveMessages();
     }
@@ -9191,7 +10600,12 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       before.cloudApprovalError = undefined;
     }
     const assistant = applyCanonicalAgentEvent(_ctx.messages, chunk.id, chunk.agentEvent);
+    // `applyCanonicalAgentEvent` can be the first thing to materialize the
+    // assistant turn (an agent event can precede any text frame), so stamp
+    // provenance here too — an unstamped turn would disqualify the thread.
+    assistant.runtime = 'managed-cloud';
     if (streamUsedQuick) assistant.managedQuickMode = true;
+    stampResolvedRoute(chunk.id, assistant);
     if (
       chunk.agentEvent.event.type === 'approval-resolved' &&
       !assistant.agentActivity?.entries.some(
@@ -9209,6 +10623,41 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     saveMessages();
   }
 
+  if ((chunk.generatedFiles?.length ?? 0) > 0 || chunk.interactiveCard) {
+    removeThinking();
+    let assistant = _ctx.messages.find((message) => message.id === chunk.id);
+    if (!assistant) {
+      assistant = {
+        id: chunk.id,
+        role: 'assistant',
+        content: '',
+        streaming: true,
+        timestamp: Date.now(),
+        runtime: 'managed-cloud',
+        ...(streamUsedQuick ? { managedQuickMode: true } : {}),
+        ...(cloudRunsByStreamId.get(chunk.id)
+          ? { cloudAgentRun: { ...cloudRunsByStreamId.get(chunk.id)! } }
+          : {}),
+      };
+      _ctx.messages.push(assistant);
+      trimLiveMessages();
+    }
+    stampResolvedRoute(chunk.id, assistant);
+    if (chunk.generatedFiles?.length) {
+      const files = new Map((assistant.generatedFiles ?? []).map((file) => [file.id, file]));
+      for (const file of chunk.generatedFiles) files.set(file.id, { ...file });
+      assistant.generatedFiles = [...files.values()].slice(-MAX_STORED_GENERATED_FILES_PER_MESSAGE);
+    }
+    if (chunk.interactiveCard) {
+      const cards = new Map((assistant.interactiveCards ?? []).map((card) => [card.cardId, card]));
+      cards.set(chunk.interactiveCard.cardId, { ...chunk.interactiveCard });
+      assistant.interactiveCards = [...cards.values()].slice(-INTERACTIVE_CARDS_MAX_PER_MESSAGE);
+    }
+    _ctx.needsMessageRebuild = true;
+    renderMessages();
+    saveMessages();
+  }
+
   if (!chunk.text && !chunk.done) return;
 
   if (!_ctx.messages.find((m) => m.id === chunk.id)) {
@@ -9219,16 +10668,20 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
       content: chunk.text,
       streaming: true,
       timestamp: Date.now(),
+      // Every CHAT_CHUNK originates from a Managed Cloud stream.
+      runtime: 'managed-cloud',
       ...(streamUsedQuick ? { managedQuickMode: true } : {}),
       ...(cloudRunsByStreamId.get(chunk.id)
         ? { cloudAgentRun: { ...cloudRunsByStreamId.get(chunk.id)! } }
         : {}),
+      ...(resolvedRouteByStreamId.get(chunk.id) ?? {}),
     };
     _ctx.messages.push(assistantMsg);
     trimLiveMessages();
     renderMessages();
   } else {
     const existing = _ctx.messages.find((m) => m.id === chunk.id)!;
+    stampResolvedRoute(chunk.id, existing);
     existing.content += chunk.text;
     if (document.getElementById(`sp-bubble-${chunk.id}`)) {
       updateStreamingBubble(chunk.id, existing.content, chunk.done);
@@ -9239,6 +10692,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   }
 
   if (chunk.done) {
+    resolvedRouteByStreamId.delete(chunk.id);
     quickModeByStreamId.delete(chunk.id);
     ownerByStreamId.delete(chunk.id);
     stopManagedChatKeepalive();
@@ -9266,24 +10720,9 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
 injectStyles();
 buildUI();
 chrome.tabs.onActivated?.addListener(() => {
-  refreshPageHostname(true);
+  refreshPageHostname();
 });
-chrome.tabs.onUpdated?.addListener((tabId, changeInfo) => {
-  // When the current page is restricted its normalized identity is null. Keep
-  // querying this panel window on navigation so a later HTTP(S) page becomes
-  // discoverable; updates still cannot inject tools without an exact identity.
-  if (activeWebMCPPage && tabId !== activeWebMCPPage.tabId) return;
-  if (!activeWebMCPPage) {
-    if (changeInfo.url !== undefined || changeInfo.status === 'complete') {
-      refreshPageHostname(changeInfo.url !== undefined);
-    }
-    return;
-  }
-  if (typeof changeInfo.url === 'string') {
-    // Clear the old page's tools synchronously; the follow-up query refreshes
-    // the exact active identity and asks that content script for its catalog.
-    updateActivePageIdentity(tabId, changeInfo.url, true);
-  }
+chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
   if (changeInfo.url !== undefined || changeInfo.status === 'complete') {
     refreshPageHostname();
   }
@@ -9362,13 +10801,9 @@ async function probeBridgeStatus(): Promise<void> {
       // Mark ever-connected so the onboarding screen is not shown on future
       // opens even if the desktop is temporarily closed.
       chrome.storage.local.set({ agi_ever_connected: true }).catch(() => {});
-      hideLegacyOfflineOnboarding();
-    } else {
-      hideLegacyOfflineOnboarding();
     }
   } catch {
     // A restarting native worker never blocks Managed Cloud chat.
-    hideLegacyOfflineOnboarding();
   }
 }
 
@@ -9486,6 +10921,9 @@ async function checkPendingContextHandoff(): Promise<void> {
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes[BROWSER_STORE_KEY]) {
+    void refreshActivePersistenceState();
+  }
   if (area === 'session' && changes['agi_pending_chat']?.newValue) {
     checkPendingChat();
   }

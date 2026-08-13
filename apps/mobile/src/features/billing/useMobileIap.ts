@@ -44,6 +44,25 @@ function purchaseErrorMessage(error: PurchaseError | Error): string {
   return message || 'The store could not complete this purchase.';
 }
 
+/**
+ * Store and catalog SDK failures can include parser/runtime implementation
+ * details (for example when an older deployment returns an HTML fallback for
+ * a JSON route). Billing renders this string directly, so keep diagnostics in
+ * development logs and show a stable recovery message to the user.
+ */
+function nativeBillingErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) return fallback;
+  const message = error.message.trim();
+  if (
+    !message ||
+    /json\s*parse|unexpected\s+(?:character|token)|invalid\s+json|<!doctype|<html/i.test(message)
+  ) {
+    if (__DEV__ && message) console.warn('[billing] Native billing response was invalid:', message);
+    return fallback;
+  }
+  return message;
+}
+
 export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState {
   const refreshTier = useTierStore((state) => state.refreshTier);
   const [catalog, setCatalog] = useState<MobileIapCatalogResponse | null>(null);
@@ -140,9 +159,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       setCatalog(null);
       catalogRef.current = null;
       setError(
-        catalogError instanceof Error
-          ? catalogError.message
-          : 'Native purchases are unavailable right now.',
+        nativeBillingErrorMessage(catalogError, 'Native purchases are unavailable right now.'),
       );
     } finally {
       setCatalogLoading(false);

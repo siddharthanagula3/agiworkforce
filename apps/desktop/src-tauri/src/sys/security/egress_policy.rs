@@ -25,14 +25,12 @@
 //!   reqwest does when it connects still wins. Closing that needs connect-time
 //!   address pinning (a custom connector/`resolve()` override) or an OS-level
 //!   firewall, neither of which exists yet.
-//! * A NAME THAT DOES NOT RESOLVE IS ALLOWED THROUGH. The judgement is
-//!   `deny if any resolved address is internal`; a lookup failure yields no
-//!   addresses and therefore no denial, on the reasoning that a name the
-//!   resolver cannot answer for is a name the transport cannot connect to
-//!   either. A resolver that can be made to fail on demand collapses this into
-//!   the rebinding race above. The canonical cloud-metadata names are
-//!   additionally refused by name (`is_metadata_name`) so that the concrete
-//!   IMDS case does not depend on being inside the cloud that publishes them.
+//! * DNS FAILS CLOSED. A hostname has to resolve to at least one public address
+//!   before an arbitrary-public request is allowed. Treating lookup failure as
+//!   permission made the validator and transport two independent DNS queries:
+//!   an attacker could fail the first one and answer the second one internally.
+//!   This does not fully close the public-then-private rebinding race; doing
+//!   that still needs connect-time address pinning or an OS-level firewall.
 //!
 //! REDIRECTS are part of the destination, not an afterthought: judging only the
 //! first URL is no guard at all when the client follows up to ten further hops.
@@ -56,6 +54,10 @@ pub enum EgressDenial {
     /// the public internet — loopback, private, link-local (cloud metadata),
     /// CGNAT, multicast, or reserved.
     InternalDestination(String),
+    /// The host could not be proven public because DNS returned no addresses
+    /// or failed. Public-only callers fail closed rather than handing the same
+    /// name to the transport for a second, potentially different lookup.
+    UnresolvedDestination(String),
 }
 
 impl fmt::Display for EgressDenial {
@@ -68,6 +70,10 @@ impl fmt::Display for EgressDenial {
             EgressDenial::InternalDestination(host) => write!(
                 f,
                 "Destination {host} is not reachable on the public internet and is blocked by the egress policy"
+            ),
+            EgressDenial::UnresolvedDestination(host) => write!(
+                f,
+                "Destination {host} could not be resolved to a public internet address and is blocked by the egress policy"
             ),
         }
     }
@@ -152,21 +158,27 @@ pub(crate) fn judge_destination(
             }
             // The name itself proves nothing: an attacker-controlled A record is
             // the cheapest way to point a public-looking host at 169.254.169.254.
-            // Judge what it resolves to. A lookup that fails yields no addresses
-            // and so no denial — see the module doc for why, and for what that
-            // leaves open.
+            // Judge what it resolves to. A lookup failure is not evidence that
+            // the destination is public, so the public-only boundary fails
+            // closed instead of letting reqwest perform a second DNS query.
             let port = parsed.port_or_known_default().unwrap_or(80);
-            if let Ok(addresses) = resolver.resolve(domain, port) {
-                for address in addresses {
-                    let internal = match address {
-                        IpAddr::V4(ip) => is_internal_ipv4(ip),
-                        IpAddr::V6(ip) => is_internal_ipv6(ip),
-                    };
-                    if internal {
-                        return Err(EgressDenial::InternalDestination(format!(
-                            "{host_str} (resolves to {address})"
-                        )));
-                    }
+            let addresses = resolver
+                .resolve(domain, port)
+                .map_err(|_| EgressDenial::UnresolvedDestination(host_str.to_string()))?;
+            if addresses.is_empty() {
+                return Err(EgressDenial::UnresolvedDestination(
+                    host_str.to_string(),
+                ));
+            }
+            for address in addresses {
+                let internal = match address {
+                    IpAddr::V4(ip) => is_internal_ipv4(ip),
+                    IpAddr::V6(ip) => is_internal_ipv6(ip),
+                };
+                if internal {
+                    return Err(EgressDenial::InternalDestination(format!(
+                        "{host_str} (resolves to {address})"
+                    )));
                 }
             }
         }
@@ -288,6 +300,88 @@ pub fn public_destination_redirect_policy() -> reqwest::redirect::Policy {
     })
 }
 
+/// Redirect policy for a public-only client.
+///
+/// Unlike [`public_destination_redirect_policy`], this policy has no
+/// same-origin compatibility exemption: every `Location` target is resolved
+/// and judged. Use this for user-, extension-, automation-, or LLM-selected
+/// public URLs. Intentional loopback clients (Ollama, CDP, local API servers)
+/// must keep their own explicitly local transport instead.
+pub fn strict_public_destination_redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if attempt.previous().len() >= MAX_REDIRECT_HOPS {
+            return attempt.error("too many redirects");
+        }
+
+        match ensure_public_http_destination(attempt.url().as_str()) {
+            Ok(()) => attempt.follow(),
+            Err(denial) => attempt.error(denial),
+        }
+    })
+}
+
+/// A reqwest client whose request builder cannot be created until the initial
+/// URL is proven public, and whose redirect policy repeats that proof for every
+/// hop. Keeping the inner client private prevents a caller from accidentally
+/// bypassing the first-hop check while reusing the transport.
+#[derive(Clone)]
+pub struct PublicHttpClient {
+    inner: reqwest::Client,
+}
+
+impl PublicHttpClient {
+    /// Build a public-only client with reqwest's standard configuration.
+    pub fn new() -> Self {
+        Self::with_builder(reqwest::Client::builder())
+            .expect("standard public HTTP client configuration must build")
+    }
+
+    /// Build a public-only client while retaining caller-specific settings
+    /// such as timeout or user agent. The redirect policy is always replaced
+    /// with the strict per-hop public policy.
+    pub fn with_builder(builder: reqwest::ClientBuilder) -> Result<Self, reqwest::Error> {
+        let inner = builder
+            .redirect(strict_public_destination_redirect_policy())
+            .build()?;
+        Ok(Self { inner })
+    }
+
+    pub fn request(
+        &self,
+        method: reqwest::Method,
+        url: &str,
+    ) -> Result<reqwest::RequestBuilder, EgressDenial> {
+        ensure_public_http_destination(url)?;
+        Ok(self.inner.request(method, url))
+    }
+
+    pub fn get(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
+        self.request(reqwest::Method::GET, url)
+    }
+
+    pub fn post(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
+        self.request(reqwest::Method::POST, url)
+    }
+
+    pub fn put(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
+        self.request(reqwest::Method::PUT, url)
+    }
+
+    pub fn patch(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
+        self.request(reqwest::Method::PATCH, url)
+    }
+
+    pub fn delete(&self, url: &str) -> Result<reqwest::RequestBuilder, EgressDenial> {
+        self.request(reqwest::Method::DELETE, url)
+    }
+}
+
+impl Default for PublicHttpClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// True when two URLs share scheme, host and effective port.
 fn same_origin(left: &url::Url, right: &url::Url) -> bool {
     left.scheme() == right.scheme()
@@ -393,13 +487,70 @@ mod tests {
         }
     }
 
-    /// A name the resolver cannot answer for is allowed through — the transport
-    /// cannot connect to it either. Pinned so the trade-off in the module doc
-    /// stays a decision rather than an accident.
+    /// A failed validation lookup cannot be treated as permission to let the
+    /// transport perform a second, potentially different DNS lookup.
     #[test]
-    fn allows_names_that_do_not_resolve() {
+    fn rejects_names_that_do_not_resolve() {
         let resolver = StubResolver::new(&[]);
-        assert!(judge_destination("https://nothing.invalid/", &resolver).is_ok());
+        assert!(matches!(
+            judge_destination("https://nothing.invalid/", &resolver),
+            Err(EgressDenial::UnresolvedDestination(_))
+        ));
+    }
+
+    #[test]
+    fn public_client_refuses_an_internal_initial_url_before_building_a_request() {
+        let client = PublicHttpClient::new();
+        assert!(matches!(
+            client.get("http://127.0.0.1/latest/meta-data/"),
+            Err(EgressDenial::InternalDestination(_))
+        ));
+    }
+
+    /// These are the source-proven arbitrary-public native egress surfaces.
+    /// Pinning their use of the boundary prevents a later feature edit from
+    /// quietly replacing the guarded client with `reqwest::Client::new()`.
+    #[test]
+    fn arbitrary_public_surfaces_remain_wired_to_the_public_boundary() {
+        let guarded_surfaces = [
+            (
+                "Discord webhook",
+                include_str!("../../features/messaging/discord.rs"),
+                "client: PublicHttpClient",
+            ),
+            (
+                "generic webhook",
+                include_str!("../../features/webhooks/mod.rs"),
+                "client: PublicHttpClient",
+            ),
+            (
+                "scheduler webhook",
+                include_str!("../commands/scheduler.rs"),
+                "egress_policy::PublicHttpClient::new()",
+            ),
+            (
+                "LLM API upload/download",
+                include_str!("../../core/llm/tool_executor/api_tools.rs"),
+                "PublicHttpClient::new()",
+            ),
+            (
+                "LLM physical scrape",
+                include_str!("../../core/llm/tool_executor/search_tools.rs"),
+                "PublicHttpClient::with_builder",
+            ),
+            (
+                "AGI API tools",
+                include_str!("../../core/agi/api_tools_impl.rs"),
+                "execute_public_request(request)",
+            ),
+        ];
+
+        for (name, source, boundary_marker) in guarded_surfaces {
+            assert!(
+                source.contains(boundary_marker),
+                "{name} no longer uses the strict public HTTP boundary"
+            );
+        }
     }
 
     /// The canonical metadata names are refused by name, so the IMDS case does

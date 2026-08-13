@@ -1,6 +1,7 @@
 import 'server-only';
 
 import type { NextRequest } from 'next/server';
+import { MANAGED_CLOUD_ORGANIZATION_HEADER } from '@agiworkforce/cloud-contracts';
 import { createDatabaseClient, type DatabaseAdapter } from '@agiworkforce/data-layer';
 import { auth } from '@clerk/nextjs/server';
 import { createError } from '@/lib/errors';
@@ -49,7 +50,7 @@ export interface UserScopedDb {
  * forged selection degrades to Personal, and the database independently reads
  * membership again for admin visibility and org writes.
  */
-export const ACTIVE_ORG_HEADER = 'x-agi-organization-id';
+export const ACTIVE_ORG_HEADER = MANAGED_CLOUD_ORGANIZATION_HEADER;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

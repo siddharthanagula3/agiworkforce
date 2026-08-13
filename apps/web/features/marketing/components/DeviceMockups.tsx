@@ -42,6 +42,8 @@ export interface DeviceWindowProps {
   title?: string;
   badge?: string;
   className?: string;
+  /** Trust route shown inside mock chat surfaces. Defaults to Local. */
+  routeMode?: 'local' | 'byok' | 'managed';
 }
 
 function deviceStyle(type: DeviceType): CSSProperties {
@@ -127,7 +129,27 @@ export function DesktopWindow({
   title = 'AGI Workforce',
   badge = 'Local',
   className,
+  routeMode = 'local',
 }: DeviceWindowProps) {
+  const routeCopy =
+    routeMode === 'byok'
+      ? {
+          mode: 'BYOK',
+          greeting: 'What can I help with, BYOK?',
+          model: 'Select provider model ▾',
+        }
+      : routeMode === 'managed'
+        ? {
+            mode: 'Managed Cloud',
+            greeting: 'What can I help with in Cloud?',
+            model: 'Select managed model ▾',
+          }
+        : {
+            mode: 'Local Mode',
+            greeting: 'What can I help with, Local?',
+            model: 'Select model ▾',
+          };
+
   return (
     <DeviceRoot type="desktop" label={`${title} desktop app interface`} className={className}>
       <WindowBar title={title} badge={badge} />
@@ -150,11 +172,11 @@ export function DesktopWindow({
           <p className="agi-desk-foot">→ Sign in · Cloud sync</p>
         </div>
         <div className="agi-desk-main">
-          <span className="agi-desk-mode">Local Mode</span>
-          <p className="agi-desk-greet">What can I help with, Local?</p>
+          <span className="agi-desk-mode">{routeCopy.mode}</span>
+          <p className="agi-desk-greet">{routeCopy.greeting}</p>
           <div className="agi-dev-composer">
             <span className="agi-dev-ghost">How can I help you today?</span>
-            <span className="agi-dev-modelchip">Select model ▾</span>
+            <span className="agi-dev-modelchip">{routeCopy.model}</span>
           </div>
           <p className="agi-desk-hint">AI can make mistakes. Verify important information.</p>
         </div>
@@ -434,21 +456,34 @@ export function TerminalWindow({
   title = 'agi · zsh',
   badge = 'sandboxed',
   className,
+  routeMode = 'local',
 }: DeviceWindowProps) {
+  const isByok = routeMode === 'byok';
+  const isManaged = routeMode === 'managed';
+  const routeLabel = isByok ? 'BYOK' : isManaged ? 'managed cloud' : 'local model';
+  const providerLabel = isByok ? 'your provider' : isManaged ? 'AGI managed' : 'ollama(local)';
+  const boundaryLabel = isByok
+    ? '● BYOK · direct to your provider'
+    : isManaged
+      ? '● cloud · managed by AGI'
+      : '● local · on-device & private';
+  const footerMode = isByok ? 'BYOK' : isManaged ? 'cloud' : 'local';
+
   return (
     <DeviceRoot type="terminal" label="AGI CLI interface" className={className}>
       <WindowBar title={title} badge={badge} />
       <div className="agi-dev-body agi-term" aria-hidden="true">
         <p className="agi-term-line agi-term-line--dim agi-term-strip">
           <span>
-            AGI · <span className="agi-term-ok">local model</span> · ollama(local)
+            AGI · <span className="agi-term-ok">{routeLabel}</span> · {providerLabel}
           </span>
           <span className="agi-term-hud">
-            in 0 · out 0 · <span className="agi-term-ok">$0.0000</span> · ctx 0%
+            in 0 · out 0 ·{' '}
+            <span className="agi-term-ok">{isByok ? 'provider billed' : '$0.0000'}</span> · ctx 0%
           </span>
         </p>
         <p className="agi-term-line">Welcome to AGI</p>
-        <p className="agi-term-line agi-term-ok">● local · on-device &amp; private</p>
+        <p className="agi-term-line agi-term-ok">{boundaryLabel}</p>
         <p className="agi-term-line agi-term-line--dim">
           Choose Local, BYOK, or Cloud with /model.
         </p>
@@ -460,7 +495,7 @@ export function TerminalWindow({
           <span className="agi-term-caret" />
         </p>
         <p className="agi-term-line agi-term-line--dim">
-          Default · local · effort:Medium · sandbox: seatbelt
+          Default · {footerMode} · effort:Medium · sandbox: seatbelt
         </p>
       </div>
     </DeviceRoot>

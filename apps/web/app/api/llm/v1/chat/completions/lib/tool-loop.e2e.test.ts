@@ -582,7 +582,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
 
     expect(output).toContain('"status":"failed"');
-    expect(output).toContain('Execution environment unavailable');
+    expect(output).toContain('Code execution is unavailable');
 
     // Never silently falls through -- the tool result message carries the explicit error.
     // buildToolLoopStream(provider, processed, stepRequest, responseModel) --
@@ -591,7 +591,7 @@ describe('runToolLoop end-to-end (mocked provider + mocked E2B executor)', () =>
       messages: Array<{ role: string; content: string }>;
     };
     const toolResultMessage = secondCallRequest.messages.find((m) => m.role === 'tool');
-    expect(toolResultMessage?.content).toContain('Execution environment unavailable');
+    expect(toolResultMessage?.content).toContain('Code execution is unavailable');
   });
 
   it('pauses (not kills) the conversation-scoped sandbox at turn end instead of disposing it', async () => {

@@ -720,6 +720,20 @@ pub struct ModelInfo {
     pub name: String,
     pub provider: String,
     pub available: bool,
+    #[serde(
+        rename = "runtimeCapabilities",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub runtime_capabilities: Option<RuntimeModelCapabilities>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RuntimeModelCapabilities {
+    pub tools: bool,
+    pub vision: bool,
+    pub thinking: bool,
+    pub context_window: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -776,6 +790,7 @@ pub async fn llm_get_available_models(
             name: m.name.clone(),
             provider: m.provider.clone(),
             available: false,
+            runtime_capabilities: None,
         })
         .collect();
 
@@ -1106,35 +1121,43 @@ async fn list_ollama_models_internal() -> Result<Vec<ModelInfo>, String> {
         .await
         .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
 
-    let models = tags_response
-        .models
+    let mut models = Vec::with_capacity(tags_response.models.len());
+    for model in tags_response.models {
+        let details = model.details.as_ref();
+        let detail_label = [
+            details.and_then(|value| value.parameter_size.clone()),
+            details.and_then(|value| value.quantization_level.clone()),
+            details.and_then(|value| value.family.clone()),
+        ]
         .into_iter()
-        .map(|m| {
-            let param_size = m
-                .details
-                .as_ref()
-                .and_then(|d| d.parameter_size.clone())
-                .unwrap_or_default();
+        .flatten()
+        .filter(|value| !value.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join(" · ");
+        let capabilities = crate::core::llm::capability_detection::detect_ollama_capabilities(
+            &client,
+            OLLAMA_DEFAULT_BASE_URL,
+            &model.name,
+        )
+        .await;
 
-            let is_small = param_size.ends_with('B')
-                && param_size
-                    .trim_end_matches('B')
-                    .parse::<f64>()
-                    .unwrap_or(100.0)
-                    <= 20.0;
-
-            ModelInfo {
-                id: m.name.clone(),
-                name: if is_small {
-                    format!("{} ({} - Recommended)", m.name, param_size)
-                } else {
-                    format!("{} ({})", m.name, param_size)
-                },
-                provider: "ollama".to_string(),
-                available: true,
-            }
-        })
-        .collect();
+        models.push(ModelInfo {
+            id: model.name.clone(),
+            name: if detail_label.is_empty() {
+                model.name
+            } else {
+                format!("{} ({})", model.name, detail_label)
+            },
+            provider: "ollama".to_string(),
+            available: true,
+            runtime_capabilities: Some(RuntimeModelCapabilities {
+                tools: capabilities.supports_tools,
+                vision: capabilities.supports_vision,
+                thinking: capabilities.supports_thinking,
+                context_window: capabilities.context_length,
+            }),
+        });
+    }
 
     Ok(models)
 }
@@ -1196,6 +1219,7 @@ async fn list_openai_compat_models_internal(
             name: m.id,
             provider: provider_id.clone(),
             available: true,
+            runtime_capabilities: None,
         })
         .collect())
 }
@@ -1285,6 +1309,7 @@ fn map_openrouter_entry(entry: &OpenRouterModelEntry) -> Option<ModelInfo> {
         name: entry.name.clone().unwrap_or_else(|| id.to_string()),
         provider: Provider::OpenRouter.as_string().to_string(),
         available: true,
+        runtime_capabilities: None,
     })
 }
 

@@ -160,6 +160,17 @@ describe('ToolCallTimeline', () => {
     expect(getByText('Decision saved: allow')).toBeTruthy();
     expect(getByText('Allowed')).toBeTruthy();
   });
+
+  it('surfaces failure and supplied duration in the compact row', () => {
+    const tools = [makeTool({ status: 'failed', duration: 1_250, output: 'Provider timed out' })];
+    const { getByText, getByLabelText } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
+    );
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(getByText('Failed · 1.3s')).toBeTruthy();
+    expect(getByLabelText(/failed/i)).toBeTruthy();
+  });
 });
 
 /**
