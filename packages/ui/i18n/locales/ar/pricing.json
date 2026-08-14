@@ -84,5 +84,20 @@
   "seatCadenceMonthly_one": "مقعد واحد · فوترة شهرية",
   "seatCadenceMonthly_other": "{{count}} مقاعد · فوترة شهرية",
   "seatCadenceAnnual_one": "مقعد واحد · فوترة سنوية",
-  "seatCadenceAnnual_other": "{{count}} مقاعد · فوترة سنوية"
+  "seatCadenceAnnual_other": "{{count}} مقاعد · فوترة سنوية",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "5 مشاريع مع 1 غيغابايت من تخزين المعرفة",
+  "basicFeature5": "محادثتان في وقت واحد وحتى 50 أداة موصّل",
+  "basicFeature6": "مهمتان مجدولتان وبيئات معزولة مُدارة لمدة 10 دقائق",
+  "proFeature4": "25 مشروعًا مع 10 غيغابايت من تخزين المعرفة",
+  "proFeature5": "توليد الصور وAGI Work والوصول إلى واجهة برمجة التطبيقات المُدارة",
+  "proFeature6": "CLI وChrome وVS Code، بالإضافة إلى 5 مهام مجدولة",
+  "maxFeature4": "مشاريع وتخزين وخوادم MCP مخصصة غير محدودة",
+  "maxFeature5": "8 محادثات في وقت واحد وحتى 300 أداة موصّل",
+  "maxFeature6": "10 مهام مجدولة وبيئات معزولة مُدارة لمدة 30 دقيقة",
+  "max15xFeature4": "مشاريع وتخزين وخوادم MCP مخصصة غير محدودة",
+  "max15xFeature5": "12 محادثة في وقت واحد وحتى 500 أداة موصّل",
+  "max15xFeature6": "25 مهمة مجدولة وبيئات معزولة مُدارة لمدة 60 دقيقة"
 }

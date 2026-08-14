@@ -938,6 +938,18 @@ export default function PricingPage() {
                     <CheckIcon />
                     {t('basicFeature3')}
                   </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature4')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature5')}
+                  </li>
+                  <li>
+                    <CheckIcon />
+                    {t('basicFeature6')}
+                  </li>
                 </ul>
                 {renderPlanAction('basic', t('basicCta'))}
               </Reveal>
@@ -967,6 +979,18 @@ export default function PricingPage() {
                   <CheckIcon />
                   {t('proFeature3')}
                 </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature4')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature5')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {t('proFeature6')}
+                </li>
               </ul>
               {renderPlanAction('pro', t('proCta'))}
             </Reveal>
@@ -976,32 +1000,44 @@ export default function PricingPage() {
                 cards inside a four-card layout. The selector keeps both buyable
                 without spending a column on each. */}
             <Reveal as="article" delay={120} className="agi-tier">
-              <h3 className="agi-tier-name">{maxVariant === 'max' ? max.label : max15x.label}</h3>
-              <div className="agi-tier-toggle" role="group" aria-label={t('maxVariantLabel')}>
-                <button
-                  type="button"
-                  aria-pressed={maxVariant === 'max'}
-                  onClick={() => setMaxVariant('max')}
-                  className={
-                    maxVariant === 'max'
-                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                      : 'agi-tier-toggle-btn'
-                  }
-                >
-                  {max.label}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={maxVariant === 'max_15x'}
-                  onClick={() => setMaxVariant('max_15x')}
-                  className={
-                    maxVariant === 'max_15x'
-                      ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
-                      : 'agi-tier-toggle-btn'
-                  }
-                >
-                  {max15x.label}
-                </button>
+              {/* Name and capacity selector share one row. The selector used to
+                  sit on its own line below, which read as a second control
+                  rather than as part of the plan's identity — and every label
+                  said "Max": the heading, and both buttons. The family name
+                  carries "Max" once and the buttons carry only the multiplier
+                  they switch, so the row states the plan and its two capacities
+                  without repeating itself. The full catalog label still appears
+                  on the CTA, which is where the exact product name matters. */}
+              <div className="agi-tier-head">
+                <h3 className="agi-tier-name">{t('maxFamilyName')}</h3>
+                <div className="agi-tier-toggle" role="group" aria-label={t('maxVariantLabel')}>
+                  <button
+                    type="button"
+                    aria-pressed={maxVariant === 'max'}
+                    aria-label={max.label}
+                    onClick={() => setMaxVariant('max')}
+                    className={
+                      maxVariant === 'max'
+                        ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                        : 'agi-tier-toggle-btn'
+                    }
+                  >
+                    {t('maxVariant5x')}
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={maxVariant === 'max_15x'}
+                    aria-label={max15x.label}
+                    onClick={() => setMaxVariant('max_15x')}
+                    className={
+                      maxVariant === 'max_15x'
+                        ? 'agi-tier-toggle-btn agi-tier-toggle-btn--active'
+                        : 'agi-tier-toggle-btn'
+                    }
+                  >
+                    {t('maxVariant15x')}
+                  </button>
+                </div>
               </div>
               <p className="agi-tier-price">
                 <span className="agi-tier-price-num">
@@ -1024,6 +1060,18 @@ export default function PricingPage() {
                 <li>
                   <CheckIcon />
                   {maxVariant === 'max' ? t('maxFeature3') : t('max15xFeature3')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {maxVariant === 'max' ? t('maxFeature4') : t('max15xFeature4')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {maxVariant === 'max' ? t('maxFeature5') : t('max15xFeature5')}
+                </li>
+                <li>
+                  <CheckIcon />
+                  {maxVariant === 'max' ? t('maxFeature6') : t('max15xFeature6')}
                 </li>
               </ul>
               {maxVariant === 'max'

@@ -84,5 +84,20 @@
   "seatCadenceMonthly_one": "{{count}}석 · 월별 청구",
   "seatCadenceMonthly_other": "{{count}}석 · 월별 청구",
   "seatCadenceAnnual_one": "{{count}}석 · 연간 청구",
-  "seatCadenceAnnual_other": "{{count}}석 · 연간 청구"
+  "seatCadenceAnnual_other": "{{count}}석 · 연간 청구",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "프로젝트 5개, 지식 저장소 1GB",
+  "basicFeature5": "동시 채팅 2개, 커넥터 도구 최대 50개",
+  "basicFeature6": "예약 작업 2개, 10분 관리형 샌드박스",
+  "proFeature4": "프로젝트 25개, 지식 저장소 10GB",
+  "proFeature5": "이미지 생성, AGI Work, 관리형 API 액세스",
+  "proFeature6": "CLI, Chrome, VS Code 및 예약 작업 5개",
+  "maxFeature4": "무제한 프로젝트, 저장소, 맞춤 MCP 서버",
+  "maxFeature5": "동시 채팅 8개, 커넥터 도구 최대 300개",
+  "maxFeature6": "예약 작업 10개, 30분 관리형 샌드박스",
+  "max15xFeature4": "무제한 프로젝트, 저장소, 맞춤 MCP 서버",
+  "max15xFeature5": "동시 채팅 12개, 커넥터 도구 최대 500개",
+  "max15xFeature6": "예약 작업 25개, 60분 관리형 샌드박스"
 }

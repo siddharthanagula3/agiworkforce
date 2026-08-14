@@ -84,5 +84,20 @@
   "seatCadenceMonthly_one": "{{count}} siège · facturation mensuelle",
   "seatCadenceMonthly_other": "{{count}} sièges · facturation mensuelle",
   "seatCadenceAnnual_one": "{{count}} siège · facturation annuelle",
-  "seatCadenceAnnual_other": "{{count}} sièges · facturation annuelle"
+  "seatCadenceAnnual_other": "{{count}} sièges · facturation annuelle",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "5 projets avec 1 Go de stockage de connaissances",
+  "basicFeature5": "2 conversations simultanées et jusqu'à 50 outils de connecteurs",
+  "basicFeature6": "2 tâches planifiées et bacs à sable gérés de 10 minutes",
+  "proFeature4": "25 projets avec 10 Go de stockage de connaissances",
+  "proFeature5": "Génération d'images, AGI Work et accès à l'API gérée",
+  "proFeature6": "CLI, Chrome et VS Code, plus 5 tâches planifiées",
+  "maxFeature4": "Projets, stockage et serveurs MCP personnalisés illimités",
+  "maxFeature5": "8 conversations simultanées et jusqu'à 300 outils de connecteurs",
+  "maxFeature6": "10 tâches planifiées et bacs à sable gérés de 30 minutes",
+  "max15xFeature4": "Projets, stockage et serveurs MCP personnalisés illimités",
+  "max15xFeature5": "12 conversations simultanées et jusqu'à 500 outils de connecteurs",
+  "max15xFeature6": "25 tâches planifiées et bacs à sable gérés de 60 minutes"
 }
