@@ -1123,3 +1123,44 @@ unconfigured rather than misnamed.
 
 I have not changed any Stripe object or production variable: the mode decision is
 a founder call, and setting them piecemeal is how a catalog ends up half-migrated.
+
+---
+
+## 27. Grant the Stripe CLI "Prices Write" so the stale live prices can be retired
+
+**Status:** `BLOCKED_BY_HUMAN`. Attempted on 2026-08-14 and refused:
+
+```
+Permission denied. The provided key 'rk_live_…zpFQTb' does not have the required
+permissions for this endpoint on account 'acct_1SgweG0zEfO6BZMh'. Enabling
+"Prices Write" ('plan_write') permissions on this key would allow this request.
+```
+
+Five prices are still ACTIVE in live mode and every one contradicts the published
+pricing, so they are a live trap the moment anyone flips `STRIPE_SECRET_KEY`:
+
+| Price                            | Live amount       | Published    |
+| -------------------------------- | ----------------- | ------------ |
+| `price_1Sgwx10zEfO6BZMh7thtFU77` | Hobby $10 / mo    | plan retired |
+| `price_1Sgwx20zEfO6BZMhbgpxL8TI` | Hobby $59.88 / yr | plan retired |
+| `price_1Sgwx20zEfO6BZMh3ix7hivi` | Pro $29.99 / mo   | **$20**      |
+| `price_1Sgwx30zEfO6BZMhJXsduOyl` | Pro $299.99 / yr  | **$200**     |
+| `price_1Sgwx30zEfO6BZMhJqItFYKF` | Max $299.99 / mo  | **$100**     |
+
+(`price_1Sgwx40zEfO6BZMhYS63EnfW`, Max $2,999.88/yr, is already archived.)
+
+Nothing depends on them — no production subscription references any live-mode
+price, because production runs in test mode (see §26). Archiving is reversible;
+Stripe cannot delete a price, only deactivate it.
+
+**Do:** open
+<https://dashboard.stripe.com/b/acct_1SgweG0zEfO6BZMh?destination=%2Fapikeys%2Fmk_1TkUf10zEfO6BZMhUZoAAoJu%2Fedit>
+and enable **Prices Write** (`plan_write`) on that restricted key.
+
+**Then tell Claude**, and the five will be archived and re-verified by listing
+them back — the first attempt reported success on output that was actually the
+permission error, so the result is confirmed by re-reading Stripe, not by
+trusting the write command.
+
+Nothing in test mode needs archiving: every ACTIVE test price is the current
+catalog and is in use.
