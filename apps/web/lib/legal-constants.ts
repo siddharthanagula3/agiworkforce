@@ -119,6 +119,15 @@ export const POLICY_LAST_UPDATED = {
   cookies: '2026-08-14',
   subprocessors: '2026-08-14',
   security: '2026-08-14',
+  /**
+   * /trust kept its own `LAST_REVIEWED` string in a different format ("14
+   * August 2026") while every other document read its date from here. Two
+   * formats and two sources for the same kind of fact is how one of them goes
+   * stale unnoticed, so /trust now reads this. Its NEXT_REVIEW constant stays
+   * local — a forward-looking commitment is not a revision date, and
+   * trust-surface-claims.test.ts requires it by name.
+   */
+  trust: '2026-08-14',
   sla: '2026-08-05',
   refunds: '2026-08-13',
   accessibility: '2026-08-05',
