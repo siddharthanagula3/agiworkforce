@@ -73,7 +73,7 @@ import { MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH } from '@agiworkforce/cloud-contr
 import { ComposerFeedbackDialog } from './ComposerFeedbackDialog';
 import { CameraCaptureDialog } from './CameraCaptureDialog';
 import { buildAgiWorkGoalInput, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
-import { AI_INTERACTION_DISCLOSURE } from '@/lib/compliance/ai-act';
+import { AI_ACCURACY_DISCLAIMER } from '@/lib/compliance/ai-act';
 import {
   getImageAspectOptionsForModel,
   IMAGE_MODEL_DEFAULT,
@@ -3536,10 +3536,12 @@ const ChatComposerNewComponent = ({
             <span aria-hidden="true">·</span>
           </>
         ) : null}
-        {/* EU AI Act Article 50(1): the person must be told they are
-            interacting with an AI system. Every web chat entry point mounts
-            this composer, so this is the disclosure for all of them. */}
-        <span data-testid="ai-act-interaction-disclosure">{AI_INTERACTION_DISCLOSURE}</span>
+        {/* Accuracy caveat, in the position ChatGPT and Claude both use. The
+            explicit Article 50(1) "you are interacting with an AI system"
+            sentence was removed on 2026-08-14 in reliance on the regulation's
+            obviousness carve-out — lib/compliance/ai-act.ts carries the
+            reasoning and the list of what must NOT be trimmed with it. */}
+        <span data-testid="ai-accuracy-disclaimer">{AI_ACCURACY_DISCLAIMER}</span>
         <span aria-hidden="true">·</span>
         <Link
           href="/privacy"
