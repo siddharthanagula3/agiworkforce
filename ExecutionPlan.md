@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-13
+Last updated: 2026-08-14
 
 Built by extracting all 211 findings from the five audit artifacts, verifying
 96 of them against the repository as it stands, and ordering the survivors by
@@ -37,6 +37,51 @@ the working flow is.
 Model policy while testing: catalog-selected cost-efficient Google models for
 general, image and video checks. Use an OpenAI model only when provider-specific
 behaviour is under test.
+
+### MCP connectors — `done` 2026-08-14
+
+The connector directory advertised 89 services and could connect to none of
+them without an operator first registering an OAuth application with each
+vendor. That is now closed for 15 of them, and the mechanism is MCP's own
+authorization discovery rather than 15 more registrations.
+
+Landed:
+
+- `packages/tools/mcp` migrated from `@modelcontextprotocol/sdk@1.x` to the
+  split `@modelcontextprotocol/client@2.0.0`, with version negotiation set to
+  `auto` (the SDK default is `legacy`, which would have left the wire format
+  identical to a 2025 client). Web, desktop, and the API gateway all consume
+  this one package, so all three moved together.
+- `lib/connectors/mcp-oauth-provider.ts` + `mcp-discovery.ts` implement the
+  discovery flow through the SDK's `auth()`; `mcp-client-metadata.ts` and
+  `app/.well-known/oauth-client-metadata/route.ts` publish the client identity
+  that removes pre-registration; migration `0115` stores per-issuer client
+  registrations and binds each grant to its issuer.
+- `lib/connectors/mcp-endpoints.ts` records 27 vendor MCP endpoints, each
+  classified by what its authorization server actually does — not by what it
+  advertises.
+
+Verified by real product use, not tests:
+
+- `GET /api/connectors` returns 15 available (was 0); the directory renders 15
+  live Connect rows with 0 console errors.
+- `GET /api/connectors/oauth/start?connectorId=linear` returns a real
+  `mcp.linear.app/authorize` URL carrying our metadata document as `client_id`,
+  PKCE S256, and an RFC 8707 `resource`.
+- `connectorId=stripe` completed a real dynamic registration
+  (`oacli_V4MU7nsFuO1oFX`) and reused it on the second call, proving the
+  per-issuer cache.
+- The migrated client connected to a live MCP server over stdio, negotiated the
+  era, listed 13 tools through the security guards, and round-tripped a call.
+
+Not done, and why — both are vendor-side, tracked in `FoundersAssistance.md`:
+
+- `TODO` §24: the CIMD connectors cannot complete a first authorization until
+  `/.well-known/oauth-client-metadata` is live in production; it 404s today, and
+  an authorization server that fetches a 404 answers `invalid_client`.
+- `TODO` §25: asana, dropbox, figma, intercom, square, and vercel advertise
+  dynamic registration and refuse it behind a redirect-URI allowlist. They are
+  recorded as `preregistered` so the directory does not offer them.
 
 ### Website — demo walkthrough
 
@@ -131,9 +176,17 @@ refusing new sandbox (fail-closed)`. Cause is an operational leak — the quota
     Notifications, Reflect, Time and focus, Skills, Connectors, Plugins, Help.
   - `/chat`, `/chat/projects`, `/chat/schedules`, `/chat/library` all 200 with
     no console errors.
-- `TODO` Still unverified through the UI: Deep Research end to end, file/image
-  ATTACHMENT upload, Projects detail, AGI Work, custom instructions, memory,
-  and a connector actually connecting.
+- `TODO` Still unverified through the UI: Deep Research end to end, Projects
+  detail, memory, and a connector actually connecting.
+- `DONE` Account name casing is one shared rule across surfaces. Clerk stores
+  this profile as "SIDDHARTHA NAGULA"; the greeting had a local fix and the
+  sidebar four inches below it still shouted a truncated "SIDDHARTH…".
+  `normalizeDisplayName` / `resolveAccountDisplayName` / `accountInitial` now
+  live in `@agiworkforce/utils/display-name` and are used by the web greeting,
+  web sidebar and chat account footer, desktop account menu / settings /
+  profile sync, and mobile settings + cloud-account. A name the USER typed
+  (mobile personalization nickname/fullName) is deliberately left exactly as
+  typed — only provider-stored values are normalised.
 - `DONE` Video aspect, quality, and duration are catalog-derived and wired
   through the Web composer to the media request. 1080p/4K constraints send the
   required duration rather than falling through to the route's 4-second
@@ -167,12 +220,297 @@ refusing new sandbox (fail-closed)`. Cause is an operational leak — the quota
   than a technical one.
 - `DONE` Sandbox/code execution UI was exercised through the live model path,
   including activity and generated output after the leaked quota was reaped.
-- `TODO` File/image attachment upload remains unverified through the real
-  browser; generated-file rendering is complete and is a separate path.
+- `DONE` File/image attachment upload, end to end in the real browser. Three
+  separate defects, each of which alone made the feature unusable:
+  1. **The menu row was unreachable.** "+ → Add photos & files" is the first
+     row of a 392px popover that renders `absolute bottom-full` inside the chat
+     shell's `overflow-hidden` column. On the EMPTY chat screen the composer is
+     centred INSIDE that clipped column, so at a 670px viewport the menu opened
+     at y=10 against a clip rect starting at y=44 and the first 34px — the whole
+     "Add photos & files" row — was cut off. `document.elementFromPoint` over it
+     returned the shell div: there was no way to attach a file to a message from
+     the web composer at all. New `AnchoredComposerMenu` portals composer
+     popovers to `document.body`, positions them from the trigger's rect, flips
+     below when there is more room, and clamps to the viewport with internal
+     scrolling. Applied to the "+" menu and to StyleSelector (468px, opened at
+     y=-64 with "Default" and "Concise" outside the viewport).
+  2. **R2 had no CORS policy.** Attachments upload browser-direct with a
+     presigned PUT; the private bucket had NO CORS configuration, so the
+     preflight failed and the send dropped the message. Applied and read back on
+     both buckets; `scripts/r2-apply-cors.mjs` reproduces it. See
+     `FoundersAssistance.md` #21 for the API token that lets CI re-run it.
+  3. **The transcript chip was a near-empty slab.** The attachment row is a flex
+     row, which defaults to `align-items: stretch`, so the compact file chip was
+     stretched to the 96px height of the image thumbnail beside it. Now
+     `items-start`, and the chip shows the real byte count it already had.
+     Verified: a PNG + a .txt uploaded, the model read BOTH (named the three band
+     colours and quoted the revenue target from the text file), and both files
+     appear in Library as READY with correct sizes.
+- `TODO` Convert the remaining composer popovers (mentions `@`, project picker,
+  media aspect/quality/duration) to `AnchoredComposerMenu`. They are shorter, so
+  they survive a 670px viewport today — measured, not assumed — but they sit in
+  the same clipped column and will cut off on a smaller window.
 - `DONE` Web search and citations were exercised live with inline activity,
   numbered source chips, and follow-up actions.
-- `TODO` Projects, AGI Work, Connectors, Skills, Plugins, Settings, Custom
-  instructions.
+- `DONE` Projects page visual language. It painted `--agi-bg-3` (the marketing
+  palette's warm parchment) across a 480px panel with one small white card
+  floating in it, while Library/Schedules/Chat render cards directly on the page
+  background — so Projects read as a different, half-finished product the moment
+  you navigated to it. The panel is now a plain layout container; the cards are
+  the surfaces.
+- `DONE` Library card actions. "Delete" and the stale-entry notice were bare
+  siblings BELOW the card in a `gap-1` column, so a red underlined link floated
+  in the grid gutter between rows. The grid cell now owns the card chrome and
+  the actions are an attached footer behind a hairline.
+- `DONE` AGI Work exercised live: mode toggle, plan/goal trail, per-step
+  progress, stop control, queued follow-up composer, completion state, and a
+  real answer rendered. Custom instructions verified working in the same pass —
+  the saved "call out assumptions" instruction visibly shaped the reply.
+- `DONE` An assistant turn that finishes with NOTHING now says so. Observed
+  live: an AGI Work run streamed for 26s, finished `stop`, persisted the `​`
+  empty-content placeholder, and rendered a header + model label + action bar
+  with no answer between them — indistinguishable from the app losing the
+  response. `producedNoVisibleOutput` in MessageBubble renders an honest line
+  pointing at Retry, and excludes every non-text output (image, video, artifact,
+  file, code result, search, interactive card) so a generated-image turn never
+  trips it. Verified against image/video/attachment/text turns: no false
+  positives.
+- `DONE` Skills and Plugins are live and need no founder action — verified by
+  calling the APIs signed in: `/api/skills` returns the 9 bundled skills
+  (`source: bundled`, downloadable, traced into the Vercel bundle by
+  `outputFileTracingIncludes`), `/api/plugins` returns the built-in catalog.
+- `BLOCKED_BY_HUMAN` Connectors. `/api/connectors` returns
+  `{"connectors":[],"available":[]}` because `oauth-registry.ts` ships with zero
+  providers on purpose and no `CONNECTOR_OAUTH_*` / `GITHUB_APP_*` env is set.
+  Not a defect — unconfigured. Exact steps in `FoundersAssistance.md` #22.
+  "Connect remote MCP server" already works without any of it.
+- `DONE` MCP SDK floor moved `^1.0.4` → `^1.30.0` (the newest published), and
+  the deprecated-transport downgrade stopped being silent. `ConnectorsPage` had
+  `parsedUrl.pathname.endsWith('/sse') ? 'sse' : 'streamable-http'` duplicated
+  at two call sites and said nothing: pasting `https://mcp.linear.app/sse`
+  quietly parked the user on the HTTP+SSE transport from protocol `2024-11-05`,
+  deprecated since `2025-03-26` and listed as eligible for removal, when the
+  same server publishes `/mcp` as primary. Both sites now use
+  `features/connectors/lib/mcp-transport-choice.ts`, which returns the
+  transport AND a deprecation flag with the conventional modern URL, surfaced
+  as an amber notice. The URL is deliberately NOT rewritten for the user — not
+  every server mounts its modern endpoint at `/mcp`, and a silent rewrite turns
+  a working connection into an unexplainable 404.
+- `TODO` **Pivot to MCP `2026-07-28` — BLOCKED on the official SDK, not on us.**
+
+  Checked against npm on 2026-08-13: `@modelcontextprotocol/sdk@1.30.0` (the
+  newest published) still declares `LATEST_PROTOCOL_VERSION = '2025-11-25'`.
+  There is no SDK support for `2026-07-28` to adopt. Hand-rolling the new
+  transport means maintaining a fork of the reference client against a spec
+  whose reference implementation has not shipped — a bad trade while nothing
+  in the product is broken by staying on `2025-11-25`.
+
+  What lands when the SDK ships it (all MUST-level for clients):
+  - **Sessions are gone.** No `Mcp-Session-Id`, no `initialize` handshake, no
+    GET stream endpoint, no `Last-Event-ID` resume. A conforming server answers
+    GET/DELETE with `405` and must "ignore it, and do not mint or echo session
+    IDs". This is strictly GOOD for us: each tool call becomes a self-contained
+    POST, which is what a Vercel serverless deployment can actually serve
+    without sticky routing or a shared session store.
+  - **Per-request metadata** replaces the handshake:
+    `_meta.io.modelcontextprotocol/{protocolVersion,clientInfo,clientCapabilities}`.
+  - **Mirrored headers**, required and validated: `MCP-Protocol-Version`,
+    `Mcp-Method`, and `Mcp-Name` for the tools/call, resources/read and
+    prompts/get methods. A header that disagrees with the body is `400` +
+    `-32020 HeaderMismatch` — deliberately, so a load balancer routing on the
+    header cannot diverge from the server executing on the body.
+  - **Servers no longer initiate requests.** Sampling / elicitation / roots
+    become MRTR: the server returns `InputRequiredResult` and the CLIENT
+    retries the original request carrying `inputResponses`. Our
+    `connect.ts callTool` assumes a single round trip and will need the retry
+    loop.
+  - **`x-mcp-header`**: clients MUST mirror annotated tool params into
+    `Mcp-Param-{Name}` headers, Base64-sentinel-encode unsafe values, and
+    REJECT (exclude from the tools/list result) any tool whose annotation breaks the
+    constraints.
+  - SSE survives only as a per-request response stream; long-lived
+    notifications move to a `subscriptions/listen` request whose response
+    stream stays open. Cancellation on HTTP is closing that stream.
+  - **`server/discover`** is the replacement for `initialize`: servers MUST
+    implement it, clients MAY call it once for up-front version/capability
+    selection. `ping`, `logging/setLevel` and `notifications/roots/list_changed`
+    are REMOVED outright (not deprecated).
+  - **`resultType` on every result** — `"complete"` or `"input_required"`.
+    Clients MUST treat an absent value from older servers as `"complete"`.
+  - **`_meta` required fields**: `io.modelcontextprotocol/protocolVersion` and
+    `clientCapabilities` are REQUIRED on every request; `clientInfo` SHOULD be.
+    A missing required field is `-32602` + HTTP 400. A capability the client did
+    not declare is `-32021 MissingRequiredClientCapability` carrying
+    `data.requiredCapabilities`.
+  - **Error codes renumbered** into the new MCP-reserved `-32020..-32099` band:
+    `HeaderMismatch` `-32001`→`-32020`, `MissingRequiredClientCapability`
+    `-32003`→`-32021`, `UnsupportedProtocolVersion` `-32004`→`-32022`. Resource
+    not found moves `-32002`→`-32602`, though clients SHOULD still accept
+    `-32002` from older servers.
+  - **`CacheableResult`**: `ttlMs` + `cacheScope` (`public`/`private`) become
+    required on the list/read results. Real win for us — a freshness hint we can
+    cache against instead of re-listing tools every turn. Servers SHOULD also
+    return the tools/list result in deterministic order specifically to improve LLM
+    prompt-cache hit rates, which is money on our side.
+  - **Tasks left the core protocol** for the `io.modelcontextprotocol/tasks`
+    extension: polling via `tasks/get`, `tasks/update` for client→server input,
+    no `tasks/list`, and servers may hand back task handles unsolicited. This is
+    the closest thing in the spec to what AGI Work already does; worth reading
+    before the next agent-runtime change.
+
+  DEPRECATED in this revision (SEP-2577), all with an earliest removal of the
+  first revision on or after **2027-07-28** — except HTTP+SSE, which is
+  **three months after SEP-2596 reaches Final**, i.e. by far the nearest:
+  - **Roots** → pass directories/files as tool parameters or resource URIs.
+  - **Sampling** → integrate directly with LLM provider APIs. Notable for us:
+    the spec is explicitly steering servers AWAY from asking the client for
+    completions, which is the model our provider layer already uses.
+  - **Logging** (`logging/setLevel`, `notifications/message`) → stderr on stdio,
+    OpenTelemetry otherwise. We already emit spans; `_meta` now reserves
+    `traceparent`/`tracestate`/`baggage` for W3C trace-context propagation, so
+    our existing trace ids can ride along once we send `_meta`.
+  - **HTTP+SSE transport** → Streamable HTTP. Already handled above.
+  - **Dynamic Client Registration** → Client ID Metadata Documents.
+
+  Writes: `packages/tools/mcp/**`, plus `apps/web/lib/user-connector-tools.ts`
+  for the MRTR retry. Re-check `npm view @modelcontextprotocol/sdk version`
+  before starting; the transport work is a no-op until that reports
+  `2026-07-28` support.
+
+- `TODO` **Two 2026-07-28 items that are NOT SDK-blocked — do these without
+  waiting.**
+  1. **An authorization-server change is not DETECTED (SEP-2352).**
+     Scoped carefully, because most of this is already handled and an earlier
+     draft of this entry overstated it:
+     - Already safe: `connector_oauth_grants` stores `token_endpoint` ("captured
+       so a later refresh cannot be pointed somewhere else by an edited registry
+       entry without detection"), and `oauth-access.ts:101` really does refresh
+       against `grant.tokenEndpoint` — the STORED value, not the descriptor's
+       current `tokenUrl`. Editing `CONNECTOR_OAUTH_PROVIDERS_JSON` therefore
+       cannot redirect a refresh. That is the main confused-deputy vector and it
+       is closed.
+     - Still open: the grant is keyed `unique (user_id, connector_id)` with no
+       issuer, and nothing COMPARES the stored endpoint against the descriptor
+       at read time. So if an operator repoints a connectorId at a different
+       authorization server, the old grant keeps reading as connected and its
+       already-minted access token is presented to the new `mcpUrl`. SEP-2352
+       requires clients to "key persisted credentials by the issuer identifier
+       … and MUST re-register when the authorization server changes".
+     - Fix: compare the descriptor's issuer/token endpoint against the grant on
+       read, and treat a mismatch as `reauthorization-required` rather than
+       serving the stale grant. An `issuer` column plus a widened unique
+       constraint makes it explicit rather than inferred from `token_endpoint`.
+     - Zero migration risk today: `/api/connectors` returns an empty list, so no
+       provider is configured and the table has no rows.
+  2. `DONE` **`$ref` values were counted but never inspected.**
+     `validateMcpInputSchema` in `packages/tools/mcp/src/connect.ts` caps depth
+     (16), `$ref` count (64) and key count (512) — good bounds, and they already
+     satisfy the new composition-keyword guidance. But the spec now states
+     implementations "MUST NOT automatically dereference `$ref` values that
+     resolve to a network URI", with any opt-in mode defaulting off and
+     rejecting loopback/link-local/private addresses. We do not dereference
+     today, so this is not a live SSRF — but nothing in the validator would stop
+     a future consumer from doing so, and a schema whose `$ref` cannot resolve
+     SHOULD be rejected rather than passed to the model as silently permissive.
+     Fixed: `isNetworkRef` rejects any `$ref` carrying an absolute URI scheme at
+     schema-admission time, so the invariant is enforced at the boundary instead
+     of resting on "we happen not to call fetch". Local (`#/$defs/…`) and
+     relative (`defs.json#/Foo`) refs are untouched — a legitimate tool pays
+     nothing. 6 tests cover both directions, including the
+     `169.254.169.254` metadata-service shape.
+
+- `TODO` **MCP OAuth discovery — the connector story does not scale without it.**
+
+  We implement exactly ONE of the three client-registration mechanisms the MCP
+  authorization spec defines, and it is the one that costs founder labour per
+  provider forever. Verified against the RELEASED `2026-07-28` spec (the
+  revision Claude announced adopting on 2026-07-28), which is substantively
+  identical to `draft` on every point below:
+
+  | Mechanism                              | Spec status                                          | Who registers                               |
+  | -------------------------------------- | ---------------------------------------------------- | ------------------------------------------- |
+  | Client ID Metadata Documents (CIMD)    | **SHOULD** support                                   | nobody — an HTTPS URL IS the `client_id`    |
+  | Dynamic Client Registration (RFC 7591) | **MAY**; explicitly **deprecated**, back-compat only | nobody — `POST /register` at connect time   |
+  | Pre-registration                       | fallback                                             | **us, per provider** ← the only one we have |
+
+  This is why Claude's custom connectors ask a user for a URL and nothing else:
+  Anthropic has no per-provider business arrangement, the protocol negotiates
+  it. Our `CONNECTOR_OAUTH_PROVIDERS_JSON` path means a user can never add an
+  MCP server we have not personally onboarded.
+
+  Normative client requirements to satisfy (all from the same spec):
+  - **MUST** use Protected Resource Metadata (RFC 9728) for AS discovery —
+    read `resource_metadata` from the 401 `WWW-Authenticate`, fetch
+    `/.well-known/oauth-protected-resource`.
+  - **MUST** support BOTH RFC 8414 and OpenID Connect Discovery for AS metadata.
+  - **SHOULD** support CIMD; host our document (e.g.
+    `https://agiworkforce.com/.well-known/oauth-client`) and pass that URL as
+    `client_id`. An AS advertises support with
+    `"client_id_metadata_document_supported": true` in its metadata, so this is
+    detectable rather than guessed.
+
+    CORRECTION to an earlier reading of this item: the spec's client priority is
+    **pre-registration → CIMD → DCR → prompt the user**, so pre-registration
+    ranks FIRST, not last. `CONNECTOR_OAUTH_PROVIDERS_JSON` is therefore the
+    PREFERRED path wherever a relationship already exists — it is not legacy and
+    is not replaced by this work. CIMD is what covers the servers we have not
+    pre-registered, which is the part that unlocks "any MCP server". DCR is the
+    only one actually deprecated here.
+
+  - **MUST** send RFC 8707 `resource` on BOTH the authorization and token
+    request, regardless of whether the AS supports it. This is what binds a
+    token to one MCP server so it cannot be replayed at another.
+  - **MUST** record the AS `issuer` before redirecting and validate RFC 9207
+    `iss` on the callback per the spec's four-row table, INCLUDING on error
+    responses — a mismatch means not even rendering `error_description`.
+  - **SHOULD** follow the scope-selection priority (challenge `scope` first,
+    then `scopes_supported`) and implement the step-up flow on
+    `insufficient_scope`, re-requesting the UNION of old and challenged scopes.
+
+  Writes: `apps/web/lib/connectors/**`, `apps/web/app/api/connectors/oauth/**`,
+  a new `.well-known` route. Reuses what already exists: PKCE, state, encrypted
+  token storage, refresh, revocation, per-user scoping.
+
+  Keep `CONNECTOR_OAUTH_PROVIDERS_JSON` afterwards as the escape hatch for
+  providers that only support pre-registration.
+
+  Sequencing note: do NOT hand-register Linear/Notion/Slack first. That builds
+  the thing this item replaces and then has to be unbuilt.
+
+- `DONE` Mobile could not be built for either store. The release preflight
+  failed at its first substantive gate: "Mobile and @agiworkforce/local-llm
+  resolve different React Native runtimes". Both declared 0.86.2, but
+  `@types/react` and `react` are (optional and required) PEERS of react-native,
+  mobile supplied them and `local-llm` did not, so pnpm minted two physically
+  distinct RN instances — the exact "second native module in Metro or the app
+  binary" the guard was written to stop (rationale recovered from the deleted
+  `EXPO_VERSION_NOTES.md`). Aligned local-llm's dev peers with mobile's and
+  reinstalled; both now resolve one runtime. A second, masked failure followed:
+  commit `310ca5667` had replaced `react-native` with `typescript` in
+  `expo.install.exclude`, dropping the documented validation exception the same
+  guard requires — restored, keeping both. The preflight now passes every gate
+  up to the store credentials (`FoundersAssistance.md` #23). Mobile suite green:
+  2,895 tests / 322 suites, typecheck clean, local-llm 83 tests clean.
+- `DONE` Web production build passes (`pnpm --filter @agiworkforce/web build`,
+  exit 0) — the release gate that matters most for public launch.
+- `DONE` Audit sweep of `AGIWORKFORCE_GAP_AUDIT_2026-08-08.md` and
+  `AGI_WORKFORCE_AUDIT_REMEDIATION_LOOP.md` for web/mobile items. Most are
+  already remediated on this head: HARD-006 (upload cap) survives only in two
+  dead modules, MATCH-004/006/007/008/012 and CRIT-005/006/007 are fixed and
+  guarded by their own tests. Repo guardrails confirm it — `check:hardcoded-arrays`,
+  `check:model-catalog`, `check:css-tokens`, `check:availability-invariant`,
+  `check:no-hex-mobile`, `check:hardcoded-endpoints`, `check:model-id-literals`,
+  `check:mobile-hygiene`, `check:trust-boundaries`, `check:llm-failures`,
+  `check:service-layer` all pass.
+- `TODO` `check:knip` is red repo-wide (746 unused files, mostly desktop/CLI,
+  plus two configs it cannot load). Pre-existing and outside the web/mobile
+  scope; needs its own pass rather than a bulk delete.
+- `TODO` Two dead web modules still carry their own wrong limits, now pointed at
+  the canonical constant but not removed: `shared/ui/ai-prompt-box.tsx` (an
+  815-line SECOND composer, zero importers, already declared debt in the
+  reachability allowlist) and `SecurityManager` in `shared/lib/security.ts`
+  (~700 lines, zero importers repo-wide). Deleting ~1,500 lines is a founder
+  call, not mine.
 - `TODO` Loading / progress / error / retry / cancel states.
 - `TODO` Dark-light consistency sweep across every screen touched.
 - `DONE` Responsive public/chat layout sweep covered desktop and 390px mobile,
@@ -2017,7 +2355,7 @@ Ordering is consequence-to-effort within waves. Waves are sequential; items insi
 - Status: DONE (2026-08-09) — GDPR e2e suite runs instead of skipping itself — ac20a2962
 - Area: ux
 - Severity: high
-- Writes: `apps/web/app/auth/device/page.tsx`, `apps/web/features/billing/pages/BillingDashboard.tsx`, `apps/web/features/chat/pages/WebChatPage.tsx`, `packages/i18n/locales/**`
+- Writes: `apps/web/app/auth/device/page.tsx`, apps/web/features/billing/pages/BillingDashboard.tsx (deleted in 1e858a7f1 along with the rest of the standalone Billing dashboard; Settings → Billing is the surviving surface), `apps/web/features/chat/pages/WebChatPage.tsx`, `packages/i18n/locales/**`
 - Verify: `pnpm check:i18n-parity && pnpm --filter @agiworkforce/web test`
 - Evidence: 7 of 760 non-test files under `apps/web/app` + `features` import `useTranslation`; `auth/device/page.tsx:217–311` is 100% literal English (the CLI/desktop pairing sign-in); `BillingDashboard.tsx:117,136` and 10+ other toasts are literals on the revenue path; `WebChatPage.tsx:3058,3061` still has raw `aria-label="Share conversation"` and `<span>Share</span>` inside an otherwise-wired file.
 

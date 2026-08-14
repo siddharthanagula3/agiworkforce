@@ -111,7 +111,15 @@ founder-approved INR yearly price exists.
 
 ## 6. Register the first cross-platform connector OAuth applications
 
-**Blocks:** turning the catalog's Google Workspace, Slack, Notion, and
+**Narrowed on 2026-08-14.** Notion no longer belongs in this item — it connects
+through MCP authorization discovery with no registration at all (see §22). What
+remains are the providers that publish no MCP endpoint we can discover, or that
+publish one and still demand a pre-registered app: **Google Workspace
+(gmail, google-calendar, google-drive), Microsoft 365, Slack, Box, HubSpot, and
+the Atlassian pair (jira, confluence)**. Do these only if you want those
+specific services; the 15 connectors in §22 need none of it.
+
+**Blocks:** turning the catalog's Google Workspace, Slack, and
 Microsoft 365 entries from discoverable cards into real per-user connections.
 AGI's broker, encrypted token storage, revocation, tenant isolation, MCP tool
 permission controls, and approval flow are implemented; provider-issued client
@@ -673,6 +681,304 @@ as runtime-verified yet.
 
 ---
 
+## 21. Store a Cloudflare API token so R2 CORS can be re-applied from the repo
+
+**Status:** `BLOCKED_BY_HUMAN` for reproducibility only. **The policy itself is
+already applied and verified in production** — this entry exists so the next
+person can re-apply it without me.
+
+**Blocks:** nothing at runtime today. It blocks `scripts/r2-apply-cors.mjs` from
+running unattended (in CI, or after a bucket is recreated).
+
+**Background.** Chat attachments upload browser-direct to R2 with a presigned
+PUT, so the browser sends a CORS preflight the bucket must answer. On
+2026-08-13 the private bucket (`agiworkforce-media-private`) had **no CORS
+configuration at all**, so every attachment upload in the web app failed at the
+preflight and the message was dropped — this had never worked in a browser, on
+any origin, production included. The public bucket had a policy but was missing
+the `chat.` and `*.vercel.app` origins.
+
+Both buckets now carry a `browser-direct-upload` rule (6 origins, PUT/GET/HEAD,
+`Content-Type` + the two `x-amz-*` checksum headers, `ETag` exposed, 1h max-age),
+applied through the authenticated Cloudflare API and read back to confirm.
+Re-verified end to end in the browser: a PNG and a .txt uploaded, reached the
+model, and appear in Library.
+
+**Why it needs you.** Bucket _configuration_ is not an S3-token capability. The
+R2 key pair in `CLOUDFLARE_R2_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` is
+object-scoped, and `PutBucketCors` returns `AccessDenied` with it (confirmed).
+The script therefore uses the Cloudflare REST API and needs an account token.
+
+**Do:**
+
+1. Cloudflare dashboard → My Profile → API Tokens → Create Token → Custom.
+2. Permission: **Account · Workers R2 Storage · Edit**. Scope it to the
+   `Agiautomationllc@gmail.com` account only.
+3. Add to `apps/web/.env.local` (and the Vercel project env, if CI should run it):
+   - `CLOUDFLARE_API_TOKEN=<token>`
+   - `CLOUDFLARE_ACCOUNT_ID=3c4f35af67459cbabbccb783f232fad9` (or reuse
+     `CLOUDFLARE_R2_ACCOUNT_ID`)
+4. Verify: `node scripts/r2-apply-cors.mjs --check` → prints
+   `✔ <bucket>: verified — 6 origins, methods PUT/GET/HEAD` for both buckets and
+   exits 0.
+
+**Afterwards:** the CORS policy becomes reproducible infrastructure rather than a
+one-off dashboard state, and adding a new origin (a custom domain, a new preview
+host) is a one-line edit to `ALLOWED_ORIGINS` plus one command.
+
+---
+
+## 22. Turn on connectors — MOSTLY SUPERSEDED on 2026-08-14, GitHub only
+
+**Status:** the generic-connector half of this item is **closed**. Re-verified
+live against the running app on 2026-08-14, signed in:
+
+| Surface    | Live result                                                            | Needs you?            |
+| ---------- | ---------------------------------------------------------------------- | --------------------- |
+| Skills     | `GET /api/skills` → **9 skills**, `source: bundled`, `downloadable`    | **No**                |
+| Plugins    | `GET /api/plugins` → built-in catalog entries (`github-automation`, …) | **No**                |
+| Connectors | `GET /api/connectors` → **15 available**                               | **No**, except GitHub |
+
+Connectors are no longer empty. `apps/web/lib/connectors/mcp-discovery.ts` now
+discovers each server's authorization server from the MCP endpoint itself and
+obtains a client identity without anyone registering an OAuth app, so notion,
+linear, stripe, airtable, monday, clickup, todoist, sentry, datadog,
+cloudflare, canva, paypal, plaid, posthog, and huggingface connect with no
+founder action. Section A below (GitHub) is the only part of this item still
+open, and it needs exactly one secret — see the checklist there.
+
+The paragraph below about the registry shipping with zero providers is still
+true and still the right design; it is simply no longer the ONLY path to a
+working connector.
+
+Skills load from `.agents/skills/` and are traced into the Vercel bundle by
+`outputFileTracingIncludes` in `apps/web/next.config.ts`, so they ship. Plugins
+render from the built-in catalog; only `status: 'published' && webInstallable`
+entries (`public.plugin_registry_entries`, migration `0096_plugin_registry.sql`)
+are installable from the web, and today's entries are `source: builtin`,
+`status: preview`, so the catalog shows without an install path. Neither needs
+founder action to appear.
+
+Connectors are empty because `apps/web/lib/connectors/oauth-registry.ts` ships
+with **zero providers on purpose** — authorize/token endpoints and scopes are
+provider facts the repo refuses to guess, because a wrong endpoint would send a
+user's authorization code to the wrong host. Nothing is broken; nothing is
+configured.
+
+**Two independent paths. Do either or both.**
+
+### A. GitHub (its own app, not the generic OAuth broker)
+
+`github` is a reserved connector id served by `apps/web/lib/github-app.ts`. It
+needs a **GitHub App**, not an OAuth app.
+
+GitHub does **not** use `/api/connectors/oauth/callback` — that path belongs to
+the generic MCP broker. GitHub has its own three routes, and the install flow is
+deliberately two turns: install first, then a SEPARATE OAuth turn that proves
+the browser-supplied `installation_id` really belongs to the signed-in user
+(GitHub warns setup-URL ids can be spoofed — `install/route.ts:63-65`).
+
+Flow: Connect → `/api/github/install/start` (sets state cookie) → GitHub install
+→ **Setup URL** `/api/github/install` → our own OAuth turn → **Callback URL**
+`/api/github/oauth/callback` → ownership verified against
+`GET /user/installations`.
+
+**Form values** (github.com → Settings → Developer settings → GitHub Apps → New):
+
+| Field                                             | Value                                                |
+| ------------------------------------------------- | ---------------------------------------------------- |
+| GitHub App name                                   | `AGI Workforce` (must be unique across GitHub)       |
+| Homepage URL                                      | `https://agiworkforce.com`                           |
+| Callback URL                                      | `https://agiworkforce.com/api/github/oauth/callback` |
+| Expire user authorization tokens                  | leave **checked**                                    |
+| Request user authorization (OAuth) during install | leave **UNCHECKED**                                  |
+| Setup URL                                         | `https://agiworkforce.com/api/github/install`        |
+| Redirect on update                                | unchecked                                            |
+| Webhook · Active                                  | checked                                              |
+| Webhook URL                                       | `https://agiworkforce.com/api/github/webhook`        |
+| Webhook secret                                    | → `GITHUB_WEBHOOK_SECRET`                            |
+| Where can this be installed                       | **Any account** (multi-tenant product)               |
+
+"Request user authorization during installation" must stay OFF: with it on,
+GitHub jumps straight to the Callback URL and the Setup URL never runs, so the
+install-state cookie is never validated and the linking turn breaks.
+
+**Repository permissions** — exactly what the three shipped tools need
+(`user-connector-tools.ts`: get a PR, comment on an issue/PR, post a
+comment-only PR review):
+
+- Pull requests: **Read and write**
+- Issues: **Read and write**
+- Metadata: Read-only (GitHub forces this)
+
+**Subscribe to events:** Issue comment. (`installation` and `ping` are delivered
+to every app automatically — `webhook-router.ts` handles those three and ignores
+the rest.)
+
+**Then set seven env vars** in Vercel Production/Preview **and**
+`apps/web/.env.local`:
+
+- `GITHUB_APP_ID` — numeric, top of the app page
+- `GITHUB_APP_SLUG` — the slug in `github.com/apps/<slug>`
+- `GITHUB_APP_CLIENT_ID` — starts `Iv1.` / `Iv23`
+- `GITHUB_APP_CLIENT_SECRET` — "Generate a new client secret"
+- `GITHUB_APP_PRIVATE_KEY_BASE64` — `base64 -i key.pem | tr -d '\n'`
+- `GITHUB_WEBHOOK_SECRET` — the same value typed into the webhook form
+- `GITHUB_TOKEN_ENCRYPTION_KEY` — **64 hex chars**, `openssl rand -hex 32`
+  (seals installation tokens at rest; `HEX_64_RE` rejects any other shape)
+
+The first five are the availability gate — `github-app.ts:97-101` treats a
+partial set as absent, so a missing one makes the connector silently not appear
+rather than appear broken. Without the seventh, tokens cannot be stored at all.
+
+**Verify:** `GET /api/connectors` lists `github` under `available`, and
+Settings → Connectors completes install → OAuth → linked.
+
+### B. Any MCP connector (Linear, Notion, Slack, …) through the generic broker
+
+1. Register an OAuth app with the provider. Redirect/callback URI:
+   `https://agiworkforce.com/api/connectors/oauth/callback`.
+2. Set `CONNECTOR_OAUTH_REDIRECT_BASE_URL=https://agiworkforce.com` (falls back
+   to `NEXT_PUBLIC_APP_URL`). It is read server-side and never from the Host
+   header, so it must be exact.
+3. Set `CONNECTOR_OAUTH_PROVIDERS_JSON` — one JSON blob, all providers, **no
+   secrets in it**:
+
+   ```json
+   {
+     "providers": [
+       {
+         "connectorId": "linear",
+         "displayName": "Linear",
+         "authorizationUrl": "<from the provider's current OAuth docs>",
+         "tokenUrl": "<from the provider's current OAuth docs>",
+         "mcpUrl": "<the connector's MCP endpoint>",
+         "transport": "streamable-http",
+         "scopes": ["<provider scope strings>"],
+         "usePkce": true,
+         "tokenAuthMethod": "client_secret_post"
+       }
+     ]
+   }
+   ```
+
+   Take every URL and scope from that provider's **current** docs — do not copy
+   them from memory or from an older integration.
+   `connectorId` must match `^[a-z0-9][a-z0-9-]{0,63}$`, cannot be `github`, and
+   becomes the MCP `serverId`, so no underscores.
+
+4. Per provider, add the two secrets (id upper-cased, `-` → `_`):
+   - `CONNECTOR_OAUTH_LINEAR_CLIENT_ID`
+   - `CONNECTOR_OAUTH_LINEAR_CLIENT_SECRET`
+     (a public client with `"tokenAuthMethod": "none"` needs only the id)
+5. Redeploy. A provider whose descriptor parses but whose secrets are missing is
+   treated as **absent**, not as broken-but-advertised — so a half-finished
+   provider silently does not appear rather than offering a Connect button that
+   500s.
+6. Verify: `GET /api/connectors` lists it under `available`, and the Connect
+   flow completes authorize → callback → stored credential → tool discovery.
+
+**Meanwhile:** "Connect remote MCP server" in Settings → Connectors already
+works today for any MCP server the user supplies themselves. That path needs
+nothing from you.
+
+---
+
+## 23. Mobile store credentials — the only remaining store-submission blockers
+
+**Status:** `BLOCKED_BY_HUMAN`. Everything else in the release preflight now
+passes; see the fixed dependency defect below.
+
+`apps/mobile/scripts/release/preflight.sh production` was failing at its FIRST
+substantive gate — "Mobile and @agiworkforce/local-llm resolve different React
+Native runtimes" — which blocked every store build. Fixed (details in
+`ExecutionPlan.md`); the preflight now reaches the credential checks and stops
+only there. Current output:
+
+```
+[ok] node version OK          [ok] EAS account: agiautomationllc
+[ok] eas.json + app.config.js [ok] Expo SDK dependencies are compatible
+[ok] EAS project linked       [ok] Expo Updates URL + fingerprint policy
+[ok] production profile/channel
+[ok] TLS pins provisioned     [ok] release-state registry matches live stores
+[err] iOS store submission requires the non-secret numeric ascAppId
+```
+
+**What this machine already has** (checked 2026-08-13, names/paths only):
+
+- `APPLE_TEAM_ID=D2PR62RLT4` exported from `~/.zshrc` — matches
+  `eas.json submit.production.ios.appleTeamId` exactly. ✔
+- Two App Store Connect API keys, both valid PKCS#8:
+  `~/.appstoreconnect/private_keys/AuthKey_36R2M2XQV2.p8` and
+  `AuthKey_G74VBWKN82.p8` (the latter is duplicated in `~/Downloads`). The Key ID
+  is the 10 characters in the filename.
+- `~/Downloads/SubscriptionKey_92GDPTCS7S.p8` is an **In-App Purchase** key
+  (App Store Server API / receipt validation), NOT a submission key. Keep it for
+  the native-purchase path; do not point `ascApiKeyPath` at it.
+- `~/Documents/CertificateSigningRequest.certSigningRequest` is a **CSR**
+  (`-----BEGIN CERTIFICATE REQUEST-----`), used to request a signing
+  certificate. It is not an API key and is not needed — EAS manages signing
+  certificates itself.
+- `APPLE_ID` / `APPLE_PASSWORD` are also exported. Those drive the legacy
+  altool/Transporter path; EAS prefers the API key and ignores them here.
+
+**Missing: the Issuer ID only.** It is not recorded anywhere on this machine.
+
+**Do, for iOS:**
+
+1. App Store Connect → Users and Access → Integrations → **App Store Connect
+   API**. Copy the **Issuer ID** (a UUID, shown above the key list — one per
+   account, shared by every key). Confirm which of the two keys above has the
+   **App Manager** role.
+2. Probe it — this authenticates the key against Apple and, if the app record
+   exists, prints the exact `ascAppId` so it is never transcribed by hand:
+
+   ```bash
+   cd apps/mobile
+   ASC_API_KEY_ID=36R2M2XQV2 \
+   ASC_API_KEY_ISSUER_ID=<the UUID> \
+   pnpm release:asc-probe
+   ```
+
+   Read-only. `401` means the Issuer ID does not match that key — try the other
+   key id. A success prints every app record and flags the one whose bundle id
+   is `com.agiworkforce.app`.
+
+3. If the probe reports no record for `com.agiworkforce.app`: App Store Connect
+   → Apps → **+** → New App with that bundle id (already registered to team
+   `D2PR62RLT4`), then re-run the probe.
+4. Put the printed id in `apps/mobile/eas.json` →
+   `submit.production.ios.ascAppId`. It is NOT a secret and belongs in the repo.
+5. Copy the chosen key to the path `eas.json` points at, and export the two ids:
+
+   ```bash
+   cp ~/.appstoreconnect/private_keys/AuthKey_36R2M2XQV2.p8 \
+      apps/mobile/secrets/asc-api-key.p8      # already git-ignored
+   export ASC_API_KEY_ID=36R2M2XQV2
+   export ASC_API_KEY_ISSUER_ID=<the UUID>
+   ```
+
+**Do, for Android:**
+
+6. Play Console → create the app for package `com.agiworkforce.app`.
+7. Google Cloud → the project linked to Play → Service Accounts → create one →
+   JSON key. In Play Console → Users and permissions, invite that service
+   account and grant release permissions.
+8. Save the JSON at `apps/mobile/secrets/google-play-service-account.json`
+   (git-ignored).
+
+**Verify:** `pnpm --filter @agiworkforce/mobile release:preflight` prints
+`preflight passed for profile=production` (from a clean git tree, or with
+`EAS_SKIP_CLEAN_CHECK=1` for a dry run).
+
+**Then:** `release:ios:prod` / `release:android:prod`, and after the listings are
+live, update `apps/mobile/src/features/release-state/mobileReleaseState.json`.
+That registry fails closed — until it carries a store-verified listing id, the
+app will not name a store or hand out a store link, which is what keeps the
+distribution claims honest.
+
+---
+
 ## Not blocked, but worth a decision
 
 **`readme = "<file>"` is an invisible coupling.** A documentation sweep can
@@ -681,3 +987,78 @@ pointer exists. Either `check-executable-docs.mjs` should learn about hatchling
 `readme =` pointers the way it already knows about Cargo `readme` and npm
 `files[]`, or the coupling should be removed. Left alone so far because it sits
 outside the write set of the item that found it.
+
+---
+
+## 24. Deploy the client metadata document, then re-verify the CIMD connectors
+
+**Blocks:** eight connectors — airtable, canva, huggingface, linear, notion,
+posthog, sentry, todoist — completing their first real authorization.
+
+Nothing is wrong with the code. These vendors' authorization servers advertise
+`client_id_metadata_document_supported: true`, which means they accept a URL as
+a `client_id` and fetch that URL to learn who is asking. AGI now publishes that
+document at:
+
+```text
+https://agiworkforce.com/.well-known/oauth-client-metadata
+```
+
+It is served correctly on localhost and returns 404 in production, because the
+change has not shipped yet. An authorization server that fetches a 404 answers
+`invalid_client`, which is exactly what linear, sentry, canva, and todoist did
+when probed on 2026-08-14 — a symptom of the missing deploy, not of the flow.
+
+**Do:**
+
+1. Ship this branch to production.
+2. Confirm the document is public and unauthenticated:
+   `curl -i https://agiworkforce.com/.well-known/oauth-client-metadata`
+   — expect `200` and JSON whose `client_id` equals that same URL.
+3. Click Connect on Linear in the directory and complete consent once.
+
+**Then tell Claude**, so the endpoint registry's CIMD verification note is
+updated from "advertised" to "confirmed end to end".
+
+Do not change `MCP_CLIENT_METADATA_PATH` after step 3. That URL _is_ AGI's
+client identity: every consent a user grants is recorded against it, so moving
+it silently invalidates them and forces everyone to reconnect.
+
+---
+
+## 25. Get AGI's callback URL allowlisted at six MCP vendors
+
+**Blocks:** asana, dropbox, figma, intercom, square, and vercel appearing as
+connectable. They serve MCP and their authorization servers publish a dynamic
+registration endpoint, but a real registration attempt on 2026-08-14 was
+refused by each one:
+
+| Connector | Response                                                                         |
+| --------- | -------------------------------------------------------------------------------- |
+| asana     | `400 invalid_redirect_uri` — "One or more redirect URIs are not allowed"         |
+| dropbox   | `403 registration_not_supported` — "Only pre-registered MCP trusted partners"    |
+| figma     | `403 Forbidden`                                                                  |
+| intercom  | `400 invalid_redirect_uri` — "not in the allowlist, reach out to Intercom"       |
+| square    | `400 invalid_redirect_uri` — "domain not in allowlist"                           |
+| vercel    | `400 invalid_redirect_uri` — "not approved for use by this authorization server" |
+
+They are therefore recorded as `preregistered` in
+`apps/web/lib/connectors/mcp-endpoints.ts` and the directory does not offer
+them, which is the honest state — advertising a Connect button that fails on
+click is the defect audit CRIT-001 was raised about.
+
+**Do:** apply to each vendor's MCP/partner programme and ask for this exact
+redirect URI to be allowlisted:
+
+```text
+https://agiworkforce.com/api/connectors/oauth/callback
+```
+
+**Then, per vendor**, either tell Claude to flip that entry back to `dynamic`
+(if they allowlisted the URI and dynamic registration now succeeds), or supply
+`CONNECTOR_OAUTH_<ID>_CLIENT_ID` / `_CLIENT_SECRET` if they issued a normal
+OAuth app instead. Do not paste secrets into chat — add them straight to the
+Vercel Production and Preview environments.
+
+Seven vendors need none of this and already register automatically: clickup,
+cloudflare, datadog, monday, paypal, plaid, stripe.
