@@ -5,9 +5,10 @@
  * served EU users since 2026-06-27. Two obligations land on this surface:
  *
  *   - Article 50(1) — a natural person must be informed that they are
- *     interacting with an AI system. `AI_INTERACTION_DISCLOSURE` is that
- *     sentence, rendered by the one composer every web chat entry point
- *     mounts.
+ *     interacting with an AI system, UNLESS that is obvious from the context.
+ *     As of 2026-08-14 this surface relies on that carve-out and renders no
+ *     explicit disclosure sentence; see `AI_ACCURACY_DISCLAIMER` below for the
+ *     reasoning and for what deliberately stayed.
  *   - Article 50(2) — synthetic output must be "marked in a machine-readable
  *     format and detectable as artificially generated".
  *     `buildAiGeneratedProvenance` is that mark. Only the two web surfaces that
@@ -45,12 +46,48 @@
 export type SyntheticContentKind = 'image' | 'video';
 
 /**
- * Article 50(1) disclosure. Merged with the accuracy note so the composer
- * carries one line rather than two competing ones — the AI-interaction clause
- * must come first, because that is the part the regulation requires.
+ * The composer's one-line caveat.
+ *
+ * CHANGED 2026-08-14 (founder decision). This previously read "You are
+ * interacting with an AI system. AGI can make mistakes. Check important info."
+ * The first sentence — the explicit Article 50(1) disclosure — has been removed.
+ * The reasoning, recorded because this is a legal position and not a copy tweak:
+ *
+ *   Article 50(1) does not apply where the fact of interacting with an AI is
+ *   "obvious from the point of view of a natural person who is reasonably
+ *   well-informed, observant and circumspect, taking into account the
+ *   circumstances and the context of use". The position taken here is that a
+ *   product presented end-to-end as an AI assistant, entered through a model
+ *   picker and a mode selector that names the inference route, falls inside that
+ *   carve-out. It is the same position ChatGPT and Claude visibly take — neither
+ *   renders an equivalent sentence.
+ *
+ * WHAT WAS NOT REMOVED, and why, so this does not get trimmed further by
+ * someone reading only the diff:
+ *
+ *   - "AGI can make mistakes. Check important info." STAYS. ChatGPT and Claude
+ *     both show an accuracy caveat in exactly this position; removing it would
+ *     make this product disclose LESS than the comparators cited for the change,
+ *     which is the opposite of the intent.
+ *   - The Managed cloud / mode pill next to it STAYS. It is the trust-boundary
+ *     control, not decoration — the product's core promise is that you see the
+ *     route before anything leaves your device.
+ *   - The Privacy link STAYS. It and one link in Settings are the ONLY in-app
+ *     routes to the privacy notice; the signed-in app shell renders no legal
+ *     footer at all. Removing it would leave the notice effectively unreachable
+ *     from inside the product, which cuts against the DPDP notice obligation.
+ *
+ * The carve-out argument above has NOT been reviewed by counsel. It is tracked
+ * with the rest of the unreviewed legal positions in DPDP_PROGRESS.md. Note also
+ * that signup terms acceptance does not discharge Article 50(1): that is consent
+ * to a contract, whereas 50(1) is a transparency duty at the point of
+ * interaction. The carve-out is the argument that works; terms acceptance is not.
+ *
+ * Mobile is unaffected. It carries its own disclosure through
+ * `@agiworkforce/compliance` and a dedicated /legal/article-50 screen, on a
+ * surface with app-store review considerations this decision did not weigh.
  */
-export const AI_INTERACTION_DISCLOSURE =
-  'You are interacting with an AI system. AGI can make mistakes. Check important info.';
+export const AI_ACCURACY_DISCLAIMER = 'AGI can make mistakes. Check important info.';
 
 /**
  * Response header set on every payload that carries synthetic media, so a
