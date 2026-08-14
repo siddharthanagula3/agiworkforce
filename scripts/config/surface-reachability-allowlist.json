@@ -448,7 +448,6 @@
           "apps/web/shared/ui/use-toast.ts",
           "apps/web/shared/utils/avatar-utils.ts",
           "apps/web/shared/utils/error-handling.ts",
-          "apps/web/shared/utils/format.ts",
           "apps/web/shared/utils/sitemap-generator.ts",
           "apps/web/shared/utils/subscription-client.ts",
           "apps/web/shared/utils/validation-schemas.ts"
