@@ -3164,6 +3164,34 @@
   color: var(--agi-ink-quiet);
   margin: 0;
 }
+/* Plan name and its capacity selector on one row.
+   `min-height` matches the pill's height so the cards WITHOUT a selector keep
+   their price on the same baseline as the Max card — otherwise the one taller
+   header knocks a single column out of alignment across the whole grid. */
+[data-design='agi'] .agi-tier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+}
+/* Compact variant of the selector for use inside the header row. The standalone
+   `.agi-tier-toggle` (still used for the monthly/annual switch above the grid)
+   keeps its own larger sizing and bottom margin. */
+[data-design='agi'] .agi-tier-head .agi-tier-toggle {
+  margin-bottom: 0;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 999px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+[data-design='agi'] .agi-tier-head .agi-tier-toggle-btn {
+  padding: 3px 11px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 [data-design='agi'] #pricing-team-title {
   scroll-margin-top: 6rem;
 }

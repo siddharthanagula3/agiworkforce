@@ -195,5 +195,20 @@
   "seatCadenceMonthly_one": "{{count}} licencia · facturación mensual",
   "seatCadenceMonthly_other": "{{count}} licencias · facturación mensual",
   "seatCadenceAnnual_one": "{{count}} licencia · facturación anual",
-  "seatCadenceAnnual_other": "{{count}} licencias · facturación anual"
+  "seatCadenceAnnual_other": "{{count}} licencias · facturación anual",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "5 proyectos con 1 GB de almacenamiento de conocimiento",
+  "basicFeature5": "2 chats a la vez y hasta 50 herramientas de conectores",
+  "basicFeature6": "2 tareas programadas y entornos gestionados de 10 minutos",
+  "proFeature4": "25 proyectos con 10 GB de almacenamiento de conocimiento",
+  "proFeature5": "Generación de imágenes, AGI Work y acceso a la API gestionada",
+  "proFeature6": "CLI, Chrome y VS Code, más 5 tareas programadas",
+  "maxFeature4": "Proyectos, almacenamiento y servidores MCP personalizados ilimitados",
+  "maxFeature5": "8 chats a la vez y hasta 300 herramientas de conectores",
+  "maxFeature6": "10 tareas programadas y entornos gestionados de 30 minutos",
+  "max15xFeature4": "Proyectos, almacenamiento y servidores MCP personalizados ilimitados",
+  "max15xFeature5": "12 chats a la vez y hasta 500 herramientas de conectores",
+  "max15xFeature6": "25 tareas programadas y entornos gestionados de 60 minutos"
 }
