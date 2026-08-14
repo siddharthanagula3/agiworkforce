@@ -3156,6 +3156,11 @@
   flex-direction: column;
   gap: 18px;
 }
+/* `min-height` lives HERE, on the name every card renders — not on the
+   `.agi-tier-head` row, which only the Max card has. Putting it on the row
+   reserved height for Max alone and pushed its price a line below every other
+   card's, which is the opposite of the intent. Matching the capacity pill's
+   height here keeps all four prices on one baseline. */
 [data-design='agi'] .agi-tier-name {
   font-size: 13px;
   font-weight: 600;
@@ -3163,17 +3168,16 @@
   text-transform: uppercase;
   color: var(--agi-ink-quiet);
   margin: 0;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
 }
-/* Plan name and its capacity selector on one row.
-   `min-height` matches the pill's height so the cards WITHOUT a selector keep
-   their price on the same baseline as the Max card — otherwise the one taller
-   header knocks a single column out of alignment across the whole grid. */
+/* Plan name and its capacity selector on one row. */
 [data-design='agi'] .agi-tier-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 28px;
 }
 /* Compact variant of the selector for use inside the header row. The standalone
    `.agi-tier-toggle` (still used for the monthly/annual switch above the grid)
