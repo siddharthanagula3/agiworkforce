@@ -1,0 +1,48 @@
+-- 0117 — persist OAuth discovery state across the two legs of an authorization.
+--
+-- WHY THIS IS NOT PART OF 0115
+-- 0115 has already been applied, so its columns cannot be edited in place.
+--
+-- WHAT WENT WRONG WITHOUT IT
+-- The MCP SDK's `auth()` performs the SEP-2352 authorization-server binding
+-- check on the callback leg: it compares the issuer recorded when the flow
+-- STARTED against the issuer discovery reports when the code comes back, and
+-- refuses to redeem the code if they differ. That is the control that stops an
+-- authorization code being redeemed at a server that is no longer the right
+-- audience for it.
+--
+-- It reads the recorded issuer from `provider.discoveryState()`. Our provider
+-- implemented `saveDiscoveryState`/`discoveryState` in memory only, and the
+-- broker spans two separate HTTP requests, so the callback leg always saw
+-- `undefined`. The SDK treats "implements the method but returns nothing" as a
+-- broken provider rather than as an opt-out — correctly, since silently
+-- skipping a security check is worse than failing — and throws:
+--
+--   "discoveryState was not available on the callback leg; ensure your provider
+--    persists discoveryState alongside codeVerifier"
+--
+-- The result was a 100% failure rate that no start-leg test could see: every
+-- connector would send the user through consent and then report that it needed
+-- reconnecting, forever.
+--
+-- WHY A JSON COLUMN RATHER THAN MORE TYPED ONES
+-- 0115 already pins `issuer`, `authorization_endpoint`, `token_endpoint` and
+-- `resource_url` individually, and those remain the values the grant is written
+-- from. This column holds the SDK's own `OAuthDiscoveryState` shape verbatim —
+-- protected-resource metadata and authorization-server metadata included — so
+-- it can be handed back unmodified. Re-deriving that structure from typed
+-- columns would mean this repository restating a shape the SDK owns, and
+-- drifting from it on the next revision.
+--
+-- It is not secret: every field is a public discovery document fetched over
+-- unauthenticated HTTP. The PKCE verifier in the neighbouring column stays
+-- encrypted, and nothing about that changes.
+--
+-- Rows are short-lived — `PENDING_AUTHORIZATION_TTL_SECONDS` is 600, and the
+-- table sweeps consumed and expired rows on every insert.
+--
+-- Depends: 0115_mcp_oauth_discovery
+-- =============================================================================
+
+alter table public.connector_oauth_authorizations
+  add column if not exists discovery_state jsonb;
