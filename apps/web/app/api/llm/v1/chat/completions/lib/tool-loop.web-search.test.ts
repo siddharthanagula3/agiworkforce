@@ -36,7 +36,11 @@ vi.mock('./tool-loop-anthropic', () => ({
 
 import { runToolLoop, searchResultsEvent } from './tool-loop';
 import type { ProcessedRequest } from './request-processor';
-import { webSearchToolDef } from '@/lib/web-search/web-search-tool';
+import {
+  webSearchToolDef,
+  WEB_SEARCH_MAX_CALLS_PER_TURN,
+  WEB_SEARCH_MAX_RESULTS,
+} from '@/lib/web-search/web-search-tool';
 
 function agentEvents(output: string): AgentEventEnvelope[] {
   return output
@@ -126,6 +130,16 @@ function makeProcessed(tools: unknown[], options: { freeTrial?: boolean } = {}):
   return {
     provider: 'xai',
     requestedModel: 'test-model',
+    // The loop reads `chatRequest` from step 2 onward (tool_choice relaxation),
+    // so a fixture without one crashed every multi-step case in this file with
+    // "Cannot read properties of undefined (reading 'tool_choice')" — the tests
+    // never reached their assertions. Only the one test that set it by hand ran.
+    chatRequest: {
+      model: 'test-model',
+      messages: [{ role: 'user', content: 'What happened in the news today?' }],
+      stream: true,
+      web_search: true,
+    },
     llmRequest: {
       model: 'test-model',
       messages: [{ role: 'user', content: 'What happened in the news today?' }],
@@ -250,7 +264,10 @@ describe('tool-loop web_search integration', () => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
       const [calledUrl, init] = fetchMock.mock.calls[0]!;
       expect(calledUrl).toBe('https://api.perplexity.ai/search');
-      expect(JSON.parse(init!.body as string)).toEqual({ query: 'today news', max_results: 8 });
+      expect(JSON.parse(init!.body as string)).toEqual({
+        query: 'today news',
+        max_results: WEB_SEARCH_MAX_RESULTS,
+      });
       expect((init!.headers as Record<string, string>)['Authorization']).toBe(
         'Bearer pplx-test-key',
       );
@@ -294,6 +311,44 @@ describe('tool-loop web_search integration', () => {
         query: 'today news',
         max_results: 5,
       });
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it(`stops searching after ${WEB_SEARCH_MAX_CALLS_PER_TURN} calls in one turn and tells the model to answer from what it has`, async () => {
+    // One more search step than the budget allows, then a final answer. The
+    // over-budget step must never reach the search backend.
+    for (let i = 0; i < WEB_SEARCH_MAX_CALLS_PER_TURN + 1; i++) {
+      factoryMocks.streamRequest.mockResolvedValueOnce(
+        toolCallStream('web_search', { query: `query ${i}` }, `call_web_search_budget_${i}`),
+      );
+    }
+    factoryMocks.streamRequest.mockResolvedValueOnce(
+      finalAnswerStream('Answering with what I have.'),
+    );
+
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      perplexitySearchResponse(),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'pplx-test-key');
+
+    try {
+      const output = await collect(
+        runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
+      );
+
+      // The backend ran exactly the budgeted number of times — the extra call
+      // was refused locally, not passed through and paid for.
+      expect(fetchMock).toHaveBeenCalledTimes(WEB_SEARCH_MAX_CALLS_PER_TURN);
+      expect(output).toContain('Search budget reached');
+      // Refusal is a normal result, not an error: the turn keeps going and
+      // still produces an answer.
+      expect(output).not.toContain('"x_stream_error"');
+      expect(output).toContain('Answering with what I have.');
+      expect(output).toContain('data: [DONE]');
     } finally {
       vi.unstubAllGlobals();
       vi.unstubAllEnvs();
