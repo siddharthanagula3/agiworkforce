@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POSITIONING } from '../../lib/marketing-constants';
 import {
   CONTACT_EMAIL,
@@ -75,6 +76,26 @@ export const metadata = buildMetadata({
  * two access layers into either absolute.
  */
 
+/**
+ * Section list for the contents block. Must stay identical to the rendered
+ * eyebrows — they are one piece of copy, not two, and drift makes the contents
+ * describe a document that is not there.
+ */
+const SECTIONS = [
+  '00 &middot; The mode decides the answer',
+  '01 &middot; What we collect',
+  '02 &middot; What we do not collect',
+  '03 &middot; How we use it, and on what basis',
+  '04 &middot; Sharing',
+  '05 &middot; Retention',
+  '06 &middot; What you can change yourself',
+  '07 &middot; Your rights, and how to use them',
+  '08 &middot; International transfers',
+  '09 &middot; Children',
+  '10 &middot; Changes',
+  '11 &middot; Contact',
+] as const;
+
 export default function PrivacyPage() {
   return (
     <div data-design="agi">
@@ -92,7 +113,12 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <PolicyContents
+          sections={SECTIONS}
+          intro="Start with section 00 — which mode you run changes almost every answer below it."
+        />
+
+        <section className="agi-section" id="s-00">
           <p className="agi-section-eyebrow">00 &middot; The mode decides the answer</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Most privacy policies have one answer. This product has three, because Local, BYOK and
@@ -152,7 +178,7 @@ export default function PrivacyPage() {
           </table>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-01">
           <p className="agi-section-eyebrow">01 &middot; What we collect</p>
           <table className="agi-ledger">
             <thead>
@@ -338,7 +364,7 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-02">
           <p className="agi-section-eyebrow">02 &middot; What we do not collect</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
@@ -377,7 +403,7 @@ export default function PrivacyPage() {
           </ul>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-03">
           <p className="agi-section-eyebrow">03 &middot; How we use it, and on what basis</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             One row per purpose, rather than a sentence listing four bases and leaving you to work
@@ -508,7 +534,7 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-04">
           <p className="agi-section-eyebrow">04 &middot; Sharing</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We share data only with the subprocessors listed at{' '}
@@ -522,7 +548,7 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-05">
           <p className="agi-section-eyebrow">05 &middot; Retention</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Every row below is a job or a mechanism that exists in the product, with the ones we do
@@ -712,7 +738,7 @@ export default function PrivacyPage() {
           </table>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-06">
           <p className="agi-section-eyebrow">06 &middot; What you can change yourself</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Controls that exist in the product right now, separated from the statutory rights in the
@@ -811,7 +837,7 @@ export default function PrivacyPage() {
           </table>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-07">
           <p className="agi-section-eyebrow">07 &middot; Your rights, and how to use them</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Depending on where you live and subject to applicable exceptions, privacy laws such as
@@ -868,7 +894,7 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-08">
           <p className="agi-section-eyebrow">08 &middot; International transfers</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI data is hosted in the United States.{' '}
@@ -876,7 +902,7 @@ export default function PrivacyPage() {
             data is transferred to and processed in the US. For EU, UK and Swiss personal data we
             rely on the Standard Contractual Clauses with the UK Addendum and the Swiss adaptations,
             set out in section 06 of the{' '}
-            <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/dpa#s-06" style={{ color: 'var(--agi-ink)' }}>
               DPA
             </Link>
             . AGI has not appointed a representative under GDPR Art. 27; the current position is at{' '}
@@ -887,7 +913,7 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-09">
           <p className="agi-section-eyebrow">09 &middot; Children</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI accounts are for people aged 18 and over; 13- to 17-year-olds may use it only under
@@ -902,7 +928,7 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-10">
           <p className="agi-section-eyebrow">10 &middot; Changes</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We may update this policy. The current version is always at this URL with the revision
@@ -915,7 +941,7 @@ export default function PrivacyPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-11">
           <p className="agi-section-eyebrow">11 &middot; Contact</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             {LEGAL_ENTITY}, {NOTICE_ADDRESS}. Email{' '}

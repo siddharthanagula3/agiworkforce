@@ -236,7 +236,7 @@ export default function SubprocessorsPage() {
             subprocessor change is one we could not perform. To object to a new subprocessor on
             reasonable data protection grounds, write to us within 30 days of publication &mdash;
             the objection and termination route is in section 05 of the{' '}
-            <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
+            <Link href="/dpa#s-05" style={{ color: 'var(--agi-ink)' }}>
               DPA
             </Link>
             .
