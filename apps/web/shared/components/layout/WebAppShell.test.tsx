@@ -41,6 +41,14 @@ vi.mock('@clerk/nextjs', () => ({
   useClerk: () => ({ signOut: vi.fn() }),
 }));
 
+// Rendering the account menu's real contents (see the DropdownMenu mock below)
+// pulls this in, and it needs a react-query provider the shell test does not
+// stand up. Stubbed so the menu can be asserted on without dragging the whole
+// workspace stack into a layout test.
+vi.mock('@/features/workspaces/components/WorkspaceMenuItems', () => ({
+  WorkspaceMenuItems: () => null,
+}));
+
 vi.mock('@agiworkforce/ui', () => ({
   Sidebar: (props: { collapsed?: boolean; isLoading?: boolean; footerSlot?: React.ReactNode }) => (
     <div
@@ -53,8 +61,13 @@ vi.mock('@agiworkforce/ui', () => ({
   ),
   DropdownMenu: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   DropdownMenuTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
-  DropdownMenuContent: () => null,
-  DropdownMenuItem: () => null,
+  // Content and items render their children rather than returning null. The
+  // stub used to swallow both, which meant nothing inside the account menu
+  // could be asserted on — including whether the product offers any route to
+  // its own policies. `asChild` is accepted and ignored; the child is already
+  // the element we want in the tree.
+  DropdownMenuContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  DropdownMenuItem: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   DropdownMenuLabel: () => null,
   DropdownMenuSeparator: () => null,
 }));
@@ -241,6 +254,38 @@ describe('WebAppShell responsive navigation', () => {
       </WebAppShell>,
     );
     expect(screen.queryByRole('dialog', { name: 'Navigation' })).toBeNull();
+  });
+
+  /**
+   * Legal reachability from inside the product.
+   *
+   * An audit found the signed-in shell rendered NO route to any policy: every
+   * legal link lived on the marketing footer, which a signed-in user never
+   * sees. A privacy notice you can only reach by signing out is not accessible,
+   * and the DPDP grievance route in particular has to be reachable from the
+   * page that made someone want to use it.
+   *
+   * Asserted by href against the canonical route constants rather than by label,
+   * so renaming a menu item is allowed and dropping the route is not.
+   */
+  it('reaches the policy set from the account menu', async () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    const { CANONICAL_POLICY_ROUTES } = await import('@/lib/legal-constants');
+    for (const route of [
+      CANONICAL_POLICY_ROUTES.dataUse,
+      CANONICAL_POLICY_ROUTES.dataRights,
+      CANONICAL_POLICY_ROUTES.legalIndex,
+    ]) {
+      expect(
+        document.querySelector(`a[href="${route}"]`),
+        `the signed-in account menu must link ${route}`,
+      ).not.toBeNull();
+    }
   });
 
   it('resize from desktop to narrow swaps the persistent sidebar for the trigger', () => {

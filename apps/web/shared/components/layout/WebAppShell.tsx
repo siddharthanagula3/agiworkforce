@@ -21,6 +21,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useClerk } from '@clerk/nextjs';
 import {
@@ -29,10 +30,13 @@ import {
   ChevronUp,
   LibraryBig,
   CalendarClock,
+  FileText,
   FolderOpen,
   ListChecks,
   Menu,
   MessageSquare,
+  Scale,
+  ShieldCheck,
   TerminalSquare,
 } from 'lucide-react';
 import {
@@ -47,6 +51,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
+import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { useConversations } from '@/lib/hooks/useConversations';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -376,6 +381,45 @@ export function WebAppShell({ children }: WebAppShellProps) {
           <DropdownMenuItem onClick={() => openSettings('general')}>
             <Settings className="mr-2 h-4 w-4" />
             Settings
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {/*
+            Legal reachability from INSIDE the product.
+            An audit found the signed-in shell rendered no route to any policy:
+            every legal link lived on the marketing footer, which a signed-in
+            user never sees. That is a real gap rather than a tidiness one — a
+            privacy notice you can only find by signing out is not accessible,
+            and the DPDP grievance route in particular has to be reachable from
+            the page that made someone want to use it.
+            The account menu rather than a persistent footer strip, because an
+            app shell should not spend vertical space on this and because it is
+            where people already look.
+          */}
+          <DropdownMenuItem asChild>
+            <Link href={CANONICAL_POLICY_ROUTES.dataUse} target="_blank" rel="noopener noreferrer">
+              <ShieldCheck className="mr-2 h-4 w-4" />
+              How we use your data
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link
+              href={CANONICAL_POLICY_ROUTES.dataRights}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Privacy &amp; your data rights
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link
+              href={CANONICAL_POLICY_ROUTES.legalIndex}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Scale className="mr-2 h-4 w-4" />
+              Terms &amp; policies
+            </Link>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
