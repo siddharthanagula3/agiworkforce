@@ -242,6 +242,18 @@ export function runMediaPaywallRecovery(
     handlers.openSettings('usage');
     return;
   }
+  // Lands on the Billing section, whose "Usage top-up" block is the real,
+  // already-working purchase control. This is the only recovery that helps a
+  // subscriber at the top of the ladder: they cannot upgrade to anything, so
+  // before this existed their paywall card offered no action at all.
+  //
+  // Only reachable when the block is one credits actually clear — see
+  // `clearedByCredits` in billing-catalog.ts. Never route a rolling-window
+  // refusal here; buying credits does not lift those caps today.
+  if (selection.recoveryAction === 'top_up') {
+    handlers.openSettings('billing');
+    return;
+  }
   if (isSelfServeIndividualPlanTier(selection.requiredTier)) {
     handlers.openUpgrade(selection.requiredTier);
     return;

@@ -61,7 +61,12 @@ export type { PaywallFeature };
 
 export type UserTier = BillingPlanTier;
 export type RequiredTier = Exclude<BillingPlanTier, 'local-only' | 'byok' | 'free'>;
-export type PaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
+export type PaywallRecoveryAction =
+  | 'upgrade'
+  | 'subscribe'
+  | 'manage_billing'
+  | 'view_usage'
+  | 'top_up';
 
 export interface InlinePaywallCardProps {
   feature: PaywallFeature;
@@ -190,9 +195,11 @@ const CtaButtons = memo(function CtaButtons({
             ? 'Manage billing'
             : recoveryAction === 'view_usage'
               ? 'View usage'
-              : recoveryAction === 'subscribe'
-                ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}`
-                : `Upgrade to ${getBillingPlanPricing(requiredTier).label}`}
+              : recoveryAction === 'top_up'
+                ? 'Buy credits'
+                : recoveryAction === 'subscribe'
+                  ? `Subscribe to ${getBillingPlanPricing(requiredTier).label}`
+                  : `Upgrade to ${getBillingPlanPricing(requiredTier).label}`}
         </Button>
       ) : null}
 

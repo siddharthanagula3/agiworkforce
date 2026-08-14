@@ -339,7 +339,7 @@ interface Message {
     paywall?: {
       feature: string;
       requiredTier: string;
-      recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
+      recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage' | 'top_up';
     };
     /**
      * Parsed interactive cards. The union already encodes whether a body was
