@@ -182,6 +182,10 @@ export async function beginMcpAuthorization(
     resourceUrl: draft.resourceUrl,
     mcpUrl,
     clientId: draft.clientId,
+    // Persisted so the callback leg can replay it. `auth()` refuses to redeem
+    // an authorization code when it cannot read the issuer recorded here, so
+    // omitting this fails every connector at the callback rather than at start.
+    discoveryState: provider.discoverySnapshot,
   });
 
   logger.info(
@@ -224,9 +228,26 @@ export async function completeMcpAuthorization(input: {
     };
   }
 
+  const discoveryState = pending.discoveryState as
+    | NonNullable<McpOAuthProviderSeed['discoveryState']>
+    | null
+    | undefined;
+
+  if (!discoveryState) {
+    // Pre-0116 rows carry no discovery state, and `auth()` will not redeem a
+    // code without it. Saying so plainly beats surfacing the SDK's internal
+    // "provider is broken" error to someone who just clicked Connect.
+    return {
+      status: 'error',
+      reason: 'unexpected',
+      message: 'This authorization was started before an upgrade. Please connect again.',
+    };
+  }
+
   const seed: McpOAuthProviderSeed = {
     codeVerifier: pending.codeVerifier,
     issuer: pending.issuer ?? null,
+    discoveryState,
   };
   const provider = new McpOAuthClientProvider({ mcpUrl, state: input.state, seed });
 

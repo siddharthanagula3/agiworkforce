@@ -101,6 +101,14 @@ export interface McpOAuthProviderSeed {
   codeVerifier?: string;
   issuer?: string | null;
   tokens?: StoredOAuthTokens | undefined;
+  /**
+   * The discovery state captured on the start leg, replayed here.
+   *
+   * Without it `auth()` cannot perform the SEP-2352 authorization-server
+   * binding check and refuses to redeem the authorization code — so the
+   * callback leg MUST supply this or the flow cannot complete.
+   */
+  discoveryState?: OAuthDiscoveryState | undefined;
 }
 
 export interface McpOAuthProviderOptions {
@@ -144,6 +152,7 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
     this._codeVerifier = options.seed?.codeVerifier ?? null;
     this._authorizationServerUrl = options.seed?.issuer ?? null;
     this._tokens = options.seed?.tokens;
+    this._discovery = options.seed?.discoveryState ?? null;
   }
 
   // ── Identity ──────────────────────────────────────────────────────────────
@@ -347,6 +356,14 @@ export class McpOAuthClientProvider implements OAuthClientProvider {
 
   get registrationMethod(): McpClientRegistrationMethod | null {
     return this._registrationMethod;
+  }
+
+  /**
+   * What discovery resolved, for the start leg to persist alongside the PKCE
+   * verifier. The callback leg replays it through `seed.discoveryState`.
+   */
+  get discoverySnapshot(): OAuthDiscoveryState | null {
+    return this._discovery;
   }
 
   get resolvedTokens(): StoredOAuthTokens | undefined {
