@@ -24,6 +24,9 @@ jest.mock('expo-router', () => ({
   // follow the production import or every screen using them throws here.
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
+    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
+    // deps would re-run it on every render, which is the opposite of what it mocks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
   useRouter: () => ({
