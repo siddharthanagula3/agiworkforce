@@ -33,9 +33,16 @@ export const metadata = buildMetadata({
  * 1. NO PRICES, NO PLAN NAMES. Pricing, plan naming and billing behaviour are
  *    owned elsewhere (/pricing, the billing catalog, checkout/portal). Describe
  *    billing mechanics generically so this page cannot drift against them.
- * 2. NO EMAIL NOTICE PROMISES. There is no transactional email provider in this
- *    repository, so a commitment to email notice of a change cannot be
- *    performed. Notice is posted here and on /changelog.
+ * 2. NO EMAIL NOTICE PROMISES — but get the REASON right. This rule used to say
+ *    "there is no transactional email provider in this repository". That was
+ *    false: lib/support/handoff/resend-client.ts calls the Resend HTTP API over
+ *    plain `fetch`, which is why a dependency grep never found it. The true
+ *    reason is narrower and still sufficient: the three paths that can send
+ *    mail (support escalation, scheduled-task notification, operational alerts)
+ *    cannot broadcast to a list of customers, so a commitment to email everyone
+ *    about a change is still unperformable. Notice is posted here and on
+ *    /changelog. A guard in app/__tests__/legal-policy-set.test.ts now fails the
+ *    build if the old wording returns.
  * 3. NO ENTERPRISE CONTROL CLAIMS. Do not sell SSO, SCIM, directory sync or an
  *    audit-log export from this page.
  * 4. Entity, address, venue and contact facts come from lib/legal-constants.ts,
@@ -280,8 +287,8 @@ export default function TermsPage() {
             You can export your data at any time while your account is active. An account deletion
             request schedules permanent erasure 24 hours later; a daily job then removes your
             user-scoped records and stored files and deletes your identity at our authentication
-            provider. Two limits, stated plainly: no confirmation email is sent, because there is no
-            transactional email system in the product, and there is no self-serve way to cancel a
+            provider. Two limits, stated plainly: no confirmation email is sent, because the product
+            has no account-lifecycle mailing path, and there is no self-serve way to cancel a
             scheduled deletion &mdash; within the 24-hour window, contact support. Sections that by
             their nature survive &mdash; licence restrictions, your content representations,
             intellectual property, disclaimers, limitation of liability, indemnification, governing
@@ -420,9 +427,9 @@ export default function TermsPage() {
                   <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
                     /changelog
                   </Link>
-                  . We do not operate a transactional email system, so we do not promise emailed
-                  notice. Continued use after a revision means you accept it; if you do not, stop
-                  using the service and cancel.
+                  . No mailing path in this product can reach an arbitrary list of customers, so we
+                  do not promise emailed notice. Continued use after a revision means you accept it;
+                  if you do not, stop using the service and cancel.
                 </td>
               </tr>
               <tr>

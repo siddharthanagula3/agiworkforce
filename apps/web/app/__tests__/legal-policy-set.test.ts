@@ -130,14 +130,13 @@ describe('legal policy set — prohibited claims', () => {
   const BANNED: { pattern: RegExp; why: string; files: string[] }[] = [
     {
       pattern: /announced via email|notify customers[^.]*30 days in advance/i,
-      why: 'There is no transactional email provider in this repository, so emailed notice cannot be performed.',
+      why: 'No mailing path can reach an arbitrary list of customers, so a promise of emailed notice cannot be performed. (The product CAN send support-escalation and scheduled-task email — see the Resend guard below — but neither can do a broadcast.)',
       files: ['privacy/page.tsx', 'terms/page.tsx', 'subprocessors/page.tsx', 'dpa/page.tsx'],
     },
-    {
-      pattern: /name:\s*'Resend'/,
-      why: 'Resend is not wired anywhere; listing a processor that receives nothing makes the list unreliable.',
-      files: ['subprocessors/page.tsx'],
-    },
+    // The `name: 'Resend'` guard used to live here, banning the entry outright.
+    // It was written on a false premise and is INVERTED below into
+    // `required claims` — see that block for the full story. Do not restore a
+    // ban: the provider is wired, and delisting it is the defect.
     {
       pattern: /RLS-enforced;\s*only you can read your rows/i,
       why: 'Database RLS bites on the user-scoped sync paths, not universally. The honest claim is two layers.',
@@ -211,6 +210,48 @@ describe('legal policy set — prohibited claims', () => {
       expect(normalized).toMatch(/applicable terms and data-use policies/i);
       expect(normalized).toMatch(/not a promise/i);
       expect(normalized).toMatch(/OpenRouter/i);
+    }
+  });
+
+  it('discloses the transactional email provider that is actually wired', () => {
+    // INVERTED GUARD. This assertion used to be its own opposite: a BANNED
+    // entry forbidding `name: 'Resend'` on the subprocessor page, on the
+    // reasoning that no email package appears in the dependencies and therefore
+    // no provider existed.
+    //
+    // The premise was true and the conclusion was false.
+    // `lib/support/handoff/resend-client.ts` calls https://api.resend.com/emails
+    // over plain `fetch`, deliberately avoiding an npm dependency — so a
+    // manifest grep could never find it. Meanwhile full support transcripts,
+    // including the user's contact email, were being emailed to an undisclosed
+    // recipient, and three policy pages justified never notifying users of
+    // anything on the strength of "there is no transactional email system".
+    //
+    // A test that enforces a false claim is worse than no test, so this one now
+    // enforces the true one: if the client exists, the page must disclose it.
+    const clientPath = path.join(WEB_DIR, 'lib/support/handoff/resend-client.ts');
+    if (!existsSync(clientPath)) return; // provider genuinely removed — nothing to disclose
+
+    const subprocessors = readPublishedCopy('subprocessors', 'page.tsx');
+    expect(
+      subprocessors,
+      'lib/support/handoff/resend-client.ts exists, so /subprocessors must list the provider',
+    ).toMatch(/name:\s*'Resend'/);
+  });
+
+  it('does not claim the product has no transactional email system', () => {
+    // The claim that justified the delisting. It appears nowhere now, and it
+    // must not come back while the client above exists: it is the sentence that
+    // let an undisclosed recipient of personal data look like a policy choice.
+    for (const file of ['privacy/page.tsx', 'terms/page.tsx', 'subprocessors/page.tsx']) {
+      const copy = readPublishedCopy(...file.split('/')).replace(/\s+/g, ' ');
+      expect(copy, `${file} must not claim there is no transactional email system`).not.toMatch(
+        /there is no transactional email (system|provider)/i,
+      );
+      expect(
+        copy,
+        `${file} must not claim we do not operate a transactional email system`,
+      ).not.toMatch(/we do not operate a transactional email/i);
     }
   });
 
