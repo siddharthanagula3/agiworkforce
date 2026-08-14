@@ -98,12 +98,30 @@ function toRequest(row: RequestRow): DataRightsRequest {
  * grants nothing, since every read path is authorised separately.
  */
 const REFERENCE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+const REFERENCE_LENGTH = 10;
+
+/**
+ * Largest multiple of the alphabet size that fits in a byte. Bytes at or above
+ * it are discarded rather than folded back with `%`.
+ *
+ * With today's 32-character alphabet this rejects nothing — 32 divides 256
+ * exactly, so a plain modulo is already uniform. The rejection step is here so
+ * that stays true if the alphabet is ever edited: at 33 characters, `byte % 33`
+ * would make the first 25 symbols ~29% likelier than the rest, and nothing in
+ * the type system or the tests would notice. Uniformity should be a property of
+ * the code, not a coincidence of the current string's length.
+ */
+const REFERENCE_ACCEPT_LIMIT =
+  Math.floor(256 / REFERENCE_ALPHABET.length) * REFERENCE_ALPHABET.length;
 
 function generateReference(): string {
-  const bytes = randomBytes(10);
   let out = '';
-  for (const byte of bytes) {
-    out += REFERENCE_ALPHABET[byte % REFERENCE_ALPHABET.length];
+  while (out.length < REFERENCE_LENGTH) {
+    // Ask for what is still missing; on the rare rejection the loop refills.
+    for (const byte of randomBytes(REFERENCE_LENGTH - out.length)) {
+      if (byte >= REFERENCE_ACCEPT_LIMIT) continue;
+      out += REFERENCE_ALPHABET[byte % REFERENCE_ALPHABET.length];
+    }
   }
   return `DPDP-${out}`;
 }
