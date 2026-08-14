@@ -568,6 +568,15 @@ export default function ChatScreen() {
       isOnline,
       clerkUserId,
       enqueueOfflineMessage,
+      // Read inside this callback when building the generation request
+      // (videoAspectRatio/videoResolution above, imageAspectRatio below). Left
+      // out of the deps they were captured stale, so changing aspect ratio or
+      // resolution in the media controls had NO effect on the next generation
+      // until some unrelated dependency happened to change and rebuild the
+      // callback — the setting appeared to apply and silently did not.
+      imageAspectRatio,
+      videoAspectRatio,
+      videoResolution,
     ],
   );
 
