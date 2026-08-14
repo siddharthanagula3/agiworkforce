@@ -16,6 +16,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
+import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -35,6 +36,34 @@ function getStripe(): Stripe {
     stripeClient = new Stripe(requireEnv('STRIPE_SECRET_KEY'), { apiVersion: STRIPE_API_VERSION });
   }
   return stripeClient;
+}
+
+/**
+ * The currency Stripe actually bills this subscription in.
+ *
+ * Read from Stripe rather than inferred from the caller's IP: someone who
+ * subscribed in INR and is travelling must still be measured against the
+ * currency their plan is billed in, not the country they happen to be in. This
+ * mirrors the doctrine already stated on `getPriceSelectionForCurrency`.
+ *
+ * Fails CLOSED. A Stripe lookup failure returns no currency, and the caller
+ * refuses the top-up — the alternative is defaulting to `'usd'`, which turns a
+ * transient API error into exactly the silent cross-currency charge this guard
+ * exists to prevent.
+ */
+async function resolveSubscriptionCurrency(subscriptionId: string): Promise<string> {
+  try {
+    const subscription = await getStripe().subscriptions.retrieve(subscriptionId);
+    return subscription.currency.trim().toLowerCase();
+  } catch (error) {
+    logger.warn(
+      { error, subscriptionId },
+      'Top-up refused: could not read the subscription billing currency from Stripe',
+    );
+    throw createError.serviceUnavailable(
+      'Your billing currency could not be verified. No charge was made; please retry.',
+    );
+  }
 }
 
 function checkoutIsEnabled(): boolean {
@@ -110,6 +139,30 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
   ) {
     throw createError.validation(
       'Top-ups are available for active plans billed by AGI Workforce. Start or restore your plan first.',
+    );
+  }
+
+  // Top-ups are priced in USD only (`usd_1_to_units_50_v1`), but subscription
+  // pricing IS regional — `lib/regional-pricing.ts` sells Basic/Pro/Max/Team in
+  // INR, so a subscriber's billing currency is not guaranteed to be USD. Billing
+  // a USD top-up against an INR subscription is not a hard Stripe error
+  // (mode:'payment' creates a PaymentIntent, not an invoice, so the Customer's
+  // pinned currency does not reject it) — it silently charges a different
+  // currency than every other line on that account, adding an unannounced forex
+  // conversion and a card-network cross-border fee the buyer never agreed to.
+  //
+  // So the currency is read from the live subscription, exactly as
+  // `/api/upgrade/preview` does, and a non-USD subscriber is refused rather than
+  // cross-charged. Defining a per-currency unit rate is a founder pricing
+  // decision, not a conversion this route may invent: the published INR plan
+  // prices are psychological price points, not one exchange rate (Basic
+  // $7→₹399 is ₹57/$, Pro $20→₹1999 is ₹100/$, Max 15x $200→₹24999 is ₹125/$),
+  // so no rate can be derived from them. Tracked in FoundersAssistance.md §28.
+  const subscriptionCurrency = await resolveSubscriptionCurrency(billing.stripe_subscription_id);
+  if (subscriptionCurrency !== 'usd') {
+    throw createError.validation(
+      `Top-ups are billed in USD and your plan is billed in ${subscriptionCurrency.toUpperCase()}. ` +
+        'No charge was made. Upgrade your plan for more included usage, or contact support.',
     );
   }
 

@@ -1180,3 +1180,120 @@ trusting the write command.
 
 Nothing in test mode needs archiving: every ACTIVE test price is the current
 catalog and is in use.
+
+## 28. India: the ₹15,000 RBI ceiling breaks two INR plans, and Razorpay is a sales question before it is an integration
+
+**Status:** `BLOCKED_BY_HUMAN` — needs a pricing decision and a Razorpay sales
+answer. No code can resolve either.
+
+Regional pricing is already built and is not the gap. `lib/regional-pricing.ts`
+carries founder-set INR prices, `lib/server/localized-pricing-service.ts`
+resolves them against Stripe multi-currency Prices, `/api/checkout` and
+`/api/pricing/localized` derive currency from trusted `x-vercel-ip-country`, and
+`/api/upgrade/preview` correctly uses the SUBSCRIPTION's currency rather than the
+caller's current IP. What is missing is not plumbing.
+
+### 28a. Two published INR prices cannot legally auto-renew
+
+RBI's e-mandate framework requires additional factor authentication (AFA/3DS) on
+**every** recurring charge above **₹15,000**. The December 2023 increase to ₹1
+lakh applies only to mutual funds, insurance premiums and credit-card bills —
+SaaS subscriptions stay at ₹15,000. Verified against Stripe's India recurring
+payments doc and RBI coverage, 2026-08-14.
+
+| Plan        | INR/mo      | Auto-renews on an Indian card?               |
+| ----------- | ----------- | -------------------------------------------- |
+| Basic       | ₹399        | Yes                                          |
+| Pro         | ₹1,999      | Yes                                          |
+| Max 5x      | ₹9,999      | Yes                                          |
+| **Max 15x** | **₹24,999** | **No** — buyer must complete 3DS every month |
+| **Team**    | ₹1,999/seat | **No at 8+ seats** (8 × 1,999 = ₹15,992)     |
+
+This is an RBI rule on the buyer's card, not a Stripe limitation. **Razorpay does
+not change it**, and UPI AutoPay is worse: UPI does not support recurring
+mandates above ₹15,000 at all. Any provider hits the same ceiling.
+
+**Decide one of:**
+
+1. Price Max 15x INR at or under ₹15,000 (a real discount vs the $200 tier).
+2. Sell Max 15x in India annually, or as invoice/manual collection, not as a card
+   auto-debit.
+3. Cap Indian Team purchases at 7 seats self-serve and route 8+ to sales.
+4. Do not sell those two tiers in India yet.
+
+Nothing is broken in production today because no INR Price object exists in
+Stripe (see 28c) — so this is a decision to make _before_ INR goes live, not an
+incident.
+
+### 28b. Stripe delays every Indian card renewal by 26 hours
+
+Stripe issues the mandatory 24-hour pre-debit notification through a partner and
+waits **26 hours** before charging. The PaymentIntent sits in `processing` for
+that whole window and cannot be cancelled. Renewals can also fail with
+`india_recurring_payment_mandate_canceled` or `payment_intent_mandate_invalid`
+when a buyer cancels the mandate at their bank — a path with no equivalent in
+card billing elsewhere.
+
+**Confirmed not handled anywhere in this repo**: a grep across
+`app/api/stripe-webhook` and `lib` finds no reference to `processing`,
+`approval_requested`, or any India mandate decline code. This is engineering
+work, not a founder decision, and it is only needed once INR billing is real —
+recorded here so it is not discovered from a failed renewal.
+
+### 28c. INR is published but not sellable
+
+`STRIPE_PRICE_BASIC_MONTHLY_INR` and `STRIPE_PRICE_TEAM_MONTHLY_INR` are read by
+`lib/pricing.ts` and are unset in every environment, because no active INR Price
+exists in Stripe. The only one that ever existed (Basic ₹399) is archived. The
+system fails closed correctly — `checkoutReady: false` — so India currently sees
+USD pricing rather than a broken button. Creating those Prices is blocked on 28a.
+
+### 28d. Top-ups were USD-only against regional plans — FIXED 2026-08-14
+
+`/api/billing/top-up` hardcoded `currency: 'usd'`. Because a top-up is
+`mode: 'payment'` (a PaymentIntent, not an invoice), Stripe would NOT have
+rejected a USD top-up on an INR subscription — it would have silently charged a
+second currency on the same account, adding an undisclosed forex conversion and a
+cross-border card fee.
+
+The route now reads the live subscription's currency and refuses a non-USD
+subscriber with an honest message, failing closed if Stripe cannot be reached.
+Setting a per-currency top-up rate is a founder decision and cannot be derived:
+the published INR prices are price points, not one exchange rate — Basic is
+₹57/$, Pro and Max are ₹100/$, Max 15x is ₹125/$, Team is ₹80/$.
+
+**Decide:** the INR price of one top-up unit, or leave top-ups USD-only.
+
+### 28e. Razorpay — what to ask sales before any code is written
+
+Razorpay is a reasonable choice and the reason is UPI, not price: UPI and
+netbanking are how most Indian consumers actually pay, and an international
+Stripe account cannot offer them. Razorpay holds an RBI PA-CB licence and settles
+to an overseas account for a foreign entity with no Indian subsidiary.
+
+Three things must be answered **before** integration, and none can be verified
+from documentation:
+
+1. **Does Razorpay support recurring/Subscriptions for a foreign entity, or only
+   one-time payments?** Their own international-payments doc covers one-time
+   collection and does not confirm recurring; it even notes that "UPI and
+   recurring payments are not supported by most payment providers." If the answer
+   is one-time only, Razorpay cannot replace Stripe for subscriptions and would
+   be a UPI-funded credit purchase instead — a different product decision.
+2. **Pricing.** Quoted case-by-case for cross-border; budget ~3% + GST.
+3. **GST/OIDAR.** Razorpay International is a payment service provider, **not** a
+   merchant of record. Supplying digital services to Indian consumers as a
+   foreign entity carries an OIDAR GST registration and 18% remittance
+   obligation that stays with AGI Automation LLC. Stripe Tax does not cover it
+   and neither does Razorpay. A merchant-of-record (Paddle, Polar) is the
+   alternative that does absorb it — at a higher rate and without UPI parity.
+
+**Do:** contact Razorpay sales with question 1 first; it decides whether this is
+a subscription integration or a top-up integration. Then confirm the OIDAR
+position with an accountant.
+
+Adding Razorpay means a **second billing provider**, not a swap: a second webhook
+surface, a second subscription lifecycle, refunds and reconciliation in two
+systems, and `resolveSubscriptionBillingSource` gaining a fourth owner alongside
+`stripe` / `apple` / `google`. That is a substantial build and should not start
+until question 1 is answered.
