@@ -49,6 +49,12 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
+// A successful DELETE releases the conversation's paused E2B sandbox. Unmocked,
+// the owner's happy path would attempt a real network call to E2B. The route
+// swallows the failure, so the test would still pass — but only after a live
+// timeout, which is how a fast suite quietly becomes a slow one.
+vi.mock('@/lib/e2b/runtime', () => ({ killE2BSession: vi.fn(async () => {}) }));
+
 import { GET, PUT, DELETE } from '@/app/api/chat/conversations/[id]/route';
 
 const OWNER = 'user-1';
@@ -127,14 +133,34 @@ describe('L1 Security - Data Isolation (BOLA/IDOR Prevention)', () => {
     expect(res.status).toBe(401);
   });
 
+  test('HAPPY_PATH: owner can DELETE their own conversation', async () => {
+    mockAuth.mockResolvedValue({ userId: OWNER });
+    const { req, context } = makeRequest('DELETE');
+    const res = await DELETE(req, context);
+
+    // Pairs with the foreign-row test below. Without this case, that test would
+    // still pass if DELETE were broken for EVERYONE — a 404 would then prove
+    // nothing about ownership scoping.
+    expect(res.status).toBe(200);
+  });
+
   test("SECURITY: DELETE binds the caller's id so it cannot soft-delete foreign rows", async () => {
     mockAuth.mockResolvedValue({ userId: ATTACKER });
     const { req, context } = makeRequest('DELETE');
     const res = await DELETE(req, context);
-    expect(res.status).toBe(200);
-    // DELETE is a scoped soft-delete; the attacker's own id is bound, so the
-    // owner's row is untouched by the `user_id = $2` filter.
-    const deleteCall = mockExecute.mock.calls.find((c) => /update web_conversations/i.test(c[0]));
+
+    // 404, not 200. The route deliberately collapses unknown, foreign,
+    // wrong-workspace and already-deleted rows into one response so a client
+    // cannot clear a durable tombstone on the strength of a no-op the server
+    // reported as success (see the comment on handleDeleteConversation).
+    // Reporting 200 here would also confirm the row exists, which is the
+    // existence leak the rest of this suite exists to prevent.
+    expect(res.status).toBe(404);
+
+    // The security property is unchanged and is what this test really guards:
+    // the soft-delete is scoped by `user_id = $2` and the id bound there is the
+    // CALLER's, so the owner's row is never the one updated.
+    const deleteCall = mockQuery.mock.calls.find((c) => /update web_conversations/i.test(c[0]));
     expect(deleteCall).toBeDefined();
     expect(deleteCall![1][1]).toBe(ATTACKER);
     expect(/user_id\s*=\s*\$2/i.test(deleteCall![0])).toBe(true);
