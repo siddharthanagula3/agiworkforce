@@ -107,24 +107,20 @@ export default function MobileLegalPage() {
                 </td>
                 <td>To run the AI assistant in the mode you selected.</td>
               </tr>
-              <tr>
-                <td>Crash reports</td>
-                <td>
-                  Stack traces, app version, device model, OS version, and diagnostic metadata.
-                  Conversation content should not be included.
-                </td>
-                <td>Crash monitoring provider.</td>
-                <td>To diagnose and fix bugs.</td>
-              </tr>
-              <tr>
-                <td>Usage analytics</td>
-                <td>
-                  Feature usage events, if analytics are enabled. Text input and conversation
-                  content should not be collected.
-                </td>
-                <td>Analytics provider.</td>
-                <td>To understand which features are valuable when the user allows analytics.</td>
-              </tr>
+              {/*
+                REMOVED 2026-08-14 — "Crash reports … Crash monitoring provider"
+                and "Usage analytics … Analytics provider".
+                Neither provider exists in this app. apps/mobile/package.json
+                declares no crash SDK and no analytics SDK — no Sentry, no
+                Crashlytics, no PostHog, Amplitude or Mixpanel. A telemetry queue
+                exists at apps/mobile/storage/telemetry.ts, but nothing calls
+                `enqueueTelemetryEvent` and nothing sends the queue, so no event
+                is produced and none leaves the device.
+                Declaring a recipient that receives nothing is the same class of
+                defect as omitting one that does: it makes the table unreliable,
+                and on a mobile legal page it is also an app-store declaration.
+                The absence is stated below the table instead.
+              */}
               <tr>
                 <td>Account data</td>
                 <td>
@@ -136,15 +132,17 @@ export default function MobileLegalPage() {
                   To run your account and manage early-access interest for higher-capacity plans.
                 </td>
               </tr>
-              <tr>
-                <td>HealthKit data (iOS only)</td>
-                <td>
-                  Step count, sleep, activity summary for the current week, if you grant HealthKit
-                  permission.
-                </td>
-                <td>Processed on-device only. Never transmitted.</td>
-                <td>To generate your weekly health recap on iOS.</td>
-              </tr>
+              {/*
+                REMOVED 2026-08-14 — "HealthKit data (iOS only) — Step count,
+                sleep, activity summary".
+                HealthKit was taken out of the app in 93ca123df, and
+                apps/mobile/__tests__/ios-store-submission-config.test.ts:60-63
+                asserts the iOS privacy manifest carries no HealthKit claim. This
+                page was still declaring collection of health data the app cannot
+                collect and has no entitlement for — the worst direction to be
+                wrong in on a sensitive category, and directly contradicted by
+                the app's own test.
+              */}
               <tr>
                 <td>Biometric data</td>
                 <td>
@@ -156,6 +154,27 @@ export default function MobileLegalPage() {
               </tr>
             </tbody>
           </table>
+
+          <p
+            style={{
+              marginTop: 24,
+              fontSize: 14,
+              lineHeight: 1.7,
+              color: 'var(--agi-ink-quiet)',
+            }}
+          >
+            <strong style={{ color: 'var(--agi-ink)' }}>
+              What this app does not collect, stated because the table above used to say otherwise.
+            </strong>{' '}
+            AGI Mobile ships <strong>no crash-reporting SDK and no analytics SDK</strong>. Until
+            2026-08-14 this page declared both, along with health data. There is no crash-monitoring
+            provider and no analytics provider in the app: a local event queue exists in the code,
+            but nothing writes to it and nothing sends it, so no usage event is produced and none
+            leaves your device. <strong>HealthKit is not used at all</strong> &mdash; the feature
+            was removed from the app, the iOS privacy manifest carries no HealthKit declaration, and
+            a test enforces that. If a future build adds any of these, this table gains a row in the
+            same change.
+          </p>
 
           <h3
             style={{
