@@ -665,6 +665,25 @@ export interface ManagedQuotaBlockPresentation {
   showResetTime: boolean;
   /** True when switching to a standard (non-flagship) model also clears it. */
   suggestStandardModel: boolean;
+  /**
+   * True when BUYING CREDITS actually clears this block right now.
+   *
+   * This is a statement about the server, not a marketing preference, and it is
+   * why the field exists: offering "Buy credits" on a block that credits cannot
+   * lift would take a user's money and leave them exactly as blocked.
+   *
+   * Today only the billing-period ledger honours purchased balance —
+   * `add_credits` raises `token_credits.credits_allocated_cents`
+   * (db/neon/0111_credit_top_up_carry.sql), which is what
+   * `insufficient_credits` / `monthly_limit_exceeded` measure.
+   *
+   * The rolling caps are FALSE deliberately: `reserve_managed_usage_request_with_limits`
+   * (db/neon/0070_managed_usage_cap_semantics.sql) compares recent `deduction`
+   * rows against a cap derived purely from the plan tier, and never reads the
+   * balance. Flip these to true in the same change that teaches those caps to
+   * consult purchased headroom — never before.
+   */
+  clearedByCredits: boolean;
   /** Default copy; a server-supplied message should win when present. */
   reason: string;
 }
@@ -677,6 +696,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: false,
+      clearedByCredits: false,
       reason: 'You have reached the current free usage limit. Upgrade for more hosted capacity.',
     },
     free_trial_model_only: {
@@ -685,6 +705,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: false,
       suggestStandardModel: true,
+      clearedByCredits: false,
       reason: 'That model requires a paid plan. Choose a free model or upgrade.',
     },
     free_trial_feature_unavailable: {
@@ -693,6 +714,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: false,
       suggestStandardModel: false,
+      clearedByCredits: false,
       reason: 'That capability requires a paid plan.',
     },
     /**
@@ -716,6 +738,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: false,
       suggestStandardModel: false,
+      clearedByCredits: false,
       reason: 'That capability is not included in your current plan.',
     },
     rolling_five_hour_limit_reached: {
@@ -724,6 +747,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: false,
+      clearedByCredits: false,
       reason:
         'You have used your rolling 5-hour capacity. It refills as earlier usage leaves the window, or upgrade for a higher limit.',
     },
@@ -733,6 +757,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: false,
+      clearedByCredits: false,
       reason:
         'You have used your rolling weekly capacity. It refills as earlier usage leaves the window, or upgrade for a higher limit.',
     },
@@ -742,6 +767,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: true,
+      clearedByCredits: false,
       reason:
         'You have used your weekly capacity for the most capable models. Choose a standard model, wait for capacity to refill, or upgrade.',
     },
@@ -751,6 +777,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: false,
+      clearedByCredits: true,
       reason: 'Your plan usage for this billing period is used up. Upgrade or wait for the reset.',
     },
     monthly_limit_exceeded: {
@@ -759,6 +786,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: false,
+      clearedByCredits: true,
       reason: 'Your plan usage for this billing period is used up. Upgrade or wait for the reset.',
     },
     monthly_credit_limit_reached: {
@@ -767,6 +795,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: false,
+      clearedByCredits: false,
       reason: 'Your plan usage for this billing period is used up. Upgrade or wait for the reset.',
     },
     rate_limit_exceeded: {
@@ -775,6 +804,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: false,
       showResetTime: true,
       suggestStandardModel: false,
+      clearedByCredits: false,
       reason: 'Too many requests in a short time. Please wait a moment and try again.',
     },
   },
