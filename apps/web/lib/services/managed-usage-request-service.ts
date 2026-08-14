@@ -7,6 +7,7 @@ import {
   getPlanSessionUsageCapCents,
   getPlanWeeklyUsageCapCents,
 } from '@/lib/server/managed-usage-policy';
+import { logger } from '@/lib/logger';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -172,6 +173,52 @@ function reservationError(decision: string): ManagedUsageRequestError {
   }
 }
 
+/**
+ * Purchased balance this account may spend past its rolling caps, in cents.
+ *
+ * Returns 0 — i.e. "no overage", the pre-0118 behaviour — unless the account
+ * has explicitly opted in. Policy lives here rather than in SQL so it is
+ * testable and so the database function stays a pure arithmetic decision.
+ *
+ * The amount is `least(remaining balance, purchased allocation)`. Both terms
+ * matter: `credits_allocated_cents` also contains the PLAN grant, so spending
+ * the raw remainder would let a user overage on plan money they had merely not
+ * used yet; and `top_up_allocated_cents` alone ignores that some of the
+ * purchase is already spent.
+ *
+ * This is a live figure, and that is what makes the SQL side safe to write as
+ * `estimate <= headroom`: a managed reservation writes its deduction
+ * immediately, so the balance falls as overage is spent and the budget closes
+ * itself without any separate meter (see migration 0119).
+ */
+async function resolveOverageHeadroomCents(db: DatabaseAdapter, userId: string): Promise<number> {
+  try {
+    const rows = await db.query<{ headroom_cents: number | string | null }>(
+      `select greatest(
+                least(
+                  credits.credits_allocated_cents - credits.credits_used_cents,
+                  credits.top_up_allocated_cents
+                ), 0)::integer as headroom_cents
+         from public.token_credits credits
+         join public.subscriptions subscription on subscription.user_id = credits.user_id
+        where credits.user_id = $1
+          and credits.period_end > now()
+          and subscription.overage_enabled
+        order by credits.period_end desc
+        limit 1`,
+      [userId],
+    );
+    const value = Number(rows[0]?.headroom_cents ?? 0);
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  } catch (error) {
+    // Fail CLOSED. A lookup failure must not silently grant unlimited overage,
+    // and it must not deny a request the plan already covers — returning 0
+    // reproduces the plan-only caps exactly.
+    logger.warn({ error, userId }, 'Overage headroom lookup failed; treating as no headroom');
+    return 0;
+  }
+}
+
 export async function reserveManagedUsageRequest(input: {
   db: DatabaseAdapter;
   userId: string;
@@ -194,11 +241,13 @@ export async function reserveManagedUsageRequest(input: {
   const sessionCapCents = getPlanSessionUsageCapCents(input.planTier);
   const weeklyCapCents = getPlanWeeklyUsageCapCents(input.planTier);
   const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageCapCents(input.planTier);
+  const topUpHeadroomCents = await resolveOverageHeadroomCents(input.db, input.userId);
   const row = await queryOne(
     input.db,
     `select * from public.reserve_managed_usage_request_with_limits(
       $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,
-      $7::text, $8::integer, $9::integer, $10::integer, $11::integer, $12::boolean
+      $7::text, $8::integer, $9::integer, $10::integer, $11::integer, $12::boolean,
+      $13::integer
     )`,
     [
       input.userId,
@@ -213,6 +262,7 @@ export async function reserveManagedUsageRequest(input: {
       weeklyCapCents,
       flagshipWeeklyCapCents,
       input.isFlagship,
+      topUpHeadroomCents,
     ],
   );
 

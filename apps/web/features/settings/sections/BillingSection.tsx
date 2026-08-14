@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { openBillingPortal, startTopUpCheckout } from '@/features/billing/services/stripe-payments';
 import {
@@ -207,6 +208,45 @@ export function BillingSection() {
   const [topUpPending, setTopUpPending] = useState(false);
   const [topUpError, setTopUpError] = useState<string | null>(null);
   const [billingDetailsRefresh, setBillingDetailsRefresh] = useState(0);
+  const [overageEnabled, setOverageEnabled] = useState(false);
+  const [overageAvailableCents, setOverageAvailableCents] = useState(0);
+  const [overagePending, setOveragePending] = useState(false);
+  const [overageError, setOverageError] = useState<string | null>(null);
+
+  /**
+   * Optimistic, then reconciled against the server's answer rather than the
+   * value that was requested — the response also carries the spendable balance,
+   * and a toggle that claims to be on while the server has it off would be a
+   * silent promise to spend money.
+   */
+  async function setOverage(next: boolean) {
+    if (overagePending) return;
+    setOveragePending(true);
+    setOverageError(null);
+    const previous = overageEnabled;
+    setOverageEnabled(next);
+    try {
+      const response = await fetch('/api/billing/overage', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ enabled: next }),
+      });
+      const body = (await response.json().catch(() => null)) as {
+        enabled?: boolean;
+        available_cents?: number;
+        error?: { message?: string };
+      } | null;
+      if (!response.ok) throw new Error(body?.error?.message ?? 'Could not update the setting.');
+      setOverageEnabled(body?.enabled === true);
+      setOverageAvailableCents(Number(body?.available_cents ?? 0));
+    } catch (error) {
+      setOverageEnabled(previous);
+      setOverageError(error instanceof Error ? error.message : 'Could not update the setting.');
+    } finally {
+      setOveragePending(false);
+    }
+  }
 
   async function openPortal() {
     if (portalPending) return;
@@ -317,6 +357,19 @@ export function BillingSection() {
     }
     setPaymentMethods({ status: 'loading', items: [] });
     setInvoices({ status: 'loading', items: [] });
+    // Overage state rides the same gate: it only means anything for a
+    // Stripe-billed account, which is the only kind that can buy credits.
+    void fetch('/api/billing/overage', { credentials: 'include' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { enabled?: boolean; available_cents?: number } | null) => {
+        if (cancelled || !body) return;
+        setOverageEnabled(body.enabled === true);
+        setOverageAvailableCents(Number(body.available_cents ?? 0));
+      })
+      .catch(() => {
+        // Leaving the toggle in its default (off) state is the honest failure:
+        // it never claims an unread setting is on.
+      });
     void (async () => {
       const [paymentResult, invoiceResult] = await Promise.allSettled([
         fetch('/api/billing/payment-methods', { credentials: 'include' }).then(async (response) => {
@@ -843,6 +896,63 @@ export function BillingSection() {
                 {topUpError}
               </p>
             )}
+
+            {/*
+              Without this, purchased credit only raised the billing-period
+              budget — the rolling 5-hour and weekly caps ignored it entirely,
+              so the limit most people actually hit stayed shut no matter how
+              much they had bought. Opt-in and off by default: spending a
+              balance somebody bought, without asking, is worse than stopping
+              at the limit they already expected.
+            */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                justifyContent: 'space-between',
+                gap: 16,
+                paddingTop: 16,
+                borderTop: '1px solid var(--settings-border)',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ minWidth: 0, flex: '1 1 260px' }}>
+                <label
+                  htmlFor="overage-toggle"
+                  style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}
+                >
+                  Keep going after a usage limit
+                </label>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--text-3)' }}>
+                  {overageAvailableCents > 0
+                    ? `Spend your credits when a usage limit stops you. ${formatMoney(overageAvailableCents, 'usd')} available.`
+                    : 'Spend your credits when a usage limit stops you. Buy credits above to use this.'}
+                </p>
+                {overageError && (
+                  <p
+                    role="alert"
+                    style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--danger, #b3261e)' }}
+                  >
+                    {overageError}
+                  </p>
+                )}
+              </div>
+              <input
+                id="overage-toggle"
+                type="checkbox"
+                role="switch"
+                checked={overageEnabled}
+                disabled={overagePending}
+                onChange={(event) => void setOverage(event.target.checked)}
+                style={{
+                  width: 18,
+                  height: 18,
+                  marginTop: 2,
+                  accentColor: 'var(--chat-accent-primary, #c8892a)',
+                  cursor: overagePending ? 'wait' : 'pointer',
+                }}
+              />
+            </div>
           </div>
         </section>
       )}

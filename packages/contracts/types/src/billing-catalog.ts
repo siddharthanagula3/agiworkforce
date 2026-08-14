@@ -677,11 +677,12 @@ export interface ManagedQuotaBlockPresentation {
    * (db/neon/0111_credit_top_up_carry.sql), which is what
    * `insufficient_credits` / `monthly_limit_exceeded` measure.
    *
-   * The rolling caps are FALSE deliberately: `reserve_managed_usage_request_with_limits`
-   * (db/neon/0070_managed_usage_cap_semantics.sql) compares recent `deduction`
-   * rows against a cap derived purely from the plan tier, and never reads the
-   * balance. Flip these to true in the same change that teaches those caps to
-   * consult purchased headroom — never before.
+   * The rolling caps became TRUE in migrations 0118/0119, which let a request
+   * refused by a rolling cap draw on remaining purchased balance instead
+   * (`p_top_up_headroom_cents`). They are gated on the account's opt-in:
+   * `resolveOverageHeadroomCents` passes 0 unless `subscriptions.overage_enabled`
+   * is set, so a user who has not turned overage on is refused exactly as
+   * before — and the paywall then offers the toggle alongside the purchase.
    */
   clearedByCredits: boolean;
   /** Default copy; a server-supplied message should win when present. */
@@ -747,7 +748,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: false,
-      clearedByCredits: false,
+      clearedByCredits: true,
       reason:
         'You have used your rolling 5-hour capacity. It refills as earlier usage leaves the window, or upgrade for a higher limit.',
     },
@@ -757,7 +758,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: false,
-      clearedByCredits: false,
+      clearedByCredits: true,
       reason:
         'You have used your rolling weekly capacity. It refills as earlier usage leaves the window, or upgrade for a higher limit.',
     },
@@ -767,7 +768,7 @@ const MANAGED_QUOTA_BLOCKS: Readonly<Record<string, ManagedQuotaBlockPresentatio
       showUpgradeCta: true,
       showResetTime: true,
       suggestStandardModel: true,
-      clearedByCredits: false,
+      clearedByCredits: true,
       reason:
         'You have used your weekly capacity for the most capable models. Choose a standard model, wait for capacity to refill, or upgrade.',
     },
