@@ -172,6 +172,8 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   let stripeItemId: string | null = null;
   let customerId: string | null = null;
   let subscriptionCurrency = 'usd';
+  let cancelAtPeriodEnd = false;
+  let subscriptionEndsAt: number | null = null;
   let currentSeats = 1;
   let currentPriceRecurring: Stripe.Price.Recurring | null = null;
   try {
@@ -231,11 +233,33 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     customerId =
       typeof stripeSub.customer === 'string' ? stripeSub.customer : stripeSub.customer.id;
     subscriptionCurrency = stripeSub.currency;
+    cancelAtPeriodEnd = stripeSub.cancel_at_period_end === true;
+    subscriptionEndsAt = stripeSub.cancel_at ?? stripeSub.items.data[0]?.current_period_end ?? null;
   } catch (err) {
     logger.error({ err, stripeSubId }, 'Failed to resolve Stripe subscription for preview');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
   if (!stripeItemId || !customerId) throw createError.internal('Subscription has no items');
+
+  // Mirrors the identical guard in /api/upgrade so the refusal happens BEFORE
+  // the confirm dialog quotes a price, not after the user clicks pay. Keeping
+  // the two in sync matters: preview is the contract this product signs with
+  // the buyer, and the apply route replays its signed token verbatim.
+  if (cancelAtPeriodEnd) {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'This plan is scheduled to end and cannot be changed while a cancellation is pending. ' +
+            'Resume the subscription from billing, then change plans.',
+          type: 'invalid_request_error',
+          code: 'subscription_pending_cancellation',
+          ...(subscriptionEndsAt ? { ends_at: subscriptionEndsAt } : {}),
+        },
+      },
+      { status: 409 },
+    );
+  }
 
   try {
     assertSameCheckoutBillingInterval(currentPriceRecurring, billingInterval);

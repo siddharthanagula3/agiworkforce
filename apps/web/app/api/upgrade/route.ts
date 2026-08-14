@@ -139,6 +139,8 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   let stripeSubId = sub.stripe_subscription_id;
   let stripeItem: Stripe.SubscriptionItem | null = null;
   let subscriptionCurrency = 'usd';
+  let cancelAtPeriodEnd = false;
+  let subscriptionEndsAt: number | null = null;
   try {
     const resolved = await resolveStripeSubscriptionForUpgrade(
       stripe,
@@ -177,11 +179,43 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     }
     stripeItem = stripeSub.items.data[0] ?? null;
     subscriptionCurrency = stripeSub.currency;
+    cancelAtPeriodEnd = stripeSub.cancel_at_period_end === true;
+    subscriptionEndsAt = stripeSub.cancel_at ?? stripeItem?.current_period_end ?? null;
   } catch (err) {
     logger.error({ err, stripeSubId }, 'Failed to resolve Stripe subscription for item ID');
     throw createError.internal('Failed to retrieve subscription details from Stripe');
   }
   if (!stripeItem) throw createError.internal('Subscription has no items');
+
+  // A subscription already scheduled to cancel must not be silently upgraded.
+  //
+  // `subscriptions.update` does NOT implicitly clear `cancel_at_period_end`, so
+  // before this guard the flow charged a proration and left the cancellation in
+  // place — while UpgradeConfirmDialog told the user "Your renewal date stays
+  // the same" and quoted a monthly price that would never be billed. The buyer
+  // does receive the upgraded tier for the remaining days, so this is a
+  // disclosure failure rather than a pure overcharge, but it is one the user
+  // discovers only when the plan disappears.
+  //
+  // Refusing rather than setting `cancel_at_period_end: false` is deliberate:
+  // resurrecting a subscription somebody deliberately cancelled, as a side
+  // effect of a different action, is a larger surprise than being told to
+  // resume first. Resume is one click away in the portal.
+  if (cancelAtPeriodEnd) {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            'This plan is scheduled to end and cannot be changed while a cancellation is pending. ' +
+            'No charge was made. Resume the subscription from billing, then change plans.',
+          type: 'invalid_request_error',
+          code: 'subscription_pending_cancellation',
+          ...(subscriptionEndsAt ? { ends_at: subscriptionEndsAt } : {}),
+        },
+      },
+      { status: 409 },
+    );
+  }
 
   try {
     assertSameCheckoutBillingInterval(stripeItem.price.recurring, billingInterval);
