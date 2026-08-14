@@ -8,6 +8,9 @@
  *   - **sse**: legacy MCP transport over Server-Sent Events.
  *   - **streamable-http**: modern MCP transport over a single bidi HTTP stream.
  */
+
+import type { OAuthClientProvider } from '@modelcontextprotocol/client';
+
 export interface McpServerConfig {
   /** Stdio: command to run. Mutually exclusive with `url`. */
   command?: string;
@@ -23,6 +26,17 @@ export interface McpServerConfig {
   transport?: 'sse' | 'streamable-http';
   /** HTTP transports: extra request headers (auth, X-Forwarded-For, etc.). */
   headers?: Record<string, string | number | boolean>;
+  /**
+   * HTTP transports: an OAuth client provider for servers that authenticate
+   * per MCP's authorization spec (RFC 9728 protected-resource metadata → RFC
+   * 8414 authorization-server metadata → authorization code + PKCE).
+   *
+   * This is the alternative to pre-minting a token and passing it in
+   * `headers`. With a provider the SDK discovers the authorization server
+   * from the server's own 401 challenge, so a connector becomes connectable
+   * without an operator first registering an OAuth app with that vendor.
+   */
+  authProvider?: OAuthClientProvider;
   /** Connection timeout in milliseconds. Default 30s. */
   connectionTimeoutMs?: number;
   /**

@@ -12,6 +12,8 @@ import {
   sanitizeConnectorReturnPath,
 } from '@/lib/connectors/oauth-registry';
 import { generateOAuthState, generatePkcePair } from '@/lib/connectors/pkce';
+import { beginMcpAuthorization } from '@/lib/connectors/mcp-discovery';
+import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
 import {
   ConnectorOAuthStoreUnavailableError,
   createPendingAuthorization,
@@ -70,10 +72,51 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const provider = getConnectorOAuthProvider(connectorId);
   const redirectUri = getConnectorOAuthRedirectUri();
+
+  // DISCOVERY PATH. An operator-registered provider always wins — it is the
+  // first rung of MCP's client-registration order, and an operator who took the
+  // trouble to register an app means it to be used. Only when there is no such
+  // provider do we ask whether the connector publishes a remote MCP endpoint we
+  // can discover authorization from, which is what makes a connector usable
+  // without anyone registering anything.
+  if (!provider) {
+    const endpoint = getMcpEndpoint(connectorId);
+    if (endpoint) {
+      const started = await beginMcpAuthorization({
+        userId,
+        connectorId,
+        mcpUrl: endpoint.url,
+        returnPath,
+      });
+
+      if (started.status === 'redirect') {
+        if (wantsJson) {
+          return NextResponse.json({ connectorId, authorizeUrl: started.authorizationUrl });
+        }
+        return NextResponse.redirect(started.authorizationUrl);
+      }
+
+      if (started.status === 'no-authorization-required') {
+        // An open MCP server. Sending the user to a consent screen that does
+        // not exist would be worse than telling them there is nothing to do.
+        return fail('open', 200, 'This connector needs no authorization.');
+      }
+
+      return fail(
+        started.reason === 'registration-rejected' || started.reason === 'no-client-identity'
+          ? 'unavailable'
+          : 'error',
+        502,
+        started.message,
+      );
+    }
+  }
+
   if (!provider || !redirectUri) {
     // Honest unavailability: no OAuth app is registered for this provider in
-    // this deployment (or the callback origin is unset), so there is nothing to
-    // authorize against. Never start a flow that cannot complete.
+    // this deployment (or the callback origin is unset), and no verified MCP
+    // endpoint exists to discover one from, so there is nothing to authorize
+    // against. Never start a flow that cannot complete.
     return fail(
       'unavailable',
       501,
