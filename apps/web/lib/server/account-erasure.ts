@@ -113,6 +113,23 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }
   { table: 'email_preferences', column: 'user_id' },
   { table: 'waitlist', column: 'user_id' },
   { table: 'cloud_managed_waitlist', column: 'user_id' },
+  // DPDP (0113/0114). Both are deleted rather than retained as evidence, and
+  // that is a deliberate call worth the two lines it takes to explain.
+  //
+  // The argument for keeping them: a consent ledger is the proof that
+  // processing was lawful, and a rights-request row is the proof that a request
+  // was answered. The argument that wins: once the account and its content are
+  // gone there is no processing left to justify, and both rows still name the
+  // person — the consent row by user id, the request row by a plaintext reply
+  // address. Retaining personal data to prove we were allowed to hold personal
+  // data we no longer hold is the wrong trade.
+  //
+  // What this does NOT reach, stated so nobody assumes otherwise: rows with a
+  // NULL user_id. Consent given against an email address at the public waitlist
+  // and requests filed by someone with no account are keyed by hash or by
+  // address, and no job ages them out. See DPDP_PROGRESS.md.
+  { table: 'consent_records', column: 'user_id' },
+  { table: 'data_rights_requests', column: 'user_id' },
   { table: 'beta_redemptions', column: 'user_id' },
   { table: 'feature_flags', column: 'user_id' },
   // Usage + billing

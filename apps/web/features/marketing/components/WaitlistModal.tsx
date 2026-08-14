@@ -27,6 +27,12 @@ import {
 import { X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@agiworkforce/ui';
 import { joinPublicWaitlist } from '@/lib/services/waitlistServiceClient';
+import { WAITLIST_CONSENT_PURPOSES } from '@/lib/consent-purposes';
+import {
+  ConsentCheckboxes,
+  missingRequiredConsents,
+  toConsentDecisions,
+} from './ConsentCheckboxes';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -58,6 +64,9 @@ function WaitlistDialog({
   const [email, setEmail] = useState('');
   const [state, setState] = useState<FormState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  // Empty on every open. Closing and reopening the dialog must re-ask rather
+  // than carry a previous session's ticks forward as a standing agreement.
+  const [consented, setConsented] = useState<string[]>([]);
 
   const handleOpenChange = (open: boolean) => {
     onOpenChange(open);
@@ -66,6 +75,7 @@ function WaitlistDialog({
       setState((prev) => (prev === 'success' ? 'idle' : prev));
       setErrorMsg('');
       setEmail('');
+      setConsented([]);
     }
   };
 
@@ -80,13 +90,26 @@ function WaitlistDialog({
       return;
     }
 
+    const missing = missingRequiredConsents(WAITLIST_CONSENT_PURPOSES, consented);
+    if (missing.length > 0) {
+      setErrorMsg('Tick the box agreeing to your email being stored before joining.');
+      setState('error');
+      return;
+    }
+
     setState('submitting');
     setErrorMsg('');
 
-    const result = await joinPublicWaitlist({ email: normalized, referralSource: source });
+    const result = await joinPublicWaitlist({
+      email: normalized,
+      referralSource: source,
+      consent: toConsentDecisions(WAITLIST_CONSENT_PURPOSES, consented),
+      consentSurface: 'web-waitlist-modal',
+    });
 
     if (result.success) {
       setState('success');
+      setConsented([]);
     } else {
       setErrorMsg(result.error ?? 'Something went wrong. Please try again.');
       setState('error');
@@ -143,6 +166,18 @@ function WaitlistDialog({
                 className="agi-waitlist-input"
                 onChange={(e) => {
                   setEmail(e.target.value);
+                  if (state === 'error') {
+                    setState('idle');
+                    setErrorMsg('');
+                  }
+                }}
+              />
+              <ConsentCheckboxes
+                purposes={WAITLIST_CONSENT_PURPOSES}
+                value={consented}
+                disabled={state === 'submitting'}
+                onChange={(next) => {
+                  setConsented(next);
                   if (state === 'error') {
                     setState('idle');
                     setErrorMsg('');

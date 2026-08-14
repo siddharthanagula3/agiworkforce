@@ -86,6 +86,19 @@ const DOCS: { href: string; label: string; body: string }[] = [
     label: 'Mobile app terms and privacy',
     body: 'Surface-specific terms for AGI Mobile on iOS and Android, including platform disclosures. The documents above govern where they overlap.',
   },
+  // India. The DPDP Act makes the notice a standalone instrument and the
+  // grievance route a statutory precondition for complaining to the Board, so
+  // neither can be a paragraph inside another document.
+  {
+    href: '/privacy/india',
+    label: 'India — DPDP notice',
+    body: 'The itemised notice under the Digital Personal Data Protection Act, 2023: what is collected, for which purpose, who it is shared with, your rights as a Data Principal, and the grievance contact.',
+  },
+  {
+    href: '/privacy/requests',
+    label: 'Data rights and consent',
+    body: 'Exercise access, correction, erasure and withdrawal, and see or change the consent recorded against your account.',
+  },
 ];
 
 export default function LegalPage() {

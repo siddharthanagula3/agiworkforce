@@ -1,0 +1,401 @@
+# DPDP Act (India) compliance — audit and remediation log
+
+Status: In progress — **no legal copy on this branch has been reviewed by counsel**
+Branch: `compliance/dpdp` (not pushed)
+Last updated: 2026-08-13
+Scope: Digital Personal Data Protection Act, 2023 and the DPDP Rules
+
+This file is the decision log for the DPDP work. It records what was built, what
+was deliberately **not** built and why, what a lawyer has to decide before any of
+it can be relied on, and what is still open. Findings are cited by `file:line` so
+the next person can check the claim rather than trust it.
+
+**Rule this file is held to** — the same one the rest of the policy set follows:
+every claim must be checkable in this repository. If you cannot point at the
+code, cut the sentence.
+
+---
+
+## 0. Does DPDP even apply? — yes, and here is the evidence
+
+The Act reaches a foreign entity that processes digital personal data **in
+connection with offering goods or services to Data Principals within India**
+(s.3(b)). AGI Automation LLC is a US entity with no Indian establishment, so this
+is the threshold question, and it is not a close one:
+
+- `apps/web/lib/pricing.ts:44` — India-specific Stripe prices exist (`₹399/mo`),
+  separate from rest-of-world USD pricing.
+- `apps/web/lib/__tests__/pricing.test.ts:202` — `getConfiguredPriceId('team', 'monthly', 'INR')`
+  resolves to a real configured price id.
+- `apps/web/lib/__tests__/regional-pricing.test.ts:55` — prices are formatted in
+  `en-IN` with `₹`.
+- `apps/web/app/api/pricing/localized/route.ts` — an unauthenticated route
+  selects currency from IP-derived country.
+
+A product that prices in rupees for Indian buyers is offering services to data
+principals in India. **Counsel should confirm the conclusion, not the facts.**
+
+The product also already publishes an _unqualified DPDP compliance claim_ in the
+mobile store listings (`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json:20`)
+and on `apps/web/app/mobile/legal/page.tsx:185`, while the web privacy policy did
+not contain the word "India". That gap between claim and implementation was the
+single most exposed thing found in this audit.
+
+---
+
+## 1. How the audit was run
+
+A seven-domain parallel audit over the monorepo, followed by an adversarial
+verification pass on the highest-severity findings in each domain (verifiers were
+prompted to **refute**, and defaulted to refuted when they could not confirm from
+source).
+
+- 49 agents, ~229 raw findings, 42 findings put through adversarial verification.
+- Domains: collection points · trackers/cookies · storage & retention · existing
+  legal copy · security safeguards · non-web surfaces · third-party recipients.
+- Six verified findings were **refuted** and are not carried forward. Two of
+  those were refuted because the fix had already landed on this branch while the
+  audit was running (the waitlist consent findings) — the verifier read the
+  patched file, which is the loop working as intended.
+
+Verification changed conclusions, so it earned its cost. Three examples:
+
+| Raw finding                                                                              | Verdict                 | Corrected position                                                                                                                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "No CAPTCHA anywhere; the CSP is pre-widened for a Turnstile that was never implemented" | **Refuted**             | The `challenges.cloudflare.com` CSP entries are the standard allowlist Clerk requires for its own Turnstile-backed bot protection on `<SignUp>`. Whether that protection is _enabled_ lives in the Clerk dashboard and **cannot be determined from this repository either way**. The correct finding is narrower — see §6. |
+| "GA4 has no Consent Mode, no IP anonymisation"                                           | **Refuted at severity** | Literally true of `GoogleAnalytics.tsx:50-61`, but GA4 never loads without consent (`AnalyticsConsentGate` fails closed), so the DPDP substance does not hold.                                                                                                                                                             |
+| "Desktop clipboard monitor writes plaintext clipboard to unencrypted SQLite"             | **Refuted**             | Every code fact checked out, but the path is unreachable dead code that never processes real clipboard data at runtime.                                                                                                                                                                                                    |
+
+---
+
+## 2. What was built on this branch
+
+Everything below is wired end to end — UI state → request body → server handler →
+database — and verified by running the guards in §7, not by a passing typecheck.
+
+### 2.1 Durable per-purpose consent (DPDP s.6)
+
+| File                                                                            | What it is                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/db/neon/0113_dpdp_consent_records.sql`                                | Append-only `consent_records` ledger. `user_id` nullable so a visitor with no account can consent; anonymous subjects keyed by `subject_email_sha256`. RLS forced. **Grants are `select, insert` only** — no UPDATE, so a withdrawal can never overwrite the grant it withdraws. |
+| `apps/web/lib/consent-purposes.ts`                                              | The purpose catalogue. Isomorphic, so the checkbox label a person reads and the key stored in the database come from one object and cannot drift.                                                                                                                                |
+| `apps/web/lib/server/consent-records.ts`                                        | `recordConsent` (INSERT only), `recordConsentBatch`, `readUserConsents`, `readUserConsentHistory`, `hasConsent` (fails closed).                                                                                                                                                  |
+| `apps/web/app/api/consent/route.ts`                                             | `GET` live state + catalogue; `POST` records grants **and withdrawals** by the same path at the same cost. 409s when the notice revision changed under a stale tab.                                                                                                              |
+| `apps/web/features/marketing/components/ConsentCheckboxes.tsx`                  | Per-purpose checkboxes, rendered unticked, with the notice link inside the same block. Exports `toConsentDecisions` (sends every purpose shown, ticked or not) and `missingRequiredConsents`.                                                                                    |
+| `apps/web/app/api/waitlist/public/route.ts`                                     | **Refuses to store an address** without an explicit decision for the purpose that makes storing it lawful. Writes consent _before_ the address.                                                                                                                                  |
+| `apps/web/features/marketing/components/{PublicWaitlistForm,WaitlistModal}.tsx` | Both intakes now carry the checkboxes; the modal clears its ticks on close so reopening re-asks.                                                                                                                                                                                 |
+| `apps/web/lib/services/waitlistServiceClient.ts`                                | Carries `consent` + `consentSurface`; surfaces the server's `CONSENT_REQUIRED` message verbatim (telling someone to "try again" is wrong advice when the fix is to tick a box).                                                                                                  |
+
+### 2.2 Notice, rights, and grievance redressal (ss.5, 11–14)
+
+| File                                                         | What it is                                                                                                                                                                                                                                                                        |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/app/privacy/india/page.tsx`                        | The itemised India notice: fiduciary identity, per-purpose processing table, consent catalogue, recipients, retention, cross-border position, all six rights with **what the product actually does for each**, grievance contact, children, breach, language.                     |
+| `apps/web/app/privacy/requests/page.tsx`                     | Rights page: consent centre, what is already self-serve, the request form, grievance contact.                                                                                                                                                                                     |
+| `apps/web/app/privacy/requests/ConsentCentre.tsx`            | Live consent state with one-click withdrawal. Distinguishes _granted_ / _withdrawn_ / **never asked** — the third is not rendered as a refusal, because it is not one.                                                                                                            |
+| `apps/web/app/privacy/requests/RightsRequestForm.tsx`        | Access / correction / erasure / withdrawal / nomination / grievance. Open to people with no account.                                                                                                                                                                              |
+| `apps/web/db/neon/0114_data_rights_requests.sql`             | Durable request queue with a quotable reference. RLS forced, `select, insert` only.                                                                                                                                                                                               |
+| `apps/web/lib/server/data-rights-requests.ts`                | Create + read own + read open queue.                                                                                                                                                                                                                                              |
+| `apps/web/app/api/privacy/requests/route.ts`                 | `POST` (anonymous allowed, `waitlist` rate limit) and `GET` (own history).                                                                                                                                                                                                        |
+| `apps/web/app/api/admin/privacy/requests/route.ts`           | Admin-gated open queue — so the queue has a **reader**.                                                                                                                                                                                                                           |
+| `apps/web/features/marketing/components/MarketingFooter.tsx` | Grievance officer + mailbox + subject line in the footer strip, plus `/privacy/india` and `/privacy/requests` links.                                                                                                                                                              |
+| `apps/web/app/terms/page.tsx`                                | New **§19 Data protection**: privacy policy incorporated, India notice prevails for Indian data principals, consent/withdrawal, warranty on third-party data you upload, security & breach, processing location, and a complaints route **carved out of the arbitration clause**. |
+| `apps/web/lib/legal-constants.ts`                            | `GRIEVANCE_OFFICER_NAME`, `GRIEVANCE_RESPONSE_TARGET_DAYS`, `dpdpGrievance`/`dpdpRequest` subjects, new routes and revision dates.                                                                                                                                                |
+| `BREACH_RUNBOOK.md`                                          | 72-hour Board notification + Data Principal notification templates, evidence-preservation-before-remediation ordering, scoping queries against this schema, and an explicit open-gaps table.                                                                                      |
+
+### 2.3 Tracker gating
+
+- `apps/web/app/layout.tsx` — **Clerk's product telemetry is now disabled**
+  (`telemetry={{ disabled: true }}`). It was an opt-out collector posting to
+  `clerk-telemetry.com` on mount, for every visitor, before any consent
+  interaction, with no switch a visitor could reach. Verified against
+  `@clerk/shared` `TelemetryCollector`, which treats `disabled: true` as final;
+  verified to typecheck.
+- GA4 was **already** correctly gated and fails closed
+  (`shared/lib/cookie-consent.ts`, `AnalyticsConsentGate.tsx`). No change needed,
+  and the audit's claim to the contrary was refuted.
+
+### 2.4 Tests written
+
+- `apps/web/__tests__/api/waitlist-public.security.test.ts` — 9 new consent-gate
+  tests: declined required purpose stores nothing; a _missing_ purpose is refused
+  rather than read as a refusal; contradictory decisions rejected; both ticked
+  **and unticked** purposes recorded; consent written before the address so a
+  ledger failure stores nothing; anonymous consent recorded against a SHA-256
+  and never the plaintext address; an invented purpose is dropped, not stored.
+- `apps/web/db/neon/dpdp-consent-migration.test.ts` — 11 schema guards, including
+  the one the whole design rests on: **no UPDATE grant on `consent_records`**.
+
+---
+
+## 3. Decisions, and why
+
+**Consent is per-purpose and unbundled, not one "I agree".**
+s.6(1) requires consent to be specific and limited to the data the named purpose
+needs. `WAITLIST_CONSENT_PURPOSES` deliberately excludes `product_analytics`:
+asking for analytics consent inside an unrelated email form is exactly the
+bundling the section prohibits. Analytics consent belongs to the cookie banner,
+where it is acted on.
+
+**A withdrawal is a new row, never an UPDATE.**
+Overwriting a grant destroys the evidence that consent was ever held — which is
+the record s.6 exists to produce. The database enforces this: `app_rls` has no
+UPDATE grant on the table.
+
+**Unticked boxes are recorded.**
+"Declined marketing on 3 March" and "was never asked" are different facts and
+only the first is defensible later. Both intakes send a decision for every
+purpose shown, and the consent centre renders the absence of a row as
+_never asked_ rather than as a refusal.
+
+**Consent is written before the personal data.**
+If the address were stored first and the ledger write then failed, the product
+would hold personal data it could not show consent for — the exact position the
+Act penalises. The reverse failure is harmless. This ordering is asserted by a
+test, not just a comment.
+
+**The consent ledger stores an email _hash_, not the address.**
+The address already lives in `cloud_managed_waitlist`. A digest is enough to link
+a consent to a waitlist row and enough to answer a data principal who supplies
+their address — which is the only way an anonymous subject can identify
+themselves anyway.
+
+**`data_rights_requests.contact_email` _is_ plaintext.**
+Every other email in this schema that can be hashed, is. This one cannot: the row
+exists to be replied to, and a digest cannot receive a reply. The mitigation is
+retention, not hashing.
+
+**Both new tables are DELETED on account erasure, not retained as evidence.**
+Registered in `USER_SCOPED_TABLES` (`lib/server/account-erasure.ts`). The
+argument for retention is that a consent ledger proves processing was lawful. The
+argument that wins: once the account and its content are gone there is no
+processing left to justify, and both rows still name the person. Retaining
+personal data to prove we were allowed to hold personal data we no longer hold is
+the wrong trade.
+
+**The rights request form writes to a table instead of opening a mail draft.**
+`/contact` is deliberately a mailto composer and that is right for general
+correspondence. A rights request is different: the Act gives the principal a
+right to a response and makes exhausting our grievance route a precondition for
+approaching the Board, so both sides need evidence the request was made. The
+success copy states plainly that the row notifies nobody.
+
+**Grievance Officer is published as a ROLE, not a name.**
+No individual's name exists anywhere in this repository for this function, and
+inventing one publishes a false statement about a real company. `contact@` with
+subject-line routing is used because it is the only mailbox proven to receive
+mail — the same convention `/security` already uses. **A named officer is a
+founder decision** (§5).
+
+**The Terms version was deliberately NOT bumped.** ← _founder decision needed_
+`POLICY_LAST_UPDATED.terms` feeds `CURRENT_TERMS_VERSION`, and bumping it does
+more than force a re-acceptance click: `app/api/auth/device/token/route.ts:98`
+and `app/api/auth/device/refresh/route.ts:120` **reject device tokens whose owner
+has not accepted the current version**. Bumping it would break every existing
+desktop, CLI and mobile device session until the user re-accepts on web. Adding
+§19 is a material change and the version _should_ move — but that is a
+production-disrupting decision, not an engineering one. The change is one line;
+see §5.
+
+**Existing false copy on `/privacy` and `/subprocessors` was NOT rewritten.**
+See §4 — this is the most serious finding in the audit, and it is deliberately
+left as a flagged item rather than quietly patched, because those pages are
+guarded by tests written on the false premise and rewriting them is its own
+reviewed change.
+
+**`WebAppShell.tsx` was not edited.** The signed-in app shell renders no legal
+footer (`apps/web/shared/components/layout/WebAppShell.tsx:301`), so the
+grievance contact is reachable from marketing pages but not from inside the app.
+That file has uncommitted changes from other work in the tree; mixing this into
+it would entangle two changes. Recorded as an open item instead.
+
+---
+
+## 4. ⚠️ The most serious finding: published policy contradicts the code
+
+**`/subprocessors` delists a transactional email provider that is live and
+receiving personal data, and `/privacy`, `/terms` and `/subprocessors` all rely
+on "there is no transactional email system" to justify not notifying users.**
+
+Confirmed by adversarial verification and independently re-verified by hand:
+
+| Evidence                                                                              | Location                                                   |
+| ------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| The delisting comment ("REMOVED 2026-08-05 — Resend…")                                | `apps/web/app/subprocessors/page.tsx:14-29`                |
+| The page repeats "there is no transactional email system"                             | `apps/web/app/subprocessors/page.tsx:172-177`              |
+| A live Resend client, calling `https://api.resend.com/emails`                         | `apps/web/lib/support/handoff/resend-client.ts:33`         |
+| User email + scheduled-task names sent to Resend                                      | `apps/web/lib/services/notification-email-service.ts:89`   |
+| **Full support chat transcripts, including the user's contact email**, sent to Resend | `apps/web/lib/support/handoff/escalation-email.ts:107,159` |
+| Operational alert emails with user-linked job ids                                     | `apps/web/lib/services/video-incident-alert-service.ts:71` |
+
+Why every previous audit missed it: the client is a raw `fetch`, not an npm
+dependency, so `grep resend package.json` finds nothing. The file's own header
+even says "VERIFIED BEFORE WRITING THIS: there is no `resend` dependency anywhere
+in this repo" — true, and the reason the policy page went stale around it.
+
+**Under DPDP this is an undisclosed recipient of personal data, and the notice is
+inaccurate about it.** Other confirmed recipients missing from `/subprocessors`:
+
+- **Runway ML** receives user prompt text for video generation — `apps/web/app/api/media/video/generate/route.ts:497-513`
+- **OpenStreetMap Nominatim** receives user location queries — `apps/web/lib/services/map-geocoding-service.ts:29`
+- **Apple App Store Server / Google Play Android Publisher** receive purchase and subscription identifiers — `apps/web/lib/server/mobile-iap-store-verification.ts:254`
+- **OpenRouter** is a failover route for _every_ catalogued chat model, not only the three disclosed — `apps/web/lib/services/aggregator-routing.ts:40`
+- **Perplexity** receives user search queries as the web-search backend — `apps/web/lib/web-search/web-search-tool.ts:39`
+- **GitHub** receives user repository data via the first-party connector — `apps/web/lib/github-app.ts:23`
+
+The new `/privacy/india` page **does not repeat the false claim** and states in
+§04 that the published subprocessor list is currently incomplete, naming the
+categories. That is a stopgap. Correcting `/subprocessors`, `/privacy` and
+`/terms` is item **O-1** below.
+
+---
+
+## 5. Needs lawyer review
+
+Nothing in `apps/web/app/privacy/india/` or Terms §19 has been seen by an Indian
+data-protection practitioner. Both new pages carry `data-legal-review="pending-counsel"`
+on the page root and a `LEGAL REVIEW REQUIRED` header comment in source.
+
+| #    | Question                                                                                                                                                                                                                                                                                                                      | Why an engineer cannot answer it                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L-1  | Confirm DPDP applicability under s.3(b) and the resulting obligations.                                                                                                                                                                                                                                                        | §0 establishes the facts; the legal conclusion is counsel's.                                                                                                                                                                                                                                                                                                                                                                                    |
+| L-2  | Does any processing here qualify as a **"legitimate use"** under s.7 rather than requiring consent?                                                                                                                                                                                                                           | The new pages claim none — the conservative reading. Counsel may narrow the consent surface, which would simplify the product.                                                                                                                                                                                                                                                                                                                  |
+| L-3  | **Significant Data Fiduciary** status (s.10).                                                                                                                                                                                                                                                                                 | It is a Central Government notification, not a self-assessment. If notified, a named **India-based DPO**, a DPIA and an independent audit become mandatory. None exist.                                                                                                                                                                                                                                                                         |
+| L-4  | **s.9 children.** A child is anyone **under 18**; verifiable parental consent is mandatory; tracking and behavioural advertising directed at children are prohibited outright.                                                                                                                                                | The product's position (18+, 13–17 supervised) does **not** implement verifiable parental consent, and mobile's age gate admits self-declared minors (`apps/mobile/app/(public)/age-gate.tsx:17`) with a minor-safe mode the child can clear themselves (`apps/mobile/src/features/settings/parental-controls/index.tsx:36`). Stated as a gap on the notice page rather than papered over. **This is the highest legal exposure in the audit.** |
+| L-5  | **s.16 cross-border.** Transfers are permitted except to territories restricted by Government notification.                                                                                                                                                                                                                   | Whether any notification affects US hosting depends on the live list on the date of reading. The page deliberately asserts no answer.                                                                                                                                                                                                                                                                                                           |
+| L-6  | **s.6(4) languages.** The notice must be available in English **and every Eighth Schedule language**.                                                                                                                                                                                                                         | Only English exists. This is a translation commissioning decision. The product already ships a Hindi locale (`app/i18n/`), while every legal page is hardcoded English JSX — so the mismatch is visible to users today.                                                                                                                                                                                                                         |
+| L-7  | Is a **role** (not a named individual) an acceptable published grievance contact?                                                                                                                                                                                                                                             | Drives whether the founder must designate someone by name.                                                                                                                                                                                                                                                                                                                                                                                      |
+| L-8  | Is `GRIEVANCE_RESPONSE_TARGET_DAYS = 30` appropriate, and must it be described as a commitment rather than a statutory period?                                                                                                                                                                                                | Published as a commitment today, deliberately.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| L-9  | Review the two **BREACH_RUNBOOK.md** templates before either is ever sent.                                                                                                                                                                                                                                                    | Drafted from the statute by an engineer.                                                                                                                                                                                                                                                                                                                                                                                                        |
+| L-10 | Does the **DPA** need a DPDP annex? Its "Applicable Data Protection Law" definition excludes DPDP and uses controller/processor framing that the Act does not share (`apps/web/app/dpa/page.tsx:209`), and its breach obligation runs only to the enterprise Customer, with no commitment to notify data principals (`:513`). | Contract drafting.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| L-11 | Terms §19 carves the data-protection complaints route **out of the arbitration clause**. Confirm that is both intended and effective.                                                                                                                                                                                         | Drafting choice with litigation consequences.                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+### Founder decisions (not legal, but not mine)
+
+| #   | Decision                                                                                                                                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-1 | Designate a **named** Grievance Officer, or confirm the role account stands (`GRIEVANCE_OFFICER_NAME` in `lib/legal-constants.ts`).                                                          |
+| F-2 | Confirm `NOTICE_ADDRESS`. It is already flagged founder-unconfirmed in `legal-constants.ts` and is now printed on two more pages.                                                            |
+| F-3 | **Bump `POLICY_LAST_UPDATED.terms`?** One line. Consequence: every existing desktop/CLI/mobile device session is rejected until the user re-accepts on web (§3). Deliberately not done.      |
+| F-4 | Provision a real `privacy@` / `grievance@` mailbox, or keep subject-line routing on `contact@`.                                                                                              |
+| F-5 | Commission Eighth Schedule translations (L-6).                                                                                                                                               |
+| F-6 | Decide whether the **mobile store listings' unqualified DPDP compliance claim** stands (`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json:20`). It currently overstates the position. |
+
+---
+
+## 6. Security gaps flagged (DPDP s.8(5))
+
+s.8(5) requires reasonable security safeguards to _prevent_ a breach, and failure
+is directly penalisable regardless of whether a breach occurs. These were
+confirmed in source. **None were fixed on this branch** — each is its own change
+with its own blast radius, and shipping half of one is worse than filing it.
+
+### Requested specifically
+
+**"Unverified captcha"** — the accurate finding, after refutation of the broader
+claim: there is **no first-party CAPTCHA and no `siteverify` call anywhere in the
+repository**. `challenges.cloudflare.com` in `apps/web/proxy.ts:87,93` is the
+standard allowlist for Clerk's own Turnstile-backed bot protection on `<SignUp>`,
+which is configured in the **Clerk dashboard** and therefore **cannot be verified
+from this repository in either direction**. Unauthenticated PII intakes
+(`/api/waitlist/public`, `/api/mobile/feedback`, `/api/mobile/content-report`)
+are protected by CSRF **and** rate limiting — the "protected only by an IP rate
+limit" version of this finding is false — but by no bot verification we can
+prove. _Action: confirm the Clerk toggle in the dashboard and record the answer
+here; treat it as unverified until then._
+
+**Fail-open behaviour** — four instances, in descending severity:
+
+| Gap                                                                          | Location                                                 | Effect                                                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account-status kill switch has a fail-**OPEN** env escape hatch              | `apps/web/lib/api-auth.ts:81-90`                         | With `ACCOUNT_STATUS_FAIL_OPEN` set, suspended and banned accounts are admitted. It appears in **neither** `validate-env.ts` nor `env-doctor.mjs`, so a deploy left with it on gives no boot-time signal.                       |
+| api-gateway rate limiting degrades silently to in-memory                     | `services/api-gateway/src/middleware/rateLimit.ts:60-99` | Warns and continues when Redis is absent. The web app throws at cold start in production (`apps/web/lib/rate-limit.ts:43-52`); the gateway does not, so limits divide by instance count.                                        |
+| Every encryption/CSRF/cron secret is a boot **warning** only                 | `apps/web/lib/validate-env.ts:29-89`                     | `CSRF_SECRET`, `CRON_SECRET`, `TOTP_ENCRYPTION_KEY`, `DEVICE_TOKEN_ENCRYPTION_KEY`, `LOG_SALT` are all "important", not critical; `ENCRYPTION_KEY` is in neither list. A production deploy missing all of them **boots green**. |
+| Unauthenticated PII intakes fail open on rate limiting during a Redis outage | `apps/web/lib/rate-limit.ts:94`                          |                                                                                                                                                                                                                                 |
+
+**Encryption weaknesses**
+
+| Gap                                                                                                                                                                                                      | Location                                                                                                       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Legacy **plaintext TOTP secrets** are read and returned as-is (`/^[A-Z2-7]+$/` → "return as-is"), with no migration job. `envelope.ts:29` states `user_two_factor.totp_secret_enc` is **not wired**.     | `apps/web/features/settings/services/user-preferences.ts:131-138`                                              |
+| TOTP AES-256 key is the **raw first 32 UTF-8 chars** of an env var — no KDF, no entropy check — while the sibling route on the **same variable** applies `scryptSync(N=2^15)` plus an entropy assertion. | `apps/web/features/settings/services/user-preferences.ts:67-75` vs `app/api/auth/desktop-token/route.ts:68-84` |
+| A deprecated but still-exported **XOR stream cipher with a deterministic key** on the shared `securityManager` singleton; key derivation is hand-rolled XOR/rotate, not a KDF.                           | `apps/web/shared/lib/security.ts:141-215`                                                                      |
+| Desktop DB / API-key / MCP-credential keys derive from a machine id via PBKDF2 with no user secret.                                                                                                      | `apps/desktop/src-tauri/src/sys/security/machine_key.rs:219-237`                                               |
+
+**HTTPS / transport**
+
+| Gap                                                                                                                                                                                                                                       | Location                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| api-gateway CORS defaults to `http://localhost:3000/3001` **with `credentials: true` and no `NODE_ENV` guard** when `ALLOWED_ORIGINS` is unset. `apps/web/lib/cors.ts:20-34` gates the same entries on development; the gateway does not. | `services/api-gateway/src/app.ts:49-90`                                          |
+| No `sslmode=require` enforcement in code for direct Postgres pools — TLS depends entirely on the operator's connection string. It appears only in doc comments.                                                                           | `services/api-gateway/src/lib/neonClients.ts:562-569`                            |
+| Clerk JWT verification omits `authorizedParties`; `CLERK_AUTHORIZED_PARTIES` silently no-ops when unset.                                                                                                                                  | `services/api-gateway/src/middleware/auth.ts:68`, `apps/web/lib/api-auth.ts:110` |
+| Cron bearer secret compared with non-constant-time string equality.                                                                                                                                                                       | `apps/web/lib/server/cron-auth.ts:13`                                            |
+
+**Logging / leakage**
+
+| Gap                                                                                                                                                          | Location                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| Pino has **no redaction configured** and application code logs email addresses verbatim.                                                                     | `apps/web/lib/logger.ts:17`                                                                        |
+| **Share capability tokens written into error logs**, exposing every shared conversation reachable by that token.                                             | `apps/web/app/api/shared/route.ts:106`                                                             |
+| Sentry `beforeSend` scrub never touches exception messages or `event.message`.                                                                               | `apps/web/lib/sentry-shared.ts:87`                                                                 |
+| Bearer credentials persisted to plaintext `localStorage` and used indefinitely.                                                                              | `apps/web/shared/lib/api.ts:92-115`                                                                |
+| Browser extension stores a full identity/employment profile (name, email, phone, location, salary) in plaintext `chrome.storage.local` with no erasure path. | `apps/extension/src/features/content/autofill/filler.ts:826`, `apps/extension/src/options.ts:1357` |
+
+---
+
+## 7. Verification run
+
+| Check                                                       | Result                                                                                                                                   |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `npx tsc --noEmit -p apps/web/tsconfig.json`                | **clean** (this is also how the Clerk `telemetry` prop was verified as typed)                                                            |
+| `node scripts/check-db-isolation.mjs`                       | **passed** — 98 tenant-scoped tables across 117 live tables, each with an explicit isolation decision (both new tables carry forced RLS) |
+| `vitest run lib/server/account-erasure.test.ts`             | **passed** — the schema-derived guard accepts both new tables' erasure classification                                                    |
+| `vitest run app/__tests__/legal-policy-set.test.ts`         | **passed** — both new routes satisfy the four-point registration contract (page exists, in sitemap, on `/legal`, no alias)               |
+| `vitest run __tests__/api/waitlist-public.security.test.ts` | **passed — 34 tests**, 9 of them new consent-gate tests                                                                                  |
+| `vitest run db/neon/dpdp-consent-migration.test.ts`         | **passed — 11 tests**                                                                                                                    |
+
+**Not run:** the full monorepo suite, lint across all packages, and any migration
+against a live database. `0113` and `0114` have **never been applied** — they are
+guarded by text assertions only. Apply them to a branch database before trusting
+the RLS policies.
+
+---
+
+## 8. Open items
+
+Ordered by exposure, not by effort.
+
+| #        | Item                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Evidence                                                                                                                                                                                          |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **O-1**  | **Correct `/subprocessors`, `/privacy` and `/terms`.** Relist the email provider, add Runway, Nominatim, Apple/Google store APIs, GitHub, Perplexity, and the true OpenRouter failover scope; delete the "no transactional email system" justification from all three. The `legal-policy-set` test currently **bans** relisting Resend (`BANNED` entry `name: 'Resend'`) — that guard was written on the false premise and must be inverted in the same change. | §4                                                                                                                                                                                                |
+| **O-2**  | **Verifiable parental consent (s.9).** Web has no age gate at all; mobile's is self-declared and its minor-safe mode is child-clearable.                                                                                                                                                                                                                                                                                                                        | L-4                                                                                                                                                                                               |
+| **O-3**  | **Desktop "delete my account" deletes nothing.** Every DELETE targets a column or table that does not exist; "Clear all local data" clears 8 of ~100 tables; the desktop GDPR export omits nearly everything while the UI claims completeness; a second export command hard-fails on a non-existent table. Local SQLite retains emails, contacts, screenshots and OCR text no erasure path reaches.                                                             | `apps/desktop/src-tauri/src/sys/commands/privacy.rs:244`, `.../chat/maintenance.rs:17`, `.../onboarding.rs:136`, `.../privacy.rs:176`, `src-tauri/src/data/db/migrations.rs:1676` — all CONFIRMED |
+| **O-4**  | **Desktop telemetry is constructed `enabled: true, privacy_mode: None`**, two Tauri commands emit user-identified telemetry bypassing the consent gate, "Delete All Data" never deletes the persisted telemetry file, and the settings UI claims analytics are "anonymous" and collect no PII while a persistent pseudonymous id is minted before any consent.                                                                                                  | `apps/desktop/src-tauri/src/lib.rs:508`, `.../commands/analytics.rs:535`, `.../telemetry/collector.rs:289`, `apps/desktop/src/features/settings/AnalyticsSettings.tsx:92` — all CONFIRMED         |
+| **O-5**  | **Anonymous rows are unerasable.** `cloud_managed_waitlist` rows with a NULL `user_id` are reachable by no erasure path (`delete_user_data()` never touches the table), and the same is now true of NULL-`user_id` rows in `consent_records` and `data_rights_requests`. Needs an erase-by-email path — which is also what an anonymous access/erasure request under §2.2 will require.                                                                         | `apps/web/app/api/waitlist/public/route.ts:91`, `apps/web/db/neon/0020_functions.sql:1405`                                                                                                        |
+| **O-6**  | **"Unsubscribe anytime" is promised and no unsubscribe path exists.** `unsubscribe_token`/`unsubscribed_at` columns exist in `0016_misc.sql:68-69` and are read only by the export route; no route consumes them, and `cloud_managed_waitlist` has no withdrawal column at all. The new consent ledger records a withdrawal but **nothing reads it before sending**. Wire `hasConsent(userId, 'product_updates')` into the notification path.                   | `WaitlistModal.tsx:203`, `apps/web/app/waitlist/page.tsx:63-65`                                                                                                                                   |
+| **O-7**  | **Nobody is notified when a rights request arrives**, and nothing polls the queue. `GET /api/admin/privacy/requests` exists so it _can_ be read; working it is a human routine that does not exist yet. Consider wiring the existing email client to the queue.                                                                                                                                                                                                 | §2.2                                                                                                                                                                                              |
+| **O-8**  | **Server/edge Sentry initialises for every request with no consent check** and retains a stable user id. Arguably a security legitimate-use rather than a tracker — but decide it deliberately and write the answer down.                                                                                                                                                                                                                                       | `apps/web/instrumentation.ts:65-70` — CONFIRMED                                                                                                                                                   |
+| **O-9**  | **Signed-in app shell has no legal footer**, so the grievance contact is unreachable from inside the product.                                                                                                                                                                                                                                                                                                                                                   | `apps/web/shared/components/layout/WebAppShell.tsx:301`                                                                                                                                           |
+| **O-10** | **Cookie consent has no server-side record, no timestamp and no policy version**, and never expires when the notice changes. The new ledger has a `product_analytics` purpose ready for it; wire the banner to `POST /api/consent` for signed-in users.                                                                                                                                                                                                         | `apps/web/shared/lib/cookie-consent.ts:34,83` — CONFIRMED                                                                                                                                         |
+| **O-11** | **The privacy policy's "what we collect" table omits ~10 proven categories**: waitlist emails, feedback blobs, content reports (incl. a 500-char conversation excerpt), support-handoff transcripts, search history, memories, phone number, download IP hash + user-agent + referrer, SCIM directory identities, mobile push tokens.                                                                                                                           | `apps/web/app/privacy/page.tsx:153` — CONFIRMED                                                                                                                                                   |
+| **O-12** | **No nomination field (s.14)** — handled manually via the request form. Disclosed as unfinished on the notice page.                                                                                                                                                                                                                                                                                                                                             | §2.2                                                                                                                                                                                              |
+| **O-13** | **Retention has no maximum age** for waitlist emails, support tickets, billing rows, or `data_rights_requests`. Two cron routes exist but are **not registered in `vercel.json`**, so their lifecycle jobs never run.                                                                                                                                                                                                                                           | `vercel.json:13`, `apps/web/db/neon/0011_waitlist.sql:50`                                                                                                                                         |
+| **O-14** | Apply `0113`/`0114` to a branch database and verify the RLS policies behave (§7).                                                                                                                                                                                                                                                                                                                                                                               | —                                                                                                                                                                                                 |
+| **O-15** | **Legal pages are hardcoded English JSX with no i18n**, while the product ships other locales. Blocks L-6 mechanically, not just commercially.                                                                                                                                                                                                                                                                                                                  | `apps/web/app/privacy/page.tsx:77`                                                                                                                                                                |
+| **O-16** | **Chrome extension**: injects a content script into every http/https page, requests `debugger` and `cookies` permissions, mirrors chat transcripts to the cloud with no opt-out, and exposes **no privacy notice anywhere in its UI**.                                                                                                                                                                                                                          | `apps/extension/manifest.json:22,37`, `.../cloud-bridge/conversationSync.ts:15`, `apps/extension/src/options.html:1`                                                                              |
+| **O-17** | **Mobile presents no privacy notice before or during onboarding**, its iOS privacy manifest declares only Email and Name (omitting user content and device identifiers), and it requests **Contacts** permission that no code reads.                                                                                                                                                                                                                            | `apps/mobile/app/(public)/onboarding.tsx:1`, `apps/mobile/app.config.js:162`, `.../deviceIntegrations.ts:104`                                                                                     |
+| **O-18** | **`/trust` has GDPR and CCPA rows but no DPDP row**; `/security`'s "what we have not done" lists the EU Art. 27 gap but no Indian obligation.                                                                                                                                                                                                                                                                                                                   | `apps/web/app/trust/page.tsx:33`, `apps/web/app/security/page.tsx:372`                                                                                                                            |
+| **O-19** | Security gaps in §6 — each needs its own change. **O-19a** (`ACCOUNT_STATUS_FAIL_OPEN` invisible to env validation) and **O-19b** (plaintext TOTP seeds) are the two worth doing first.                                                                                                                                                                                                                                                                         | §6                                                                                                                                                                                                |
+
+---
+
+## 9. What this branch does **not** claim
+
+- It does not make AGI DPDP-compliant. It closes the consent, notice, rights and
+  grievance gaps on the **web** surface and documents the rest.
+- No legal copy here has been reviewed by counsel.
+- Desktop, mobile and the browser extension are **audited but unremediated**
+  (O-3, O-4, O-16, O-17). Desktop account deletion deleting nothing is a
+  confirmed critical defect that this branch does not touch.
+- The migrations have never been applied to a database.
+- Nothing here has been pushed, per instruction.
