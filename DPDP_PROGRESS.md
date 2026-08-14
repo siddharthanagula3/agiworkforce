@@ -274,14 +274,16 @@ on the page root and a `LEGAL REVIEW REQUIRED` header comment in source.
 
 ### Founder decisions (not legal, but not mine)
 
-| #   | Decision                                                                                                                                                                                     |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F-1 | Designate a **named** Grievance Officer, or confirm the role account stands (`GRIEVANCE_OFFICER_NAME` in `lib/legal-constants.ts`).                                                          |
-| F-2 | Confirm `NOTICE_ADDRESS`. It is already flagged founder-unconfirmed in `legal-constants.ts` and is now printed on two more pages.                                                            |
-| F-3 | **Bump `POLICY_LAST_UPDATED.terms`?** One line. Consequence: every existing desktop/CLI/mobile device session is rejected until the user re-accepts on web (§3). Deliberately not done.      |
-| F-4 | Provision a real `privacy@` / `grievance@` mailbox, or keep subject-line routing on `contact@`.                                                                                              |
-| F-5 | Commission Eighth Schedule translations (L-6).                                                                                                                                               |
-| F-6 | Decide whether the **mobile store listings' unqualified DPDP compliance claim** stands (`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json:20`). It currently overstates the position. |
+| #   | Decision                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F-1 | Designate a **named** Grievance Officer, or confirm the role account stands (`GRIEVANCE_OFFICER_NAME` in `lib/legal-constants.ts`).                                                                                                                                                                                                                                                                                                                   |
+| F-2 | Confirm `NOTICE_ADDRESS`. It is already flagged founder-unconfirmed in `legal-constants.ts` and is now printed on two more pages.                                                                                                                                                                                                                                                                                                                     |
+| F-3 | **Bump `POLICY_LAST_UPDATED.terms`?** One line. Consequence: every existing desktop/CLI/mobile device session is rejected until the user re-accepts on web (§3). Deliberately not done.                                                                                                                                                                                                                                                               |
+| F-4 | Provision a real `privacy@` / `grievance@` mailbox, or keep subject-line routing on `contact@`.                                                                                                                                                                                                                                                                                                                                                       |
+| F-5 | Commission Eighth Schedule translations (L-6).                                                                                                                                                                                                                                                                                                                                                                                                        |
+| F-6 | Decide whether the **mobile store listings' unqualified DPDP compliance claim** stands (`apps/mobile/store-listing/LISTING-METADATA-ANDROID.json:20`). It currently overstates the position.                                                                                                                                                                                                                                                          |
+| F-7 | **`proFeature2` "Priority routing across providers"** (`packages/ui/i18n/locales/*/pricing.json`) has no implementation — a grep for priority/tier routing across `apps/web/lib`, `apps/web/app/api` and `packages/ai` returns nothing. It is a product-capability claim, so it should be built or cut. NOT edited here: the string exists in ten locale bundles and rewriting marketing copy in ten languages unreviewed is not an engineering call. |
+| F-8 | `enterpriseFeature2` ("Custom capacity and dedicated support") and `enterpriseFeature4` ("Annual contract with a dedicated account manager") are also unbacked in code — but they are **staffing commitments, not product features**, and software cannot evidence a human. Left alone deliberately; confirm you intend to staff them.                                                                                                                |
 
 ---
 
@@ -400,6 +402,46 @@ TO app_rls`, so both tables were born mutable. Measured on a real branch,
 
 **Lesson worth keeping:** a migration test that asserts the text of a `.sql` file
 proves the spelling, not the schema. Anything load-bearing needs a connection.
+
+---
+
+## 7.2 Second pass — competitor-benchmarked page audit (14 August)
+
+A five-domain audit compared `/privacy`, `/terms`, `/security`+`/trust`, the
+marketing surface and `/legal`+`/cookies`+`/subprocessors` against reference
+captures of the OpenAI, Anthropic and t3.chat policy sets, then put every
+proposed change through a verifier told to refute it. **57 proposed items were
+cut**, which is the number that matters: 21 were already fixed by the first
+pass, and the rest were wrong.
+
+Three cuts worth keeping on the record, because each would have shipped a
+falsehood:
+
+| Proposed                                                                                        | Verdict                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| List Apple App Store Server as a recipient of purchase identifiers                              | **Cut.** `mobile-iap-store-verification.ts` verifies Apple's signed notifications locally with `SignedDataVerifier` against bundled root certificates. Apple sends to us; nothing goes back. Only Google's path is an outbound POST. |
+| Publish a corrected API route-coverage figure on `/trust`                                       | **Cut.** `trust-surface-claims.test.ts:125` asserts that no `N of M hosted API route files` figure appears — a deliberate guard against a number that cannot be kept true.                                                           |
+| Adopt "your data will be transferred to and processed in the United States" as a flat statement | **Cut.** False as an absolute: Nominatim is in the EU and three model providers are outside the US.                                                                                                                                  |
+
+**A claim this branch itself published, and then corrected.** The first pass
+added a `/privacy` row saying download records hold "a hashed IP … pseudonymous
+rather than anonymous". Half true and flattering: the `release_downloads` hash
+uses a **fixed salt** (`0020_functions.sql:1783`), and `/api/download` separately
+writes the **raw** IP to application logs (`route.ts:109-129`). The row now says
+both. Writing a compliance page is not exempt from the rule the page enforces.
+
+### What the second pass fixed
+
+| Was published                                                                                   | Actually true                                                                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/security`: "CI blocks on Semgrep's security-audit ruleset"                                    | Semgrep runs and does **not** block; its own step comment says `--error` flips it once findings reach zero, and they have not.                                                                                                                                                             |
+| `/security`: "CodeQL runs on push and weekly on Mondays at 04:17 UTC"                           | **There is no CodeQL in this repository.** `.github/workflows/codeql.yml` is named `Rust Security` and runs cargo audit + clippy on that schedule. The filename is the only CodeQL thing about it.                                                                                         |
+| `/security`: "GitHub Actions are pinned by commit digest"                                       | `check-action-pins.sh` enforces SHA pinning for **third-party** actions and exempts the first-party `actions/` namespace.                                                                                                                                                                  |
+| `/security` + `/trust`: erasure covers "34 user-scoped tables"                                  | **66.** Nothing guarded the figure, so it drifted with every migration that added a table. Now derived from `USER_SCOPED_TABLES.length` by a test, so it cannot drift again.                                                                                                               |
+| `/security`: artifact sandbox sets `frame-src 'none'`                                           | The deployed policy sets `frame-src 'self'`. Quoting a directive stricter than the one served is the worst error available on a security page — a reviewer checks the quote, not the header.                                                                                               |
+| `/subprocessors`: "We do not process your prompts; the request flows directly from your client" | True of desktop, CLI and VS Code. **The web app is cloud-only and has no user-supplied-key path at all** (`lib/byok-providers.ts:9-14`), so everything done in a browser is Managed Cloud. The surface is now named on both `/subprocessors` and `/privacy`.                               |
+| `/dpa`: two more instances of "there is no transactional email system"                          | Fixed. The guard's first version omitted `/dpa`, and the claim survived there a day longer than everywhere else — a guard is only as wide as its file list. It now covers `/dpa`, `/security` and `/trust` too.                                                                            |
+| Home page: "we will tell you the day it lands" / "We'll email you the day AGI Mobile lands"     | Nothing reads `cloud_managed_waitlist` to send mail. An unperformable promise — and under the consent model, worse: an address collected for a purpose we cannot carry out. Rewritten to what actually happens. The same tightening was applied to this branch's own consent-purpose copy. |
 
 ---
 

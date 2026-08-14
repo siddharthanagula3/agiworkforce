@@ -287,13 +287,26 @@ export function MarketingLanding() {
           <p className="agi-fl-section-lede">
             AGI Mobile is built around Local Mode: chats and memory stay on the phone unless you
             move them. It is not on the App Store or Google Play yet, so there is nothing to install
-            today. Leave your email and we will tell you the day it lands.
+            today. Leave your email to be told when it lands.
           </p>
+          {/*
+           * The copy here used to promise "we will tell you the day it lands"
+           * and "We'll email you the day AGI Mobile lands". Nothing in this
+           * repository reads `cloud_managed_waitlist` to send mail — the only
+           * wired email paths are support escalation and scheduled-task
+           * notifications, neither of which can broadcast to this list. So the
+           * promise was unperformable, and under the DPDP consent model it was
+           * worse than that: the address is collected for a stated purpose, and
+           * a purpose we cannot carry out is not a lawful one to collect for.
+           * Say what actually happens — the address is recorded, a human sends
+           * the announcement — and do not restore a delivery guarantee until
+           * something can deliver it.
+           */}
           <div className="agi-fl-launch-form">
             <PublicWaitlistForm
               source="mobile"
               ctaLabel="Notify Me"
-              successMessage="You're on the list. We'll email you the day AGI Mobile lands on the App Store and Google Play."
+              successMessage="You're on the list. We announce launches on the changelog, and we'll reach the addresses on this list when it ships."
             />
           </div>
         </section>
