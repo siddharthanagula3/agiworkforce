@@ -84,6 +84,19 @@ export interface DiscoveredAuthorizationFacts {
   resourceUrl?: string | null;
   mcpUrl?: string | null;
   clientId?: string | null;
+  /**
+   * The SDK's `OAuthDiscoveryState` verbatim (0116).
+   *
+   * `auth()` reads this on the callback leg to perform the SEP-2352
+   * authorization-server binding check — comparing the issuer recorded when the
+   * flow started against what discovery reports now, before the code is
+   * redeemed. A provider that implements the accessor but returns nothing is
+   * treated by the SDK as broken, not as opting out, so this must round-trip
+   * across the two requests or no discovered connector can complete.
+   *
+   * Public discovery documents only; nothing secret.
+   */
+  discoveryState?: unknown;
 }
 
 export interface PendingAuthorizationInput extends DiscoveredAuthorizationFacts {
@@ -123,8 +136,9 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
       `insert into public.connector_oauth_authorizations (
          user_id, connector_id, state_hash, code_verifier_enc, code_challenge_method,
          redirect_uri, requested_scopes, return_path, expires_at,
-         issuer, authorization_endpoint, token_endpoint, resource_url, mcp_url, client_id
-       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+         issuer, authorization_endpoint, token_endpoint, resource_url, mcp_url, client_id,
+         discovery_state
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
       [
         input.userId,
         input.connectorId,
@@ -141,6 +155,7 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
         input.resourceUrl ?? null,
         input.mcpUrl ?? null,
         input.clientId ?? null,
+        input.discoveryState === undefined ? null : JSON.stringify(input.discoveryState),
       ],
     );
   } catch (error) {
@@ -162,6 +177,7 @@ interface PendingAuthorizationRow {
   resource_url: string | null;
   mcp_url: string | null;
   client_id: string | null;
+  discovery_state: unknown;
 }
 
 /**
@@ -188,7 +204,7 @@ export async function consumePendingAuthorization(
           and expires_at > now()
         returning user_id, connector_id, code_verifier_enc, redirect_uri,
                   requested_scopes, return_path, issuer, authorization_endpoint,
-                  token_endpoint, resource_url, mcp_url, client_id`,
+                  token_endpoint, resource_url, mcp_url, client_id, discovery_state`,
       [hashOAuthState(state)],
     );
   } catch (error) {
@@ -226,6 +242,12 @@ export async function consumePendingAuthorization(
     resourceUrl: row.resource_url,
     mcpUrl: row.mcp_url,
     clientId: row.client_id,
+    // `jsonb` comes back parsed from the driver, but a text-mode driver would
+    // hand back a string; accept both rather than depending on driver mode.
+    discoveryState:
+      typeof row.discovery_state === 'string'
+        ? (JSON.parse(row.discovery_state) as unknown)
+        : row.discovery_state,
   };
 }
 
