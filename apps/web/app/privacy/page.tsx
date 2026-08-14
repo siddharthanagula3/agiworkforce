@@ -378,13 +378,133 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">03 &middot; How we use it</p>
+          <p className="agi-section-eyebrow">03 &middot; How we use it, and on what basis</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
-            To run the service, bill you, secure the system, prevent abuse, respond to support
-            requests, and comply with the law. Where the GDPR applies, our bases are performance of
-            the contract with you (running the service and billing), our legitimate interests
-            (security, abuse prevention, and keeping the service working), your consent (telemetry
-            and analytics only), and legal obligation.
+            One row per purpose, rather than a sentence listing four bases and leaving you to work
+            out which applies to what. Where a row says <em>legitimate interests</em>, it also says
+            why we think ours do not override yours &mdash; that balancing test is the part a bare
+            list omits.
+          </p>
+          <table className="agi-ledger">
+            <thead>
+              <tr>
+                <th>Purpose</th>
+                <th>Data used</th>
+                <th>Basis, where the GDPR or UK GDPR applies</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ width: '22%', verticalAlign: 'top' }}>
+                  Creating and running your account
+                </td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Email, account identifier, authentication metadata, settings.
+                </td>
+                <td>
+                  <strong>Performance of a contract.</strong> You asked us to run an account; it
+                  cannot exist without these.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Running the assistant (Managed Cloud)</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Conversations, files, projects, memories, schedules.
+                </td>
+                <td>
+                  <strong>Performance of a contract.</strong> This is the service itself. Local and
+                  BYOK do not produce this data for us at all.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Taking payment</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Billing identifiers, plan, invoice metadata. Card numbers go to Stripe and never
+                  reach us.
+                </td>
+                <td>
+                  <strong>Performance of a contract</strong>, and <strong>legal obligation</strong>{' '}
+                  for the records tax and accounting law requires us to keep.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Answering you</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Support conversations, feedback, content reports.
+                </td>
+                <td>
+                  <strong>Performance of a contract</strong> when you are a customer;{' '}
+                  <strong>legitimate interests</strong> otherwise. You initiated the contact, and we
+                  cannot reply without keeping what you sent.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Keeping the service secure and available</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Server logs, the security audit log, rate-limiting state, account status.
+                </td>
+                <td>
+                  <strong>Legitimate interests.</strong> Every user has an interest in the service
+                  not being taken over or abused, the data is operational rather than content, and
+                  you cannot opt out of it without also opting out of being protected by it.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Understanding which builds are downloaded</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Download records: hashed IP, user-agent, referrer, coarse country &mdash; plus the
+                  raw IP in server logs, as section 01 says.
+                </td>
+                <td>
+                  <strong>Legitimate interests.</strong> Narrow, and the honest caveats about the
+                  fixed salt and the raw log entry are in section 01 rather than buried here.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Crash and error reporting</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Error reports with a stable user id, content-scrubbed.
+                </td>
+                <td>
+                  <strong>Your consent.</strong> Off unless you turn it on in settings. No prompt
+                  content is sent.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Product analytics</td>
+                <td style={{ verticalAlign: 'top' }}>Aggregated page views.</td>
+                <td>
+                  <strong>Your consent.</strong> Nothing loads until you give it, and the gate fails
+                  closed &mdash; if your choice cannot be read, analytics stays off.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Telling you when something opens</td>
+                <td style={{ verticalAlign: 'top' }}>The email you gave the early-access list.</td>
+                <td>
+                  <strong>Your consent</strong>, recorded per purpose against the revision of this
+                  notice you were shown, before the address is stored.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Complying with the law</td>
+                <td style={{ verticalAlign: 'top' }}>
+                  Whatever a valid legal process compels, narrowed to the minimum.
+                </td>
+                <td>
+                  <strong>Legal obligation.</strong>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
+            <strong>India works differently and has its own page.</strong> Under the Digital
+            Personal Data Protection Act, 2023 consent is the default ground rather than one of
+            several, so the analysis is not the same as the table above. It is at{' '}
+            <Link href="/privacy/india" style={{ color: 'var(--agi-ink)' }}>
+              /privacy/india
+            </Link>
+            , and it governs for data principals in India where the two differ.
           </p>
         </section>
 
@@ -508,10 +628,191 @@ export default function PrivacyPage() {
               </tr>
             </tbody>
           </table>
+
+          <div className="agi-callout" style={{ marginTop: 28 }}>
+            <h3 className="agi-callout-h">What deliberately survives deleting your account</h3>
+            <p className="agi-callout-p">
+              &ldquo;Delete my account&rdquo; erases an enumerated list of 66 user-scoped tables and
+              your stored files. A short list of things is kept on purpose, and you should know what
+              before you decide, not after.
+            </p>
+          </div>
+          <table className="agi-ledger" style={{ marginTop: 16 }}>
+            <thead>
+              <tr>
+                <th>What is kept</th>
+                <th>Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ width: '30%', verticalAlign: 'top' }}>
+                  Security and organisation audit log entries naming you
+                </td>
+                <td>
+                  Both audit trails are append-only integrity controls &mdash; the application role
+                  is blocked from writing to them at the database level, which is the point of an
+                  audit trail. Erasure does not purge them. We are recording that as a gap rather
+                  than describing the erasure as total: a separate privileged routine exists to
+                  purge them, and it is not part of the automatic path.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>A record that you were erased</td>
+                <td>
+                  A suppression entry survives so the system can tell that this subject must stay
+                  erased. Deleting it would erase the evidence that the erasure happened.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>
+                  Double-charge protection keys and payments still moving
+                </td>
+                <td>
+                  Deleting these can charge you twice or lose a settlement owed to you. They outlive
+                  the account they protected.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>
+                  Rows that belong to an organisation rather than to you
+                </td>
+                <td>
+                  An organisation&rsquo;s billing ledger keeps the row with your user id removed;
+                  files you added to a shared project keep the file and drop the attribution; abuse
+                  reports you filed about someone else keep the report and drop you. Deleting an
+                  organisation because its creator left would erase every other member.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Stripe&rsquo;s own records</td>
+                <td>
+                  Your payments and invoices sit with Stripe under its retention, not ours. Card
+                  numbers go to Stripe directly and never reach us.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>
+                  Anything given without an account, keyed to an address
+                </td>
+                <td>
+                  <strong>
+                    An early-access email, a consent decision or a rights request made without
+                    signing in is not reachable by account deletion
+                  </strong>
+                  , because there is no account to delete. Nothing ages those out automatically
+                  either. Use the request form at{' '}
+                  <Link href="/privacy/requests" style={{ color: 'var(--agi-ink)' }}>
+                    /privacy/requests
+                  </Link>{' '}
+                  and we will remove them.
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">06 &middot; Your rights, and how to use them</p>
+          <p className="agi-section-eyebrow">06 &middot; What you can change yourself</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            Controls that exist in the product right now, separated from the statutory rights in the
+            next section on purpose. A right you have to write in and ask for is not the same thing
+            as a switch you can reach, and a policy that mixes them makes the product sound more
+            self-serve than it is.
+          </p>
+          <table className="agi-ledger">
+            <thead>
+              <tr>
+                <th>Control</th>
+                <th>Where it is, and exactly what it does</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ width: '26%', verticalAlign: 'top' }}>Export your data</td>
+                <td>
+                  Account settings. Returns your account data as a download. It is rate limited, and
+                  every export is written to the security audit log. It does not yet cover every
+                  category this page lists &mdash; where something is missing, use the access
+                  request in the next section.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Delete your account</td>
+                <td>
+                  Account settings. Erasure is scheduled 24 hours out, then performed by a daily job
+                  that also deletes your identity at our authentication provider. Read the survivors
+                  table in section 05 first &mdash; and note there is no self-serve cancel inside
+                  that 24-hour window.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Withdraw a consent</td>
+                <td>
+                  <Link href="/privacy/requests" style={{ color: 'var(--agi-ink)' }}>
+                    /privacy/requests
+                  </Link>
+                  . Per purpose, one click, immediate. Withdrawing an optional purpose never costs
+                  you access to anything you did not withdraw.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Turn analytics off</td>
+                <td>
+                  The cookie preferences dialog, reachable from{' '}
+                  <Link href="/cookies" style={{ color: 'var(--agi-ink)' }}>
+                    /cookies
+                  </Link>
+                  . It is already off until you turn it on; this is how you change your mind.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Turn crash reporting off</td>
+                <td>
+                  Settings. A separate switch from analytics, in a different place, because they are
+                  different vendors doing different things &mdash; we would rather say that than
+                  imply one toggle covers both.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Clear your search history</td>
+                <td>Settings. Removes the stored history for your account.</td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Memory</td>
+                <td>
+                  Off unless you enable it. When on, the assistant keeps facts about you across
+                  sessions, and you can remove them.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Temporary chat</td>
+                <td>
+                  The composer. A temporary conversation is hard-deleted by a daily job about 30
+                  days later, messages with it.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Delete a conversation or a file</td>
+                <td>
+                  In the product. Deleted files sit in a recently-deleted bin for 30 days, then the
+                  bytes are removed from storage.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Choose where a request goes</td>
+                <td>
+                  The mode selector. Local keeps the conversation on your machine and sends us
+                  nothing; BYOK goes from your client straight to your provider on your key. Both
+                  are desktop, CLI and VS Code capabilities &mdash; the web app is cloud-only.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">07 &middot; Your rights, and how to use them</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Depending on where you live and subject to applicable exceptions, privacy laws such as
             the GDPR, UK GDPR, and CCPA may give you rights of access, correction, deletion,
@@ -568,7 +869,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">07 &middot; International transfers</p>
+          <p className="agi-section-eyebrow">08 &middot; International transfers</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI data is hosted in the United States.{' '}
             <strong>We do not offer EU or UK data residency</strong>, so European customers&rsquo;
@@ -587,7 +888,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">08 &middot; Children</p>
+          <p className="agi-section-eyebrow">09 &middot; Children</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI accounts are for people aged 18 and over; 13- to 17-year-olds may use it only under
             an account opened and supervised by a parent, guardian or school, as set out in section
@@ -602,7 +903,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">09 &middot; Changes</p>
+          <p className="agi-section-eyebrow">10 &middot; Changes</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We may update this policy. The current version is always at this URL with the revision
             date at the top, and material changes are recorded on{' '}
@@ -615,7 +916,7 @@ export default function PrivacyPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">10 &middot; Contact</p>
+          <p className="agi-section-eyebrow">11 &middot; Contact</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             {LEGAL_ENTITY}, {NOTICE_ADDRESS}. Email{' '}
             <a href={contactMailto(CONTACT_SUBJECTS.privacy)} style={{ color: 'var(--agi-ink)' }}>

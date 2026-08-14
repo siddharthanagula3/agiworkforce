@@ -90,6 +90,11 @@ const DOCS: { href: string; label: string; body: string }[] = [
   // grievance route a statutory precondition for complaining to the Board, so
   // neither can be a paragraph inside another document.
   {
+    href: '/data-use',
+    label: 'How we use your data',
+    body: 'Plain-English answers to the questions people actually ask — training, who can read your chats, selling, retention, deletion, residency — each linking to the section of the privacy policy that governs it.',
+  },
+  {
     href: '/privacy/india',
     label: 'India — DPDP notice',
     body: 'The itemised notice under the Digital Personal Data Protection Act, 2023: what is collected, for which purpose, who it is shared with, your rights as a Data Principal, and the grievance contact.',

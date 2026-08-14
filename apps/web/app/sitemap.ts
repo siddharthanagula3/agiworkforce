@@ -129,6 +129,10 @@ const routes: RouteConfig[] = [
   { path: '/model-licenses', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/legal', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/legal/eu-representative', priority: 0.4, changeFrequency: 'monthly' },
+  // Plain-language companion to /privacy, indexed at a higher priority than the
+  // policy itself on purpose: it is the page someone searching "does AGI train
+  // on my data" should land on.
+  { path: '/data-use', priority: 0.7, changeFrequency: 'yearly' },
   // India — the DPDP notice and the data-principal request route. Indexed
   // rather than hidden: a data principal has to be able to find the grievance
   // contact without already being a customer.
