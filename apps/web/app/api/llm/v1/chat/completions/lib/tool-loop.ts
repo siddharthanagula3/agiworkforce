@@ -93,7 +93,10 @@ import {
   isWebSearchTool,
   executeWebSearch,
   formatWebSearchResultForModel,
+  webSearchBudgetExhaustedMessage,
   WEB_SEARCH_FREE_MAX_RESULTS,
+  WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN,
+  WEB_SEARCH_MAX_CALLS_PER_TURN,
   webSearchResultsToFetchedSources,
 } from '@/lib/web-search/web-search-tool';
 import type { ProcessedRequest } from './request-processor';
@@ -1747,6 +1750,21 @@ export async function* runToolLoop(
   // tools needs two independently-emitted cumulative lists, not one merged
   // list with an ambiguous tag.
   const searchedSources: FetchedSource[] = [];
+  /**
+   * Web searches this turn has spent, against the budget below.
+   *
+   * An ordinary question is not a research run. Nothing used to bound how many
+   * times the model could call `web_search` inside one turn, so a single
+   * question could search on step after step and pile up dozens of citations —
+   * a deep-research-sized source list for a two-line answer. The budget forces
+   * the intended shape: search once, read the results, and search again only
+   * when that pass genuinely left the question open.
+   */
+  let webSearchCallsUsed = 0;
+  const webSearchCallBudget =
+    processed.chatRequest?.work_mode === 'agiwork'
+      ? WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN
+      : WEB_SEARCH_MAX_CALLS_PER_TURN;
   const providerGeneratedFileRefs = new Map<string, GeneratedFileRef>();
 
   // Conversation-scoped E2B executor: resolved (created, or resumed from a paused
@@ -1987,6 +2005,20 @@ export async function* runToolLoop(
     }[] = [];
 
     const executeTool = (tc: PendingToolCall): Promise<ToolLoopToolResult> => {
+      // Spend the turn's search budget BEFORE dispatching. Over-budget calls
+      // resolve to a plain (non-error) tool result telling the model to answer
+      // from what it already read: an exhausted budget is an expected state,
+      // not a failure to retry, and returning `isError` would invite exactly
+      // the retry loop the budget exists to stop.
+      if (isWebSearchTool(tc.qualifiedName)) {
+        webSearchCallsUsed += 1;
+        if (webSearchCallsUsed > webSearchCallBudget) {
+          return Promise.resolve({
+            content: webSearchBudgetExhaustedMessage(webSearchCallBudget),
+            isError: false,
+          });
+        }
+      }
       const execute = () =>
         runMcpTool(tc, resolveE2BExecutor, availableTools, options.connectorExecutor, {
           userId: options.userId,
