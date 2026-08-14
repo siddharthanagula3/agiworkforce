@@ -297,8 +297,20 @@ export default function SubprocessorsPage() {
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             When you BYOK against Anthropic, OpenAI, Google, or any other provider, that provider
             becomes a processor of <em>your</em> data, on <em>your</em> contract, not ours. We do
-            not process your prompts; the request flows directly from your client to the provider
-            you targeted. See{' '}
+            not process those prompts; the request goes from your client to the provider you
+            targeted, and no row in the table above is in that path.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16 }}>
+            <strong>Which surface that applies to, precisely.</strong> BYOK is a capability of the
+            desktop app, the CLI and the VS Code extension.{' '}
+            <strong>
+              The web app at agiworkforce.com is cloud-only: it has no user-supplied-key path at
+              all.
+            </strong>{' '}
+            Every model request you make in a browser is a Managed Cloud request on our keys,
+            through the recipients listed above. We used to state the BYOK posture here without
+            naming the surface, which invited exactly the wrong inference on the one surface where
+            it does not hold. See{' '}
             <Link href="/byok" style={{ color: 'var(--agi-ink)' }}>
               BYOK
             </Link>{' '}

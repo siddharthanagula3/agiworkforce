@@ -41,14 +41,14 @@ export const CONSENT_PURPOSES: readonly ConsentPurpose[] = [
     id: 'enterprise_waitlist',
     label: 'Store my email address on the enterprise early-access list.',
     description:
-      'Your email address is stored so we can tell you when enterprise organisation and SSO features open. It is used for that and nothing else.',
+      'Your address is stored so we can reach you when enterprise organisation and SSO features open. It is used for that and nothing else. To be straight about the mechanism: nothing in the product mails this list automatically, so the announcement is sent by a person.',
     necessaryForRequest: true,
   },
   {
     id: 'product_updates',
     label: 'Also email me product updates and launch news.',
     description:
-      'Occasional email about new releases and capabilities. Separate from the early-access list, so you can withdraw it without leaving that list.',
+      'Occasional email about new releases and capabilities, sent by a person rather than an automated system. Separate from the early-access list, so you can withdraw it without leaving that list.',
     necessaryForRequest: false,
   },
   {

@@ -243,7 +243,17 @@ describe('legal policy set — prohibited claims', () => {
     // The claim that justified the delisting. It appears nowhere now, and it
     // must not come back while the client above exists: it is the sentence that
     // let an undisclosed recipient of personal data look like a policy choice.
-    for (const file of ['privacy/page.tsx', 'terms/page.tsx', 'subprocessors/page.tsx']) {
+    // /dpa is in this list because the first version of this guard omitted it,
+    // and the claim survived there for a day after being removed everywhere
+    // else. A guard is only as wide as its file list.
+    for (const file of [
+      'privacy/page.tsx',
+      'terms/page.tsx',
+      'subprocessors/page.tsx',
+      'dpa/page.tsx',
+      'security/page.tsx',
+      'trust/page.tsx',
+    ]) {
       const copy = readPublishedCopy(...file.split('/')).replace(/\s+/g, ' ');
       expect(copy, `${file} must not claim there is no transactional email system`).not.toMatch(
         /there is no transactional email (system|provider)/i,

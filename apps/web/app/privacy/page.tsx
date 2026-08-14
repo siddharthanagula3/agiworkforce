@@ -120,7 +120,12 @@ export default function PrivacyPage() {
                 <td style={{ verticalAlign: 'top' }}>BYOK</td>
                 <td style={{ verticalAlign: 'top' }}>
                   From your client straight to the provider you targeted, on your own API key. We
-                  are not in that request path.
+                  are not in that request path.{' '}
+                  <strong>
+                    Available on the desktop app, the CLI and the VS Code extension. The web app is
+                    cloud-only and has no user-key path, so anything you do in a browser is Managed
+                    Cloud.
+                  </strong>
                 </td>
                 <td>
                   Your account and settings. Not the prompt traffic. Your key is encrypted on your
@@ -276,13 +281,21 @@ export default function PrivacyPage() {
               <tr>
                 <td>Devices and downloads</td>
                 <td>
-                  Push tokens for the mobile apps, and for a desktop download: a hashed IP, the
-                  user-agent, the referring page and a coarse country.
+                  Push tokens for the mobile apps. For a desktop download: a hashed IP, the
+                  user-agent, the referring page and a coarse country in the download record &mdash;
+                  and separately, your <em>unhashed</em> IP address in our server logs.
                 </td>
                 <td>
                   Delivering notifications you asked for, and understanding which builds are being
-                  downloaded. The IP is hashed rather than stored raw, which makes the record
-                  pseudonymous rather than anonymous.
+                  downloaded.{' '}
+                  <strong>
+                    Two honest caveats. The hash in the download record uses a fixed salt, so it is
+                    pseudonymous rather than anonymous &mdash; anyone holding both the hash and a
+                    candidate address can confirm a match. And the download endpoint separately
+                    writes the raw IP to application logs for abuse detection, which the hashing
+                    does not cover.
+                  </strong>{' '}
+                  Both are improvements we owe you rather than controls we are claiming.
                 </td>
               </tr>
               <tr>
