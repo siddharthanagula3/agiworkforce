@@ -97,6 +97,20 @@ export interface AuthState {
   error: string | null;
   /** True once the Clerk auth state has been determined */
   initialized: boolean;
+  /**
+   * True when the last `/api/me` call answered 401.
+   *
+   * Without this, a 401 is INDISTINGUISHABLE from a free plan: the handler
+   * clears `subscription` to null, sets `initialized`, and records no error, so
+   * every consumer that reads `subscription?.tier ?? 'free'` renders a
+   * confident "Free" with an Upgrade button. A paying Max 15x customer whose
+   * token happened to be refreshing was told to buy the plan they already own,
+   * while the usage panel — fed by a different request that authenticated fine
+   * — kept showing Max 15x beside it.
+   *
+   * `null` subscription now means "we do not know", and this flag says why.
+   */
+  unauthenticated: boolean;
 
   // Actions
   refreshUser: () => Promise<void>;
@@ -111,6 +125,7 @@ const INITIAL_STATE: Omit<AuthState, 'refreshUser' | 'signOut' | '_reset'> = {
   isLoading: true,
   error: null,
   initialized: false,
+  unauthenticated: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -134,13 +149,16 @@ export const useBillingStore = create<AuthState>()((set) => ({
 
         if (!response.ok) {
           if (response.status === 401) {
-            // Not authenticated — clear gracefully
+            // Not authenticated — clear gracefully, but FLAG it. Clearing
+            // silently is what let a signed-in user's transient 401 render as
+            // a free plan (see `unauthenticated` on AuthState).
             set({
               user: null,
               subscription: null,
               featureFlags: null,
               isLoading: false,
               initialized: true,
+              unauthenticated: true,
             });
             return;
           }
@@ -185,6 +203,10 @@ export const useBillingStore = create<AuthState>()((set) => ({
           isLoading: false,
           error: null,
           initialized: true,
+          // A recovered session must clear the flag, or one transient 401
+          // would pin the billing surfaces to "sign in again" for the rest of
+          // the page's life.
+          unauthenticated: false,
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
