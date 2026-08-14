@@ -43,7 +43,31 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'Do you train on my data?',
-    a: `AGI does not use customer conversation content to train AGI-owned models. ${POSITIONING.trustBoundary}`,
+    a: `AGI does not use customer conversation content to train AGI-owned models. ${POSITIONING.trustBoundary} One thing worth being precise about: in managed cloud your prompt goes to the model provider serving the model you picked, and what they do with it is governed by their terms, not ours — our no-training statement is about AGI-owned models and is not a promise on their behalf.`,
+  },
+  {
+    q: 'Who can read my conversations?',
+    a: 'In Local mode, nobody but you — they never reach us. In managed cloud we store them, so the honest answer is not "nobody": access is limited to people who need it to operate or support the service, and every request is scoped to the account that owns it by two layers of access control. The privacy policy states what those layers are and, more usefully, where each one stops.',
+  },
+  {
+    q: 'Do you sell my data, or use it for ads?',
+    a: 'No to both. We do not sell personal data, we do not share it for cross-context behavioural advertising, we run no advertising and we set no advertising cookies. Analytics is opt-in and stays off until you turn it on. The third parties that do receive data, and exactly what each one gets, are listed on the subprocessors page.',
+  },
+  {
+    q: 'How do I delete everything, or get a copy of it?',
+    a: 'Both are self-serve in account settings. Export returns your data as a download. Deletion is scheduled 24 hours out and then performed by a daily job that also deletes your identity at our authentication provider — with two limits stated up front rather than discovered: no confirmation email is sent, and there is no self-serve way to cancel inside that window. A short list of things is kept on purpose, and the privacy policy has a table of exactly what and why.',
+  },
+  {
+    q: 'What if I never made an account — can you still delete what you hold?',
+    a: 'Yes, but not automatically. An email address you gave a waitlist, or a consent you gave without signing in, is not reachable by account deletion because there is no account to delete, and nothing ages those out on a schedule. Use the request form on the data-rights page and we will remove them.',
+  },
+  {
+    q: 'What happens to my data if I cancel?',
+    a: 'Cancelling a subscription does not delete your account or your content — the account continues on the free tier and your data stays until you delete it. If you want it gone, delete the account; if you want a copy first, export it.',
+  },
+  {
+    q: 'Are you GDPR or DPDP compliant?',
+    a: 'Those are not badges anyone issues, so a plain yes would be worth nothing. What we publish instead is the working: a per-regime status ledger on the trust page with a date on every line and what would prove it, an India-specific notice under the Digital Personal Data Protection Act, and a security page that lists what we have NOT done alongside what we have. We hold no SOC 2 report and no ISO 27001 certificate, and we say so in the same places we say what we do have.',
   },
   {
     q: 'What happens to my master password?',
@@ -51,11 +75,11 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'Is there an Enterprise plan?',
-    a: 'Enterprise is in scoping, not on sale. SSO, audit log export, and custom retention are planned; contact sales to discuss your requirements and timeline.',
+    a: 'Enterprise is contract-scoped rather than self-serve — there is no checkout for it, so it starts with a conversation. On what actually exists rather than what is planned: single sign-on and SCIM directory provisioning are built and are provisioned by us for an organisation. A customer-facing audit-log export and per-organisation retention windows are NOT built, and we would rather say that here than let "Enterprise" imply the whole category. Contact sales to discuss requirements and timing.',
   },
   {
     q: 'Where do you host data?',
-    a: 'Hosted data lives in the United States. EU/UK residency hosting is on the roadmap, not available today. Local conversations never leave your device in the first place.',
+    a: 'Hosted data lives in the United States. We do not offer data residency in the EU, the UK or India, and we are not publishing a date for one — if residency is a requirement for you, we do not meet it today. Local conversations never leave your device in the first place, and BYOK requests go from your client straight to your provider.',
   },
 ];
 
@@ -89,12 +113,27 @@ export default function FaqPage() {
 
         <section className="agi-fl-section" aria-labelledby="agi-faq-qa-title">
           <p className="agi-fl-eyebrow">Q &amp; A</p>
+          {/*
+            The count is derived, not typed. It read "Ten questions" while the
+            list held sixteen — a hardcoded number next to a list is a claim
+            that goes stale the first time someone adds an entry, which is
+            exactly what happened.
+          */}
           <h2 id="agi-faq-qa-title" className="agi-fl-h2">
-            Ten questions, ten straight answers.
+            {QA.length} questions, {QA.length} straight answers.
           </h2>
           <p className="agi-fl-section-lede">
             Providers, trust modes, managed cloud, billing, and what happens to your data. The short
-            version of everything the rest of the site covers at length.
+            version of everything the rest of the site covers at length. For the data questions in
+            more depth there is a page of its own at{' '}
+            <Link href="/data-use" style={{ color: 'var(--agi-ink)' }}>
+              how we use your data
+            </Link>
+            , and the policy that governs them all is the{' '}
+            <Link href="/privacy" style={{ color: 'var(--agi-ink)' }}>
+              privacy policy
+            </Link>
+            .
           </p>
           <ul className="agi-reasons" style={{ marginTop: 40 }}>
             {QA.map((item) => (
