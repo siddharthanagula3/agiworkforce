@@ -26,6 +26,9 @@ const stripeMocks = vi.hoisted(() => ({
   upgradeToTeamPlan: vi.fn(),
   upgradePlanMidCycle: vi.fn(),
   previewUpgrade: vi.fn(),
+  // Resolves rather than rejecting: in production this navigates away, so a
+  // rejection would mean failure and the component would surface an error.
+  openBillingPortal: vi.fn(async () => {}),
 }));
 
 const routerMocks = vi.hoisted(() => ({
@@ -509,10 +512,15 @@ describe('PricingPage', () => {
     render(<PricingPage />);
 
     expect(screen.getByRole('button', { name: 'Current plan' })).toBeDisabled();
-    expect(screen.getByRole('link', { name: 'Manage billing' })).toHaveAttribute(
-      'href',
-      '/billing',
-    );
+
+    // Opens the Stripe portal rather than linking to /billing. The old href
+    // closed a loop with no exit — /billing redirects to /settings/billing,
+    // whose "Adjust plan" button is what sends the user to /pricing — so a
+    // subscriber could never reach a control that actually changes the plan.
+    const manageBilling = screen.getByRole('button', { name: 'Manage billing' });
+    expect(manageBilling).not.toHaveAttribute('href');
+    fireEvent.click(manageBilling);
+    await waitFor(() => expect(stripeMocks.openBillingPortal).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole('button', { name: 'basicCta' })).toBeNull();
     expect(screen.getByRole('button', { name: 'maxCta' })).toBeEnabled();
     await showMax15x();
@@ -538,7 +546,7 @@ describe('PricingPage', () => {
     // Team subscription into a personal one would strand the other seats. These
     // assertions belong on the individual tab, which is the default.
     await waitFor(() =>
-      expect(screen.getAllByRole('link', { name: 'Manage billing' }).length).toBeGreaterThan(0),
+      expect(screen.getAllByRole('button', { name: 'Manage billing' }).length).toBeGreaterThan(0),
     );
     expect(screen.queryByRole('button', { name: 'maxCta' })).toBeNull();
 

@@ -30,6 +30,7 @@ import {
   upgradeToMaxPlan,
   upgradeToMax15xPlan,
   upgradeToTeamPlan,
+  openBillingPortal,
 } from '@features/billing/services/stripe-payments';
 import {
   UpgradeConfirmDialog,
@@ -194,6 +195,7 @@ export default function PricingPage() {
   const [localizedPricing, setLocalizedPricing] = useState<LocalizedPricingCatalog | null>(null);
   const [pricingStatus, setPricingStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
+  const [portalPending, setPortalPending] = useState(false);
   const [upgradeConfirm, setUpgradeConfirm] = useState<UpgradeConfirmRequest | null>(null);
   // Team is billed per seat. Start at the contract minimum of two seats; the
   // buyer picks the real count and the total below updates from it.
@@ -359,6 +361,23 @@ export default function PricingPage() {
     return currentIndex < 0 || targetIndex < 0 || targetIndex < currentIndex ? 'lower' : 'upgrade';
   }
 
+  /**
+   * `openBillingPortal` navigates away on success, so reaching the catch means
+   * it failed. Surfacing it as a toast matters more here than elsewhere: this
+   * button is the ONLY exit from a plan the user wants to leave, and a silent
+   * failure would restore exactly the dead control it was added to remove.
+   */
+  async function openPortalFromPricing() {
+    if (portalPending) return;
+    setPortalPending(true);
+    try {
+      await openBillingPortal();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not open the billing portal.');
+      setPortalPending(false);
+    }
+  }
+
   function renderPlanAction(plan: CheckoutPlan, upgradeLabel: string) {
     if (!authInitialized) {
       return (
@@ -376,10 +395,26 @@ export default function PricingPage() {
       );
     }
     if (relationship === 'lower') {
+      // Opens the Stripe Customer Portal, which is the only surface that can
+      // actually perform a downgrade. This used to be `<Link href="/billing">`,
+      // and that closed a loop with no exit: /billing redirects to
+      // /settings/billing, which opens the Billing settings modal — the exact
+      // screen whose "Adjust plan" button sent the user to /pricing in the
+      // first place. A Max 15x subscriber who wanted Max 5x could go
+      // Settings → Adjust plan → Pricing → 5x → Manage billing → Settings,
+      // forever, and never reach a control that changes the plan.
+      //
+      // BillingSection hit the identical bug and was fixed the same way; this
+      // copy of it was missed. See the note on `openPortal` there.
       return (
-        <Link href="/billing" className="agi-tier-cta agi-tier-cta--ghost">
-          Manage billing
-        </Link>
+        <button
+          type="button"
+          className="agi-tier-cta agi-tier-cta--ghost"
+          disabled={portalPending}
+          onClick={() => void openPortalFromPricing()}
+        >
+          {portalPending ? 'Opening billing…' : 'Manage billing'}
+        </button>
       );
     }
     if (
