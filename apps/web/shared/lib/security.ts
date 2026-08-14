@@ -4,6 +4,7 @@
  */
 
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
+import { MAX_CHAT_ATTACHMENT_BYTES } from '@agiworkforce/cloud-contracts';
 
 // ========================================
 // XSS Protection and Data Sanitization
@@ -530,7 +531,11 @@ export class SecurityManager {
     errors: string[];
   } {
     const errors: string[] = [];
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    // HARD-006: was a private `10 * 1024 * 1024`, 2 MiB below the cap
+    // `/api/uploads/presign` actually enforces. A validator that rejects what
+    // the server accepts is worse than no validator: it reports a limit the
+    // product does not have.
+    const maxSize = MAX_CHAT_ATTACHMENT_BYTES;
     const allowedTypes = [
       'image/jpeg',
       'image/png',
