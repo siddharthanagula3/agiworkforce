@@ -3,7 +3,12 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { CapabilityGrid } from '@/features/marketing/components/FlagshipSections';
-import { DESKTOP_LOCAL_RUNTIMES, MARKETING } from '../../lib/marketing-constants';
+import {
+  BYOK_SURFACES,
+  DESKTOP_LOCAL_RUNTIMES,
+  MARKETING,
+  SURFACE_STATUS,
+} from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'Help',
@@ -52,7 +57,15 @@ export default function HelpPage() {
             {
               meta: 'BYOK',
               title: 'Add your API key',
-              body: 'Bring your own provider keys on Desktop, CLI, and VS Code. The local runtime owns and protects the key.',
+              // Was: 'Bring your own provider keys on Desktop, CLI, and VS Code.'
+              // Two problems. It hardcoded the surface list instead of reading
+              // BYOK_SURFACES, so it could not follow the constant; and it was
+              // the only BYOK statement on the site that dropped
+              // BYOK_SURFACES.exclusion — /byok and /faq both carry it. A reader
+              // on the WEB app, which cannot accept a key at all, was told to
+              // add one with no indication this surface is excluded. VS Code is
+              // also named without saying it has no published release yet.
+              body: `Bring your own provider keys on ${BYOK_SURFACES.label} — Desktop and the CLI have published releases; the VS Code extension is ${SURFACE_STATUS.vscode.toLowerCase()}. ${BYOK_SURFACES.exclusion} The key stays in the local runtime and requests go straight to your provider.`,
               href: '/byok',
             },
             {
