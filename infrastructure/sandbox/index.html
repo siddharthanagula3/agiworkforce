@@ -30,6 +30,14 @@
   only leaks what was already in the user's chat history (the data the
   model put into the artifact was already on screen).
 
+  `frame-src 'self'` (was 'none') exists for ONE reason: renderHtml() below
+  mounts the artifact document in a nested `<iframe srcdoc>` rather than
+  assigning it with innerHTML. A srcdoc frame navigates to `about:srcdoc`,
+  which browsers check against `frame-src` and match with `'self'`. It also
+  INHERITS this document's CSP, so every directive above still applies inside
+  the artifact — the trust boundary is unchanged. See renderHtml() for why the
+  innerHTML form could not render a real HTML document correctly.
+
   WEB-13 / WEB-20 / WEB-25 (audit 2026-05-19).
 -->
 <html lang="en">
@@ -48,7 +56,7 @@
         img-src 'self' data: blob: https:;
         font-src 'self' data: https:;
         connect-src 'none';
-        frame-src 'none';
+        frame-src 'self';
         base-uri 'none';
         form-action 'none';
         object-src 'none';
@@ -80,6 +88,26 @@
         height: 100%;
         color: #999;
         font-size: 13px;
+      }
+      /*
+        `el.hidden = true` sets the `hidden` ATTRIBUTE, whose UA rule is only
+        `[hidden] { display: none }` — a lower-specificity selector than the
+        `#idle` id rule above. Without this line showRoot() left the idle
+        placeholder painted at full height and pushed the rendered artifact
+        below the fold: the panel read "Waiting for artifact…" forever while
+        the real content sat one scroll down. Same for #root's `hidden`.
+      */
+      #idle[hidden],
+      #root[hidden] {
+        display: none;
+      }
+      /* The artifact frame fills the panel; the artifact document scrolls
+         inside it, exactly as it does when the file is opened from disk. */
+      #root > iframe.artifact-frame {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
       }
       #error {
         color: #c00;
@@ -180,7 +208,13 @@
         // Renderers — each takes the payload and writes into rootEl.
         // --------------------------------------------------------------
 
-        function renderHtml(payload) {
+        /**
+         * Inert form: drop the markup into this document and (optionally)
+         * re-create its <script> elements so they execute. Kept for the
+         * `runScripts: false` contract and as the fallback if a browser
+         * refuses the nested frame.
+         */
+        function renderHtmlInline(payload) {
           rootEl.innerHTML = String(payload.html || '');
           // Inline <script> tags in innerHTML do NOT execute. To run scripts
           // the artifact must use the `script-tag` form (rare). Treat that
@@ -195,6 +229,86 @@
               oldScript.parentNode.replaceChild(s, oldScript);
             });
           }
+        }
+
+        /**
+         * An HTML artifact is a DOCUMENT, so render it as one.
+         *
+         * The old path assigned the whole document string to `rootEl.innerHTML`.
+         * That is not a document load, and three things silently broke:
+         *   1. `<!doctype html>`, `<html>`, `<head>` and `<title>` are dropped
+         *      by the fragment parser; a CSP <meta> outside <head> is ignored.
+         *   2. `DOMContentLoaded` / `load` had ALREADY fired on this document,
+         *      so every artifact that wraps its init in
+         *      `document.addEventListener('DOMContentLoaded', …)` — which is
+         *      most model-authored pages — never initialised. Sections that
+         *      start at `opacity: 0` and are revealed by an IntersectionObserver
+         *      stayed invisible: a nav bar followed by a blank page, while the
+         *      same file opened from disk looked perfect.
+         *   3. `position: fixed` / viewport units resolved against the OUTER
+         *      document rather than the artifact's own viewport.
+         *
+         * A same-origin `srcdoc` frame is a real document load, so all three
+         * behave exactly as they do when the user downloads the file and opens
+         * it. The frame inherits this document's CSP (connect-src 'none', the
+         * script CDN allowlist, …), so the security envelope is unchanged.
+         */
+        function renderHtml(payload) {
+          if (payload.runScripts === false) {
+            renderHtmlInline(payload);
+            return;
+          }
+
+          const html = String(payload.html || '');
+          rootEl.innerHTML = '';
+
+          const frame = document.createElement('iframe');
+          frame.className = 'artifact-frame';
+          frame.setAttribute('title', 'Artifact preview');
+          // No `sandbox` attribute: the frame is same-origin with THIS
+          // renderer, which is already a dedicated origin cross-origin to the
+          // app. Adding `sandbox` without `allow-same-origin` would put the
+          // artifact on a null origin, where localStorage/sessionStorage access
+          // THROWS — breaking artifacts that legitimately persist state. The
+          // parent app is protected by the renderer's own origin, not by this.
+          frame.setAttribute('allow', 'fullscreen');
+          frame.setAttribute('referrerpolicy', 'no-referrer');
+
+          // If a browser refuses `about:srcdoc` under frame-src, fall back to
+          // the inline form rather than showing an empty panel. The violation
+          // event is the definitive signal; `load` fires either way.
+          let settled = false;
+          function onViolation(event) {
+            const directive = String(
+              (event && (event.effectiveDirective || event.violatedDirective)) || '',
+            );
+            if (settled || directive.indexOf('frame-src') !== 0) return;
+            settled = true;
+            document.removeEventListener('securitypolicyviolation', onViolation);
+            renderHtmlInline(payload);
+          }
+          document.addEventListener('securitypolicyviolation', onViolation);
+          frame.addEventListener('load', function () {
+            if (settled) return;
+            document.removeEventListener('securitypolicyviolation', onViolation);
+            settled = true;
+            // A frame blocked by CSP still fires `load` (for about:blank), so
+            // confirm the document actually received the artifact. The frame is
+            // same-origin, so this read always succeeds when it worked.
+            try {
+              const doc = frame.contentDocument;
+              const empty =
+                !doc ||
+                !doc.body ||
+                (doc.body.childElementCount === 0 && !(doc.body.textContent || '').trim());
+              if (empty && html.trim().length > 0) renderHtmlInline(payload);
+            } catch (e) {
+              renderHtmlInline(payload);
+            }
+          });
+
+          frame.srcdoc = html;
+          rootEl.appendChild(frame);
         }
 
         function renderReact(payload) {
