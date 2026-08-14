@@ -1,8 +1,8 @@
 # DPDP Act (India) compliance — audit and remediation log
 
 Status: In progress — **no legal copy on this branch has been reviewed by counsel**
-Branch: `compliance/dpdp` (not pushed)
-Last updated: 2026-08-13
+Branch: `compliance/dpdp` (not pushed). Migrations 0113-0116 ARE applied to production — see §7.1.
+Last updated: 2026-08-14
 Scope: Digital Personal Data Protection Act, 2023 and the DPDP Rules
 
 This file is the decision log for the DPDP work. It records what was built, what
@@ -75,16 +75,18 @@ database — and verified by running the guards in §7, not by a passing typeche
 
 ### 2.1 Durable per-purpose consent (DPDP s.6)
 
-| File                                                                            | What it is                                                                                                                                                                                                                                                                       |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/web/db/neon/0113_dpdp_consent_records.sql`                                | Append-only `consent_records` ledger. `user_id` nullable so a visitor with no account can consent; anonymous subjects keyed by `subject_email_sha256`. RLS forced. **Grants are `select, insert` only** — no UPDATE, so a withdrawal can never overwrite the grant it withdraws. |
-| `apps/web/lib/consent-purposes.ts`                                              | The purpose catalogue. Isomorphic, so the checkbox label a person reads and the key stored in the database come from one object and cannot drift.                                                                                                                                |
-| `apps/web/lib/server/consent-records.ts`                                        | `recordConsent` (INSERT only), `recordConsentBatch`, `readUserConsents`, `readUserConsentHistory`, `hasConsent` (fails closed).                                                                                                                                                  |
-| `apps/web/app/api/consent/route.ts`                                             | `GET` live state + catalogue; `POST` records grants **and withdrawals** by the same path at the same cost. 409s when the notice revision changed under a stale tab.                                                                                                              |
-| `apps/web/features/marketing/components/ConsentCheckboxes.tsx`                  | Per-purpose checkboxes, rendered unticked, with the notice link inside the same block. Exports `toConsentDecisions` (sends every purpose shown, ticked or not) and `missingRequiredConsents`.                                                                                    |
-| `apps/web/app/api/waitlist/public/route.ts`                                     | **Refuses to store an address** without an explicit decision for the purpose that makes storing it lawful. Writes consent _before_ the address.                                                                                                                                  |
-| `apps/web/features/marketing/components/{PublicWaitlistForm,WaitlistModal}.tsx` | Both intakes now carry the checkboxes; the modal clears its ticks on close so reopening re-asks.                                                                                                                                                                                 |
-| `apps/web/lib/services/waitlistServiceClient.ts`                                | Carries `consent` + `consentSurface`; surfaces the server's `CONSENT_REQUIRED` message verbatim (telling someone to "try again" is wrong advice when the fix is to tick a box).                                                                                                  |
+| File                                                                            | What it is                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/db/neon/0113_dpdp_consent_records.sql`                                | Append-only `consent_records` ledger. `user_id` nullable so a visitor with no account can consent; anonymous subjects keyed by `subject_email_sha256`. RLS forced. Its `grant select, insert` did **not** by itself make the table append-only — see §7.1 and `0116`. |
+| `apps/web/db/neon/0116_consent_ledger_append_only.sql`                          | What actually makes it append-only: `REVOKE update, delete` from `app_rls` on both tables, plus a `BEFORE UPDATE OR DELETE` trigger on `consent_records` that refuses any non-owner role so a future blanket re-grant cannot undo it. Proven behaviourally, §7.1.     |
+| `scripts/verify-dpdp-schema.mjs`                                                | Behavioural proof against a live database: RLS forced, grants, the trigger in both directions (including after a deliberate adversarial re-grant), the owner erasure path, every constraint, and the exact reads the app performs. 26 checks.                         |
+| `apps/web/lib/consent-purposes.ts`                                              | The purpose catalogue. Isomorphic, so the checkbox label a person reads and the key stored in the database come from one object and cannot drift.                                                                                                                     |
+| `apps/web/lib/server/consent-records.ts`                                        | `recordConsent` (INSERT only), `recordConsentBatch`, `readUserConsents`, `readUserConsentHistory`, `hasConsent` (fails closed).                                                                                                                                       |
+| `apps/web/app/api/consent/route.ts`                                             | `GET` live state + catalogue; `POST` records grants **and withdrawals** by the same path at the same cost. 409s when the notice revision changed under a stale tab.                                                                                                   |
+| `apps/web/features/marketing/components/ConsentCheckboxes.tsx`                  | Per-purpose checkboxes, rendered unticked, with the notice link inside the same block. Exports `toConsentDecisions` (sends every purpose shown, ticked or not) and `missingRequiredConsents`.                                                                         |
+| `apps/web/app/api/waitlist/public/route.ts`                                     | **Refuses to store an address** without an explicit decision for the purpose that makes storing it lawful. Writes consent _before_ the address.                                                                                                                       |
+| `apps/web/features/marketing/components/{PublicWaitlistForm,WaitlistModal}.tsx` | Both intakes now carry the checkboxes; the modal clears its ticks on close so reopening re-asks.                                                                                                                                                                      |
+| `apps/web/lib/services/waitlistServiceClient.ts`                                | Carries `consent` + `consentSurface`; surfaces the server's `CONSENT_REQUIRED` message verbatim (telling someone to "try again" is wrong advice when the fix is to tick a box).                                                                                       |
 
 ### 2.2 Notice, rights, and grievance redressal (ss.5, 11–14)
 
@@ -354,10 +356,50 @@ here; treat it as unverified until then._
 | `vitest run __tests__/api/waitlist-public.security.test.ts` | **passed — 34 tests**, 9 of them new consent-gate tests                                                                                  |
 | `vitest run db/neon/dpdp-consent-migration.test.ts`         | **passed — 11 tests**                                                                                                                    |
 
-**Not run:** the full monorepo suite, lint across all packages, and any migration
-against a live database. `0113` and `0114` have **never been applied** — they are
-guarded by text assertions only. Apply them to a branch database before trusting
-the RLS policies.
+**Not run:** the full monorepo suite, and lint across all packages.
+
+### 7.1 Applied to the database — and the defect that only a database found
+
+`0113`–`0116` are **applied to production** (Neon project `wispy-star-10666975`,
+branch `production`): **116 applied, 0 pending, 0 drift**. Sequence followed:
+
+1. Backup branch `backup-pre-0113-20260814` cut from production (repo convention).
+2. Throwaway branch `dpdp-migration-test-20260814` cut from production; all
+   pending migrations applied there and verified; branch since deleted.
+3. Production applied with `--target production --confirm-production`.
+4. `node scripts/verify-dpdp-schema.mjs` re-run **against production**: 26/26.
+5. Final production grants confirmed `{consent_records: [INSERT, SELECT],
+data_rights_requests: [INSERT, SELECT]}`, trigger present, zero test residue.
+
+Production was at 110 with **six** pending, not two: `0111_credit_top_up_carry`,
+`0112_mobile_native_iap` and `0115_mcp_oauth_discovery` (all from commit
+`310ca5667`, authored elsewhere) were also unapplied. The runner is ordinal and
+cannot skip, so shipping the DPDP migrations meant shipping those three. That was
+raised and **explicitly authorised** before production was touched.
+
+> **The append-only ledger was not append-only.** `0113` grants
+> `select, insert ... to app_rls` and was documented as append-only in the
+> migration, its down script, the migration test, this file, and the commit
+> message. That grant is **additive and prevents nothing**: `0037:83` sets
+> `ALTER DEFAULT PRIVILEGES ... GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES
+TO app_rls`, so both tables were born mutable. Measured on a real branch,
+> `app_rls` held `INSERT,SELECT,UPDATE,DELETE` on both.
+>
+> The text-matching migration test could not see this — it read the `.sql` file
+> and found the words, which were there. **`0116_consent_ledger_append_only.sql`
+> is the repair**: a `REVOKE` (the pattern `0043_audit_log_immutability.sql`
+> already used for `security_audit_logs`) plus a `BEFORE UPDATE OR DELETE`
+> trigger that refuses any non-owner role — because `0043` documents that a
+> REVOKE alone is **not** re-grant-proof, and the consent ledger's entire legal
+> value is that a withdrawal cannot overwrite the grant it withdraws.
+>
+> `scripts/verify-dpdp-schema.mjs` now proves it behaviourally, including the
+> adversarial case: it deliberately re-issues `grant update, delete` and shows
+> the trigger still refuses, while the owner path still deletes so account
+> erasure keeps working.
+
+**Lesson worth keeping:** a migration test that asserts the text of a `.sql` file
+proves the spelling, not the schema. Anything load-bearing needs a connection.
 
 ---
 
@@ -380,7 +422,7 @@ Ordered by exposure, not by effort.
 | **O-11** | **The privacy policy's "what we collect" table omits ~10 proven categories**: waitlist emails, feedback blobs, content reports (incl. a 500-char conversation excerpt), support-handoff transcripts, search history, memories, phone number, download IP hash + user-agent + referrer, SCIM directory identities, mobile push tokens.                                                                                                                           | `apps/web/app/privacy/page.tsx:153` — CONFIRMED                                                                                                                                                   |
 | **O-12** | **No nomination field (s.14)** — handled manually via the request form. Disclosed as unfinished on the notice page.                                                                                                                                                                                                                                                                                                                                             | §2.2                                                                                                                                                                                              |
 | **O-13** | **Retention has no maximum age** for waitlist emails, support tickets, billing rows, or `data_rights_requests`. Two cron routes exist but are **not registered in `vercel.json`**, so their lifecycle jobs never run.                                                                                                                                                                                                                                           | `vercel.json:13`, `apps/web/db/neon/0011_waitlist.sql:50`                                                                                                                                         |
-| **O-14** | Apply `0113`/`0114` to a branch database and verify the RLS policies behave (§7).                                                                                                                                                                                                                                                                                                                                                                               | —                                                                                                                                                                                                 |
+| **O-14** | ~~Apply `0113`/`0114` to a branch database and verify the RLS policies behave.~~ **DONE** — applied through production, 26/26 behavioural checks, and the verification found a real defect (see §7.1).                                                                                                                                                                                                                                                          | §7.1                                                                                                                                                                                              |
 | **O-15** | **Legal pages are hardcoded English JSX with no i18n**, while the product ships other locales. Blocks L-6 mechanically, not just commercially.                                                                                                                                                                                                                                                                                                                  | `apps/web/app/privacy/page.tsx:77`                                                                                                                                                                |
 | **O-16** | **Chrome extension**: injects a content script into every http/https page, requests `debugger` and `cookies` permissions, mirrors chat transcripts to the cloud with no opt-out, and exposes **no privacy notice anywhere in its UI**.                                                                                                                                                                                                                          | `apps/extension/manifest.json:22,37`, `.../cloud-bridge/conversationSync.ts:15`, `apps/extension/src/options.html:1`                                                                              |
 | **O-17** | **Mobile presents no privacy notice before or during onboarding**, its iOS privacy manifest declares only Email and Name (omitting user content and device identifiers), and it requests **Contacts** permission that no code reads.                                                                                                                                                                                                                            | `apps/mobile/app/(public)/onboarding.tsx:1`, `apps/mobile/app.config.js:162`, `.../deviceIntegrations.ts:104`                                                                                     |
@@ -397,5 +439,7 @@ Ordered by exposure, not by effort.
 - Desktop, mobile and the browser extension are **audited but unremediated**
   (O-3, O-4, O-16, O-17). Desktop account deletion deleting nothing is a
   confirmed critical defect that this branch does not touch.
-- The migrations have never been applied to a database.
+- The migrations ARE now applied through production (§7.1), but `0111`, `0112`
+  and `0115` rode along with them — those are other people's schema changes and
+  this branch did not review their contents beyond confirming they apply cleanly.
 - Nothing here has been pushed, per instruction.
