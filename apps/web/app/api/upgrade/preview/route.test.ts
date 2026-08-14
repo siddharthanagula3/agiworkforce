@@ -158,7 +158,12 @@ describe('POST /api/upgrade/preview', () => {
     expect(subscriptionDetails).toMatchObject({
       proration_behavior: 'always_invoice',
     });
-    expect(subscriptionDetails).not.toHaveProperty('billing_cycle_anchor');
+    // Must be stated, not omitted. This assertion previously required the
+    // property to be ABSENT, on the assumption that omitting it preserves the
+    // renewal anchor. `invoices.createPreview` actually defaults it to `now`,
+    // which Stripe then refuses to combine with `proration_date` — so every
+    // upgrade preview returned 500 in production while this test passed.
+    expect(subscriptionDetails).toMatchObject({ billing_cycle_anchor: 'unchanged' });
     expect(
       stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details?.proration_date,
     ).toEqual(expect.any(Number));

@@ -284,6 +284,20 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
         // starts a new full cycle and invoices the full target plan minus an
         // unused-time credit; that is materially more than the requested
         // remaining-period price difference.
+        //
+        // This MUST be stated explicitly. The intent above was previously left
+        // to the default, and `invoices.createPreview` defaults the anchor to
+        // `now` — which Stripe then refuses to combine with `proration_date`:
+        //
+        //   "You cannot specify `proration_date` when `billing_cycle_anchor=now`"
+        //
+        // Every upgrade preview therefore 500'd, so no user could reach the
+        // confirm step at all. `subscriptions.update` in the apply route
+        // defaults this to `unchanged`, so only the preview was affected — but
+        // that also meant preview and apply were describing different changes.
+        // Pinning it here makes the two agree, which is the premise the signed
+        // preview token relies on.
+        billing_cycle_anchor: 'unchanged',
         // Pin the calculation instant into the signed preview token. The apply
         // endpoint reuses this exact second so Stripe cannot charge a value
         // different from the amount the user confirmed.
