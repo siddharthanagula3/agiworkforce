@@ -16,6 +16,7 @@
     "check:expo-deps": "node scripts/check-expo-deps.mjs",
     "check:tls-pins": "EXPO_PUBLIC_APP_ENV=production node scripts/check-tls-pins.mjs",
     "release:preflight": "bash scripts/release/preflight.sh",
+    "release:asc-probe": "node scripts/release/asc-probe.mjs",
     "release:verify-associations": "node scripts/release/verify-production-associations.mjs",
     "release:verify-store-listings": "node scripts/release/verify-store-listings.mjs",
     "test:release-associations": "node --test scripts/release/verify-production-associations.test.mjs",
@@ -143,6 +144,7 @@
     "install": {
       "exclude": [
         "react",
+        "react-native",
         "typescript"
       ]
     },
