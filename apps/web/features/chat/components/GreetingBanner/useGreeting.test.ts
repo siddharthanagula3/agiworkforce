@@ -260,7 +260,13 @@ describe('useGreeting · name extraction', () => {
 
 describe('useGreeting · name length cap', () => {
   it('uses name when it is exactly 50 characters', () => {
-    const fiftyChars = 'A'.repeat(50);
+    // Mixed case on purpose. This case is about the LENGTH cap, and an
+    // all-caps fixture also trips the casing rule (an ALL-CAPS profile name is
+    // deliberately title-cased so the hero headline does not shout) — so
+    // `'A'.repeat(50)` asserted a normalisation the product does not do, and
+    // the test failed for a reason that had nothing to do with length.
+    const fiftyChars = `Aa${'b'.repeat(48)}`;
+    expect(fiftyChars).toHaveLength(50);
     const { result } = renderGreeting(10, 3, fiftyChars);
     expect(result.current.headline).toBe(`Good morning, ${fiftyChars}`);
   });

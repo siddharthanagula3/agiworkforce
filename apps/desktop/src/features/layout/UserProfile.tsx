@@ -12,6 +12,7 @@ import {
   User,
 } from 'lucide-react';
 import React, { useState } from 'react';
+import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { cn } from '../../lib/utils';
 import { useAccountStore, selectIsTierLoading, useAuthStore } from '../../stores/auth';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -36,7 +37,10 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
 
   const { displayName, email, planDisplayName } = account;
   const displayedPlanName = isTierLoading ? 'Loading...' : planDisplayName;
-  const name = displayName || email?.split('@')[0] || 'Account';
+  // Shared with web/mobile (@agiworkforce/utils/display-name): an identity
+  // provider that stores "SIDDHARTHA NAGULA" must not make the account menu
+  // shout it.
+  const name = resolveAccountDisplayName(displayName, email, 'Account');
 
   const initials = name
     .split(/[\s._-]+/)

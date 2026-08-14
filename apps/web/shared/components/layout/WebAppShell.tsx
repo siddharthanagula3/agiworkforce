@@ -55,6 +55,7 @@ import { SidebarWordmark } from '@shared/components/agi/SidebarWordmark';
 import { webManagedCloudProjects } from '@/features/projects/services/managed-cloud-projects';
 import { toast } from 'sonner';
 import { getBillingPlanPricing } from '@agiworkforce/types';
+import { accountInitial, resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { WorkspaceMenuItems } from '@/features/workspaces/components/WorkspaceMenuItems';
 
@@ -298,8 +299,12 @@ export function WebAppShell({ children }: WebAppShellProps) {
   );
 
   // ---- Account footer ----
-  const displayName = user?.name || user?.email?.split('@')[0] || 'User';
-  const userInitial = displayName.charAt(0).toUpperCase();
+  // Normalised through the shared helper: Clerk stores this profile as
+  // "SIDDHARTHA NAGULA", and the raw value rendered a shouting, truncated
+  // "SIDDHARTH…" in the sidebar while the greeting headline four inches away
+  // said "Siddhartha". One rule, one source, every surface.
+  const displayName = resolveAccountDisplayName(user?.name, user?.email);
+  const userInitial = accountInitial(displayName);
   const currentTier = subscription?.tier ?? 'free';
   // Capitalising the raw tier id rendered "Max_15x" for max_15x, which the
   // badge's `uppercase` class then showed as "MAX_15X". Use the catalog's own
