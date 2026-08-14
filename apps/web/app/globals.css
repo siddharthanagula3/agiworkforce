@@ -2580,6 +2580,21 @@
 [data-design='agi'] .agi-cta-ghost:hover {
   color: var(--agi-ink);
 }
+/* The class was written for links. The consent centre and the data-rights form
+   need the same affordance on a real <button> — withdrawing consent performs an
+   action, it does not navigate — so strip the default button chrome that would
+   otherwise render a grey box around link-styled text. */
+[data-design='agi'] button.agi-cta-ghost {
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+[data-design='agi'] button.agi-cta-ghost:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
 
 /* page hero (subroutes) — editorial-terminal voice, mirrors .agi-fl-hero */
 [data-design='agi'] .agi-page-hero {
