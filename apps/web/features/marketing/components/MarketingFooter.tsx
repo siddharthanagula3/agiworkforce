@@ -53,6 +53,7 @@ const COMPANY = [
   { href: '/faq', label: 'FAQ' },
   { href: '/support', label: 'Support' },
   { href: '/privacy', label: 'Privacy' },
+  { href: '/data-use', label: 'How we use your data' },
   { href: '/terms', label: 'Terms' },
   { href: '/acceptable-use', label: 'Acceptable use' },
   { href: '/agent-permissions', label: 'Agent permissions' },
