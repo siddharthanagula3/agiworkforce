@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Legal',
@@ -9,6 +10,29 @@ export const metadata = buildMetadata({
     'Index of legal documents: terms, privacy, DPA, SLA, subprocessors, refund policy, accessibility, and trust posture.',
   path: '/legal',
 });
+
+/**
+ * Revision date per document, keyed by route.
+ *
+ * Built from CANONICAL_POLICY_ROUTES and POLICY_LAST_UPDATED rather than typed
+ * here, so the index cannot claim a date the document itself does not print.
+ * A route with no entry renders an em dash instead of a guess — /mobile/legal
+ * and the EU-representative statement have their own dates in the same
+ * constant, and anything genuinely undated should look undated.
+ *
+ * Why an index needs dates at all: a reviewer's first question about a policy
+ * set is not what it says, it is whether it has been touched since the product
+ * changed. A stale date is itself a finding, and hiding it one click deeper
+ * does not make it less true.
+ */
+const REVISED: Readonly<Record<string, string>> = Object.fromEntries(
+  (Object.keys(CANONICAL_POLICY_ROUTES) as (keyof typeof CANONICAL_POLICY_ROUTES)[])
+    .filter((key) => key in POLICY_LAST_UPDATED)
+    .map((key) => [
+      CANONICAL_POLICY_ROUTES[key],
+      POLICY_LAST_UPDATED[key as keyof typeof POLICY_LAST_UPDATED],
+    ]),
+);
 
 const DOCS: { href: string; label: string; body: string }[] = [
   {
@@ -124,19 +148,34 @@ export default function LegalPage() {
         <section className="agi-section">
           <p className="agi-section-eyebrow">Documents</p>
           <table className="agi-ledger">
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>What it covers</th>
+                <th>Last revised</th>
+              </tr>
+            </thead>
             <tbody>
               {DOCS.map((d) => (
                 <tr key={d.href}>
-                  <td style={{ width: '28%' }}>
+                  <td style={{ width: '24%', verticalAlign: 'top' }}>
                     <Link href={d.href} style={{ color: 'var(--agi-ink)', fontWeight: 600 }}>
                       {d.label}
                     </Link>
                   </td>
-                  <td>{d.body}</td>
+                  <td style={{ verticalAlign: 'top' }}>{d.body}</td>
+                  <td style={{ width: '14%', color: 'var(--agi-ink-quiet)', verticalAlign: 'top' }}>
+                    {REVISED[d.href] ?? '—'}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
+            Dates come from the same constant each document prints at the top of itself, so this
+            column cannot claim a revision the document does not. Where a document carries no date
+            in that constant, this column shows a dash rather than a guess.
+          </p>
         </section>
         <MarketingFooter />
       </main>

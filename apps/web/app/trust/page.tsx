@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Trust',
@@ -26,7 +27,7 @@ export const metadata = buildMetadata({
  * Rule for editing: if you change a row, change its `asOf`. A stale date is a
  * defect, not cosmetics.
  */
-const LAST_REVIEWED = '14 August 2026';
+const LAST_REVIEWED = POLICY_LAST_UPDATED.trust;
 const NEXT_REVIEW = 'November 2026';
 
 /** Certification and regulatory posture. `artifact` says what would prove it. */
@@ -69,7 +70,7 @@ const COMPLIANCE: {
     status: 'Implemented',
     artifact:
       'Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 66 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66 — nothing checked it. A test now derives it from the code.',
-    asOf: '2026-08-05',
+    asOf: '2026-08-14',
   },
   {
     item: 'GDPR — Article 27 EU representative',
