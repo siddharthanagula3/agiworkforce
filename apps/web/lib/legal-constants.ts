@@ -113,12 +113,12 @@ export function contactMailto(subject?: string): string {
  */
 export const POLICY_LAST_UPDATED = {
   terms: '2026-08-11',
-  privacy: '2026-08-11',
+  privacy: '2026-08-14',
   acceptableUse: '2026-08-05',
   dpa: '2026-08-13',
-  cookies: '2026-08-05',
-  subprocessors: '2026-08-13',
-  security: '2026-08-11',
+  cookies: '2026-08-14',
+  subprocessors: '2026-08-14',
+  security: '2026-08-14',
   sla: '2026-08-05',
   refunds: '2026-08-13',
   accessibility: '2026-08-05',
