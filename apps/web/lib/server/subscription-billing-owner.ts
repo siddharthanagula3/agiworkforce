@@ -1,13 +1,20 @@
 import 'server-only';
 
 import type { MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
-import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 
 export type SubscriptionBillingSource = MeSubscriptionSource | 'unverified';
 
 interface SubscriptionBillingOwnerRow {
   plan_tier: string;
   status: string;
+  /**
+   * Present on any row Stripe has ever billed, and written at checkout — well
+   * before `checkout.session.completed` delivers the subscription id. It is what
+   * separates "Stripe bills this, we just have not recorded which subscription
+   * yet" from "an administrator provisioned this outside Stripe".
+   */
+  stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   apple_original_transaction_id?: string | null;
   google_purchase_token?: string | null;
@@ -64,6 +71,24 @@ export function resolveSubscriptionBillingSource(
   if (hasAppleId) return 'apple';
   if (hasGoogleId) return 'google';
   if ((subscription.plan_tier || '').trim().toLowerCase() === 'free') return 'none';
+
+  // A paid row with a Stripe CUSTOMER but no subscription id is Stripe-billed
+  // with the id not yet recorded — a delayed `checkout.session.completed`, or a
+  // legacy row written before the column existed. Falling through to 'manual'
+  // here told those users "this subscription is managed by your organization"
+  // and refused the upgrade with a 409, which is both false and unactionable.
+  //
+  // It also made the recovery in `resolveStripeSubscriptionForUpgrade`
+  // unreachable: that function exists precisely to find the live subscription
+  // by customer id, and the ownership gate rejected the request before it could
+  // run. Classifying as 'stripe' lets the recovery do its job; when it finds no
+  // owned live subscription the route still refuses, with the honest
+  // `checkout_required` instead of an invented org policy.
+  //
+  // No authorization is widened by this: the recovery independently verifies
+  // that the subscription belongs to this customer AND carries this user's id.
+  if (isStripeCustomerId(subscription.stripe_customer_id)) return 'stripe';
+
   return 'manual';
 }
 
