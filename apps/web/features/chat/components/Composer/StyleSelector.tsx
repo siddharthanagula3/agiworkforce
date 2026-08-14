@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
+import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import {
   useStyleStore,
   RESPONSE_LENGTH_OPTIONS,
@@ -53,14 +54,18 @@ export function StyleSelector() {
   const [showCreateForm, setShowCreateForm] = React.useState(false);
   const [form, setForm] = React.useState<CreateFormState>(EMPTY_FORM);
   const ref = React.useRef<HTMLDivElement>(null);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
+  // The panel is portaled to document.body (AnchoredComposerMenu), so it is not
+  // inside `ref` any more — "outside" has to mean outside BOTH.
+  const panelRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-        setShowCreateForm(false);
-        setForm(EMPTY_FORM);
-      }
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
+      setShowCreateForm(false);
+      setForm(EMPTY_FORM);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -126,6 +131,7 @@ export function StyleSelector() {
   return (
     <div className="relative" ref={ref}>
       <button
+        ref={triggerRef}
         onClick={() => setOpen(!open)}
         className={cn(
           'flex h-8 items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-all',
@@ -140,8 +146,19 @@ export function StyleSelector() {
         <span className="hidden sm:inline">{style === 'default' ? 'Style' : activeLabel}</span>
       </button>
 
-      {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 w-72 rounded-xl border border-border/60 bg-popover/95 p-2 shadow-xl backdrop-blur-xl">
+      {/* Portaled + viewport-clamped: as an `absolute bottom-full` panel this
+          468px menu opened at y=-64 on the empty-chat screen (the composer is
+          centred INSIDE the shell's overflow-hidden column there), which put
+          "Default" and "Concise" outside the clip rect and made them
+          unclickable. See AnchoredComposerMenu. */}
+      <AnchoredComposerMenu
+        anchorRef={triggerRef}
+        open={open}
+        align="start"
+        contentRef={panelRef}
+        className="w-72 p-2"
+      >
+        <div>
           {/* Preset styles */}
           <div className="mb-1.5 px-2 py-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
             Response Style
@@ -312,7 +329,7 @@ export function StyleSelector() {
             </div>
           )}
         </div>
-      )}
+      </AnchoredComposerMenu>
     </div>
   );
 }
