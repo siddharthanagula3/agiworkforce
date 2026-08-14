@@ -3,15 +3,20 @@
 /**
  * ThinkingBlock – Collapsible reasoning / thinking display
  *
+ * Presentation: a bare ACTIVITY LINE, not a card. It is the same affordance as
+ * the tool timeline's "Searched the web ›" row (ToolTimeline.tsx) — one line of
+ * muted text with a right-pointing chevron that rotates when opened — so a turn
+ * that interleaves reasoning and tool steps reads as one continuous list
+ * instead of alternating filled grey slabs with plain rows. The reasoning text
+ * lives behind the disclosure, on an indented rail.
+ *
  * Features:
  * - Live elapsed-second timer while the model is thinking
- * - "Thinking..." animated label while streaming, "Thought for Xs" when done
- * - Brain icon (pulses while active, static when complete)
+ * - Derived verb phrase while streaming, "Thought for Xs" when done
  * - Collapsible content with CSS max-height transition
  * - Auto-scroll to bottom as thinking text streams in
- * - Single-line preview when collapsed
  * - Full ARIA attributes for accessibility
- * - prefers-reduced-motion: disables pulse + height transition
+ * - prefers-reduced-motion: disables the blinking cursor + height transition
  *
  * Props:
  *   content              – raw thinking text (may contain newlines)
@@ -23,7 +28,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Clock, ChevronDown } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/utils/reasoning';
 
@@ -131,73 +136,47 @@ export function ThinkingBlock({
 
   const durationLabel = formatThinkingDuration(resolvedDuration);
 
-  // ── Preview line (collapsed state) ────────────────────────────────────────
-  const previewLine =
-    content
-      .split('\n')
-      .find((line) => line.trim().length > 0)
-      ?.trim() ?? '';
-  const previewText = previewLine.length > 80 ? previewLine.slice(0, 77) + '…' : previewLine;
-
   // ── Computed label ────────────────────────────────────────────────────────
   // While streaming: derive a live verb phrase from the reasoning content so the
   // header reads e.g. "Analyzing • 4s" instead of the static "Thinking... 4s".
   // The phrase updates every render as new thinking tokens arrive.
+  //
+  // A completed block whose duration resolves to 0 has no timing to report —
+  // the provider sent no duration and no start/complete timestamps (segment
+  // paths often don't). Printing "Thought for 0s" under a long chain of
+  // reasoning states a measurement that was never taken; the plain label is the
+  // honest form.
   const headerLabel = isStreaming
     ? `${deriveReasoningPhrase(content)} • ${durationLabel}`
-    : `Thought for ${durationLabel}`;
+    : resolvedDuration > 0
+      ? `Thought for ${durationLabel}`
+      : 'Thought process';
 
   // Don't render an empty completed block (edge case: <thinking></thinking>)
   if (!isStreaming && (!content || content.trim().length === 0)) {
     return null;
   }
 
+  const headerId = `thinking-header-${content.slice(0, 8).replace(/\s/g, '')}`;
+
   return (
-    <div
-      /**
-       * Theme tokens, not fixed zinc/slate values.
-       *
-       * The block previously painted `bg-zinc-950/*` in BOTH themes and drew
-       * its text in `slate-400`. In dark mode that reads correctly; in light
-       * mode it produced a dark slab of low-contrast grey text on the light
-       * page — the reasoning body was effectively unreadable. `--chat-glass`
-       * and `--chat-border-subtle` already flip per theme, and the text now
-       * uses `muted-foreground`, which is contrast-checked in both.
-       */
-      className={cn(
-        'overflow-hidden rounded-lg border border-[var(--chat-border-subtle)]',
-        isStreaming ? 'bg-[var(--chat-glass)]' : 'bg-[var(--chat-glass)]/70',
-      )}
-    >
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
+    <div>
+      {/* ── Status line ─────────────────────────────────────────────────────────
+          No card, no fill, no border: one muted line that matches the tool
+          timeline's "Searched the web ›" row. The block used to paint a filled
+          `--chat-glass` slab with a small-caps "REASONING" chip and an inline
+          italic preview of the raw chain-of-thought, which dominated the turn
+          and made every reasoning step louder than the answer under it. */}
       <button
         type="button"
-        id={`thinking-header-${content.slice(0, 8).replace(/\s/g, '')}`}
+        id={headerId}
         onClick={handleToggle}
         aria-expanded={expanded}
-        aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning block`}
-        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[var(--chat-surface-hover)] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        aria-label={`${expanded ? 'Collapse' : 'Expand'} reasoning`}
+        className="w-full flex items-center gap-2 py-0.5 text-sm text-left text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-sm"
       >
-        {/* Clock icon · pulses while streaming (unless reduced-motion) */}
-        <Clock
-          className={cn(
-            'w-3.5 h-3.5 shrink-0 text-muted-foreground',
-            isStreaming && !reducedMotion && 'animate-pulse',
-          )}
-          aria-hidden="true"
-        />
-
-        {/* "Reasoning" small-caps label */}
-        <span className="text-[10px] tracking-widest text-muted-foreground [font-variant:small-caps]">
-          Reasoning
-        </span>
-
-        {/* Duration / status label */}
         <span
-          className={cn(
-            'text-xs tabular-nums',
-            isStreaming ? 'text-foreground/80' : 'text-muted-foreground',
-          )}
+          className={cn('flex-1 min-w-0 truncate', isStreaming && 'text-primary')}
           // aria-live polite so screen readers pick up changes but not every second
           aria-live="polite"
           aria-atomic="true"
@@ -205,30 +184,24 @@ export function ThinkingBlock({
           {headerLabel}
         </span>
 
-        {/* Collapsed preview · hidden on mobile (sm:) */}
-        {!expanded && previewText && (
-          <span className="hidden sm:block flex-1 min-w-0 truncate text-xs italic font-mono text-muted-foreground">
-            {previewText}
-          </span>
-        )}
-
-        <span className="flex-1" aria-hidden="true" />
-
-        {/* Animated chevron */}
-        <ChevronDown
+        {/* Chevron at the right end of the line · points right when collapsed,
+            down when open (same direction/rotation as ToolTimeline's header). */}
+        <ChevronRight
           className={cn(
-            'w-3.5 h-3.5 shrink-0 text-muted-foreground',
+            'w-3.5 h-3.5 shrink-0',
             !reducedMotion && 'transition-transform duration-200',
-            expanded && 'rotate-180',
+            expanded && 'rotate-90',
           )}
           aria-hidden="true"
         />
       </button>
 
-      {/* ── Collapsible body ────────────────────────────────────────────────── */}
+      {/* ── Collapsible body ─────────────────────────────────────────────────
+          Indented behind a hairline rail rather than a boxed panel, so the
+          reasoning reads as a detail of the line above it. */}
       <div
         role="region"
-        aria-labelledby={`thinking-header-${content.slice(0, 8).replace(/\s/g, '')}`}
+        aria-labelledby={headerId}
         className={cn(!reducedMotion && 'transition-all ease-in-out')}
         style={
           reducedMotion
@@ -243,25 +216,23 @@ export function ThinkingBlock({
               }
         }
       >
-        <div className="border-t border-[var(--chat-border-subtle)]">
-          <div
-            ref={bodyRef}
-            className="max-h-96 overflow-y-auto px-4 py-3 [scrollbar-width:thin] [scrollbar-color:var(--chat-border-strong)_transparent]"
-          >
-            <p className="text-xs text-muted-foreground font-mono italic leading-relaxed whitespace-pre-wrap">
-              {content}
-              {/* Blinking cursor while streaming (disabled with reduced-motion) */}
-              {isStreaming && (
-                <span
-                  className={cn(
-                    'inline-block w-1.5 h-3 bg-muted-foreground/60 ml-0.5 align-middle',
-                    !reducedMotion && 'animate-pulse',
-                  )}
-                  aria-hidden="true"
-                />
-              )}
-            </p>
-          </div>
+        <div
+          ref={bodyRef}
+          className="mt-1 mb-1 ml-1 max-h-96 overflow-y-auto border-l border-border/40 pl-3 [scrollbar-width:thin] [scrollbar-color:var(--chat-border-strong)_transparent]"
+        >
+          <p className="text-[13px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+            {content}
+            {/* Blinking cursor while streaming (disabled with reduced-motion) */}
+            {isStreaming && (
+              <span
+                className={cn(
+                  'inline-block w-1.5 h-3 bg-muted-foreground/60 ml-0.5 align-middle',
+                  !reducedMotion && 'animate-pulse',
+                )}
+                aria-hidden="true"
+              />
+            )}
+          </p>
         </div>
       </div>
     </div>
