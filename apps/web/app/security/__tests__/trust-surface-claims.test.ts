@@ -181,3 +181,31 @@ describe('trust surface — managed cloud maturity is stated', () => {
     });
   }
 });
+
+describe('trust surface — the erasure figure is derived, not remembered', () => {
+  /**
+   * /security and /trust both publish a count of the tables account erasure
+   * walks. Both said 34 while `USER_SCOPED_TABLES` had grown to 66 — a figure
+   * nothing checked, so every migration that added a user-scoped table widened
+   * the gap in silence. That is the exact shape of claim this whole test file
+   * exists to catch, and it had no guard.
+   *
+   * The number is read out of the constant rather than written here, so this
+   * assertion cannot itself go stale: add a table, and the pages must be
+   * updated in the same change or the build fails.
+   */
+  it('publishes the real USER_SCOPED_TABLES length on /security and /trust', async () => {
+    const { USER_SCOPED_TABLES } = await import('@/lib/server/account-erasure');
+    const count = USER_SCOPED_TABLES.length;
+
+    expect(count).toBeGreaterThan(0);
+
+    for (const page of ['security', 'trust'] as PageName[]) {
+      const source = read(page);
+      expect(
+        source,
+        `/${page} must state the real erasure table count (${count}). Update the copy in the same change as the constant.`,
+      ).toContain(`${count} user-scoped tables`);
+    }
+  });
+});

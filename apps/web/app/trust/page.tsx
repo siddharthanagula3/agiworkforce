@@ -68,7 +68,7 @@ const COMPLIANCE: {
     item: 'GDPR — data subject rights',
     status: 'Implemented',
     artifact:
-      'Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 34 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy.',
+      'Self-service export returns your account data as a JSON download, and account deletion runs an enumerated erasure across 66 user-scoped tables plus stored objects, on a daily scheduled job. Mechanism is documented on /security; the deletion window is stated in the privacy policy. The figure read 34 until 14 August 2026, while the list had grown to 66 — nothing checked it. A test now derives it from the code.',
     asOf: '2026-08-05',
   },
   {

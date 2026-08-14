@@ -356,13 +356,13 @@ export default function DpaPage() {
             <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
               /changelog
             </Link>
-            , which is the notice mechanism AGI can actually operate today &mdash; there is no
-            transactional email system in the product, so this DPA does not promise emailed notice.
-            The Customer may subscribe to the changelog feed to receive changes. A Customer may
-            object to a new sub-processor on reasonable data protection grounds by writing to{' '}
-            {CONTACT_EMAIL} within 30 days of publication; if AGI cannot offer a reasonable
-            alternative, the Customer may terminate the affected subscription and receive a pro-rata
-            refund of prepaid fees for the unused term.
+            , which is the notice mechanism AGI can actually operate today &mdash; no mailing path
+            in the product can reach an arbitrary list of customers, so this DPA does not promise
+            emailed notice. The Customer may subscribe to the changelog feed to receive changes. A
+            Customer may object to a new sub-processor on reasonable data protection grounds by
+            writing to {CONTACT_EMAIL} within 30 days of publication; if AGI cannot offer a
+            reasonable alternative, the Customer may terminate the affected subscription and receive
+            a pro-rata refund of prepaid fees for the unused term.
           </p>
         </section>
 
@@ -490,7 +490,7 @@ export default function DpaPage() {
             schedules erasure 24 hours later. A daily job then erases user-scoped records and the
             stored objects belonging to that account and deletes the identity at the authentication
             provider. Two limits are stated plainly because the product has them: no confirmation
-            email is sent, since there is no transactional email system in the product; and there is
+            email is sent, because the product has no account-lifecycle mailing path; and there is
             no self-serve cancellation of a scheduled deletion, so a user who changes their mind
             within the 24-hour window must reach support.
           </p>
