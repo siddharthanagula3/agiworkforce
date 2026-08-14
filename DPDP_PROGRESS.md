@@ -446,6 +446,66 @@ both. Writing a compliance page is not exempt from the rule the page enforces.
 
 ---
 
+## 7.3 Third pass — the rest of the policy surface (14 August)
+
+Six domains audited: FAQ + help, AUP + agent-permissions, SLA + refunds +
+accessibility, mobile legal + store listings, DPA + /legal index, and
+cross-cutting structure.
+
+**Read this before using the findings below.** The audit agents completed; the
+**verifier agents failed on API 529s on both the first run and the resume**. Two
+earlier passes showed verification cuts roughly half of all proposals as stale or
+simply wrong, so an unverified finding here is a QUESTION, not a defect. Every
+item acted on in this pass was verified BY HAND against source. Everything else is
+left in the queue below, unverified, deliberately.
+
+### Verified by hand and fixed
+
+| Was published                                                                                              | What the code says                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/mobile/legal`: a row declaring **HealthKit** collection — step count, sleep, activity summary            | HealthKit was removed from the app in `93ca123df`, and `apps/mobile/__tests__/ios-store-submission-config.test.ts:60-63` asserts the iOS privacy manifest carries **no** HealthKit claim. The page declared collection of health data the app cannot collect and holds no entitlement for — the worst direction to be wrong in on a sensitive category, and contradicted by the app's own test.         |
+| `/mobile/legal`: rows naming a **crash-monitoring provider** and an **analytics provider**                 | `apps/mobile/package.json` declares neither. A telemetry queue exists at `apps/mobile/storage/telemetry.ts`, but nothing calls `enqueueTelemetryEvent` and nothing sends it, so no event is produced and none leaves the device. These are app-store declarations, which the stores enforce.                                                                                                            |
+| FAQ: `custom OpenAI-compatible endpoints` listed as a provider capability                                  | `apps/web/app/partners/page.tsx:60-64` records the exact decision this violates, in terms: there is no generic provider variant and no setting that points AGI at an arbitrary endpoint. The one real path is CLI-only, from its own config file, https-or-loopback.                                                                                                                                    |
+| FAQ training answer: stopped at "does not train AGI-owned models" and appended `POSITIONING.trustBoundary` | `legal-policy-set.test.ts:204-214` requires `/privacy` and `/terms` to carry all four of "AGI-owned models", "applicable terms and data-use policies", "not a promise" and "OpenRouter" — precisely so a no-training sentence is never read as covering the third parties that receive the content. The FAQ carried one. What it appended is a plan-capacity blurb that answers nothing about training. |
+| `/help` BYOK card: "Desktop, CLI, and VS Code", hardcoded                                                  | Dropped `BYOK_SURFACES.exclusion`, which `/byok` and `/faq` both carry — so a reader on the **web** app, which cannot accept a provider key at all, was told to "add your API key" with nothing saying this surface is excluded. Also named VS Code without saying `SURFACE_STATUS.vscode` is coming-soon with zero published release tags.                                                             |
+| FAQ: EU/UK residency "on the roadmap"; Enterprise "SSO… planned"                                           | Nothing backs a roadmap. And "planned" _understated_ two of three: SSO and SCIM directory provisioning are genuinely built (migrations 0083/0084/0092, `lib/server/scim`, admin routes). Audit-log export and per-org retention really are absent.                                                                                                                                                      |
+
+**One finding the evidence refuted.** The audit called the `/accessibility`
+contrast, focus and screen-reader rows unsupported. `apps/web/reports/a11y-report.json`
+reports **zero violations** against `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa` —
+the claims are backed. What was actually wrong is their _breadth_: the scan covers
+five routes in two colour schemes and the rows read site-wide, while the Keyboard
+row on the same page already modelled the honest version. The rows are now scoped
+and the evidence and its limits are published. Cutting them would have been the
+wrong fix.
+
+### Queue — audited, NOT verified, do not act on without checking
+
+Each needs the same treatment: open the cited file, open the code that would have
+to back it, and decide. Highest value first.
+
+| #    | Question to answer                                                                                                                                                                                                                                                                                                                  | Cited at                                       |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| Q-1  | Does the product actually default every connector and MCP tool to requiring approval? A hand-trace was started and did not conclude — the verdict logic is not where the AUP copy implies. **A published enforcement claim the product does not enforce is the cardinal defect in this repo**, so this one is worth doing properly. | `acceptable-use/page.tsx:32`                   |
+| Q-2  | Is a Block absolute, and does it really not hide the tool from the model's list?                                                                                                                                                                                                                                                    | `agent-permissions/page.tsx:274`               |
+| Q-3  | Does a saved "ask" verdict really outrank automatic mode?                                                                                                                                                                                                                                                                           | `agent-permissions/page.tsx:164`               |
+| Q-4  | Can per-tool permissions really be set from the conversation approval card on web today?                                                                                                                                                                                                                                            | `agent-permissions/page.tsx:463`               |
+| Q-5  | Is the Desktop OAuth scope table complete (it lists only Gmail, Google Calendar, Outlook Calendar)?                                                                                                                                                                                                                                 | `agent-permissions/page.tsx:408`               |
+| Q-6  | Are the published rate limits (60 conversation ops/min) the ones the code enforces?                                                                                                                                                                                                                                                 | `acceptable-use/page.tsx:59`                   |
+| Q-7  | Does the sandbox description match `lib/e2b/gate.ts`, given execution is operator-gated and off by default?                                                                                                                                                                                                                         | `acceptable-use/page.tsx:187`                  |
+| Q-8  | Does the Chrome extension debugger claim match `apps/extension` permissions?                                                                                                                                                                                                                                                        | `acceptable-use/page.tsx:176`                  |
+| Q-9  | Do the SLA first-response targets (Free 48h … Enterprise) have any mechanism behind them, and does `/refund-policy` correctly point at them?                                                                                                                                                                                        | `sla/page.tsx:48`, `refund-policy/page.tsx:96` |
+| Q-10 | Does "cancellation stops the next renewal and access continues through the paid period" match the Stripe webhook handlers?                                                                                                                                                                                                          | `refund-policy/page.tsx:37`                    |
+| Q-11 | Does `/mobile/legal` correctly describe local conversation deletion on uninstall, the Art. 50(1) in-app disclosure, and the export marker?                                                                                                                                                                                          | `mobile/legal/page.tsx:238,241,258`            |
+| Q-12 | Does the mobile children's statement survive contact with the self-declared age gate?                                                                                                                                                                                                                                               | `mobile/legal/page.tsx:275`                    |
+| Q-13 | Does the DPA need a DPDP annex, and should "Applicable Data Protection Law" name the DPDP Act?                                                                                                                                                                                                                                      | `dpa/page.tsx:209`                             |
+
+**Re-running the verifiers is the cheap way to clear this queue** — the audit
+agents replay from cache, so only the six verify calls re-run:
+`Workflow({scriptPath: '…/legal-surface-to-global-standard-wf_964d1caf-983.js', resumeFromRunId: 'wf_964d1caf-983'})`.
+
+---
+
 ## 8. Open items
 
 Ordered by exposure, not by effort.
