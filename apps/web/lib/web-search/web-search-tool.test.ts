@@ -18,6 +18,7 @@ import {
   formatWebSearchResultForModel,
   webSearchResultsToFetchedSources,
   WEB_SEARCH_TOOL,
+  WEB_SEARCH_MAX_RESULTS,
   type WebSearchOutcome,
 } from './web-search-tool';
 
@@ -148,7 +149,7 @@ describe('executeWebSearch — happy path', () => {
       | undefined;
     expect(call).toBeDefined();
     const body = JSON.parse(call![1].body as string);
-    expect(body).toEqual({ query: 'agi workforce', max_results: 8 });
+    expect(body).toEqual({ query: 'agi workforce', max_results: WEB_SEARCH_MAX_RESULTS });
   });
 
   it('salvages valid entries and drops malformed ones (missing url)', async () => {

@@ -40,12 +40,42 @@ const PERPLEXITY_SEARCH_URL = 'https://api.perplexity.ai/search';
 
 /** Total wall-clock budget for the search request. */
 export const WEB_SEARCH_TIMEOUT_MS = 15_000;
-/** Results requested from Perplexity and returned to the model — capped well
- * under Perplexity's max of 20 to bound tool-result token cost. */
-export const WEB_SEARCH_MAX_RESULTS = 8;
+/**
+ * Results requested from Perplexity and returned to the model for ONE call —
+ * capped well under Perplexity's max of 20 to bound tool-result token cost.
+ *
+ * 10 is the answer-shaped size: enough independent sources to cross-check a
+ * claim in a single pass, few enough that the citation list under a normal chat
+ * answer stays readable. A question that needs more breadth gets it by issuing
+ * ANOTHER search (see {@link WEB_SEARCH_MAX_CALLS_PER_TURN}), not by widening
+ * one call — that is what keeps a two-line question from returning a
+ * research-report's worth of links.
+ */
+export const WEB_SEARCH_MAX_RESULTS = 10;
 /** Free-plan result cap. Keeps one useful lookup affordable while still giving
  * the model enough independent sources to compare claims. */
 export const WEB_SEARCH_FREE_MAX_RESULTS = 5;
+/**
+ * Web searches one ordinary chat turn may run.
+ *
+ * A normal question is not a research run: it deserves a first search, and one
+ * or two follow-ups when the first pass genuinely did not answer it. Without a
+ * ceiling the loop would keep searching for as many steps as it has
+ * (`DEFAULT_CHAT_MAX_STEPS`), which is how a single question ended up citing
+ * dozens of sources. This matches the `max_uses: 3` already pinned on
+ * Anthropic's native search tool for non-research turns
+ * (`appendWebSearchTool` in request-processor.ts), so the platform tool and the
+ * provider-native tool spend the same budget.
+ *
+ * Deep Research is deliberately NOT bounded by this: it runs its own loop
+ * (research-loop.ts) with its own, much larger search budget.
+ */
+export const WEB_SEARCH_MAX_CALLS_PER_TURN = 3;
+/**
+ * AGI Work turns are long-running agentic jobs, not one question, so they get a
+ * larger — but still finite — search budget.
+ */
+export const WEB_SEARCH_MAX_CALLS_PER_AGI_WORK_TURN = 10;
 /** Maximum accepted query length. */
 const MAX_QUERY_LENGTH = 400;
 /** Per-result snippet cap (chars) before it is fed back to the model — bounds
@@ -65,8 +95,11 @@ export function webSearchToolDef(): {
       description:
         'Search the web for current information. Use for recent events, facts you are ' +
         'not confident about, or anything that may have changed since your training data. ' +
-        'Returns a list of web results with titles, URLs, and snippets — follow up with ' +
-        'url_fetch on a specific result if you need the full page content.',
+        `Returns up to ${WEB_SEARCH_MAX_RESULTS} web results with titles, URLs, and snippets — ` +
+        'follow up with url_fetch on a specific result if you need the full page content. ' +
+        'Search ONCE first and read the results; only search again if that pass genuinely ' +
+        'did not answer the question, and then with a different, more specific query. ' +
+        'Do not fan out multiple searches for one ordinary question.',
       parameters: {
         type: 'object',
         properties: {
@@ -269,6 +302,23 @@ export function formatWebSearchResultForModel(outcome: WebSearchOutcome): string
     '<untrusted_web_results>\n' +
     `${lines.join('\n\n')}\n` +
     '</untrusted_web_results>'
+  );
+}
+
+/**
+ * Tool-result content returned INSTEAD of running a search once the turn's
+ * search budget is spent.
+ *
+ * Deliberately not an error: an exhausted budget is a normal, expected state
+ * the model should absorb and answer around, not a failure it should retry or
+ * report. It states the limit plainly so the model stops re-issuing searches
+ * and writes the answer from what it already read.
+ */
+export function webSearchBudgetExhaustedMessage(limit: number): string {
+  return (
+    `Search budget reached: this turn has already run its ${limit} allowed web ` +
+    'searches. No further searches will run. Answer now using the results you ' +
+    'already have, and say plainly which parts you could not confirm.'
   );
 }
 
