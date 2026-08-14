@@ -17,6 +17,7 @@ import {
   useChatSettingsStore,
   useChatStore as useSharedChatStore,
 } from '@agiworkforce/unified-chat';
+import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { registerChatStoreStateReader } from './stores/chat/chatStoreRef';
 import { useUnifiedAuthStore } from './stores/auth';
 import { isElectronHost, isTauri, invoke, listen } from './lib/tauri-mock';
@@ -1057,7 +1058,7 @@ const DesktopShell = () => {
           if (!user) return;
 
           useChatSettingsStore.getState().updateProfile({
-            fullName: user.name || user.email?.split('@')[0] || 'User',
+            fullName: resolveAccountDisplayName(user.name, user.email),
             email: user.email || '',
             plan: billingState.getCurrentPlan?.() || 'free',
           });
