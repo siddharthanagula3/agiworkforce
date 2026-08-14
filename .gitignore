@@ -126,6 +126,10 @@ $RECYCLE.BIN/
 .env.production.local
 .env.production
 .env.*.local
+# Timestamped backups written before an env rewrite (.env.local.bak-<stamp>).
+# None of the patterns above match a suffix AFTER `.local`, so these were
+# committable — a backup of a secret file is still a secret file.
+.env*.bak*
 !.env.example
 !.env.local.example
 
