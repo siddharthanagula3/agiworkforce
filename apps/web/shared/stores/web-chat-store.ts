@@ -289,7 +289,7 @@ export interface MessageMetadata {
     requiredTier: string;
     reason?: string;
     /** Recovery implied by the server code; legacy slots default to upgrade. */
-    recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
+    recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage' | 'top_up';
     /**
      * GOV-20 — presentation flags from `classifyManagedQuotaErrorCode`, so a
      * PAID ceiling (rolling window, billing period, rate limit) renders the

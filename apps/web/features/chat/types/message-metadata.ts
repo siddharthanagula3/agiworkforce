@@ -102,7 +102,7 @@ export interface PaywallSlot {
   requiredTier: string;
   reason?: string;
   /** Recovery implied by the server code; legacy slots default to upgrade. */
-  recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
+  recoveryAction?: 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage' | 'top_up';
   /**
    * GOV-20 — presentation flags from `classifyManagedQuotaErrorCode`. Optional
    * so an already-persisted paywall slot written before this existed still

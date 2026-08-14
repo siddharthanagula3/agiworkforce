@@ -63,7 +63,11 @@ import type { ResearchStep } from '@agiworkforce/types';
 import { parseResearchPlanEvent } from '@/features/chat/utils/research-plan';
 import { parseAgiWorkPlanEvent, type AgiWorkGoalInput } from '@/features/chat/utils/agiwork-plan';
 // GOV-20: one classifier for every managed quota refusal, free or paid.
-import { classifyManagedQuotaErrorCode, getNextUpgradeTier } from '@agiworkforce/types';
+import {
+  classifyManagedQuotaErrorCode,
+  getNextUpgradeTier,
+  isSelfServePaidPlanTier,
+} from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import {
   createSendReplayMetadata,
@@ -2969,6 +2973,22 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
     // pointing at a tier that does not exist.
     const nextTier = getNextUpgradeTier(planTier);
     const resetAt = error instanceof ChatApiError ? error.resetAt : undefined;
+
+    // Buying credits is offered ONLY when credits actually lift this specific
+    // block (`clearedByCredits`, see billing-catalog.ts) and the account can
+    // reach the purchase control at all. Top-ups require an active Stripe-billed
+    // paid plan, so a free or store-billed account must not be shown the button.
+    //
+    // This is what unblocks the top tier. Previously `showUpgradeCta` was
+    // ANDed with `nextTier !== null`, so a Max 15x subscriber — who by
+    // definition has no plan above them — got a paywall card with no action on
+    // it at all: correctly refused an upgrade, and never offered the credits
+    // that would actually help.
+    const canBuyCredits =
+      quotaBlock.clearedByCredits &&
+      isSelfServePaidPlanTier(planTier) &&
+      useBillingStore.getState().subscription?.subscription_source === 'stripe';
+    const recoveryAction = canBuyCredits ? ('top_up' as const) : ('upgrade' as const);
     updateMessage(
       assistantMessageId,
       {
@@ -2980,7 +3000,10 @@ async function handleStreamError(error: unknown, ctx: StreamErrorContext): Promi
             feature: quotaBlock.feature,
             requiredTier: nextTier ?? 'basic',
             reason: errorMessage || quotaBlock.reason,
-            showUpgradeCta: quotaBlock.showUpgradeCta && nextTier !== null,
+            // A credits CTA does not need a higher tier to exist — that is the
+            // whole point of it for someone already at the top.
+            showUpgradeCta: quotaBlock.showUpgradeCta && (nextTier !== null || canBuyCredits),
+            recoveryAction,
             showResetTime: quotaBlock.showResetTime,
             suggestStandardModel: quotaBlock.suggestStandardModel,
             ...(resetAt ? { resetAt } : {}),

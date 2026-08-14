@@ -101,7 +101,12 @@ export interface GeneratedImageResult {
   model: string;
 }
 
-export type MediaPaywallRecoveryAction = 'upgrade' | 'subscribe' | 'manage_billing' | 'view_usage';
+export type MediaPaywallRecoveryAction =
+  | 'upgrade'
+  | 'subscribe'
+  | 'manage_billing'
+  | 'view_usage'
+  | 'top_up';
 
 /** Error codes/types the media-generation API uses to signal a billing recovery path. */
 const PAYWALL_ERROR_RECOVERY: Readonly<Record<string, MediaPaywallRecoveryAction>> = {
