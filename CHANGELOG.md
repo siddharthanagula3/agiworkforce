@@ -2,9 +2,60 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-11
+Last updated: 2026-08-14
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased — MCP connectors] — 2026-08-14
+
+### Added
+
+- **Fifteen connectors now connect with no operator setup, through MCP's own
+  authorization discovery.** The broker previously required a human to register
+  an OAuth application with each vendor before a Connect button could complete,
+  which is why 83 catalog entries rendered controls that could not finish. AGI
+  now discovers a server's authorization server from the MCP endpoint itself
+  (RFC 9728 protected-resource metadata → RFC 8414 server metadata) and obtains
+  a client identity without anyone registering: eight vendors accept a hosted
+  Client ID Metadata Document as the `client_id`, and seven issue one through
+  dynamic registration, cached per issuer in `mcp_oauth_clients` (0115) so a
+  vendor is registered with once rather than once per user. Tokens are bound to
+  the specific MCP server with an RFC 8707 `resource`, the callback's `iss` is
+  validated per RFC 9207 before the code is redeemed, and a grant records the
+  issuer that minted it so a server that moves to a different authorization
+  server forces a clean reconnect (SEP-2352) instead of replaying a credential
+  at a party that is no longer its audience. `GET /api/connectors` reports
+  15 available where it previously reported none, and web, mobile, and desktop
+  all inherit it because all three read the same `available` list and the same
+  409 start path.
+
+### Changed
+
+- **The MCP client moved to the official SDK v2 and negotiates the 2026-07-28
+  protocol.** `@modelcontextprotocol/sdk@1.x` was replaced by the split
+  `@modelcontextprotocol/client@2.0.0` across web, desktop, and the API
+  gateway, which all share `@agiworkforce/mcp`. Version negotiation is set to
+  `auto` rather than the SDK's `legacy` default — the default would have made a
+  v2 client byte-identical to a 2025 client on the wire — so a server that
+  answers the `server/discover` probe gets the modern era and everything else
+  falls back to the `initialize` handshake. The negotiated era is reported on
+  the connection handle, and a tool call that returns an `input_required`
+  result is surfaced as an explicit error rather than as an empty success.
+
+### Fixed
+
+- **Six connectors that advertise dynamic registration but refuse it no longer
+  appear connectable.** asana, dropbox, figma, intercom, square, and vercel
+  publish a `registration_endpoint` and then reject the registration behind a
+  redirect-URI allowlist or a partner programme. Classifying them from the
+  advertised capability would have shipped six Connect buttons that fail on
+  click; each was tested against the live endpoint and is recorded as requiring
+  an operator OAuth app, with the vendor paperwork tracked in
+  `FoundersAssistance.md`.
+- **The Epic FHIR connector no longer shows Epic Games' logo.** The icon map
+  pointed `epic-fhir` at `siEpicgames`, a video-game company, for a healthcare
+  EHR connector. It now falls back to the neutral initial tile, since Simple
+  Icons carries no Epic Systems mark.
 
 ## [Unreleased — Website demo readiness] — 2026-08-11
 
