@@ -2,6 +2,12 @@
 
 import { useId, useState, type FormEvent } from 'react';
 import { joinPublicWaitlist } from '@/lib/services/waitlistServiceClient';
+import { WAITLIST_CONSENT_PURPOSES } from '@/lib/consent-purposes';
+import {
+  ConsentCheckboxes,
+  missingRequiredConsents,
+  toConsentDecisions,
+} from './ConsentCheckboxes';
 import type { WaitlistModalSource } from './WaitlistModal';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -13,6 +19,13 @@ type FormState = 'idle' | 'submitting' | 'success' | 'error';
  * wants an embedded form instead of the modal). Calls /api/waitlist/public ·
  * no account required; the server attaches the Clerk user id when a session
  * exists.
+ *
+ * The consent block is not decoration. DPDP s.6 makes the address storable only
+ * against a purpose the person affirmatively agreed to, so the ticked set below
+ * starts EMPTY and both the ticked and the unticked purposes are sent. The
+ * server refuses the write when the required purpose is absent or false, which
+ * means removing these checkboxes breaks the endpoint rather than silently
+ * reverting to unconsented collection.
  */
 export function PublicWaitlistForm({
   source = 'website',
@@ -28,6 +41,9 @@ export function PublicWaitlistForm({
   const [email, setEmail] = useState('');
   const [state, setState] = useState<FormState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  // Starts empty and is never seeded: an unticked box is the initial state, and
+  // a ticked one can only come from a click.
+  const [consented, setConsented] = useState<string[]>([]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -40,13 +56,26 @@ export function PublicWaitlistForm({
       return;
     }
 
+    const missing = missingRequiredConsents(WAITLIST_CONSENT_PURPOSES, consented);
+    if (missing.length > 0) {
+      setErrorMsg('Tick the box agreeing to your email being stored before joining.');
+      setState('error');
+      return;
+    }
+
     setState('submitting');
     setErrorMsg('');
 
-    const result = await joinPublicWaitlist({ email: normalized, referralSource: source });
+    const result = await joinPublicWaitlist({
+      email: normalized,
+      referralSource: source,
+      consent: toConsentDecisions(WAITLIST_CONSENT_PURPOSES, consented),
+      consentSurface: 'web-waitlist-inline',
+    });
     if (result.success) {
       setState('success');
       setEmail('');
+      setConsented([]);
     } else {
       setErrorMsg(result.error ?? 'Something went wrong. Please try again.');
       setState('error');
@@ -81,6 +110,18 @@ export function PublicWaitlistForm({
         className="agi-waitlist-inline-input"
         onChange={(e) => {
           setEmail(e.target.value);
+          if (state === 'error') {
+            setState('idle');
+            setErrorMsg('');
+          }
+        }}
+      />
+      <ConsentCheckboxes
+        purposes={WAITLIST_CONSENT_PURPOSES}
+        value={consented}
+        disabled={state === 'submitting'}
+        onChange={(next) => {
+          setConsented(next);
           if (state === 'error') {
             setState('idle');
             setErrorMsg('');

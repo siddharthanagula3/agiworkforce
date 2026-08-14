@@ -4,9 +4,11 @@ import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
   ARBITRATION_FORUM,
+  CANONICAL_POLICY_ROUTES,
   CONTACT_EMAIL,
   CONTACT_SUBJECTS,
   GOVERNING_LAW,
+  GRIEVANCE_OFFICER_NAME,
   LEGAL_ENTITY,
   LEGAL_ENTITY_DESCRIPTOR,
   NOTICE_ADDRESS,
@@ -469,7 +471,105 @@ export default function TermsPage() {
         </section>
 
         <section className="agi-section">
-          <p className="agi-section-eyebrow">19 &middot; Contact</p>
+          <p className="agi-section-eyebrow">19 &middot; Data protection</p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            Our processing of personal data is governed by the{' '}
+            <Link href={CANONICAL_POLICY_ROUTES.privacy} style={{ color: 'var(--agi-ink)' }}>
+              privacy policy
+            </Link>
+            , which forms part of these terms. Where you contract with us as a business customer and
+            we process personal data on your behalf, the{' '}
+            <Link href={CANONICAL_POLICY_ROUTES.dpa} style={{ color: 'var(--agi-ink)' }}>
+              DPA
+            </Link>{' '}
+            applies and prevails over these terms on data protection matters.
+          </p>
+          <table className="agi-ledger" style={{ marginTop: 16 }}>
+            <tbody>
+              <tr>
+                <td style={{ width: '26%', verticalAlign: 'top' }}>Data principals in India</td>
+                <td>
+                  If India&rsquo;s Digital Personal Data Protection Act, 2023 applies to our
+                  processing of your personal data, the notice at{' '}
+                  <Link
+                    href={CANONICAL_POLICY_ROUTES.indiaPrivacy}
+                    style={{ color: 'var(--agi-ink)' }}
+                  >
+                    /privacy/india
+                  </Link>{' '}
+                  governs your rights, and it prevails over the general privacy policy where the two
+                  differ. It states plainly which of those rights are self-serve today and which are
+                  not.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Consent, and withdrawing it</td>
+                <td>
+                  Where we rely on your consent, we ask for it per purpose, we record the decision
+                  against the revision of the notice you were shown, and you can withdraw any of it
+                  at{' '}
+                  <Link
+                    href={CANONICAL_POLICY_ROUTES.dataRights}
+                    style={{ color: 'var(--agi-ink)' }}
+                  >
+                    /privacy/requests
+                  </Link>
+                  . Withdrawing an optional consent never costs you access to anything you did not
+                  withdraw. Withdrawal applies going forward and does not undo processing that
+                  already lawfully happened.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Data you submit about other people</td>
+                <td>
+                  If you invite a colleague, provision users from your directory, or upload content
+                  containing someone else&rsquo;s personal data, you confirm you are entitled to
+                  give it to us for that purpose &mdash; including having given any notice or
+                  obtained any consent their law requires. We do not contact those individuals to
+                  obtain it on your behalf, and nothing in the product does so today.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Security and breach</td>
+                <td>
+                  We maintain security safeguards described at{' '}
+                  <Link href={CANONICAL_POLICY_ROUTES.security} style={{ color: 'var(--agi-ink)' }}>
+                    /security
+                  </Link>
+                  , and we operate a written incident procedure with a 72-hour clock for regulator
+                  notification where a law requires one. No safeguard is a guarantee, and we do not
+                  claim one.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Where your data is processed</td>
+                <td>
+                  In the United States. We do not offer data residency in India or in the EU/UK, so
+                  using the service means your personal data is transferred there. If residency is a
+                  requirement for you, we do not meet it.
+                </td>
+              </tr>
+              <tr>
+                <td style={{ verticalAlign: 'top' }}>Complaints</td>
+                <td>
+                  Raise a data protection complaint with the {GRIEVANCE_OFFICER_NAME} by emailing{' '}
+                  <a
+                    href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)}
+                    style={{ color: 'var(--agi-ink)' }}
+                  >
+                    {CONTACT_EMAIL}
+                  </a>{' '}
+                  with the subject line &ldquo;{CONTACT_SUBJECTS.dpdpGrievance}&rdquo;. This route
+                  is available to you regardless of the dispute-resolution and arbitration terms
+                  above, which do not apply to it.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">20 &middot; Contact</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             {LEGAL_ENTITY}, {NOTICE_ADDRESS}. Email{' '}
             <a href={contactMailto()} style={{ color: 'var(--agi-ink)' }}>
@@ -483,6 +583,9 @@ export default function TermsPage() {
             </Link>
             <Link href="/privacy" className="agi-cta-ghost">
               Privacy &rarr;
+            </Link>
+            <Link href={CANONICAL_POLICY_ROUTES.indiaPrivacy} className="agi-cta-ghost">
+              India &mdash; DPDP notice &rarr;
             </Link>
             <Link href="/dpa" className="agi-cta-ghost">
               DPA &rarr;

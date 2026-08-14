@@ -7,6 +7,7 @@
 
 import type { InviteCodeError } from '@shared/components/cloud-bridge/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import type { ConsentDecision } from '@/lib/consent-purposes';
 
 export interface RedeemInviteResult {
   success: boolean;
@@ -18,6 +19,16 @@ export interface WaitlistEntry {
   email: string;
   name?: string;
   referralSource?: string;
+  /**
+   * One decision per purpose that was on screen, ticked or not (DPDP s.6).
+   * `/api/waitlist/public` refuses the submission when the purpose that makes
+   * storing the address lawful is absent or false, so this is not optional in
+   * practice — it is typed optional only because `joinWaitlist` below posts to
+   * a different, account-bound route.
+   */
+  consent?: ConsentDecision[];
+  /** Which consent surface collected the decisions. */
+  consentSurface?: 'web-waitlist-inline' | 'web-waitlist-modal';
 }
 
 export interface JoinWaitlistResult {
@@ -109,11 +120,23 @@ export async function joinPublicWaitlist(entry: WaitlistEntry): Promise<JoinWait
       body: JSON.stringify({
         email: entry.email.toLowerCase().trim(),
         source,
+        consent: entry.consent ?? [],
+        consentSurface: entry.consentSurface ?? 'web-waitlist-inline',
       }),
     });
 
     if (!res.ok) {
-      return { success: false, error: 'Failed to join waitlist. Please try again.' };
+      // The server's message is surfaced verbatim for the consent failures
+      // (400 CONSENT_REQUIRED), because "please try again" is wrong advice when
+      // the fix is to tick a box.
+      const body = (await res.json().catch(() => null)) as {
+        error?: { code?: string; message?: string } | string;
+      } | null;
+      const message =
+        typeof body?.error === 'object' && typeof body.error?.message === 'string'
+          ? body.error.message
+          : 'Failed to join waitlist. Please try again.';
+      return { success: false, error: message };
     }
 
     return { success: true };

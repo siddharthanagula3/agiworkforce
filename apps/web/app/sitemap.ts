@@ -129,6 +129,11 @@ const routes: RouteConfig[] = [
   { path: '/model-licenses', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/legal', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/legal/eu-representative', priority: 0.4, changeFrequency: 'monthly' },
+  // India — the DPDP notice and the data-principal request route. Indexed
+  // rather than hidden: a data principal has to be able to find the grievance
+  // contact without already being a customer.
+  { path: '/privacy/india', priority: 0.6, changeFrequency: 'yearly' },
+  { path: '/privacy/requests', priority: 0.6, changeFrequency: 'yearly' },
 
   // HTML sitemap
   { path: '/sitemap-page', priority: 0.4, changeFrequency: 'monthly' },

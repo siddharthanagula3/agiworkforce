@@ -61,7 +61,39 @@ export const CONTACT_SUBJECTS = {
   appeal: 'Suspension appeal',
   arbitrationOptOut: 'Arbitration opt-out',
   ipComplaint: 'IP complaint',
+  /**
+   * India's DPDP Act requires a published grievance route that is distinct from
+   * ordinary support, because s.13 gives the data principal a right to a
+   * response and s.13(3) makes exhausting it a precondition for complaining to
+   * the Data Protection Board. Same mailbox, distinct subject, per the
+   * convention above — a dedicated address is not provably provisioned.
+   */
+  dpdpGrievance: 'DPDP grievance',
+  /** A data principal exercising access, correction, erasure or withdrawal. */
+  dpdpRequest: 'DPDP data principal request',
 } as const;
+
+/**
+ * India — DPDP Act, 2023 grievance redressal.
+ *
+ * FOUNDER CONFIRMATION REQUIRED (do not resolve this from code):
+ *  - `GRIEVANCE_OFFICER_NAME` is deliberately a ROLE, not a person. The DPDP
+ *    Rules require a Significant Data Fiduciary to publish a named Data
+ *    Protection Officer, and every fiduciary to publish the contact of the
+ *    person who answers questions about processing. No name for that person
+ *    appears anywhere in this repository, and inventing one publishes a false
+ *    statement about a real company. Replace it with the individual's name once
+ *    the founder designates them, or leave the role if the designated contact
+ *    is a role account.
+ *  - Whether AGI Automation LLC is a Significant Data Fiduciary is a
+ *    notification-based classification made by the Central Government, not
+ *    something this repository can determine. See DPDP_PROGRESS.md.
+ *
+ * `GRIEVANCE_RESPONSE_TARGET_DAYS` is the period this product commits to, not a
+ * statutory number quoted from the Act. Do not describe it as a legal deadline.
+ */
+export const GRIEVANCE_OFFICER_NAME = 'Grievance Officer, AGI Automation LLC';
+export const GRIEVANCE_RESPONSE_TARGET_DAYS = 30;
 
 /** Build a `mailto:` link with a routing subject line. */
 export function contactMailto(subject?: string): string {
@@ -94,6 +126,9 @@ export const POLICY_LAST_UPDATED = {
   mobile: '2026-08-13',
   copyright: '2026-08-06',
   modelLicenses: '2026-08-06',
+  /** India — DPDP Act, 2023 notice and the data-principal rights page. */
+  indiaPrivacy: '2026-08-13',
+  dataRights: '2026-08-13',
 } as const;
 
 /**
@@ -119,6 +154,20 @@ export const CANONICAL_POLICY_ROUTES = {
   mobile: '/mobile/legal',
   copyright: '/copyright',
   modelLicenses: '/model-licenses',
+  /**
+   * India-specific notice under DPDP s.5 and the grievance route under s.13.
+   * A separate page rather than a section of /privacy because the Act requires
+   * the notice to be a standalone, itemised statement a data principal can be
+   * given at the moment of collection — a link into the middle of a longer
+   * policy is not that.
+   */
+  indiaPrivacy: '/privacy/india',
+  /**
+   * Where a data principal exercises access, correction, erasure and
+   * withdrawal. s.6(6) requires withdrawal to be as easy as giving consent, so
+   * it has a URL of its own rather than living behind a support mailbox.
+   */
+  dataRights: '/privacy/requests',
 } as const;
 
 /** Alias → canonical. Mirrored by the redirect table in `next.config.ts`. */

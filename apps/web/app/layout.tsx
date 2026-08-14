@@ -177,7 +177,22 @@ export default async function RootLayout({
           strategy="beforeInteractive"
           nonce={nonce}
         />
-        <ClerkProvider localization={clerkLocalization}>
+        {/*
+         * DPDP consent gating — Clerk's own product telemetry is switched off.
+         *
+         * The cookie banner gates GA4 and nothing else, because GA4 was the
+         * only tracker anyone had counted. Clerk's SDK ships an opt-OUT
+         * telemetry collector that posts to clerk-telemetry.com on mount, for
+         * every visitor, before any consent interaction — and unlike GA4 there
+         * is no switch for a visitor to reach. Rather than add a third consent
+         * category for a ping the product gets no value from, it is disabled
+         * outright: `TelemetryCollector` treats `disabled: true` as final
+         * (@clerk/shared telemetry collector, `#shouldRecord`).
+         *
+         * If this ever needs to come back, it needs a consent category and a
+         * row on /cookies in the same change — not a silent re-enable.
+         */}
+        <ClerkProvider localization={clerkLocalization} telemetry={{ disabled: true }}>
           <SkipLinks />
           {/*
            * role="main" (rather than a native <main> tag) so nested route
