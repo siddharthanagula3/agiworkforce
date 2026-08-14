@@ -14,13 +14,11 @@ const { mockStdioTransport, mockSSETransport, mockStreamableTransport } = vi.hoi
   mockStreamableTransport: vi.fn(),
 }));
 
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+vi.mock('@modelcontextprotocol/client/stdio', () => ({
   StdioClientTransport: mockStdioTransport,
 }));
-vi.mock('@modelcontextprotocol/sdk/client/sse.js', () => ({
+vi.mock('@modelcontextprotocol/client', () => ({
   SSEClientTransport: mockSSETransport,
-}));
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
   StreamableHTTPClientTransport: mockStreamableTransport,
 }));
 

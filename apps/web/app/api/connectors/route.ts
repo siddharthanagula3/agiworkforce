@@ -45,6 +45,10 @@ import {
   isConnectorOAuthConfigured,
 } from '@/lib/connectors/oauth-registry';
 import {
+  connectorIdsWithMcpEndpoint,
+  isSelfServiceConnector,
+} from '@/lib/connectors/mcp-endpoints';
+import {
   isDeviceLocalConnector,
   isKnownConnectorId,
   resolveConnectorHealth,
@@ -137,6 +141,15 @@ function getAvailableConnectorIds(): string[] {
   const available = new Set<string>();
   for (const id of getOperatorMappedConnectorIds()) available.add(id);
   for (const id of getOAuthConfiguredConnectorIds()) available.add(id);
+  // Connectors whose own authorization server issues us a client identity —
+  // via a metadata document or dynamic registration — need no operator setup
+  // at all, so clicking Connect genuinely does something. A `preregistered`
+  // endpoint is excluded on purpose: it serves MCP but still requires an
+  // operator OAuth app, and listing it would put back exactly the dead button
+  // this function exists to prevent.
+  for (const id of connectorIdsWithMcpEndpoint()) {
+    if (isSelfServiceConnector(id)) available.add(id);
+  }
   if (
     isGitHubInstallationLinkingAvailable() &&
     isGitHubAppConfigured() &&
@@ -371,7 +384,16 @@ async function handleCreateConnector(request: NextRequest) {
   // A provider with a registered platform OAuth app connects by running the
   // authorization-code flow, not by flipping a row. Mirrors the github 409:
   // tell the caller exactly where to send the user.
-  if (!operatorMappedIds.has(body.connectorId) && isConnectorOAuthConfigured(body.connectorId)) {
+  //
+  // A connector with a self-service MCP endpoint takes the SAME 409, because it
+  // also connects by authorization rather than by a row — the difference is
+  // only where the endpoints come from (live discovery instead of the registry),
+  // and `/api/connectors/oauth/start` decides that internally. Sharing the
+  // branch is what keeps the directory from needing to know which kind it is.
+  if (
+    !operatorMappedIds.has(body.connectorId) &&
+    (isConnectorOAuthConfigured(body.connectorId) || isSelfServiceConnector(body.connectorId))
+  ) {
     const startPath = buildConnectorOAuthStartPath(body.connectorId);
     return NextResponse.json(
       {

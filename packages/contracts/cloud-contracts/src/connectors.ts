@@ -255,3 +255,25 @@ export const CONNECTOR_OAUTH_START_PATH = '/api/connectors/oauth/start';
  * test that asserts a handler still exists here.
  */
 export const CONNECTOR_OAUTH_CALLBACK_PATH = '/api/connectors/oauth/callback';
+
+/**
+ * Where this deployment publishes its OAuth **client metadata document**.
+ *
+ * This path IS a `client_id`. Under Client ID Metadata Documents, a client
+ * identifies itself to an authorization server by presenting an HTTPS URL that
+ * serves its own registration metadata; the authorization server fetches that
+ * URL instead of consulting a registration it holds. That is what lets a
+ * connector authorize against a vendor this deployment has no relationship
+ * with — no pre-registration, and no dynamic-registration call either.
+ *
+ * Two consequences make this a contract value rather than an implementation
+ * detail:
+ *
+ *   - Changing the path changes our client identity. Every authorization
+ *     server that has seen the old URL treats the new one as a different
+ *     client, so existing consents stop applying and users must re-authorize.
+ *   - The URL must stay publicly fetchable, unauthenticated, over HTTPS, with
+ *     a non-root pathname. An authorization server fetches it server-side
+ *     during authorization; putting it behind auth breaks every connect.
+ */
+export const MCP_CLIENT_METADATA_PATH = '/.well-known/oauth-client-metadata';

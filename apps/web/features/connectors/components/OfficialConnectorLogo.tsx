@@ -21,7 +21,6 @@ import {
   siDropbox,
   siElasticsearch,
   siElevenlabs,
-  siEpicgames,
   siEvernote,
   siFacebook,
   siFigma,
@@ -143,8 +142,13 @@ const SIMPLE_ICON_BY_CONNECTOR_ID: Record<string, SimpleIcon> = {
   wandb: siWeightsandbiases,
   'anthropic-api': siAnthropic,
   replicate: siReplicate,
-  'epic-fhir': siEpicgames,
   ollama: siOllama,
+  // `epic-fhir` deliberately has NO glyph. It previously mapped to
+  // `siEpicgames` — Epic Games, the video-game company — while the connector is
+  // Epic Systems, the healthcare EHR vendor. Showing one company's trademark
+  // for another is worse than showing none, and in a clinical-data context it is
+  // actively misleading, so this falls through to the neutral initial tile.
+  // Simple Icons carries no Epic Systems glyph to use instead.
 };
 
 export function OfficialConnectorLogo({
