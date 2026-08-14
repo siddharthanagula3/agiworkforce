@@ -30,8 +30,9 @@ function read(page: string): string {
 /** Eyebrows as written in the SECTIONS constant the contents block renders. */
 function declaredSections(source: string): string[] {
   const block = /const SECTIONS = \[([\s\S]*?)\] as const;/.exec(source);
-  if (!block) return [];
-  return [...block[1].matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
+  const body = block?.[1];
+  if (!body) return [];
+  return [...body.matchAll(/'([^']+)'/g)].map((m) => m[1] as string);
 }
 
 /** Section ids actually present on the page. */

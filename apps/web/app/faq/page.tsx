@@ -2,12 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import {
-  BYOK_SURFACES,
-  DESKTOP_LOCAL_RUNTIMES,
-  MARKETING,
-  POSITIONING,
-} from '../../lib/marketing-constants';
+import { BYOK_SURFACES, DESKTOP_LOCAL_RUNTIMES, MARKETING } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
   title: 'FAQ',
@@ -19,7 +14,7 @@ export const metadata = buildMetadata({
 const QA: { q: string; a: string }[] = [
   {
     q: 'How many providers do you support?',
-    a: `${MARKETING.providers.display} provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot, Zhipu, and custom OpenAI-compatible endpoints. Desktop Local mode also supports four verified runtimes: ${DESKTOP_LOCAL_RUNTIMES.label}. The in-product catalog is the current source of truth.`,
+    a: `${MARKETING.providers.display} provider integrations, including Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity, Qwen, Moonshot and Zhipu. The CLI can additionally route to a custom OpenAI-compatible endpoint you declare in its own config file, over https or localhost only; Desktop and Web have no setting that points AGI at an arbitrary endpoint, so this is a CLI capability rather than a product-wide one. Desktop Local mode also supports four verified runtimes: ${DESKTOP_LOCAL_RUNTIMES.label}. The in-product catalog is the current source of truth.`,
   },
   {
     q: 'What does BYOK mean here?',
@@ -43,7 +38,7 @@ const QA: { q: string; a: string }[] = [
   },
   {
     q: 'Do you train on my data?',
-    a: `AGI does not use customer conversation content to train AGI-owned models. ${POSITIONING.trustBoundary} One thing worth being precise about: in managed cloud your prompt goes to the model provider serving the model you picked, and what they do with it is governed by their terms, not ours — our no-training statement is about AGI-owned models and is not a promise on their behalf.`,
+    a: 'AGI does not use customer conversation content to train AGI-owned models, and we do not sell your data. Be precise about the part people misread: in managed cloud we send your prompt and attachments to the provider serving the model you selected. MiniMax, Qwen and Zhipu route through OpenRouter, which is also the failover for every other chat model in the catalogue, so content for a model from any provider can pass through it. Those third parties handle that content under their applicable terms and data-use policies — our statement about AGI-owned models is not a promise on their behalf. In BYOK mode your own provider account and terms govern, and in Local mode none of them are contacted. Recipients are listed at /subprocessors.',
   },
   {
     q: 'Who can read my conversations?',
