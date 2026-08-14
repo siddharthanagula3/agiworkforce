@@ -88,8 +88,12 @@ import { decryptConnectorToken } from '@/lib/custom-connector-crypto';
 import {
   getConnectorOAuthProvider,
   getOAuthConfiguredConnectorIds,
-  type ConnectorOAuthProvider,
 } from '@/lib/connectors/oauth-registry';
+import {
+  connectorIdsWithMcpEndpoint,
+  getMcpEndpoint,
+  isSelfServiceConnector,
+} from '@/lib/connectors/mcp-endpoints';
 import { resolveConnectorAccessToken } from '@/lib/connectors/oauth-access';
 import { getUserConnectorOAuthGrantSummaries } from '@/lib/connectors/oauth-store';
 import { detectConnectorAuthChallenge } from '@/lib/connectors/oauth-challenge';
@@ -1002,14 +1006,54 @@ const _oauthCatalogCache = new Map<string, CustomCatalogState>();
 const _oauthHandles = new Map<string, McpServerHandle>();
 const OAUTH_CATALOG_TTL_MS = 60_000;
 
+/**
+ * Where a connector's MCP endpoint is and what to call it.
+ *
+ * Deliberately narrower than `ConnectorOAuthProvider`: the execution path only
+ * ever needed four fields from it, and widening the parameter to the full
+ * provider meant a connector could be executed ONLY if an operator had
+ * registered an OAuth app. A connector authorized through discovery
+ * (`lib/connectors/mcp-discovery.ts`) has a real grant but no provider
+ * descriptor, so it could hold a working token and still be unreachable here.
+ */
+interface ConnectorMcpTarget {
+  connectorId: string;
+  mcpUrl: string;
+  transport: 'streamable-http' | 'sse';
+  displayName?: string | undefined;
+}
+
+/**
+ * Resolve the endpoint for a connector from whichever source knows it.
+ *
+ * The operator's registered provider wins, matching the precedence the connect
+ * flow uses: an operator who registered an app means it to be used.
+ */
+function resolveConnectorMcpTarget(connectorId: string): ConnectorMcpTarget | null {
+  const provider = getConnectorOAuthProvider(connectorId);
+  if (provider) {
+    return {
+      connectorId,
+      mcpUrl: provider.mcpUrl,
+      transport: provider.transport,
+      displayName: provider.displayName,
+    };
+  }
+  const endpoint = getMcpEndpoint(connectorId);
+  if (endpoint) {
+    return { connectorId, mcpUrl: endpoint.url, transport: endpoint.transport };
+  }
+  return null;
+}
+
 function oauthConnectorMcpConfig(
-  provider: ConnectorOAuthProvider,
+  target: ConnectorMcpTarget,
   accessToken: string,
   tokenType: string,
 ): McpServerConfig {
   return {
-    url: provider.mcpUrl,
-    transport: provider.transport,
+    url: target.mcpUrl,
+    transport: target.transport,
     headers: { Authorization: `${tokenType || 'Bearer'} ${accessToken}` },
   };
 }
@@ -1063,7 +1107,22 @@ const _reportedOAuthShadowedIds = new Set<string>();
 function getUsableOAuthConnectorIds(): string[] {
   const operatorMapped = loadConnectorMcpMap();
   const usable: string[] = [];
-  for (const id of getOAuthConfiguredConnectorIds()) {
+
+  // Candidates are the operator-registered providers PLUS every connector whose
+  // authorization server lets us obtain a client identity on our own (CIMD or
+  // dynamic registration). A `preregistered` endpoint is deliberately excluded:
+  // without an operator app there is no way for a user to hold a grant for it,
+  // so listing it here would only add a lookup that always misses.
+  //
+  // Membership here is not a claim that the connector is connected — the caller
+  // intersects this with the user's live grants, so a candidate with no grant
+  // still reads as Connect rather than Connected.
+  const candidates = new Set(getOAuthConfiguredConnectorIds());
+  for (const id of connectorIdsWithMcpEndpoint()) {
+    if (isSelfServiceConnector(id)) candidates.add(id);
+  }
+
+  for (const id of candidates) {
     if (operatorMapped.has(id)) {
       // A configuration mistake, not a per-turn event: warn once per process
       // rather than on every chat turn for the life of the deployment.
@@ -1083,23 +1142,23 @@ function getUsableOAuthConnectorIds(): string[] {
 
 async function buildOAuthConnectorCatalog(
   userId: string,
-  provider: ConnectorOAuthProvider,
+  target: ConnectorMcpTarget,
   accessToken: string,
   tokenType: string,
 ): Promise<McpToolCatalog | null> {
   const now = Date.now();
-  const cacheKey = oauthConnectorCacheKey(userId, provider.connectorId);
+  const cacheKey = oauthConnectorCacheKey(userId, target.connectorId);
   const cached = _oauthCatalogCache.get(cacheKey);
   if (cached && cached.catalog && now < cached.expiresAt) return cached.catalog;
 
   // SSRF: the MCP endpoint is operator-supplied but can still be re-pointed via
   // DNS after configuration, so it is re-checked on every build.
   try {
-    await assertResolvedPublicHostname(provider.mcpUrl);
+    await assertResolvedPublicHostname(target.mcpUrl);
   } catch (err) {
     if (err instanceof EgressPolicyError) {
       logger.warn(
-        { connectorId: provider.connectorId },
+        { connectorId: target.connectorId },
         '[user-connector] OAuth connector endpoint blocked by SSRF policy',
       );
       _oauthCatalogCache.set(cacheKey, { catalog: null, expiresAt: now + OAUTH_CATALOG_TTL_MS });
@@ -1110,7 +1169,7 @@ async function buildOAuthConnectorCatalog(
 
   try {
     const { catalog, handles } = await buildMcpToolCatalog({
-      [provider.connectorId]: oauthConnectorMcpConfig(provider, accessToken, tokenType),
+      [target.connectorId]: oauthConnectorMcpConfig(target, accessToken, tokenType),
     });
     for (const h of handles) {
       const old = _oauthHandles.get(cacheKey);
@@ -1122,7 +1181,7 @@ async function buildOAuthConnectorCatalog(
   } catch (err) {
     logger.warn(
       {
-        connectorId: provider.connectorId,
+        connectorId: target.connectorId,
         authChallenge: detectConnectorAuthChallenge(err) !== null,
       },
       '[user-connector] failed to build OAuth connector catalog',
@@ -1134,19 +1193,19 @@ async function buildOAuthConnectorCatalog(
 
 async function callOAuthConnectorTool(
   userId: string,
-  provider: ConnectorOAuthProvider,
+  target: ConnectorMcpTarget,
   accessToken: string,
   tokenType: string,
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<ConnectorExecResult> {
-  const cacheKey = oauthConnectorCacheKey(userId, provider.connectorId);
+  const cacheKey = oauthConnectorCacheKey(userId, target.connectorId);
   let handle = _oauthHandles.get(cacheKey);
   if (!handle) {
-    await assertResolvedPublicHostname(provider.mcpUrl);
+    await assertResolvedPublicHostname(target.mcpUrl);
     handle = await connectMcpServer({
-      serverName: provider.connectorId,
-      config: oauthConnectorMcpConfig(provider, accessToken, tokenType),
+      serverName: target.connectorId,
+      config: oauthConnectorMcpConfig(target, accessToken, tokenType),
     });
     _oauthHandles.set(cacheKey, handle);
   }
@@ -1177,8 +1236,8 @@ async function executeOAuthConnectorTool(
   toolName: string,
   args: Record<string, unknown>,
 ): Promise<ConnectorExecResult> {
-  const provider = getConnectorOAuthProvider(connectorId);
-  if (!provider) return NOT_HANDLED;
+  const target = resolveConnectorMcpTarget(connectorId);
+  if (!target) return NOT_HANDLED;
 
   const access = await resolveConnectorAccessToken(userId, connectorId);
   if (access.status !== 'ready') {
@@ -1192,7 +1251,7 @@ async function executeOAuthConnectorTool(
   try {
     return await callOAuthConnectorTool(
       userId,
-      provider,
+      target,
       access.accessToken,
       access.tokenType,
       toolName,
@@ -1244,7 +1303,7 @@ async function executeOAuthConnectorTool(
     try {
       return await callOAuthConnectorTool(
         userId,
-        provider,
+        target,
         refreshed.accessToken,
         refreshed.tokenType,
         toolName,
@@ -1617,18 +1676,18 @@ export async function loadUserConnectorToolCatalog(
         : new Set<string>();
     for (const connectorId of usableOAuthIds) {
       if (!grantedOAuthIds.has(connectorId)) continue;
-      const provider = getConnectorOAuthProvider(connectorId);
-      if (!provider) continue;
+      const target = resolveConnectorMcpTarget(connectorId);
+      if (!target) continue;
       const access = await resolveConnectorAccessToken(userId, connectorId);
       if (access.status !== 'ready') continue;
       const catalog = await buildOAuthConnectorCatalog(
         userId,
-        provider,
+        target,
         access.accessToken,
         access.tokenType,
       );
       if (catalog) {
-        defs.push(...catalogToConnectorToolDefs(catalog, provider.displayName ?? connectorId));
+        defs.push(...catalogToConnectorToolDefs(catalog, target.displayName ?? connectorId));
       }
     }
 

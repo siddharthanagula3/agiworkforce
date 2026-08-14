@@ -18,6 +18,7 @@ import {
   upsertConnectorOAuthGrant,
 } from '@/lib/connectors/oauth-store';
 import { ConnectorOAuthTokenError, exchangeAuthorizationCode } from '@/lib/connectors/oauth-client';
+import { completeMcpAuthorization } from '@/lib/connectors/mcp-discovery';
 
 /** Longest authorization code we will forward to a token endpoint. */
 const MAX_CODE_LENGTH = 2048;
@@ -94,6 +95,50 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
   if (!code || code.length > MAX_CODE_LENGTH) {
     return redirectTo(pending.returnPath, pending.connectorId, 'failed');
+  }
+
+  // DISCOVERY PATH. A pending row carrying an MCP URL was started by
+  // `beginMcpAuthorization`, where the endpoints came from live discovery
+  // rather than from the registry. It must be redeemed against those pinned
+  // endpoints — the registry has no entry to consult, and `iss` validation
+  // (RFC 9207) has to happen before the code is spent.
+  if (pending.mcpUrl) {
+    const completion = await completeMcpAuthorization({
+      pending,
+      state,
+      code,
+      iss: url.searchParams.get('iss') ?? undefined,
+    });
+
+    if (completion.status === 'error') {
+      logger.warn(
+        { connectorId: pending.connectorId, reason: completion.reason },
+        '[connector-oauth] discovered-connector exchange failed',
+      );
+      return redirectTo(
+        pending.returnPath,
+        pending.connectorId,
+        completion.reason === 'authorization-server-changed' ? 'reauthorize' : 'failed',
+      );
+    }
+
+    await recordAuditEvent({
+      userId,
+      eventType: 'connector_added',
+      request,
+      detail: {
+        resourceType: 'connector',
+        connectorId: pending.connectorId,
+        // Distinguished from `oauth` so the trail shows this grant was
+        // authorized against a discovered authorization server rather than an
+        // operator-registered application.
+        source: 'mcp-discovery',
+        status: 'connected',
+        scopes: completion.grantedScopes,
+      },
+    });
+
+    return redirectTo(pending.returnPath, pending.connectorId, 'connected');
   }
 
   const provider = getConnectorOAuthProvider(pending.connectorId);

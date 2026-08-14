@@ -29,6 +29,8 @@ import {
   getConnectorOAuthProvider,
   type ConnectorOAuthProvider,
 } from '@/lib/connectors/oauth-registry';
+import { getMcpEndpoint } from '@/lib/connectors/mcp-endpoints';
+import { refreshDiscoveredGrant } from '@/lib/connectors/mcp-discovery';
 
 /** Refresh a token that expires within this window rather than racing the call. */
 const EXPIRY_SKEW_MS = 60_000;
@@ -55,7 +57,14 @@ export async function resolveConnectorAccessToken(
   options: { forceRefresh?: boolean } = {},
 ): Promise<ConnectorAccessOutcome> {
   const provider = getConnectorOAuthProvider(connectorId);
-  if (!provider) return { status: 'not-configured' };
+
+  // A connector with no operator-registered provider is NOT automatically
+  // unconfigured any more: it may have been authorized through discovery
+  // against the vendor's own MCP endpoint, in which case a real grant exists
+  // and reporting `not-configured` would tell the user to set up something that
+  // is already working. `getMcpEndpoint` is the cheap static check; the grant
+  // read below is what actually decides.
+  if (!provider && !getMcpEndpoint(connectorId)) return { status: 'not-configured' };
 
   let grant;
   try {
@@ -91,6 +100,51 @@ export async function resolveConnectorAccessToken(
     // expiring or was just rejected. A grant that cannot produce a usable token
     // must not keep reading as connected.
     await revokeConnectorOAuthGrant(userId, connectorId);
+    return { status: 'reauthorization-required', reason: 'expired' };
+  }
+
+  // DISCOVERED GRANTS refresh through `auth()`, not through the registry: their
+  // client identity lives in `mcp_oauth_clients` keyed by issuer, and there is
+  // no provider descriptor holding a client id and secret to pass here.
+  if (grant.mcpUrl) {
+    const outcome = await refreshDiscoveredGrant({
+      mcpUrl: grant.mcpUrl,
+      issuer: grant.issuer,
+      refreshToken,
+      tokenType: grant.tokenType,
+      grantedScopes: grant.grantedScopes,
+    });
+
+    if (outcome.status === 'authorization-server-changed') {
+      // SEP-2352. The credential is addressed to a party that no longer serves
+      // this resource; dropping it is the point, not a side effect.
+      await revokeConnectorOAuthGrant(userId, connectorId);
+      return { status: 'reauthorization-required', reason: 'refresh-failed' };
+    }
+    if (outcome.status === 'failed') {
+      logger.warn({ connectorId }, '[connector-oauth] discovered-connector token refresh failed');
+      return { status: 'reauthorization-required', reason: 'refresh-failed' };
+    }
+
+    await updateConnectorOAuthGrantTokens(userId, connectorId, {
+      accessToken: outcome.accessToken,
+      refreshToken: outcome.refreshToken,
+      tokenType: outcome.tokenType,
+      grantedScopes: outcome.grantedScopes,
+      accessTokenExpiresAt: outcome.accessTokenExpiresAt,
+    });
+    return {
+      status: 'ready',
+      accessToken: outcome.accessToken,
+      tokenType: outcome.tokenType,
+      grantedScopes: outcome.grantedScopes,
+    };
+  }
+
+  if (!provider) {
+    // A grant exists but there is neither a registry provider nor a recorded
+    // MCP URL to refresh against — the shape a pre-0115 discovered grant would
+    // have. Nothing can renew it, so ask for a clean reconnect.
     return { status: 'reauthorization-required', reason: 'expired' };
   }
 

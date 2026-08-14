@@ -45,11 +45,14 @@ interface ClientStubState {
 }
 
 function installClientMock(state: ClientStubState): void {
-  vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => {
+  vi.doMock('@modelcontextprotocol/client', () => {
     class FakeClient {
       constructor(public info: { name: string; version: string }) {}
       async connect(_t: unknown): Promise<void> {
         state.connectCalled += 1;
+      }
+      getDiscoverResult(): undefined {
+        return undefined;
       }
       async close(): Promise<void> {
         state.closeCalled += 1;
@@ -65,7 +68,7 @@ function installClientMock(state: ClientStubState): void {
         return state.callToolImpl(args);
       }
     }
-    return { Client: FakeClient };
+    return { Client: FakeClient, isInputRequiredResult: () => false };
   });
 }
 
@@ -178,10 +181,13 @@ describe('connectMcpServer — listTools failure', () => {
 describe('buildMcpToolCatalog — per-server failure isolation', () => {
   it('logs to console.error and continues when one server fails', async () => {
     let listCalls = 0;
-    vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => {
+    vi.doMock('@modelcontextprotocol/client', () => {
       class FakeClient {
         constructor(public info: unknown) {}
         async connect(): Promise<void> {}
+        getDiscoverResult(): undefined {
+          return undefined;
+        }
         async close(): Promise<void> {}
         async listTools(): Promise<{ tools: ToolListItem[] }> {
           listCalls += 1;
@@ -196,7 +202,7 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
           return { content: [] };
         }
       }
-      return { Client: FakeClient };
+      return { Client: FakeClient, isInputRequiredResult: () => false };
     });
 
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -218,11 +224,14 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
   });
 
   it('returns an empty catalog when every server fails', async () => {
-    vi.doMock('@modelcontextprotocol/sdk/client/index.js', () => {
+    vi.doMock('@modelcontextprotocol/client', () => {
       class FakeClient {
         constructor(public info: unknown) {}
         async connect(): Promise<void> {
           throw new Error('connect failed');
+        }
+        getDiscoverResult(): undefined {
+          return undefined;
         }
         async close(): Promise<void> {}
         async listTools(): Promise<{ tools: ToolListItem[] }> {
@@ -232,7 +241,7 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
           return { content: [] };
         }
       }
-      return { Client: FakeClient };
+      return { Client: FakeClient, isInputRequiredResult: () => false };
     });
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const { buildMcpToolCatalog } = await import('../connect');
@@ -317,5 +326,31 @@ describe('validateMcpInputSchema', () => {
     const result = validateMcpInputSchema({ anyOf: refs });
     expect(result.ok).toBe(false);
     expect(result.reason).toMatch(/\$ref/);
+  });
+});
+
+describe('validateMcpInputSchema · network $ref (MCP 2026-07-28)', () => {
+  it('accepts local $ref', () => {
+    const schema = {
+      type: 'object',
+      properties: { a: { $ref: '#/$defs/A' } },
+      $defs: { A: { type: 'string' } },
+    };
+    expect(validateMcpInputSchema(schema).ok).toBe(true);
+  });
+
+  it('accepts a relative $ref (no scheme — stays local to the consumer base)', () => {
+    expect(validateMcpInputSchema({ $ref: 'defs.json#/Foo' }).ok).toBe(true);
+  });
+
+  it.each([
+    ['https://evil.example/schema.json'],
+    ['http://169.254.169.254/latest/meta-data/'],
+    ['file:///etc/passwd'],
+    ['ftp://host/schema.json'],
+  ])('rejects a network $ref: %s', (ref) => {
+    const result = validateMcpInputSchema({ type: 'object', properties: { a: { $ref: ref } } });
+    expect(result.ok).toBe(false);
+    expect(result.reason).toMatch(/network \$ref/);
   });
 });

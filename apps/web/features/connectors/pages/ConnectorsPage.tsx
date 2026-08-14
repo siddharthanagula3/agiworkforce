@@ -31,6 +31,7 @@ import {
 import { cn } from '@shared/lib/utils';
 import { ErrorBoundary } from '@shared/components/ErrorBoundary';
 import { getConnectorCapability } from '@/lib/connectors/catalog';
+import { legacyTransportNotice, resolveMcpTransportChoice } from '../lib/mcp-transport-choice';
 import { ConnectorOverviewDialog } from '../components/ConnectorOverviewDialog';
 import { OfficialConnectorLogo } from '../components/OfficialConnectorLogo';
 import {
@@ -106,6 +107,8 @@ function InspectMcpServerDialog({
   const [mcpUrl, setMcpUrl] = useState('');
   const [authToken, setAuthToken] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** Set when the pasted URL selects the deprecated HTTP+SSE transport. */
+  const [legacyTransportWarning, setLegacyTransportWarning] = useState<string | null>(null);
   const [isInspecting, setIsInspecting] = useState(false);
   const [inspectResult, setInspectResult] = useState<McpInspectResult | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -129,6 +132,14 @@ function InspectMcpServerDialog({
       return;
     }
 
+    // Say it out loud when the pasted URL selects the deprecated transport,
+    // instead of silently downgrading. See features/connectors/lib/
+    // mcp-transport-choice.ts for why we do not rewrite the URL for them.
+    const transportChoice = resolveMcpTransportChoice(parsedUrl);
+    setLegacyTransportWarning(
+      transportChoice.deprecated ? legacyTransportNotice(transportChoice.suggestedUrl) : null,
+    );
+
     setError(null);
     setInspectResult(null);
     setIsInspecting(true);
@@ -144,7 +155,7 @@ function InspectMcpServerDialog({
           serverName: parsedUrl.hostname.replace(/^www\./, '').slice(0, 100),
           config: {
             url: trimmedUrl,
-            transport: parsedUrl.pathname.endsWith('/sse') ? 'sse' : 'streamable-http',
+            transport: resolveMcpTransportChoice(parsedUrl).transport,
             ...(authToken.trim()
               ? {
                   headers: {
@@ -213,7 +224,7 @@ function InspectMcpServerDialog({
         body: JSON.stringify({
           name: inspectResult.serverName,
           url: trimmedUrl,
-          transport: parsedUrl.pathname.endsWith('/sse') ? 'sse' : 'streamable-http',
+          transport: resolveMcpTransportChoice(parsedUrl).transport,
           ...(authToken.trim() ? { authToken: authToken.trim() } : {}),
         }),
       });
@@ -285,6 +296,14 @@ function InspectMcpServerDialog({
                 aria-label="MCP auth token"
               />
               {error && <p className="text-xs text-destructive">{error}</p>}
+              {/* A deprecated transport is not an error — the connection works.
+                  It is a heads-up with the modern URL, so the user is not
+                  quietly parked on a protocol that is eligible for removal. */}
+              {legacyTransportWarning && (
+                <p className="text-xs text-amber-600 dark:text-amber-500" role="status">
+                  {legacyTransportWarning}
+                </p>
+              )}
               <Button
                 size="sm"
                 className="h-8 w-full text-xs bg-primary text-primary-foreground hover:bg-primary/90"

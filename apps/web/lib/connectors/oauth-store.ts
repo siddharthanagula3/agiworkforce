@@ -66,7 +66,27 @@ export const PENDING_AUTHORIZATION_TTL_SECONDS = 600;
 
 // ─── In-flight authorizations ───────────────────────────────────────────────
 
-export interface PendingAuthorizationInput {
+/**
+ * Endpoints and identifiers that a DISCOVERED connector has no registry entry
+ * to re-read on the callback leg (0115).
+ *
+ * They are pinned at start time rather than re-discovered at redemption so that
+ * a protected-resource document which changes between the two legs cannot point
+ * the code exchange at a different token endpoint. All fields are optional: a
+ * registry-configured connector leaves them null and reads its endpoints from
+ * `oauth-registry.ts` exactly as before.
+ */
+export interface DiscoveredAuthorizationFacts {
+  issuer?: string | null;
+  authorizationEndpoint?: string | null;
+  tokenEndpoint?: string | null;
+  /** RFC 8707 resource indicator the resulting token is bound to. */
+  resourceUrl?: string | null;
+  mcpUrl?: string | null;
+  clientId?: string | null;
+}
+
+export interface PendingAuthorizationInput extends DiscoveredAuthorizationFacts {
   userId: string;
   connectorId: string;
   /** Raw state — hashed here, never stored or logged in the clear. */
@@ -78,7 +98,7 @@ export interface PendingAuthorizationInput {
   returnPath: string;
 }
 
-export interface PendingAuthorization {
+export interface PendingAuthorization extends DiscoveredAuthorizationFacts {
   userId: string;
   connectorId: string;
   codeVerifier: string;
@@ -102,8 +122,9 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
     await db.execute(
       `insert into public.connector_oauth_authorizations (
          user_id, connector_id, state_hash, code_verifier_enc, code_challenge_method,
-         redirect_uri, requested_scopes, return_path, expires_at
-       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+         redirect_uri, requested_scopes, return_path, expires_at,
+         issuer, authorization_endpoint, token_endpoint, resource_url, mcp_url, client_id
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         input.userId,
         input.connectorId,
@@ -114,6 +135,12 @@ export async function createPendingAuthorization(input: PendingAuthorizationInpu
         input.requestedScopes,
         input.returnPath,
         expiresAt,
+        input.issuer ?? null,
+        input.authorizationEndpoint ?? null,
+        input.tokenEndpoint ?? null,
+        input.resourceUrl ?? null,
+        input.mcpUrl ?? null,
+        input.clientId ?? null,
       ],
     );
   } catch (error) {
@@ -129,6 +156,12 @@ interface PendingAuthorizationRow {
   redirect_uri: string;
   requested_scopes: string[] | null;
   return_path: string;
+  issuer: string | null;
+  authorization_endpoint: string | null;
+  token_endpoint: string | null;
+  resource_url: string | null;
+  mcp_url: string | null;
+  client_id: string | null;
 }
 
 /**
@@ -154,7 +187,8 @@ export async function consumePendingAuthorization(
           and consumed_at is null
           and expires_at > now()
         returning user_id, connector_id, code_verifier_enc, redirect_uri,
-                  requested_scopes, return_path`,
+                  requested_scopes, return_path, issuer, authorization_endpoint,
+                  token_endpoint, resource_url, mcp_url, client_id`,
       [hashOAuthState(state)],
     );
   } catch (error) {
@@ -186,6 +220,12 @@ export async function consumePendingAuthorization(
     redirectUri: row.redirect_uri,
     requestedScopes: row.requested_scopes ?? [],
     returnPath: row.return_path,
+    issuer: row.issuer,
+    authorizationEndpoint: row.authorization_endpoint,
+    tokenEndpoint: row.token_endpoint,
+    resourceUrl: row.resource_url,
+    mcpUrl: row.mcp_url,
+    clientId: row.client_id,
   };
 }
 
@@ -199,6 +239,21 @@ export interface StoredGrantTokens {
   /** Absolute expiry, or null when the provider issued no `expires_in`. */
   accessTokenExpiresAt: Date | null;
   tokenEndpoint: string;
+  /**
+   * The authorization server this grant was minted by (0115).
+   *
+   * Null for a registry-configured connector, whose authorization server is
+   * fixed by the operator's descriptor. Set for a discovered connector, where
+   * it is the SEP-2352 control: the refresh path compares it against what
+   * discovery reports now and forces a clean re-authorization if the MCP server
+   * has moved to a different authorization server, rather than presenting the
+   * credential to a party that is no longer its intended audience.
+   */
+  issuer?: string | null;
+  /** RFC 8707 resource indicator the token is bound to, when one was used. */
+  resourceUrl?: string | null;
+  /** The MCP endpoint this grant authorizes; the only record of it when discovered. */
+  mcpUrl?: string | null;
 }
 
 export async function upsertConnectorOAuthGrant(
@@ -212,8 +267,9 @@ export async function upsertConnectorOAuthGrant(
       `insert into public.connector_oauth_grants (
          user_id, connector_id, access_token_enc, refresh_token_enc, token_type,
          granted_scopes, access_token_expires_at, token_endpoint,
+         issuer, resource_url, mcp_url,
          connected_at, revoked_at, updated_at
-       ) values ($1, $2, $3, $4, $5, $6, $7, $8, now(), null, now())
+       ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now(), null, now())
        on conflict (user_id, connector_id) do update set
          access_token_enc = excluded.access_token_enc,
          refresh_token_enc = excluded.refresh_token_enc,
@@ -221,6 +277,9 @@ export async function upsertConnectorOAuthGrant(
          granted_scopes = excluded.granted_scopes,
          access_token_expires_at = excluded.access_token_expires_at,
          token_endpoint = excluded.token_endpoint,
+         issuer = excluded.issuer,
+         resource_url = excluded.resource_url,
+         mcp_url = excluded.mcp_url,
          connected_at = now(),
          revoked_at = null,
          updated_at = now()`,
@@ -233,6 +292,9 @@ export async function upsertConnectorOAuthGrant(
         tokens.grantedScopes,
         tokens.accessTokenExpiresAt?.toISOString() ?? null,
         tokens.tokenEndpoint,
+        tokens.issuer ?? null,
+        tokens.resourceUrl ?? null,
+        tokens.mcpUrl ?? null,
       ],
     );
   } catch (error) {
@@ -283,6 +345,12 @@ export interface ConnectorOAuthGrant {
   grantedScopes: string[];
   accessTokenExpiresAt: Date | null;
   tokenEndpoint: string;
+  /** Authorization server that minted this grant; null for registry connectors. */
+  issuer: string | null;
+  /** RFC 8707 resource the token is bound to, when one was requested. */
+  resourceUrl: string | null;
+  /** MCP endpoint this grant authorizes; the only record of it when discovered. */
+  mcpUrl: string | null;
   connectedAt: string;
   updatedAt: string;
 }
@@ -295,6 +363,9 @@ interface GrantRow {
   granted_scopes: string[] | null;
   access_token_expires_at: string | null;
   token_endpoint: string;
+  issuer: string | null;
+  resource_url: string | null;
+  mcp_url: string | null;
   connected_at: string;
   updated_at: string;
 }
@@ -321,6 +392,7 @@ export async function getConnectorOAuthGrant(
     rows = await db.query<GrantRow>(
       `select connector_id, access_token_enc, refresh_token_enc, token_type,
               granted_scopes, access_token_expires_at, token_endpoint,
+              issuer, resource_url, mcp_url,
               connected_at, updated_at
          from public.connector_oauth_grants
         where user_id = $1 and connector_id = $2 and revoked_at is null`,
@@ -348,6 +420,9 @@ function decodeGrantRow(row: GrantRow): ConnectorOAuthGrant {
         ? new Date(row.access_token_expires_at)
         : null,
       tokenEndpoint: row.token_endpoint,
+      issuer: row.issuer,
+      resourceUrl: row.resource_url,
+      mcpUrl: row.mcp_url,
       connectedAt: row.connected_at,
       updatedAt: row.updated_at,
     };
