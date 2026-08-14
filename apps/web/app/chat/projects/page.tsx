@@ -329,13 +329,21 @@ export default function ProjectsPage() {
             />
           )}
 
+          {/*
+            Transparent, not a tinted slab.
+
+            This section painted `--agi-bg-3` — the marketing palette's warm
+            parchment (#ebe2d1 light / #1b1810 dark) — across a 480px-tall
+            panel, with one small white project card floating inside it. Every
+            other in-app surface (Library, Schedules, Chat) renders cards
+            directly on the page background, so Projects read as a different,
+            half-finished product the moment you navigated to it. The panel is
+            now a plain layout container; the CARDS are the surfaces.
+          */}
           <section
             style={{
-              border: '1px solid var(--agi-rule)',
-              borderRadius: 16,
-              background: 'var(--agi-bg-3)',
-              padding: '20px 24px',
-              minHeight: 480,
+              padding: '4px 0 0',
+              minHeight: 320,
             }}
           >
             {projectStatus === 'loading' || projectStatus === 'idle' ? (

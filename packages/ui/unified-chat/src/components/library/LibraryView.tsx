@@ -525,8 +525,20 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
           className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
         >
           {cards.map(({ item, isUnavailable, presentation }) => (
-            <div key={item.id} className="flex h-full flex-col gap-1">
+            // One card per file, with the row actions as an attached FOOTER.
+            //
+            // These were previously bare siblings under the card in a gap-1
+            // column, so "Delete" rendered as a loose red underlined link
+            // floating in the grid gutter between rows — it read as a
+            // misplaced element rather than an action belonging to the file
+            // above it. The wrapper now owns the card chrome and the inner
+            // card drops its own, so the whole cell is a single surface.
+            <div
+              key={item.id}
+              className="flex h-full flex-col overflow-hidden rounded-[var(--chat-radius-md)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)]"
+            >
               <GeneratedFileCard
+                className="h-auto flex-1 rounded-none border-0 bg-transparent"
                 presentation={{
                   ...presentation,
                   // Inline thumbnail through the authed serve route for
@@ -545,136 +557,138 @@ export function LibraryView({ transport, initialQuery = '' }: LibraryViewProps) 
                 }
                 onPreviewError={() => void handleThumbnailError(item)}
               />
-              {isUnavailable ? (
-                <p className="px-1 text-xs text-[var(--chat-destructive)]" role="status">
-                  Stored file bytes are no longer available. You can remove this stale Library
-                  entry.
-                </p>
-              ) : null}
-              {viewDeleted ? (
-                confirmingPermanentDeleteId === item.id ? (
+              <div className="flex flex-col gap-2 border-t border-[var(--chat-border)] px-3 py-2">
+                {isUnavailable ? (
+                  <p className="text-xs text-[var(--chat-destructive)]" role="status">
+                    Stored file bytes are no longer available. You can remove this stale Library
+                    entry.
+                  </p>
+                ) : null}
+                {viewDeleted ? (
+                  confirmingPermanentDeleteId === item.id ? (
+                    <div
+                      className="rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-2"
+                      role="group"
+                      aria-label={`Permanently delete ${item.file_name}`}
+                    >
+                      <p className="text-xs text-[var(--chat-text-secondary)]">
+                        Delete permanently? This file cannot be restored.
+                      </p>
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingPermanentDeleteId(null)}
+                          disabled={permanentlyDeletingId === item.id}
+                          className="text-xs font-medium text-[var(--chat-text-secondary)] underline underline-offset-2 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handlePermanentDelete(item.id)}
+                          disabled={permanentlyDeletingId === item.id}
+                          className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2 disabled:opacity-50"
+                        >
+                          {permanentlyDeletingId === item.id ? 'Deleting…' : 'Delete permanently'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => void handleRestore(item.id)}
+                        disabled={restoringId === item.id}
+                        className="text-xs font-medium text-primary underline underline-offset-2 disabled:opacity-50"
+                      >
+                        {restoringId === item.id ? 'Restoring…' : 'Restore'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingPermanentDeleteId(item.id)}
+                        className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
+                      >
+                        Delete permanently
+                      </button>
+                    </div>
+                  )
+                ) : confirmingDeleteId === item.id ? (
                   <div
                     className="rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-2"
                     role="group"
-                    aria-label={`Permanently delete ${item.file_name}`}
+                    aria-label={`Delete ${item.file_name}`}
                   >
                     <p className="text-xs text-[var(--chat-text-secondary)]">
-                      Delete permanently? This file cannot be restored.
+                      Move to Recently deleted? You can restore it for 30 days.
                     </p>
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         type="button"
-                        onClick={() => setConfirmingPermanentDeleteId(null)}
-                        disabled={permanentlyDeletingId === item.id}
+                        onClick={() => setConfirmingDeleteId(null)}
+                        disabled={deletingId === item.id}
                         className="text-xs font-medium text-[var(--chat-text-secondary)] underline underline-offset-2 disabled:opacity-50"
                       >
                         Cancel
                       </button>
                       <button
                         type="button"
-                        onClick={() => void handlePermanentDelete(item.id)}
-                        disabled={permanentlyDeletingId === item.id}
+                        onClick={() => void handleDelete(item.id)}
+                        disabled={deletingId === item.id}
                         className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2 disabled:opacity-50"
                       >
-                        {permanentlyDeletingId === item.id ? 'Deleting…' : 'Delete permanently'}
+                        {deletingId === item.id ? 'Deleting…' : 'Move to Recently deleted'}
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void handleRestore(item.id)}
-                      disabled={restoringId === item.id}
-                      className="text-xs font-medium text-primary underline underline-offset-2 disabled:opacity-50"
-                    >
-                      {restoringId === item.id ? 'Restoring…' : 'Restore'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingPermanentDeleteId(item.id)}
-                      className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
-                    >
-                      Delete permanently
-                    </button>
-                  </div>
-                )
-              ) : confirmingDeleteId === item.id ? (
-                <div
-                  className="rounded-[var(--chat-radius-sm)] border border-[var(--chat-border)] bg-[var(--chat-surface-elevated)] p-2"
-                  role="group"
-                  aria-label={`Delete ${item.file_name}`}
-                >
-                  <p className="text-xs text-[var(--chat-text-secondary)]">
-                    Move to Recently deleted? You can restore it for 30 days.
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingDeleteId(null)}
-                      disabled={deletingId === item.id}
-                      className="text-xs font-medium text-[var(--chat-text-secondary)] underline underline-offset-2 disabled:opacity-50"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void handleDelete(item.id)}
-                      disabled={deletingId === item.id}
-                      className="text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2 disabled:opacity-50"
-                    >
-                      {deletingId === item.id ? 'Deleting…' : 'Move to Recently deleted'}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDeleteId(item.id)}
-                  className="flex self-start items-center gap-1 text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
-                  aria-label={`Delete ${item.file_name}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                  Delete
-                </button>
-              )}
-              {mutationErrors[item.id] ? (
-                <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
-                  <span>
-                    {viewDeleted && confirmingPermanentDeleteId === item.id
-                      ? 'Permanent delete'
-                      : viewDeleted
-                        ? 'Restore'
-                        : 'Delete'}{' '}
-                    failed ({mutationErrors[item.id]}).
-                  </span>
                   <button
                     type="button"
-                    onClick={() =>
-                      void (viewDeleted
-                        ? confirmingPermanentDeleteId === item.id
-                          ? handlePermanentDelete(item.id)
-                          : handleRestore(item.id)
-                        : handleDelete(item.id))
-                    }
-                    className="font-medium underline underline-offset-2"
+                    onClick={() => setConfirmingDeleteId(item.id)}
+                    className="flex self-start items-center gap-1 text-xs font-medium text-[var(--chat-destructive)] underline underline-offset-2"
+                    aria-label={`Delete ${item.file_name}`}
                   >
-                    Retry
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                    Delete
                   </button>
-                </div>
-              ) : null}
-              {downloadErrors[item.id] ? (
-                <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
-                  <span>Download failed ({downloadErrors[item.id]}).</span>
-                  <button
-                    type="button"
-                    onClick={() => void handleDownload(item)}
-                    className="font-medium underline underline-offset-2"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : null}
+                )}
+                {mutationErrors[item.id] ? (
+                  <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
+                    <span>
+                      {viewDeleted && confirmingPermanentDeleteId === item.id
+                        ? 'Permanent delete'
+                        : viewDeleted
+                          ? 'Restore'
+                          : 'Delete'}{' '}
+                      failed ({mutationErrors[item.id]}).
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void (viewDeleted
+                          ? confirmingPermanentDeleteId === item.id
+                            ? handlePermanentDelete(item.id)
+                            : handleRestore(item.id)
+                          : handleDelete(item.id))
+                      }
+                      className="font-medium underline underline-offset-2"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : null}
+                {downloadErrors[item.id] ? (
+                  <div className="flex items-center gap-2 text-xs text-[var(--chat-destructive)]">
+                    <span>Download failed ({downloadErrors[item.id]}).</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleDownload(item)}
+                      className="font-medium underline underline-offset-2"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ))}
         </div>
