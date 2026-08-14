@@ -42,8 +42,9 @@ export default function AccessibilityPage() {
               <tr>
                 <td>Screen reader</td>
                 <td>
-                  Semantic HTML throughout · landmarks, headings in order, lists, labelled controls.
-                  ARIA labels where semantics aren&rsquo;t enough.
+                  Semantic HTML · landmarks, headings in order, lists, labelled controls. ARIA
+                  labels where semantics aren&rsquo;t enough. Verified by automated scan on the
+                  routes listed below, not by testing with an actual screen reader on every page.
                 </td>
               </tr>
               <tr>
@@ -57,18 +58,39 @@ export default function AccessibilityPage() {
                 <td>Contrast</td>
                 <td>
                   Body text and primary UI surfaces meet AA contrast against the warm-near-black
-                  surface. Tertiary copy meets large-text AA.
+                  surface, in both light and dark schemes, on the routes listed below. Tertiary copy
+                  meets large-text AA.
                 </td>
               </tr>
               <tr>
                 <td>Focus</td>
                 <td>
-                  Visible focus rings on every interactive element. No <code>outline: none</code>{' '}
-                  without an explicit replacement.
+                  Visible focus rings are the house rule and <code>outline: none</code> is not used
+                  without an explicit replacement. As with keyboard operability above, that is a
+                  standard we hold components to rather than a per-element audit result &mdash; we
+                  do not claim every element on every route has been checked.
                 </td>
               </tr>
             </tbody>
           </table>
+
+          <p className="agi-page-lede" style={{ marginTop: 24, fontSize: 14 }}>
+            <strong>The evidence behind those rows, and its limits.</strong> An automated axe scan
+            runs against WCAG 2.0 A/AA and 2.1 A/AA and currently reports{' '}
+            <strong>zero violations</strong>. Its scope is five routes &mdash; the home page, the
+            chat app, pricing, a feature page and the download page &mdash; each in both light and
+            dark colour schemes. That is the whole basis for the conformance rows above, so read
+            them as covering those routes rather than all of the site.
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
+            Two limits worth stating rather than leaving you to infer. Automated tooling catches a
+            minority of WCAG criteria &mdash; it finds a missing label and cannot tell you whether a
+            heading makes sense or a focus order is logical, which is why the keyboard and focus
+            rows above describe a standard we hold components to rather than an audit result. And
+            the scan covers five routes out of well over a hundred. We hold no VPAT and have
+            commissioned no third-party accessibility audit; if either changes, this section says so
+            on the same day.
+          </p>
         </section>
         <section className="agi-section">
           <p className="agi-section-eyebrow">Known gaps</p>
