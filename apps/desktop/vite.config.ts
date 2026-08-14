@@ -348,9 +348,21 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/contracts/trust-boundaries/src/index.ts',
         ),
+        // EVERY `@agiworkforce/utils/<subpath>` used by desktop source must be
+        // listed here, ABOVE the bare-package entry. Vite matches object-form
+        // aliases by PREFIX, so the '@agiworkforce/utils' entry below also
+        // captures subpath imports and rewrites them to `.../src/index.ts/<sub>`
+        // — a path inside a file, which fails at build time with the opaque
+        // "Not a directory (os error 20)". The package's own `exports` map is
+        // correct and is what every other surface resolves through; it is only
+        // bypassed here because this alias block short-circuits resolution.
         '@agiworkforce/utils/uuidv7': path.resolve(
           __dirname,
           '../../packages/platform/utils/src/uuidv7.ts',
+        ),
+        '@agiworkforce/utils/display-name': path.resolve(
+          __dirname,
+          '../../packages/platform/utils/src/displayName.ts',
         ),
         '@agiworkforce/utils': path.resolve(
           __dirname,
