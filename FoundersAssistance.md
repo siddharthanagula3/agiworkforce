@@ -1126,9 +1126,25 @@ a founder call, and setting them piecemeal is how a catalog ends up half-migrate
 
 ---
 
-## 27. Grant the Stripe CLI "Prices Write" so the stale live prices can be retired
+## 27. Stale live prices — RESOLVED 2026-08-14
 
-**Status:** `BLOCKED_BY_HUMAN`. Attempted on 2026-08-14 and refused:
+**Status:** `DONE`. All six live-mode prices are archived (`active=false`), confirmed
+by listing them back from Stripe rather than by trusting the write command. Zero
+ACTIVE prices remain in live mode, so a key flip now fails closed instead of
+charging Pro at $29.99 against a page promising $20.
+
+The price env vars in `.env.local` (both copies) and Vercel Production were
+repointed at the verified test-mode IDs matching `BILLING_PLAN_PRICING`, and the
+missing `STRIPE_PRICE_TEAM_MONTHLY_USD` / `STRIPE_PRICE_TEAM_YEARLY_USD` were
+added — the local files had been pointing at the LIVE ids, which do not exist in
+test mode, so local checkout was broken independently of everything else.
+
+**Still to do:** revoke the temporary write permission on the live restricted key
+(Prices → Write back to None), plus anything else the bulk toggle enabled
+(Third-Party Gift Cards, Webhook Endpoints, Workflows). The cleanup is finished;
+a live key with write access is a standing risk for no remaining benefit.
+
+The old blocker, for the record:
 
 ```
 Permission denied. The provided key 'rk_live_…zpFQTb' does not have the required
