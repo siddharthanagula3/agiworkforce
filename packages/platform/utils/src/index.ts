@@ -150,3 +150,8 @@ export {
 // Shared reasoning/thinking-block presentation logic (web ThinkingBlock,
 // mobile ThinkingChip) — duration formatting + live verb-phrase inference.
 export { formatThinkingDuration, deriveReasoningPhrase } from './reasoning';
+
+// Shared account/profile name presentation (web greeting + sidebar account
+// row, mobile settings, desktop account menu) so one surface cannot shout
+// "SIDDHARTHA" while another shows "Siddhartha".
+export { normalizeDisplayName, resolveAccountDisplayName, accountInitial } from './displayName';

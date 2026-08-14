@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import * as ImagePicker from 'expo-image-picker';
 import { useUser } from '@clerk/expo';
+import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import {
   Archive,
   Baby,
@@ -198,13 +199,21 @@ function ProfileHeader({ onPress }: { onPress: () => void }) {
   const cloudPersonalization = useCloudSettingsStore((s) => s.personalization);
   const personalization = isCloudMode ? cloudPersonalization : localPersonalization;
   const [savingPhoto, setSavingPhoto] = useState(false);
+  // A name the USER typed (nickname / fullName in personalization) is rendered
+  // exactly as typed — their casing is a deliberate choice. Only the values
+  // that come from the identity provider go through the shared normaliser,
+  // because Clerk stores whatever the signup form captured and "SIDDHARTHA
+  // NAGULA" shouting from the settings header reads as a bug (see
+  // @agiworkforce/utils/display-name).
+  const providerName =
+    clerkUser?.fullName ||
+    clerkUser?.firstName ||
+    clerkUser?.username ||
+    clerkUser?.primaryEmailAddress?.emailAddress?.split('@')[0];
   const displayName = isCloudMode
     ? personalization.nickname ||
       personalization.fullName ||
-      clerkUser?.fullName ||
-      clerkUser?.firstName ||
-      clerkUser?.username ||
-      clerkUser?.primaryEmailAddress?.emailAddress?.split('@')[0] ||
+      (providerName ? normalizeDisplayName(providerName) : undefined) ||
       'AGI Cloud'
     : personalization.nickname || personalization.fullName || 'Local profile';
   const subtitle = isCloudMode

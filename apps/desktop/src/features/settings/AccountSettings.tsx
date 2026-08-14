@@ -14,6 +14,7 @@
  * the Plan row only links to the same Stripe portal.
  */
 import { useState } from 'react';
+import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { Button } from '@/ui/Button';
 import { useAccountStore, useAuthStore } from '../../stores/auth';
 import type { CreditBalance, SubscriptionStatus } from '../../stores/auth';
@@ -85,8 +86,11 @@ export function AccountSettings() {
     accountData.subscriptionFetchStatus === 'succeeded',
   );
 
-  const displayName =
-    accountData.displayName || accountData.email?.split('@')[0] || 'AGI Workforce user';
+  const displayName = resolveAccountDisplayName(
+    accountData.displayName,
+    accountData.email,
+    'AGI Workforce user',
+  );
   const subscriptionStatusLabel =
     SUBSCRIPTION_STATUS_LABELS[accountData.subscriptionStatus] ?? 'Unknown';
   const planStatus = cancellationScheduled

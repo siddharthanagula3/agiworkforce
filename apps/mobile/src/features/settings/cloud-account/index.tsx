@@ -18,6 +18,7 @@ import {
   UserRound,
 } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
+import { normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
@@ -49,7 +50,10 @@ export default function CloudAccountScreen() {
 
   const userId = clerkUser?.id ?? null;
   const userEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
-  const displayName = clerkUser?.fullName ?? clerkUser?.username ?? null;
+  // Provider-stored casing is not a presentation decision — shared rule in
+  // @agiworkforce/utils/display-name.
+  const rawDisplayName = clerkUser?.fullName ?? clerkUser?.username ?? null;
+  const displayName = rawDisplayName ? normalizeDisplayName(rawDisplayName) : null;
   const avatarUrl = clerkUser?.imageUrl ?? null;
 
   const [copied, setCopied] = useState(false);

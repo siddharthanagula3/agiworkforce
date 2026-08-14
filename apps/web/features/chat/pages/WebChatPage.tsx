@@ -54,6 +54,7 @@ import {
   type SendPreviewPresentation,
   hasSelfServeUpgradePath,
 } from '@agiworkforce/types';
+import { accountInitial, normalizeDisplayName } from '@agiworkforce/utils/display-name';
 import {
   Menu,
   Share2,
@@ -273,13 +274,18 @@ export function resolveChatAccountDisplay(
   showFreeUpgrade: boolean;
   isLoading: boolean;
 } {
-  const displayName = user?.name || user?.email?.split('@')[0];
+  // Shared normalisation (see @agiworkforce/utils/display-name): the identity
+  // provider's stored casing is not a presentation decision. Without this the
+  // chat sidebar shouted "SIDDHARTHA NAGULA" under a greeting that read
+  // "Siddhartha".
+  const rawName = user?.name?.trim() || user?.email?.trim().split('@')[0]?.trim();
+  const displayName = rawName ? normalizeDisplayName(rawName) : undefined;
 
   if (!billingPolicyReady) {
     if (displayName) {
       return {
         displayName,
-        userInitial: displayName.charAt(0).toUpperCase(),
+        userInitial: accountInitial(displayName),
         tierLabel: null,
         showFreeUpgrade: false,
         isLoading: false,
@@ -298,7 +304,7 @@ export function resolveChatAccountDisplay(
   const tier = subscriptionTier ?? 'free';
   return {
     displayName: settledDisplayName,
-    userInitial: settledDisplayName.charAt(0).toUpperCase(),
+    userInitial: accountInitial(settledDisplayName),
     tierLabel: getBillingPlanPricing(tier).label,
     showFreeUpgrade: tier === 'free',
     isLoading: false,
