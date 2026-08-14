@@ -61,6 +61,19 @@ const allowedRootFiles = new Set([
   'SECURITY.md',
   'THIRD_PARTY_LICENSES.md',
   'TODO.md',
+  // India DPDP Act instruments, root-level for the same reason
+  // FoundersAssistance.md is: they must be seen, not filed away.
+  //
+  // BREACH_RUNBOOK.md is read under incident pressure, on the worst day, by
+  // whoever is awake. A runbook nested three directories deep is a runbook
+  // nobody finds at 2am, and the notification clock it exists to protect starts
+  // the moment anyone becomes aware — not when they locate the procedure.
+  //
+  // DPDP_PROGRESS.md carries the decision log, the clauses awaiting counsel, and
+  // the founder decisions the compliance work cannot make for itself. Filing it
+  // under docs/ would put questions addressed to a human where only agents look.
+  'BREACH_RUNBOOK.md',
+  'DPDP_PROGRESS.md',
   // Hardening-mission root instruments (root-level by design — REMEDIATION_BRIEF.md
   // is the operating contract and references audit.sh/audit-report.md "at the repo root").
   'REMEDIATION_BRIEF.md',

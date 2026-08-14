@@ -1,5 +1,11 @@
 import Link from 'next/link';
 import { AgiMark } from '@shared/components/agi/AgiMark';
+import {
+  CONTACT_EMAIL,
+  CONTACT_SUBJECTS,
+  GRIEVANCE_OFFICER_NAME,
+  contactMailto,
+} from '@/lib/legal-constants';
 
 /*
  * Site-wide marketing footer. Compact product, surface, capability, and
@@ -61,6 +67,11 @@ const COMPANY = [
   // several third-party and open-weight models needs its licence terms stated.
   { href: '/copyright', label: 'Copyright' },
   { href: '/model-licenses', label: 'Model licences' },
+  // India. DPDP requires the notice and the grievance route to be findable
+  // without already being a customer, so both are footer links rather than
+  // sections buried inside /privacy.
+  { href: '/privacy/india', label: 'India — DPDP notice' },
+  { href: '/privacy/requests', label: 'Data rights & consent' },
   { href: '/legal', label: 'All legal docs' },
 ];
 
@@ -123,6 +134,28 @@ export function MarketingFooter() {
             </li>
           ))}
         </ul>
+      </div>
+      {/*
+        Grievance contact in the footer, not only on the policy page. India's
+        DPDP Act makes the fiduciary's grievance route a precondition for
+        complaining to the Data Protection Board, so someone who needs it has to
+        be able to find it from any page — including from a page that made them
+        want to complain. Subject-line routing because `contact@` is the one
+        mailbox proven to receive mail; see lib/legal-constants.ts.
+      */}
+      <div className="agi-footer-strip">
+        <span>
+          Grievance officer ({GRIEVANCE_OFFICER_NAME}):{' '}
+          <a href={contactMailto(CONTACT_SUBJECTS.dpdpGrievance)} className="agi-footer-link">
+            {CONTACT_EMAIL}
+          </a>{' '}
+          · subject &ldquo;{CONTACT_SUBJECTS.dpdpGrievance}&rdquo;
+        </span>
+        <span>
+          <Link href="/privacy/requests" className="agi-footer-link">
+            Exercise your data rights
+          </Link>
+        </span>
       </div>
       <div className="agi-footer-strip">
         <span>© 2026 AGI. Proprietary.</span>
