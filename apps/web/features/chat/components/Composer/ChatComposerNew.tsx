@@ -33,6 +33,7 @@ import { ComposerFooter } from './ComposerFooter';
 import { DragDropOverlay } from './DragDropOverlay';
 import { VoiceInputButton } from './VoiceInputButton';
 import { AttachmentPreview } from './AttachmentPreview';
+import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { getAcceptAttribute, useAttachments } from '@features/chat/hooks/use-attachments';
 import { isChatImageMimeType } from '@/lib/chat-attachment-policy';
 import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-list';
@@ -893,6 +894,12 @@ const ChatComposerNewComponent = ({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
+  // The "+" trigger and its portaled menu. The menu is no longer a DOM
+  // descendant of `overflowRef` (see AnchoredComposerMenu), so the
+  // outside-click handler has to consult both or every click inside the menu
+  // would read as a click outside it and close the menu mid-interaction.
+  const overflowTriggerRef = useRef<HTMLButtonElement>(null);
+  const overflowMenuRef = useRef<HTMLDivElement>(null);
   const projectPickerRef = useRef<HTMLDivElement>(null);
   const mentionsRef = useRef<HTMLDivElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
@@ -1142,7 +1149,12 @@ const ChatComposerNewComponent = ({
   // Close popover on outside click or Escape
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (overflowRef.current && !overflowRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      // The "+" menu is portaled to document.body, so "inside" means inside
+      // the trigger wrapper OR inside the menu content.
+      const insideOverflow =
+        overflowRef.current?.contains(target) || overflowMenuRef.current?.contains(target);
+      if (!insideOverflow) {
         setShowOverflowMenu(false);
       }
       if (mentionsRef.current && !mentionsRef.current.contains(e.target as Node)) {
@@ -2305,6 +2317,7 @@ const ChatComposerNewComponent = ({
             {/* + Overflow Menu Button */}
             <div className={cn('relative shrink-0')} ref={overflowRef}>
               <button
+                ref={overflowTriggerRef}
                 onClick={() => {
                   const next = !showOverflowMenu;
                   setShowOverflowMenu(next);
@@ -2345,63 +2358,74 @@ const ChatComposerNewComponent = ({
                 )}
               </button>
 
-              {/* + Menu Popover */}
-              {showOverflowMenu && (
-                <div className="absolute bottom-full left-0 z-50 mb-2 w-64 rounded-xl border border-border/60 bg-popover/95 p-1.5 shadow-xl backdrop-blur-xl">
-                  {
-                    <>
-                      {/* 0. Work mode (Chat | AGI Work) — shown in the menu ONLY
+              {/* + Menu Popover.
+
+                Portaled and viewport-clamped (see AnchoredComposerMenu): as an
+                `absolute bottom-full` child it was clipped by the chat shell's
+                overflow-hidden column, and at ordinary laptop viewport heights
+                the clip removed its FIRST row — "Add photos & files" — leaving
+                the product with no reachable way to attach a file. */}
+              <AnchoredComposerMenu
+                anchorRef={overflowTriggerRef}
+                open={showOverflowMenu}
+                align="start"
+                contentRef={overflowMenuRef}
+                className="w-64 p-1.5"
+              >
+                {
+                  <>
+                    {/* 0. Work mode (Chat | AGI Work) — shown in the menu ONLY
                         below sm, where the inline segmented toggle is hidden to
                         free composer-row width for the model selector. Keeps
                         work-mode fully switchable on the narrow (mobile)
                         composer instead of dropping the control. */}
-                      {projectPicker && !imageMode && canUseAgiWork && (
-                        <div className="chat-composer-mode-in-menu sm:hidden">
-                          <div className="flex items-center gap-3 rounded-lg px-3 py-2">
-                            <span className="flex-1 text-left text-sm">Mode</span>
-                            <div className="flex items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
-                              {(['chat', 'agiwork'] as const).map((mode) => (
-                                <button
-                                  key={mode}
-                                  type="button"
-                                  onClick={() => handleWorkModeChange(mode)}
-                                  disabled={isTurnActive || composerDisabled}
-                                  aria-pressed={workMode === mode}
-                                  title={WORK_MODE_TITLES[mode]}
-                                  className={cn(
-                                    'flex h-7 items-center rounded-full px-3 transition-colors',
-                                    workMode === mode
-                                      ? 'bg-background text-foreground shadow-sm'
-                                      : 'text-muted-foreground hover:text-foreground',
-                                    (isTurnActive || composerDisabled) &&
-                                      'cursor-not-allowed opacity-50',
-                                  )}
-                                >
-                                  {mode === 'chat' ? 'Chat' : 'AGI Work'}
-                                </button>
-                              ))}
-                            </div>
+                    {projectPicker && !imageMode && canUseAgiWork && (
+                      <div className="chat-composer-mode-in-menu sm:hidden">
+                        <div className="flex items-center gap-3 rounded-lg px-3 py-2">
+                          <span className="flex-1 text-left text-sm">Mode</span>
+                          <div className="flex items-center rounded-full border border-[var(--chat-glass-border)] bg-muted/40 p-0.5 text-xs font-medium">
+                            {(['chat', 'agiwork'] as const).map((mode) => (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => handleWorkModeChange(mode)}
+                                disabled={isTurnActive || composerDisabled}
+                                aria-pressed={workMode === mode}
+                                title={WORK_MODE_TITLES[mode]}
+                                className={cn(
+                                  'flex h-7 items-center rounded-full px-3 transition-colors',
+                                  workMode === mode
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground',
+                                  (isTurnActive || composerDisabled) &&
+                                    'cursor-not-allowed opacity-50',
+                                )}
+                              >
+                                {mode === 'chat' ? 'Chat' : 'AGI Work'}
+                              </button>
+                            ))}
                           </div>
-                          <div className="my-1 border-t border-border/40" />
                         </div>
-                      )}
+                        <div className="my-1 border-t border-border/40" />
+                      </div>
+                    )}
 
-                      {/* 1. Add photos and files */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          fileInputRef.current?.click();
-                          closeMenu();
-                        }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                      >
-                        <Paperclip className="h-4 w-4 text-muted-foreground" />
-                        <span className="flex-1 text-left">Add photos &amp; files</span>
-                      </button>
+                    {/* 1. Add photos and files */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        fileInputRef.current?.click();
+                        closeMenu();
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    >
+                      <Paperclip className="h-4 w-4 text-muted-foreground" />
+                      <span className="flex-1 text-left">Add photos &amp; files</span>
+                    </button>
 
-                      {hostCanGenerateImage && (
-                        <>
-                          {/* 2. Create image.
+                    {hostCanGenerateImage && (
+                      <>
+                        {/* 2. Create image.
 
                         AUDIT-FIX CMP-11: this row had NO tier check in the
                         composer while /api/media/image/generate rejects
@@ -2409,90 +2433,88 @@ const ChatComposerNewComponent = ({
                         failed after a round trip, with `onUpgradeRequest`
                         available and never called. Deep Research one row below
                         was already gated correctly; this now matches it. */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              closeMenu();
-                              if (!billingPolicyReady) {
-                                if (billingPolicyError) {
-                                  setLocalNotice("Couldn't verify your plan. Retrying…");
-                                  void refreshBillingPolicy();
-                                } else {
-                                  setLocalNotice('Checking your plan…');
-                                }
-                                return;
+                        <button
+                          type="button"
+                          onClick={() => {
+                            closeMenu();
+                            if (!billingPolicyReady) {
+                              if (billingPolicyError) {
+                                setLocalNotice("Couldn't verify your plan. Retrying…");
+                                void refreshBillingPolicy();
+                              } else {
+                                setLocalNotice('Checking your plan…');
                               }
-                              if (mediaAvailabilityStatus !== 'ready') {
-                                setLocalNotice(
-                                  mediaAvailabilityStatus === 'error'
-                                    ? (mediaAvailabilityError ??
-                                        'Could not check image model availability.')
-                                    : 'Checking image model availability…',
-                                );
-                                if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
-                                return;
-                              }
-                              if (availableImageModels.length === 0) {
-                                setLocalNotice(
-                                  'This deployment is not ready for image generation.',
-                                );
-                                return;
-                              }
-                              if (!canUseImageGeneration) {
-                                onUpgradeRequest?.();
-                                return;
-                              }
-                              setImageMode(true);
-                              setTimeout(() => textareaRef.current?.focus(), 0);
-                            }}
-                            title={
-                              !billingPolicyReady
-                                ? billingPolicyError
-                                  ? 'Your plan could not be verified. Click to retry.'
-                                  : 'Checking your plan.'
-                                : mediaAvailabilityStatus === 'loading'
-                                  ? 'Checking configured image providers.'
-                                  : mediaAvailabilityStatus === 'error'
-                                    ? 'Image provider availability could not be checked. Click to retry.'
-                                    : availableImageModels.length === 0
-                                      ? 'This deployment is not ready for image generation.'
-                                      : !canUseImageGeneration
-                                        ? 'Image generation is available on Pro and above.'
-                                        : undefined
+                              return;
                             }
+                            if (mediaAvailabilityStatus !== 'ready') {
+                              setLocalNotice(
+                                mediaAvailabilityStatus === 'error'
+                                  ? (mediaAvailabilityError ??
+                                      'Could not check image model availability.')
+                                  : 'Checking image model availability…',
+                              );
+                              if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+                              return;
+                            }
+                            if (availableImageModels.length === 0) {
+                              setLocalNotice('This deployment is not ready for image generation.');
+                              return;
+                            }
+                            if (!canUseImageGeneration) {
+                              onUpgradeRequest?.();
+                              return;
+                            }
+                            setImageMode(true);
+                            setTimeout(() => textareaRef.current?.focus(), 0);
+                          }}
+                          title={
+                            !billingPolicyReady
+                              ? billingPolicyError
+                                ? 'Your plan could not be verified. Click to retry.'
+                                : 'Checking your plan.'
+                              : mediaAvailabilityStatus === 'loading'
+                                ? 'Checking configured image providers.'
+                                : mediaAvailabilityStatus === 'error'
+                                  ? 'Image provider availability could not be checked. Click to retry.'
+                                  : availableImageModels.length === 0
+                                    ? 'This deployment is not ready for image generation.'
+                                    : !canUseImageGeneration
+                                      ? 'Image generation is available on Pro and above.'
+                                      : undefined
+                          }
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                            imageMode && 'text-primary',
+                          )}
+                        >
+                          <ImagePlus
                             className={cn(
-                              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                              imageMode && 'text-primary',
+                              'h-4 w-4',
+                              imageMode ? 'text-primary' : 'text-muted-foreground',
                             )}
-                          >
-                            <ImagePlus
-                              className={cn(
-                                'h-4 w-4',
-                                imageMode ? 'text-primary' : 'text-muted-foreground',
-                              )}
-                            />
-                            <span className="flex-1 text-left">Create image</span>
-                            {!billingPolicyReady ? (
-                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                {billingPolicyError ? 'Retry' : 'Checking'}
-                              </span>
-                            ) : mediaAvailabilityStatus !== 'ready' ||
-                              availableImageModels.length === 0 ? (
-                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
-                              </span>
-                            ) : !canUseImageGeneration ? (
-                              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                Upgrade
-                              </span>
-                            ) : null}
-                          </button>
-                        </>
-                      )}
+                          />
+                          <span className="flex-1 text-left">Create image</span>
+                          {!billingPolicyReady ? (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {billingPolicyError ? 'Retry' : 'Checking'}
+                            </span>
+                          ) : mediaAvailabilityStatus !== 'ready' ||
+                            availableImageModels.length === 0 ? (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
+                            </span>
+                          ) : !canUseImageGeneration ? (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              Upgrade
+                            </span>
+                          ) : null}
+                        </button>
+                      </>
+                    )}
 
-                      {hostCanGenerateVideo && (
-                        <>
-                          {/* 2b. Create video.
+                    {hostCanGenerateVideo && (
+                      <>
+                        {/* 2b. Create video.
 
                         /api/media/video/generate has been implemented and
                         entitled (billing-catalog: max_15x + enterprise) all
@@ -2502,88 +2524,86 @@ const ChatComposerNewComponent = ({
                         composer was unreachable. Same component, same gating
                         idiom, same upgrade affordance as "Create image" one row
                         above; only the capability key differs. */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              closeMenu();
-                              if (!billingPolicyReady) {
-                                if (billingPolicyError) {
-                                  setLocalNotice("Couldn't verify your plan. Retrying…");
-                                  void refreshBillingPolicy();
-                                } else {
-                                  setLocalNotice('Checking your plan…');
-                                }
-                                return;
+                        <button
+                          type="button"
+                          onClick={() => {
+                            closeMenu();
+                            if (!billingPolicyReady) {
+                              if (billingPolicyError) {
+                                setLocalNotice("Couldn't verify your plan. Retrying…");
+                                void refreshBillingPolicy();
+                              } else {
+                                setLocalNotice('Checking your plan…');
                               }
-                              if (mediaAvailabilityStatus !== 'ready') {
-                                setLocalNotice(
-                                  mediaAvailabilityStatus === 'error'
-                                    ? (mediaAvailabilityError ??
-                                        'Could not check video model availability.')
-                                    : 'Checking video model availability…',
-                                );
-                                if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
-                                return;
-                              }
-                              if (availableVideoModels.length === 0) {
-                                setLocalNotice(
-                                  'This deployment is not ready for video generation.',
-                                );
-                                return;
-                              }
-                              if (!canUseVideoGeneration) {
-                                onUpgradeRequest?.();
-                                return;
-                              }
-                              setVideoMode(true);
-                              setTimeout(() => textareaRef.current?.focus(), 0);
-                            }}
-                            title={
-                              !billingPolicyReady
-                                ? billingPolicyError
-                                  ? 'Your plan could not be verified. Click to retry.'
-                                  : 'Checking your plan.'
-                                : mediaAvailabilityStatus === 'loading'
-                                  ? 'Checking configured video providers.'
-                                  : mediaAvailabilityStatus === 'error'
-                                    ? 'Video provider availability could not be checked. Click to retry.'
-                                    : availableVideoModels.length === 0
-                                      ? 'This deployment is not ready for video generation.'
-                                      : !canUseVideoGeneration
-                                        ? 'Video generation is available on Max 15x and Enterprise.'
-                                        : undefined
+                              return;
                             }
+                            if (mediaAvailabilityStatus !== 'ready') {
+                              setLocalNotice(
+                                mediaAvailabilityStatus === 'error'
+                                  ? (mediaAvailabilityError ??
+                                      'Could not check video model availability.')
+                                  : 'Checking video model availability…',
+                              );
+                              if (mediaAvailabilityStatus === 'error') retryMediaAvailability();
+                              return;
+                            }
+                            if (availableVideoModels.length === 0) {
+                              setLocalNotice('This deployment is not ready for video generation.');
+                              return;
+                            }
+                            if (!canUseVideoGeneration) {
+                              onUpgradeRequest?.();
+                              return;
+                            }
+                            setVideoMode(true);
+                            setTimeout(() => textareaRef.current?.focus(), 0);
+                          }}
+                          title={
+                            !billingPolicyReady
+                              ? billingPolicyError
+                                ? 'Your plan could not be verified. Click to retry.'
+                                : 'Checking your plan.'
+                              : mediaAvailabilityStatus === 'loading'
+                                ? 'Checking configured video providers.'
+                                : mediaAvailabilityStatus === 'error'
+                                  ? 'Video provider availability could not be checked. Click to retry.'
+                                  : availableVideoModels.length === 0
+                                    ? 'This deployment is not ready for video generation.'
+                                    : !canUseVideoGeneration
+                                      ? 'Video generation is available on Max 15x and Enterprise.'
+                                      : undefined
+                          }
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                            videoMode && 'text-primary',
+                          )}
+                        >
+                          <Video
                             className={cn(
-                              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                              videoMode && 'text-primary',
+                              'h-4 w-4',
+                              videoMode ? 'text-primary' : 'text-muted-foreground',
                             )}
-                          >
-                            <Video
-                              className={cn(
-                                'h-4 w-4',
-                                videoMode ? 'text-primary' : 'text-muted-foreground',
-                              )}
-                            />
-                            <span className="flex-1 text-left">Create video</span>
-                            {!billingPolicyReady ? (
-                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                {billingPolicyError ? 'Retry' : 'Checking'}
-                              </span>
-                            ) : mediaAvailabilityStatus !== 'ready' ||
-                              availableVideoModels.length === 0 ? (
-                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
-                              </span>
-                            ) : !canUseVideoGeneration ? (
-                              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
-                                Upgrade
-                              </span>
-                            ) : null}
-                          </button>
-                        </>
-                      )}
+                          />
+                          <span className="flex-1 text-left">Create video</span>
+                          {!billingPolicyReady ? (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {billingPolicyError ? 'Retry' : 'Checking'}
+                            </span>
+                          ) : mediaAvailabilityStatus !== 'ready' ||
+                            availableVideoModels.length === 0 ? (
+                            <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {mediaAvailabilityStatus === 'loading' ? 'Checking' : 'Unavailable'}
+                            </span>
+                          ) : !canUseVideoGeneration ? (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              Upgrade
+                            </span>
+                          ) : null}
+                        </button>
+                      </>
+                    )}
 
-                      {/* 3. Take a screenshot — desktop-only capability. Render-gated
+                    {/* 3. Take a screenshot — desktop-only capability. Render-gated
                         so it is ABSENT (not merely disabled) on web/mobile.
 
                         AUDIT-FIX CMP-10: this rendered an icon and a label with
@@ -2591,45 +2611,45 @@ const ChatComposerNewComponent = ({
                         menu. The shared AttachmentMenu already implements the
                         real behaviour (capture → attach as a File); this is now
                         the same contract, driven by the same capability flag. */}
-                      {canTakeScreenshotCap && (
-                        <button
-                          type="button"
-                          disabled={isCapturingScreenshot}
-                          onClick={() => {
-                            void handleTakeScreenshot();
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                            isCapturingScreenshot && 'cursor-not-allowed opacity-50',
-                          )}
-                        >
-                          <Camera className="h-4 w-4" />
-                          <span className="flex-1 text-left">
-                            {isCapturingScreenshot ? 'Capturing…' : 'Take a screenshot'}
-                          </span>
-                        </button>
-                      )}
+                    {canTakeScreenshotCap && (
+                      <button
+                        type="button"
+                        disabled={isCapturingScreenshot}
+                        onClick={() => {
+                          void handleTakeScreenshot();
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                          isCapturingScreenshot && 'cursor-not-allowed opacity-50',
+                        )}
+                      >
+                        <Camera className="h-4 w-4" />
+                        <span className="flex-1 text-left">
+                          {isCapturingScreenshot ? 'Capturing…' : 'Take a screenshot'}
+                        </span>
+                      </button>
+                    )}
 
-                      {/* Take a photo — webcam capture. Unlike the screenshot
+                    {/* Take a photo — webcam capture. Unlike the screenshot
                         item above this is NOT desktop-gated: `getUserMedia` is
                         available in every browser this app supports, and the
                         camera is the one attachment source a laptop and a phone
                         both have. The dialog owns the permission prompt and the
                         preview; nothing is captured until the shutter is
                         pressed. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowOverflowMenu(false);
-                          setCameraOpen(true);
-                        }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
-                      >
-                        <Camera className="h-4 w-4" />
-                        <span className="flex-1 text-left">Take a photo</span>
-                      </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOverflowMenu(false);
+                        setCameraOpen(true);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    >
+                      <Camera className="h-4 w-4" />
+                      <span className="flex-1 text-left">Take a photo</span>
+                    </button>
 
-                      {/* 4. Select working folder — desktop-only capability (local
+                    {/* 4. Select working folder — desktop-only capability (local
                         File System Access). Render-gated: ABSENT on web/mobile.
                         The browser-API `canPickFolder` check is NOT the platform
                         gate; it only disables when the desktop browser lacks the
@@ -2638,218 +2658,217 @@ const ChatComposerNewComponent = ({
                         different folder") — this legacy row only renders on
                         surfaces without the picker so the control never
                         appears twice. */}
-                      {!projectPicker && canUseWorkingDirectory && (
-                        <button
-                          type="button"
-                          disabled={!canPickFolder}
-                          title={
-                            canPickFolder
-                              ? folderName
-                                ? `Working folder: ${folderName}`
-                                : undefined
-                              : 'Folder access is not supported in this browser'
-                          }
-                          onClick={() => {
-                            pickFolder();
-                            closeMenu();
-                          }}
-                          className={cn(
-                            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                            !canPickFolder && 'cursor-not-allowed opacity-50',
-                            canPickFolder && folderName
-                              ? 'text-amber-300 hover:bg-muted/60'
-                              : 'hover:bg-muted/60',
-                          )}
-                        >
-                          {folderName ? (
-                            <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
-                          ) : (
-                            <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
-                          )}
-                          <span className="flex-1 text-left">
-                            {folderName ? folderName : 'Add working folder'}
-                          </span>
-                          {folderName && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                clearFolder();
-                              }}
-                              className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
-                              aria-label="Clear working folder"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-                          {!canPickFolder && (
-                            <span className="text-[10px] text-muted-foreground">Not supported</span>
-                          )}
-                        </button>
-                      )}
+                    {!projectPicker && canUseWorkingDirectory && (
+                      <button
+                        type="button"
+                        disabled={!canPickFolder}
+                        title={
+                          canPickFolder
+                            ? folderName
+                              ? `Working folder: ${folderName}`
+                              : undefined
+                            : 'Folder access is not supported in this browser'
+                        }
+                        onClick={() => {
+                          pickFolder();
+                          closeMenu();
+                        }}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                          !canPickFolder && 'cursor-not-allowed opacity-50',
+                          canPickFolder && folderName
+                            ? 'text-amber-300 hover:bg-muted/60'
+                            : 'hover:bg-muted/60',
+                        )}
+                      >
+                        {folderName ? (
+                          <FolderOpen className="h-4 w-4 shrink-0 text-amber-400" />
+                        ) : (
+                          <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        )}
+                        <span className="flex-1 text-left">
+                          {folderName ? folderName : 'Add working folder'}
+                        </span>
+                        {folderName && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              clearFolder();
+                            }}
+                            className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
+                            aria-label="Clear working folder"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                        {!canPickFolder && (
+                          <span className="text-[10px] text-muted-foreground">Not supported</span>
+                        )}
+                      </button>
+                    )}
 
-                      {/* Divider */}
-                      <div className="my-1 border-t border-border/30" />
+                    {/* Divider */}
+                    <div className="my-1 border-t border-border/30" />
 
-                      {/* 5. Skills -- entry point that opens the settings modal at
+                    {/* 5. Skills -- entry point that opens the settings modal at
                         the Skills pane (founder directive 2026-07-10: the plus-menu
                         holds ENTRIES, not inline lists — the lists live in the
                         settings modal). Per-message skill selection stays available
                         via the @mention dropdown in the textarea. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeMenu();
-                          openSettings('skills');
-                        }}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMenu();
+                        openSettings('skills');
+                      }}
+                      className={cn(
+                        'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
+                        selectedSkillName && 'text-primary',
+                      )}
+                    >
+                      <Sparkles
                         className={cn(
-                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60',
-                          selectedSkillName && 'text-primary',
+                          'h-4 w-4',
+                          selectedSkillName ? 'text-primary' : 'text-muted-foreground',
                         )}
-                      >
-                        <Sparkles
-                          className={cn(
-                            'h-4 w-4',
-                            selectedSkillName ? 'text-primary' : 'text-muted-foreground',
-                          )}
-                        />
-                        <span className="flex-1 text-left">{selectedSkillName ?? 'Skills'}</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
+                      />
+                      <span className="flex-1 text-left">{selectedSkillName ?? 'Skills'}</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
 
-                      {/* 6. Connectors -- entry point that opens the settings modal
+                    {/* 6. Connectors -- entry point that opens the settings modal
                         at the Connectors pane. An inline connect toggle here would
                         imply a mid-chat capability that does not exist (per-
                         conversation connector enablement has no runtime backing),
                         so the honest surface is the settings pane — no fake
                         toggles, no inline list. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeMenu();
-                          openSettings('connectors');
-                        }}
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMenu();
+                        openSettings('connectors');
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    >
+                      {/* Simple connector icon */}
+                      <svg
+                        className="h-4 w-4 text-muted-foreground"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        aria-hidden="true"
                       >
-                        {/* Simple connector icon */}
-                        <svg
-                          className="h-4 w-4 text-muted-foreground"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          aria-hidden="true"
-                        >
-                          <circle cx="3.5" cy="8" r="2" />
-                          <circle cx="12.5" cy="8" r="2" />
-                          <path d="M5.5 8h5" />
-                        </svg>
-                        <span className="flex-1 text-left">Connectors</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
+                        <circle cx="3.5" cy="8" r="2" />
+                        <circle cx="12.5" cy="8" r="2" />
+                        <path d="M5.5 8h5" />
+                      </svg>
+                      <span className="flex-1 text-left">Connectors</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
 
-                      {/* 7. Plugins -- entry point that opens the settings modal at
+                    {/* 7. Plugins -- entry point that opens the settings modal at
                         the Plugins pane. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeMenu();
-                          openSettings('plugins');
-                        }}
-                        // Was the ONLY row in this menu carrying
-                        // `text-muted-foreground`, so a fully-wired entry
-                        // rendered greyed-out beside Skills and Connectors and
-                        // read as disabled. Matches its siblings now.
-                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        closeMenu();
+                        openSettings('plugins');
+                      }}
+                      // Was the ONLY row in this menu carrying
+                      // `text-muted-foreground`, so a fully-wired entry
+                      // rendered greyed-out beside Skills and Connectors and
+                      // read as disabled. Matches its siblings now.
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors hover:bg-muted/60"
+                    >
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        aria-hidden="true"
                       >
-                        <svg
-                          className="h-4 w-4"
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.5"
-                          aria-hidden="true"
-                        >
-                          <rect x="2" y="2" width="5" height="5" rx="1" />
-                          <rect x="9" y="2" width="5" height="5" rx="1" />
-                          <rect x="2" y="9" width="5" height="5" rx="1" />
-                          <path d="M11.5 9v6M9 11.5h6" />
-                        </svg>
-                        <span className="flex-1 text-left">Plugins</span>
-                        <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
+                        <rect x="2" y="2" width="5" height="5" rx="1" />
+                        <rect x="9" y="2" width="5" height="5" rx="1" />
+                        <rect x="2" y="9" width="5" height="5" rx="1" />
+                        <path d="M11.5 9v6M9 11.5h6" />
+                      </svg>
+                      <span className="flex-1 text-left">Plugins</span>
+                      <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                    </button>
 
-                      {/* Divider */}
-                      <div className="my-1 border-t border-border/30" />
+                    {/* Divider */}
+                    <div className="my-1 border-t border-border/30" />
 
-                      {/* 8. Deep Research toggle */}
-                      <MenuToggleRow
-                        icon={Telescope}
-                        label="Deep Research"
-                        checked={researchEnabled}
-                        onToggle={() => {
-                          handleResearchToggle();
-                          closeMenu();
-                        }}
-                        disabled={disabled || isFreeTrial || !modelSupportsResearch}
-                        title={
-                          isFreeTrial
-                            ? 'Upgrade to use Deep Research'
-                            : !modelSupportsResearch
-                              ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
-                              : undefined
-                        }
-                      />
-
-                      {/* 8a. Code execution toggle */}
-                      <MenuToggleRow
-                        icon={Terminal}
-                        label="Run code"
-                        checked={codeExecutionEnabled}
-                        onToggle={() => {
-                          handleCodeExecutionToggle();
-                          closeMenu();
-                        }}
-                        disabled={disabled || !modelSupportsCodeExecution}
-                      />
-
-                      {/* 8b. Managed Office creation — server-owned DOCX/PPTX bytes,
-                        persisted through the same generated-file pipeline as sandbox output. */}
-                      <MenuToggleRow
-                        icon={FileText}
-                        label="Create Office files"
-                        checked={officeCreationEnabled}
-                        onToggle={() => {
-                          handleOfficeCreationToggle();
-                          closeMenu();
-                        }}
-                        disabled={disabled || !modelSupportsOfficeCreation}
-                        title={
-                          !modelSupportsOfficeCreation
-                            ? "Office file creation isn't available for this model."
+                    {/* 8. Deep Research toggle */}
+                    <MenuToggleRow
+                      icon={Telescope}
+                      label="Deep Research"
+                      checked={researchEnabled}
+                      onToggle={() => {
+                        handleResearchToggle();
+                        closeMenu();
+                      }}
+                      disabled={disabled || isFreeTrial || !modelSupportsResearch}
+                      title={
+                        isFreeTrial
+                          ? 'Upgrade to use Deep Research'
+                          : !modelSupportsResearch
+                            ? "Deep Research isn't available for this model. Choose Auto or a model that supports Deep Research."
                             : undefined
-                        }
-                      />
+                      }
+                    />
 
-                      {/* 8c. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
+                    {/* 8a. Code execution toggle */}
+                    <MenuToggleRow
+                      icon={Terminal}
+                      label="Run code"
+                      checked={codeExecutionEnabled}
+                      onToggle={() => {
+                        handleCodeExecutionToggle();
+                        closeMenu();
+                      }}
+                      disabled={disabled || !modelSupportsCodeExecution}
+                    />
+
+                    {/* 8b. Managed Office creation — server-owned DOCX/PPTX bytes,
+                        persisted through the same generated-file pipeline as sandbox output. */}
+                    <MenuToggleRow
+                      icon={FileText}
+                      label="Create Office files"
+                      checked={officeCreationEnabled}
+                      onToggle={() => {
+                        handleOfficeCreationToggle();
+                        closeMenu();
+                      }}
+                      disabled={disabled || !modelSupportsOfficeCreation}
+                      title={
+                        !modelSupportsOfficeCreation
+                          ? "Office file creation isn't available for this model."
+                          : undefined
+                      }
+                    />
+
+                    {/* 8c. Incognito / temporary chat toggle. AUDIT-FIX CMP-3:
                         render-gated on the host actually providing a persistence
                         path — an unbacked privacy switch is worse than none. */}
-                      {activeConversationId && onSetTemporaryChat && (
-                        <MenuToggleRow
-                          icon={EyeOff}
-                          label={isSavingIncognito ? 'Temporary chat · saving…' : 'Temporary chat'}
-                          checked={isIncognito}
-                          onToggle={() => {
-                            void handleIncognitoToggle();
-                            closeMenu();
-                          }}
-                          disabled={!canToggleIncognito}
-                        />
-                      )}
-                    </>
-                  }
-                </div>
-              )}
+                    {activeConversationId && onSetTemporaryChat && (
+                      <MenuToggleRow
+                        icon={EyeOff}
+                        label={isSavingIncognito ? 'Temporary chat · saving…' : 'Temporary chat'}
+                        checked={isIncognito}
+                        onToggle={() => {
+                          void handleIncognitoToggle();
+                          closeMenu();
+                        }}
+                        disabled={!canToggleIncognito}
+                      />
+                    )}
+                  </>
+                }
+              </AnchoredComposerMenu>
             </div>
 
             {primaryOverflowActive && PrimaryOverflowIcon && (

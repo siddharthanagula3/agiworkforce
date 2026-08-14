@@ -39,6 +39,7 @@ import {
   Square,
   Download,
   Flag,
+  AlertCircle,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -82,8 +83,10 @@ import {
 import { useToolApprovalResolver, isApprovalTurnLive } from '@/lib/hooks/useChatStream';
 import { ToolTimeline, type ToolEntry } from './ToolTimeline';
 import type { SearchResponse, SearchResult, MediaGenerationResult } from '../../types/search-media';
+import { hasWebSearchSources } from '../../types/message-metadata';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
+import { formatBytes } from '@shared/utils/format';
 import { ComparisonResponse } from './ComparisonResponse';
 import { InlineSourceTags, type Citation } from './InlineSourceTags';
 import type { InteractiveCard } from '@agiworkforce/types';
@@ -870,6 +873,60 @@ const MessageBubbleComponent = function MessageBubble({
     return detectCardType(cleanedContent);
   }, [isUser, message.isStreaming, cleanedContent]);
 
+  /**
+   * A finished assistant turn that rendered NOTHING.
+   *
+   * Observed live in AGI Work: the model ran for 26s, the activity trail said
+   * "Prepared the response → Done", `finishReason` was `stop`, and the turn
+   * persisted the zero-width-space empty-content placeholder — so the transcript showed
+   * a header, a model label and an action bar with no answer between them. The
+   * user is given no way to tell "the model returned nothing" apart from "the
+   * app lost my response", and in a recorded demo it simply looks broken.
+   *
+   * The empty placeholder is legitimate for turns whose OUTPUT is not text (a
+   * generated image, a video, an artifact, a file), so every one of those
+   * renderers is excluded below — this fires only when the turn truly has
+   * nothing to show. Retry already lives in the action bar underneath.
+   */
+  const producedNoVisibleOutput = useMemo(() => {
+    if (isUser || message.isStreaming) return false;
+    // The persisted "no text" placeholder is a zero-width space, not "". Written
+    // as escapes: the literal characters are invisible in review and in a diff,
+    // so a stray edit could silently delete one and quietly break the check.
+    if (cleanedContent.replace(/[\u200B\uFEFF]/g, '').trim().length > 0) return false;
+    if (displayAttachments.length > 0 || artifacts.length > 0) return false;
+    if (streamingBlock) return false;
+    const meta = message.metadata;
+    if (!meta) return true;
+    return !(
+      meta.imageUrl ||
+      meta.imageData ||
+      meta.videoUrl ||
+      meta.videoData ||
+      meta.videoStatus ||
+      meta.documentData ||
+      meta.generatedFile ||
+      meta.artifactManifest ||
+      meta.computeSession ||
+      meta.codeExecutionResult ||
+      meta.isExecutingCode ||
+      meta.interactiveCards?.length ||
+      meta.comparisonOptions ||
+      meta.paywall ||
+      hasWebSearchSources(meta.searchResults) ||
+      meta.toolType === 'image-generation' ||
+      meta.toolType === 'video-generation'
+    );
+  }, [
+    isUser,
+    message.isStreaming,
+    message.metadata,
+    cleanedContent,
+    displayAttachments.length,
+    artifacts.length,
+    streamingBlock,
+  ]);
+
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
@@ -1197,6 +1254,11 @@ const MessageBubbleComponent = function MessageBubble({
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
                 <span className="text-sm">Thinking...</span>
               </div>
+            ) : producedNoVisibleOutput ? (
+              <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+                <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                The model finished without returning a response. Use Retry below to run it again.
+              </p>
             ) : (
               (() => {
                 const markdown = (
@@ -1252,7 +1314,13 @@ const MessageBubbleComponent = function MessageBubble({
               broken-image fallback when the source fails to load. Non-image
               attachments keep the icon+name chip linking to the file. */}
           {displayAttachments.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
+            // `items-start`: a flex row defaults to `align-items: stretch`, so
+            // the compact file chip was being stretched to the height of the
+            // 96px image thumbnail beside it — rendering as a near-empty
+            // 150x96 card with one line of text floating in the middle. The
+            // chip now keeps its natural height and aligns to the thumbnail's
+            // top edge.
+            <div className="mt-2 flex flex-wrap items-start gap-2">
               {displayAttachments.map((attachment) => {
                 const isImage = attachment.type.startsWith('image/');
                 const isDoc =
@@ -1329,8 +1397,19 @@ const MessageBubbleComponent = function MessageBubble({
                     ) : (
                       <File className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
                     )}
-                    <span className="max-w-[160px] truncate text-xs text-foreground">
-                      {attachment.name}
+                    <span className="flex min-w-0 flex-col">
+                      <span className="max-w-[180px] truncate text-xs text-foreground">
+                        {attachment.name}
+                      </span>
+                      {/* The size is real data the composer already showed
+                          before sending; dropping it in the transcript made the
+                          chip read as a placeholder. Only rendered when the
+                          byte count is actually known. */}
+                      {typeof attachment.size === 'number' && attachment.size > 0 && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {formatBytes(attachment.size)}
+                        </span>
+                      )}
                     </span>
                   </a>
                 );
