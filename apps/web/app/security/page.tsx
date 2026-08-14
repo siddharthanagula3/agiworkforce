@@ -377,6 +377,33 @@ const NOT_DONE: { k: string; v: string }[] = [
     k: 'Health-check coverage',
     v: 'The live check on /status covers Postgres reachability, the payments API, and required environment configuration. Authentication, object storage, the gateway, the rate limiter, and model routes are not covered by it.',
   },
+  //
+  // ── Added 14 August 2026, from a review of the security safeguards India's
+  // DPDP Act s.8(5) requires. Each row is a posture statement a reviewer needs.
+  // Deliberately NOT included: the specific configuration values, env-var names
+  // and code paths involved. Those are in the internal remediation log. A
+  // security page owes a reviewer an honest picture, not a working recipe.
+  //
+  {
+    k: 'India — DPDP Act, 2023',
+    v: 'Our position is published in full at /privacy/india, including the parts that are gaps rather than controls: no verifiable parental consent (the Act treats anyone under 18 as a child), no notice translations into Eighth Schedule languages, no Indian data residency, and a grievance contact published as a role rather than a named officer. The consent and rights machinery is implemented; those four are not.',
+  },
+  {
+    k: 'Automated-abuse verification',
+    v: 'There is no first-party CAPTCHA or bot-verification check anywhere in our own code, and no server-side verification call for one. Sign-up bot protection is a feature of our identity provider, configured in its dashboard rather than in this repository — which means we cannot demonstrate its state from source, and a reviewer should not assume it. Unauthenticated endpoints that accept personal data are protected by CSRF validation and per-IP rate limiting, which are real controls but are not bot verification.',
+  },
+  {
+    k: 'Log redaction',
+    v: 'Bearer tokens are redacted before logs are written. There is no field-level redaction configured on the structured logger itself, so an email address passed into a log call is written as given. Reducing what reaches logs, rather than filtering it afterwards, is open work.',
+  },
+  {
+    k: 'Fail-closed coverage is not uniform',
+    v: 'Some controls fail closed by design and are described above — the analytics consent gate is one, and the web rate limiter refuses to start in production without its backing store. Others degrade rather than refuse when a dependency is unavailable, and a small number of operational switches can be set to admit traffic that would otherwise be blocked. Making the fail direction consistent, and making every security-relevant setting refuse a boot rather than warn, is tracked remediation work rather than something we have finished.',
+  },
+  {
+    k: 'Legacy credential formats',
+    v: 'Some second-factor secrets stored before the current encryption scheme are still readable in their original format, and no migration job has rewritten them. New enrolments use the current scheme. Until that migration runs, the honest statement is that our encryption-at-rest posture is not uniform across every historical row.',
+  },
 ];
 
 export default function SecurityPage() {
