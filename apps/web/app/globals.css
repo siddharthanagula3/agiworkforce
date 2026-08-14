@@ -7561,6 +7561,57 @@
   text-underline-offset: 2px;
 }
 
+/* ── policy table of contents (long legal documents) ────────────────────
+   Long policy pages had no section ids, so nothing could be cited. These
+   anchors are numbered rather than slugged (see PolicyContents.tsx) so a
+   heading rewrite does not break inbound links. */
+
+[data-design='agi'] .agi-policy-toc {
+  margin: 0 0 8px;
+  padding: 18px 22px;
+  border: 1px solid var(--agi-rule);
+  border-left: 2px solid var(--agi-amber);
+  border-radius: 10px;
+  background: var(--agi-bg-2);
+}
+
+[data-design='agi'] .agi-policy-toc-intro {
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--agi-ink-quiet);
+}
+
+[data-design='agi'] .agi-policy-toc-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 4px 24px;
+}
+
+[data-design='agi'] .agi-policy-toc-link {
+  display: block;
+  padding: 3px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--agi-ink-2);
+  text-decoration: none;
+  transition: color var(--agi-dur-fast) var(--agi-ease-out);
+}
+
+[data-design='agi'] .agi-policy-toc-link:hover {
+  color: var(--agi-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Anchored sections land under any sticky chrome rather than flush to it. */
+[data-design='agi'] section[id^='s-'] {
+  scroll-margin-top: 88px;
+}
+
 /* ── data-rights request form (/privacy/requests) ───────────────────── */
 
 [data-design='agi'] .agi-rights-form {

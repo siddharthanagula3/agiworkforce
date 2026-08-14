@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import {
   CONTACT_EMAIL,
   CONTACT_SUBJECTS,
@@ -166,6 +167,27 @@ const ANNEX_II: { k: string; v: string; limit: string }[] = [
   },
 ];
 
+/**
+ * Section list for the contents block. Must stay identical to the rendered
+ * eyebrows — they are one piece of copy, not two, and drift makes the contents
+ * describe a document that is not there.
+ */
+const SECTIONS = [
+  '01 &middot; Parties, scope, and precedence',
+  '02 &middot; Definitions',
+  '03 &middot; Role allocation, by trust boundary',
+  '04 &middot; AGI&rsquo;s obligations as processor',
+  '05 &middot; Sub-processors',
+  '06 &middot; International transfers',
+  '07 &middot; Annex I &mdash; processing details',
+  '08 &middot; Annex II &mdash; technical and organisational measures',
+  '09 &middot; Deletion, return, and data-subject requests',
+  '10 &middot; Personal data breach',
+  '11 &middot; Audit',
+  '12 &middot; Alpha status, liability, and term',
+  '13 &middot; Signature',
+] as const;
+
 export default function DpaPage() {
   return (
     <div data-design="agi">
@@ -184,7 +206,12 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <PolicyContents
+          sections={SECTIONS}
+          intro="Annex II (section 08) states the limit of every security measure next to the measure. If you are reviewing this before signing, read that one first."
+        />
+
+        <section className="agi-section" id="s-01">
           <p className="agi-section-eyebrow">01 &middot; Parties, scope, and precedence</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             This Data Processing Addendum (&ldquo;DPA&rdquo;) is entered into between {LEGAL_ENTITY}
@@ -203,7 +230,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-02">
           <p className="agi-section-eyebrow">02 &middot; Definitions</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             &ldquo;Applicable Data Protection Law&rdquo; means the EU General Data Protection
@@ -218,7 +245,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-03">
           <p className="agi-section-eyebrow">03 &middot; Role allocation, by trust boundary</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI runs across three separate trust boundaries. The controller/processor relationship
@@ -286,7 +313,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-04">
           <p className="agi-section-eyebrow">04 &middot; AGI&rsquo;s obligations as processor</p>
           <ul className="agi-reasons">
             <li className="agi-reason">
@@ -335,7 +362,7 @@ export default function DpaPage() {
           </ul>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-05">
           <p className="agi-section-eyebrow">05 &middot; Sub-processors</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             The Customer gives general written authorisation for AGI to engage sub-processors. The
@@ -366,7 +393,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-06">
           <p className="agi-section-eyebrow">06 &middot; International transfers</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI hosts data in the United States. It does not currently offer European or United
@@ -427,7 +454,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-07">
           <p className="agi-section-eyebrow">07 &middot; Annex I &mdash; processing details</p>
           <table className="agi-ledger">
             <tbody>
@@ -447,7 +474,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-08">
           <p className="agi-section-eyebrow">
             08 &middot; Annex II &mdash; technical and organisational measures
           </p>
@@ -476,7 +503,7 @@ export default function DpaPage() {
           </table>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-09">
           <p className="agi-section-eyebrow">
             09 &middot; Deletion, return, and data-subject requests
           </p>
@@ -507,7 +534,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-10">
           <p className="agi-section-eyebrow">10 &middot; Personal data breach</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI notifies the Customer without undue delay and in any event within 72 hours of
@@ -520,7 +547,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-11">
           <p className="agi-section-eyebrow">11 &middot; Audit</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI makes available the information necessary to demonstrate compliance with this DPA.
@@ -544,7 +571,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-12">
           <p className="agi-section-eyebrow">12 &middot; Alpha status, liability, and term</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Managed Cloud is in public alpha. Its features, capacity and operational controls change
@@ -566,7 +593,7 @@ export default function DpaPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-13">
           <p className="agi-section-eyebrow">13 &middot; Signature</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             This DPA is effective without signature once the Terms of Service are accepted. If your
