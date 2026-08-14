@@ -199,25 +199,32 @@ export function ThinkingBlock({ block, compact: compactProp }: ThinkingBlockProp
     const summary = buildCompactSummary(block.steps);
     return (
       <div className="my-2">
+        {/*
+          A bare status line, not a filled pill. This rendered as a bordered,
+          surface-filled chip, so a turn that interleaved reasoning and tool
+          steps alternated grey slabs with the plain "Searched the web ›" rows
+          the tool timeline draws — two visual languages for the same idea.
+          It now matches the expanded header below and the tool rows: muted
+          text, a chevron, nothing else.
+        */}
         <button
           type="button"
           onClick={() => setCompactExpanded(true)}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-[var(--chat-radius-sm)]',
-            'px-2.5 py-1 text-[12px] font-normal',
-            'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-secondary)]',
-            'bg-[var(--chat-surface-elevated)] hover:bg-[var(--chat-surface-hover)]',
-            'border border-[var(--chat-border)] transition-colors',
+            'inline-flex max-w-full items-center gap-1.5 rounded-[var(--chat-radius-sm)]',
+            'py-0.5 text-[13px] font-normal',
+            'text-[var(--chat-text-muted)] hover:text-[var(--chat-text-primary)]',
+            'transition-colors',
           )}
           aria-label="Expand tool steps"
         >
-          <span>{summary}</span>
+          <span className="truncate">{summary}</span>
           {block.durationMs !== undefined && (
-            <span className="text-[var(--chat-text-muted)] opacity-60">
+            <span className="shrink-0 text-[var(--chat-text-muted)] opacity-60">
               &middot; {formatDuration(block.durationMs)}
             </span>
           )}
-          <ChevronRight size={11} className="shrink-0 text-[var(--chat-text-muted)]" />
+          <ChevronRight size={13} className="shrink-0 text-[var(--chat-text-muted)]" />
         </button>
       </div>
     );
