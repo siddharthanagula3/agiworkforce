@@ -195,7 +195,13 @@ export default function OnboardingScreen() {
       setDownloadError(null);
       setRecommendedModel(nextModel);
     },
-    [deviceInfo.tier],
+    // `tier1Runtime` is read above but was not listed. It starts null and is set
+    // together with `tier` by one setDeviceInfo call, so the omission is hidden
+    // whenever detection also changes the tier — but when it resolves to the
+    // SAME tier, this callback kept the initial null and
+    // pickModelForPickerSelection took the non-runtime branch on exactly the
+    // Tier-1 devices the runtime exists to serve.
+    [deviceInfo.tier, deviceInfo.tier1Runtime],
   );
 
   // Detect device capabilities once on mount
