@@ -14,6 +14,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 import { cn } from '@shared/lib/utils';
+import { MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
 import {
   Tooltip,
   TooltipTrigger,
@@ -402,7 +403,11 @@ export const PromptInputBox = React.forwardRef(
         if (!isImageFile(file)) {
           return;
         }
-        if (file.size > 10 * 1024 * 1024) {
+        // HARD-006: this was a private `10 * 1024 * 1024`, 2 MiB BELOW the
+        // canonical cap the presign route actually enforces — a client-side
+        // gate that silently drops files the server would have accepted. The
+        // limit is not this component's to choose.
+        if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
           return;
         }
         setFiles([file]);
