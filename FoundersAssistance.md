@@ -1062,3 +1062,64 @@ Vercel Production and Preview environments.
 
 Seven vendors need none of this and already register automatically: clickup,
 cloudflare, datadog, monday, paypal, plaid, stripe.
+
+---
+
+## 26. Production Stripe is in TEST mode — no real customer can be charged
+
+**Status:** `BLOCKED_BY_HUMAN`. Established with the Stripe CLI on 2026-08-14 by
+resolving the price IDs stored against live production subscriptions.
+
+`agiworkforce.com` is serving real users with **test-mode** Stripe keys. Every
+"paid" row in `subscriptions` is a test subscription, including the founder
+accounts on `basic` and `max_15x`. A real card cannot be charged, so the product
+currently takes no money.
+
+The evidence is direct: the price IDs recorded on production subscriptions
+(`price_1Tv2zN…` Basic, `price_1Tv2zQ…` Max 15x) resolve in test mode and do not
+exist in live mode.
+
+**The two catalogs do not agree, which is the trap.**
+
+| Plan    | Published / test mode             | LIVE mode                       |
+| ------- | --------------------------------- | ------------------------------- |
+| Basic   | $7 / mo                           | _does not exist_                |
+| Pro     | $20 / mo, $200 / yr               | **$29.99 / mo, $299.99 / yr**   |
+| Max     | $100 / mo                         | **$299.99 / mo**                |
+| Max 15x | $200 / mo                         | _does not exist_                |
+| Team    | $25 / seat / mo, $240 / seat / yr | _does not exist_                |
+| —       | —                                 | "Hobby" $10 / mo (retired name) |
+
+So flipping `STRIPE_SECRET_KEY` to the live key ALONE would be worse than the
+current state: the live catalog has no Basic, Max 15x or Team, and would charge
+Pro at $29.99 against a pricing page that promises $20.
+
+**Do, in this order:**
+
+1. Decide whether to keep taking no money for now (public alpha) or go live.
+2. If going live: create the live products/prices to match
+   `BILLING_PLAN_PRICING` in `packages/contracts/types/src/billing-catalog.ts`
+   — Basic $7, Pro $20/$200, Max $100, Max 15x $200, Team $25/$240 per seat.
+   Retire or ignore the legacy "Hobby" product.
+3. Repoint EVERY `STRIPE_PRICE_*` variable in Vercel Production at the new live
+   IDs in the same change as the key swap. They move together or not at all.
+4. Re-run the upgrade flow end to end with a real card.
+
+**Separately, and true in either mode:** four price variables are missing and are
+logged on every production request —
+
+```
+STRIPE_PRICE_TEAM_MONTHLY_USD    STRIPE_PRICE_TEAM_MONTHLY_INR
+STRIPE_PRICE_TEAM_YEARLY_USD     STRIPE_PRICE_BASIC_MONTHLY_INR
+```
+
+Vercel has `STRIPE_PRICE_TEAM_MONTHLY` and `STRIPE_PRICE_TEAM_YEARLY` **without
+the `_USD` suffix the code reads**, so Team checkout fails closed. In the current
+test-mode configuration the correct values are the active prices
+`price_1Tv2zQ0zEfO6BZMh8EeLvWZJ` (Team $25/mo) and
+`price_1Tv2zR0zEfO6BZMhPTByLptE` (Team $240/yr). No INR price exists for Team at
+all, and the only Basic INR price (₹399) is inactive — so INR billing is
+unconfigured rather than misnamed.
+
+I have not changed any Stripe object or production variable: the mode decision is
+a founder call, and setting them piecemeal is how a catalog ends up half-migrated.
