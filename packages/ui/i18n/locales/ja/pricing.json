@@ -84,5 +84,20 @@
   "seatCadenceMonthly_one": "{{count}} シート · 月払い",
   "seatCadenceMonthly_other": "{{count}} シート · 月払い",
   "seatCadenceAnnual_one": "{{count}} シート · 年払い",
-  "seatCadenceAnnual_other": "{{count}} シート · 年払い"
+  "seatCadenceAnnual_other": "{{count}} シート · 年払い",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "5 プロジェクト、ナレッジストレージ 1 GB",
+  "basicFeature5": "同時に 2 チャット、コネクタツール最大 50",
+  "basicFeature6": "スケジュールタスク 2 件、マネージドサンドボックス 10 分",
+  "proFeature4": "25 プロジェクト、ナレッジストレージ 10 GB",
+  "proFeature5": "画像生成、AGI Work、マネージド API アクセス",
+  "proFeature6": "CLI、Chrome、VS Code に加えてスケジュールタスク 5 件",
+  "maxFeature4": "プロジェクト、ストレージ、カスタム MCP サーバーが無制限",
+  "maxFeature5": "同時に 8 チャット、コネクタツール最大 300",
+  "maxFeature6": "スケジュールタスク 10 件、マネージドサンドボックス 30 分",
+  "max15xFeature4": "プロジェクト、ストレージ、カスタム MCP サーバーが無制限",
+  "max15xFeature5": "同時に 12 チャット、コネクタツール最大 500",
+  "max15xFeature6": "スケジュールタスク 25 件、マネージドサンドボックス 60 分"
 }

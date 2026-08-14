@@ -84,5 +84,20 @@
   "seatCadenceMonthly_one": "{{count}} Platz · monatliche Abrechnung",
   "seatCadenceMonthly_other": "{{count}} Plätze · monatliche Abrechnung",
   "seatCadenceAnnual_one": "{{count}} Platz · jährliche Abrechnung",
-  "seatCadenceAnnual_other": "{{count}} Plätze · jährliche Abrechnung"
+  "seatCadenceAnnual_other": "{{count}} Plätze · jährliche Abrechnung",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "5 Projekte mit 1 GB Wissensspeicher",
+  "basicFeature5": "2 gleichzeitige Chats und bis zu 50 Connector-Tools",
+  "basicFeature6": "2 geplante Aufgaben und verwaltete Sandboxes mit 10 Minuten",
+  "proFeature4": "25 Projekte mit 10 GB Wissensspeicher",
+  "proFeature5": "Bildgenerierung, AGI Work und verwalteter API-Zugriff",
+  "proFeature6": "CLI, Chrome und VS Code sowie 5 geplante Aufgaben",
+  "maxFeature4": "Unbegrenzte Projekte, Speicher und eigene MCP-Server",
+  "maxFeature5": "8 gleichzeitige Chats und bis zu 300 Connector-Tools",
+  "maxFeature6": "10 geplante Aufgaben und verwaltete Sandboxes mit 30 Minuten",
+  "max15xFeature4": "Unbegrenzte Projekte, Speicher und eigene MCP-Server",
+  "max15xFeature5": "12 gleichzeitige Chats und bis zu 500 Connector-Tools",
+  "max15xFeature6": "25 geplante Aufgaben und verwaltete Sandboxes mit 60 Minuten"
 }

@@ -84,5 +84,20 @@
   "seatCadenceMonthly_one": "{{count}} postazione · fatturazione mensile",
   "seatCadenceMonthly_other": "{{count}} postazioni · fatturazione mensile",
   "seatCadenceAnnual_one": "{{count}} postazione · fatturazione annuale",
-  "seatCadenceAnnual_other": "{{count}} postazioni · fatturazione annuale"
+  "seatCadenceAnnual_other": "{{count}} postazioni · fatturazione annuale",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "5 progetti con 1 GB di archiviazione della conoscenza",
+  "basicFeature5": "2 chat contemporaneamente e fino a 50 strumenti connettore",
+  "basicFeature6": "2 attività pianificate e sandbox gestite da 10 minuti",
+  "proFeature4": "25 progetti con 10 GB di archiviazione della conoscenza",
+  "proFeature5": "Generazione di immagini, AGI Work e accesso all'API gestita",
+  "proFeature6": "CLI, Chrome e VS Code, più 5 attività pianificate",
+  "maxFeature4": "Progetti, archiviazione e server MCP personalizzati illimitati",
+  "maxFeature5": "8 chat contemporaneamente e fino a 300 strumenti connettore",
+  "maxFeature6": "10 attività pianificate e sandbox gestite da 30 minuti",
+  "max15xFeature4": "Progetti, archiviazione e server MCP personalizzati illimitati",
+  "max15xFeature5": "12 chat contemporaneamente e fino a 500 strumenti connettore",
+  "max15xFeature6": "25 attività pianificate e sandbox gestite da 60 minuti"
 }

@@ -84,5 +84,20 @@
   "seatCadenceMonthly_one": "{{count}} 个席位 · 按月计费",
   "seatCadenceMonthly_other": "{{count}} 个席位 · 按月计费",
   "seatCadenceAnnual_one": "{{count}} 个席位 · 按年计费",
-  "seatCadenceAnnual_other": "{{count}} 个席位 · 按年计费"
+  "seatCadenceAnnual_other": "{{count}} 个席位 · 按年计费",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "5 个项目，1 GB 知识存储",
+  "basicFeature5": "同时进行 2 个对话，最多 50 个连接器工具",
+  "basicFeature6": "2 个定时任务，10 分钟托管沙箱",
+  "proFeature4": "25 个项目，10 GB 知识存储",
+  "proFeature5": "图像生成、AGI Work 和托管 API 访问",
+  "proFeature6": "CLI、Chrome 和 VS Code，另加 5 个定时任务",
+  "maxFeature4": "无限项目、存储和自定义 MCP 服务器",
+  "maxFeature5": "同时进行 8 个对话，最多 300 个连接器工具",
+  "maxFeature6": "10 个定时任务，30 分钟托管沙箱",
+  "max15xFeature4": "无限项目、存储和自定义 MCP 服务器",
+  "max15xFeature5": "同时进行 12 个对话，最多 500 个连接器工具",
+  "max15xFeature6": "25 个定时任务，60 分钟托管沙箱"
 }

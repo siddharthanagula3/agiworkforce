@@ -84,5 +84,20 @@
   "seatCadenceMonthly_one": "{{count}} सीट · मासिक बिलिंग",
   "seatCadenceMonthly_other": "{{count}} सीटें · मासिक बिलिंग",
   "seatCadenceAnnual_one": "{{count}} सीट · वार्षिक बिलिंग",
-  "seatCadenceAnnual_other": "{{count}} सीटें · वार्षिक बिलिंग"
+  "seatCadenceAnnual_other": "{{count}} सीटें · वार्षिक बिलिंग",
+  "maxFamilyName": "Max",
+  "maxVariant5x": "5x",
+  "maxVariant15x": "15x",
+  "basicFeature4": "1 GB नॉलेज स्टोरेज के साथ 5 प्रोजेक्ट",
+  "basicFeature5": "एक साथ 2 चैट और 50 तक कनेक्टर टूल",
+  "basicFeature6": "2 शेड्यूल्ड टास्क और 10 मिनट के मैनेज्ड सैंडबॉक्स",
+  "proFeature4": "10 GB नॉलेज स्टोरेज के साथ 25 प्रोजेक्ट",
+  "proFeature5": "इमेज जेनरेशन, AGI Work और मैनेज्ड API एक्सेस",
+  "proFeature6": "CLI, Chrome और VS Code, साथ ही 5 शेड्यूल्ड टास्क",
+  "maxFeature4": "असीमित प्रोजेक्ट, स्टोरेज और कस्टम MCP सर्वर",
+  "maxFeature5": "एक साथ 8 चैट और 300 तक कनेक्टर टूल",
+  "maxFeature6": "10 शेड्यूल्ड टास्क और 30 मिनट के मैनेज्ड सैंडबॉक्स",
+  "max15xFeature4": "असीमित प्रोजेक्ट, स्टोरेज और कस्टम MCP सर्वर",
+  "max15xFeature5": "एक साथ 12 चैट और 500 तक कनेक्टर टूल",
+  "max15xFeature6": "25 शेड्यूल्ड टास्क और 60 मिनट के मैनेज्ड सैंडबॉक्स"
 }
