@@ -2,6 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
+import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import {
   ARBITRATION_FORUM,
   CANONICAL_POLICY_ROUTES,
@@ -49,6 +50,34 @@ export const metadata = buildMetadata({
  *    not from a string typed into this file.
  */
 
+/**
+ * Section list for the contents block. Must stay identical to the rendered
+ * eyebrows — they are one piece of copy, not two, and drift makes the contents
+ * describe a document that is not there.
+ */
+const SECTIONS = [
+  '01 &middot; Who these terms are with',
+  '02 &middot; Eligibility and age',
+  '03 &middot; Licence',
+  '04 &middot; Your account',
+  '05 &middot; Your content, and what we may do with it',
+  '06 &middot; Managed Cloud is in public alpha',
+  '07 &middot; Acceptable use',
+  '08 &middot; AI output: no reliance',
+  '09 &middot; Third-party services and connectors',
+  '10 &middot; Payment, taxes, and auto-renewal',
+  '11 &middot; Suspension',
+  '12 &middot; Termination and what happens to your data',
+  '13 &middot; Export control and sanctions',
+  '14 &middot; Intellectual property complaints',
+  '15 &middot; Warranty disclaimer and limitation of liability',
+  '16 &middot; Indemnification',
+  '17 &middot; Governing law, arbitration, and disputes',
+  '18 &middot; General',
+  '19 &middot; Data protection',
+  '20 &middot; Contact',
+] as const;
+
 export default function TermsPage() {
   return (
     <div data-design="agi">
@@ -66,7 +95,12 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <PolicyContents
+          sections={SECTIONS}
+          intro="Sections 15 and 17 limit our liability and require arbitration. They are the ones to read before you accept, so they are named here rather than left to be found."
+        />
+
+        <section className="agi-section" id="s-01">
           <p className="agi-section-eyebrow">01 &middot; Who these terms are with</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             These terms are an agreement between you (and, where you accept on behalf of an
@@ -87,7 +121,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-02">
           <p className="agi-section-eyebrow">02 &middot; Eligibility and age</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             You must be at least 18 years old and able to form a binding contract to open an account
@@ -105,7 +139,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-03">
           <p className="agi-section-eyebrow">03 &middot; Licence</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             {LEGAL_ENTITY} grants you a non-exclusive, non-transferable, revocable licence to
@@ -116,7 +150,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-04">
           <p className="agi-section-eyebrow">04 &middot; Your account</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             You are responsible for keeping your account credentials and your master password
@@ -129,7 +163,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-05">
           <p className="agi-section-eyebrow">
             05 &middot; Your content, and what we may do with it
           </p>
@@ -165,7 +199,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-06">
           <p className="agi-section-eyebrow">06 &middot; Managed Cloud is in public alpha</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI Managed Cloud is offered as a <strong>public alpha</strong>. It is open by default,
@@ -182,7 +216,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-07">
           <p className="agi-section-eyebrow">07 &middot; Acceptable use</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI can execute code, act on accounts you connect, and run unattended on a schedule. The{' '}
@@ -195,7 +229,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-08">
           <p className="agi-section-eyebrow">08 &middot; AI output: no reliance</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             AGI produces output using machine-learning models. That output{' '}
@@ -209,7 +243,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-09">
           <p className="agi-section-eyebrow">09 &middot; Third-party services and connectors</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             When you connect a third-party account, you authorise AGI to act with the permissions
@@ -226,7 +260,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-10">
           <p className="agi-section-eyebrow">10 &middot; Payment, taxes, and auto-renewal</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Paid subscriptions are billed in advance through Stripe, our payment processor, or the
@@ -260,7 +294,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-11">
           <p className="agi-section-eyebrow">11 &middot; Suspension</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             We may suspend or restrict your access where you breach the acceptable use policy, where
@@ -275,7 +309,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-12">
           <p className="agi-section-eyebrow">
             12 &middot; Termination and what happens to your data
           </p>
@@ -296,7 +330,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-13">
           <p className="agi-section-eyebrow">13 &middot; Export control and sanctions</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             You must comply with United States export control and economic sanctions laws. You may
@@ -307,7 +341,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-14">
           <p className="agi-section-eyebrow">14 &middot; Intellectual property complaints</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             If you believe content on our service infringes your copyright or other intellectual
@@ -327,7 +361,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-15">
           <p className="agi-section-eyebrow">
             15 &middot; Warranty disclaimer and limitation of liability
           </p>
@@ -359,7 +393,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-16">
           <p className="agi-section-eyebrow">16 &middot; Indemnification</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             You agree to indemnify, defend, and hold harmless {LEGAL_ENTITY}, its officers,
@@ -372,7 +406,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-17">
           <p className="agi-section-eyebrow">
             17 &middot; Governing law, arbitration, and disputes
           </p>
@@ -406,7 +440,7 @@ export default function TermsPage() {
           </p>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-18">
           <p className="agi-section-eyebrow">18 &middot; General</p>
           <table className="agi-ledger">
             <tbody>
@@ -477,7 +511,7 @@ export default function TermsPage() {
           </table>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-19">
           <p className="agi-section-eyebrow">19 &middot; Data protection</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             Our processing of personal data is governed by the{' '}
@@ -575,7 +609,7 @@ export default function TermsPage() {
           </table>
         </section>
 
-        <section className="agi-section">
+        <section className="agi-section" id="s-20">
           <p className="agi-section-eyebrow">20 &middot; Contact</p>
           <p className="agi-page-lede" style={{ marginTop: 0 }}>
             {LEGAL_ENTITY}, {NOTICE_ADDRESS}. Email{' '}
