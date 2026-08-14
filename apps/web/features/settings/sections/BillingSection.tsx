@@ -193,6 +193,7 @@ export function BillingSection() {
   const billingInitialized = useBillingStore((s) => s.initialized);
   const billingLoading = useBillingStore((s) => s.isLoading);
   const billingError = useBillingStore((s) => s.error);
+  const billingUnauthenticated = useBillingStore((s) => s.unauthenticated);
   const refreshUser = useBillingStore((s) => s.refreshUser);
 
   // "Manage billing" and "Update payment method" are Stripe Customer Portal
@@ -378,6 +379,30 @@ export function BillingSection() {
     return (
       <div role="status" aria-live="polite" style={{ color: 'var(--text-3)', fontSize: 14 }}>
         Loading your billing account…
+      </div>
+    );
+  }
+
+  // A 401 clears `subscription` without recording an error, so before this
+  // guard the render fell straight through to `tier = 'free'` and offered a
+  // paying customer an upgrade to the plan they already have — with the usage
+  // panel beside it still correctly reading Max 15x from its own request.
+  // "We could not read your plan" is the honest thing to say when we could not.
+  if (billingUnauthenticated && !subscription) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <h1 style={{ margin: 0, fontSize: 24, color: 'var(--text-1)' }}>Billing</h1>
+        <p role="alert" style={{ margin: 0, color: 'var(--danger, #b3261e)', fontSize: 14 }}>
+          Your session expired before we could read your plan. Your subscription has not changed
+          &mdash; sign in again to see it.
+        </p>
+        <button
+          type="button"
+          onClick={() => void refreshUser()}
+          style={{ alignSelf: 'flex-start', padding: '7px 14px', borderRadius: 'var(--radius-md)' }}
+        >
+          Try again
+        </button>
       </div>
     );
   }
