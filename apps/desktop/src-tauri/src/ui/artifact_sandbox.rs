@@ -220,7 +220,10 @@ mod tests {
         assert!(csp.contains("default-src 'none'"));
         // The egress block. Artifact scripts must not be able to phone home.
         assert!(csp.contains("connect-src 'none'"));
-        assert!(csp.contains("frame-src 'none'"));
+        // `frame-src 'self'` (never a remote origin) — the renderer mounts HTML
+        // artifacts in a same-origin `srcdoc` frame so they load as real
+        // documents. That frame inherits this very policy, egress block included.
+        assert!(csp.contains("frame-src 'self'"));
         assert!(csp.contains("object-src 'none'"));
         assert!(csp.contains("base-uri 'none'"));
         assert!(csp.contains("form-action 'none'"));
