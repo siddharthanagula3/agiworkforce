@@ -40,8 +40,15 @@ export const metadata = buildMetadata({
  *    as vendor-governed.
  *  - "Org-level retention windows on Enterprise". No control reads or enforces a
  *    per-organisation conversation retention window on the conversation path.
- *  - "Material changes are announced via email". There is no transactional email
- *    provider in this repository.
+ *  - "Material changes are announced via email". CORRECTED 2026-08-14: the
+ *    original reason given here — "there is no transactional email provider in
+ *    this repository" — was FALSE. lib/support/handoff/resend-client.ts calls
+ *    the Resend HTTP API over plain `fetch`, so no dependency grep could find
+ *    it, and /subprocessors delisted the provider on that same bad reasoning
+ *    while support transcripts were being emailed through it. The claim still
+ *    cannot be made, for the narrower true reason: no mailing path here can
+ *    reach an arbitrary list of customers. Say that, never the old sentence —
+ *    a guard in app/__tests__/legal-policy-set.test.ts enforces it.
  *
  * CLAIM ADDED: billing-record retention (BIZ-046). The retention schedule had a
  * row for the account and none for the money. Erasure deletes `subscriptions`,
@@ -220,13 +227,97 @@ export default function PrivacyPage() {
                 </td>
                 <td>Debugging, abuse prevention, and incident investigation.</td>
               </tr>
+              <tr>
+                <td>Things you send us on purpose</td>
+                <td>
+                  Feedback (your subject, message, and optionally a diagnostic log we scrub for
+                  secrets before storing), content reports (the category, your note, and a short
+                  excerpt of the message you are reporting), and support conversations.
+                </td>
+                <td>
+                  Answering you and fixing what you reported. A support escalation emails the
+                  transcript and the contact address you gave to our support inbox, which is one of
+                  the three things in this product that can send email at all.
+                </td>
+              </tr>
+              <tr>
+                <td>Records you create by using the product</td>
+                <td>
+                  Your search history, and the memories the assistant keeps about you when you
+                  enable them.
+                </td>
+                <td>
+                  Making search and the assistant useful across sessions. Both are yours to clear:
+                  search history has a clear action, and memory is off unless you turn it on.
+                </td>
+              </tr>
+              <tr>
+                <td>Profile details you choose to add</td>
+                <td>
+                  Display name, avatar, and optional fields such as a phone number, stored with your
+                  settings.
+                </td>
+                <td>
+                  Personalising the product. Optional means optional &mdash; nothing here is
+                  required to use an account.
+                </td>
+              </tr>
+              <tr>
+                <td>Early-access list</td>
+                <td>
+                  Your email address, if you ask us to tell you when enterprise features open.
+                </td>
+                <td>
+                  Only what you consented to, recorded per purpose before the address is stored. You
+                  can be asked about product updates separately and decline that without leaving the
+                  list.
+                </td>
+              </tr>
+              <tr>
+                <td>Devices and downloads</td>
+                <td>
+                  Push tokens for the mobile apps, and for a desktop download: a hashed IP, the
+                  user-agent, the referring page and a coarse country.
+                </td>
+                <td>
+                  Delivering notifications you asked for, and understanding which builds are being
+                  downloaded. The IP is hashed rather than stored raw, which makes the record
+                  pseudonymous rather than anonymous.
+                </td>
+              </tr>
+              <tr>
+                <td>Directory-provisioned identities (Enterprise)</td>
+                <td>
+                  When your employer connects a directory, the name, email and directory identifier
+                  it sends us for each user it provisions.
+                </td>
+                <td>
+                  Creating and deactivating accounts on your organisation&rsquo;s instruction. Your
+                  employer decides what is sent; we act on it.
+                </td>
+              </tr>
             </tbody>
           </table>
+          <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
+            <strong>Why this table grew on {POLICY_LAST_UPDATED.privacy}.</strong> A review compared
+            it against every write path in the product and found the six categories above missing:
+            feedback and its diagnostic logs, content reports and support transcripts, search
+            history and memories, profile fields, the early-access list, device tokens and download
+            records, and directory-provisioned identities. All of it was already being collected;
+            this page had not kept up. If you add a collection point and do not add a row here, that
+            is the defect this paragraph exists to prevent.
+          </p>
           <p className="agi-page-lede" style={{ marginTop: 16, fontSize: 14 }}>
             <strong>Hosted AI providers we may route requests to (Managed Cloud):</strong>{' '}
             Anthropic, OpenAI, Google, xAI, DeepSeek, Perplexity and Moonshot directly; MiniMax,
             Qwen and Zhipu through OpenRouter, which therefore also handles those requests. Which
-            one depends on the model you select. The full current list with regions is at{' '}
+            one depends on the model you select.{' '}
+            <strong>
+              OpenRouter is additionally the failover for every other chat model in the catalogue
+            </strong>
+            , so if a direct route fails, prompt content for a model from any provider can pass
+            through it &mdash; we would rather say that than let the three named families imply a
+            narrower answer. The full current list with regions is at{' '}
             <Link href="/subprocessors" style={{ color: 'var(--agi-ink)' }}>
               /subprocessors
             </Link>
@@ -427,10 +518,11 @@ export default function PrivacyPage() {
                 <td style={{ verticalAlign: 'top' }}>Deletion</td>
                 <td>
                   Request account deletion from the product. Erasure is scheduled 24 hours later and
-                  then performed. Two limits stated plainly: we send no confirmation email, because
-                  there is no transactional email system in the product; and there is no self-serve
-                  way to cancel a scheduled deletion, so if you change your mind inside the 24-hour
-                  window you must reach support.
+                  then performed. Two limits stated plainly: you get no confirmation email, because
+                  the only email this product sends is support escalation, scheduled-task
+                  notifications and operational alerts to us &mdash; there is no account-lifecycle
+                  mail; and there is no self-serve way to cancel a scheduled deletion, so if you
+                  change your mind inside the 24-hour window you must reach support.
                 </td>
               </tr>
               <tr>
@@ -504,8 +596,8 @@ export default function PrivacyPage() {
             <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
               /changelog
             </Link>
-            . We do not operate a transactional email system, so we do not promise emailed notice of
-            a change.
+            . No mailing path in this product can reach an arbitrary list of customers, so we do not
+            promise emailed notice of a change.
           </p>
         </section>
 

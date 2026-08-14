@@ -26,7 +26,7 @@ export const metadata = buildMetadata({
  * Rule for editing: if you change a row, change its `asOf`. A stale date is a
  * defect, not cosmetics.
  */
-const LAST_REVIEWED = '5 August 2026';
+const LAST_REVIEWED = '14 August 2026';
 const NEXT_REVIEW = 'November 2026';
 
 /** Certification and regulatory posture. `artifact` says what would prove it. */
@@ -87,10 +87,71 @@ const COMPLIANCE: {
   },
   {
     item: 'Subprocessor transparency',
+    status: 'Published — corrected 14 August 2026',
+    artifact:
+      'A list of processors with purpose and region is published at /subprocessors, and processing terms are at /dpa. Stating the correction rather than quietly reissuing the list: a review on 14 August found six recipients missing, including a transactional email provider that had been delisted nine days earlier on the false reasoning that no email package appeared in our dependencies — it calls the provider’s HTTP API directly, so the check could not have found it. The list is now built from egress rather than from the manifest.',
+    asOf: '2026-08-14',
+  },
+  //
+  // India — DPDP Act, 2023. Added 14 August 2026. Applicability is not
+  // theoretical: the product prices in INR against India-specific Stripe
+  // prices, which is an offering of services to data principals in India.
+  //
+  {
+    item: 'DPDP (India) — notice under s.5',
     status: 'Published',
     artifact:
-      'A current list of processors with purpose and region is published at /subprocessors. Processing terms are at /dpa.',
-    asOf: '2026-08-05',
+      'An itemised notice at /privacy/india naming the fiduciary, each purpose, the recipients, retention, the cross-border position and every data-principal right, with what the product actually does for each. Drafted from the repository; NOT yet reviewed by Indian counsel, and it says so in its own source.',
+    asOf: '2026-08-14',
+  },
+  {
+    item: 'DPDP (India) — consent under s.6',
+    status: 'Implemented',
+    artifact:
+      'A per-purpose consent ledger in the database, append-only by database grant and by trigger, so a withdrawal can never overwrite the grant it withdraws. Boxes render unticked, an unticked box is recorded as a decision, and the largest anonymous intake refuses to store an address without an explicit consent row written first. Withdrawal is one click at /privacy/requests.',
+    asOf: '2026-08-14',
+  },
+  {
+    item: 'DPDP (India) — data principal rights (ss.11–14)',
+    status: 'Partially implemented',
+    artifact:
+      'Export and account deletion are self-serve; consent withdrawal is self-serve at /privacy/requests; access, correction, erasure without an account, and nomination are recorded as durable requests with a reference and worked manually. Nomination has no field in the product. The gaps are stated on /privacy/india rather than implied away.',
+    asOf: '2026-08-14',
+  },
+  {
+    item: 'DPDP (India) — grievance redressal under s.13',
+    status: 'Published, as a role',
+    artifact:
+      'A grievance route published in the site footer, on /privacy/india and in the terms, reachable without an account. It names a role rather than an individual because no named officer has been designated — designating one is an open founder decision, not an engineering task.',
+    asOf: '2026-08-14',
+  },
+  {
+    item: 'DPDP (India) — verifiable parental consent under s.9',
+    status: 'Not implemented',
+    artifact:
+      'Under this Act a child is anyone under 18 and verifiable parental consent is mandatory. The web surface has no age gate; the mobile age gate is self-declared and its minor-safe mode can be cleared by the child. This is the largest open gap in our DPDP position and we are listing it rather than letting you discover it.',
+    asOf: '2026-08-14',
+  },
+  {
+    item: 'DPDP (India) — notice languages under s.6(4)',
+    status: 'Not provided',
+    artifact:
+      'The Act entitles a data principal to the notice in any Eighth Schedule language. Only English is published. Translation is a commissioning decision that has not been made.',
+    asOf: '2026-08-14',
+  },
+  {
+    item: 'DPDP (India) — Significant Data Fiduciary obligations',
+    status: 'Not applicable unless notified',
+    artifact:
+      'Significant Data Fiduciary status is a Central Government notification, not a self-assessment. AGI has not been notified. If it ever is, a named India-based Data Protection Officer, a data protection impact assessment and an independent audit become mandatory, and none of the three exists today.',
+    asOf: '2026-08-14',
+  },
+  {
+    item: 'DPDP (India) — data residency',
+    status: 'Not offered',
+    artifact:
+      'All hosting is in the United States. There is no Indian region and no plan published for one, so using the service means personal data leaves India.',
+    asOf: '2026-08-14',
   },
 ];
 

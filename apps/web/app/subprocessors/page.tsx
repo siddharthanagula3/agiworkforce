@@ -12,20 +12,36 @@ export const metadata = buildMetadata({
 });
 
 /*
- * REMOVED 2026-08-05 — "Resend · Transactional email (account, billing, support)".
+ * RE-ADDED 2026-08-14 — "Resend". The 2026-08-05 removal was WRONG, and the way
+ * it was wrong is worth keeping on the record.
  *
- * No transactional email provider is wired anywhere in this repository: there is
- * no resend/sendgrid/postmark/mailgun/nodemailer/SES dependency in the web
- * manifest and no send call site. Two production files state the same thing in
- * terms — app/api/user/delete-account/route.ts ("there is no transactional email
- * provider anywhere in this repository") and
- * lib/services/organization-invitation-service.ts.
+ * That removal reasoned from the dependency manifest: no resend/sendgrid/
+ * postmark/nodemailer/SES package, therefore no email provider, therefore
+ * delist. The premise was true and the conclusion was false.
+ * `lib/support/handoff/resend-client.ts` calls `https://api.resend.com/emails`
+ * over plain `fetch` — its own header explains that it deliberately avoided an
+ * npm dependency because "one HTTP POST does not justify an SDK" and the repo's
+ * hooks block lockfile edits. A grep for the package could never find it.
  *
- * Listing a processor that receives nothing is a defect in the opposite
- * direction from an omission: it makes the list unreliable, and it propped up
- * three separate promises of emailed notice that could not be performed. Do not
- * re-add the entry until an email provider is actually wired — and when it is,
- * add it here in the same change.
+ * The cost of that mistake was not one wrong row. Three pages went on to justify
+ * NOT notifying users of anything — subprocessor changes, breach, policy
+ * updates — on the strength of "there is no transactional email system in this
+ * product". Personal data was leaving the product to an undisclosed recipient
+ * the whole time, including full support transcripts.
+ *
+ * LESSON, for whoever audits this list next: verify a vendor by its EGRESS, not
+ * by package.json. The enumeration that belongs in a review is
+ *   grep -rn "https://api\.\|fetch('https://\|fetch(\`https://" apps/web/lib apps/web/app/api
+ * and then read each hit.
+ *
+ * WHAT WAS CHECKED THIS TIME, and one finding that did NOT survive:
+ * an audit reported that both Apple and Google receive purchase identifiers.
+ * Google does — `lib/server/mobile-iap-store-verification.ts:254` POSTs the
+ * purchase token to androidpublisher.googleapis.com. Apple does NOT: the same
+ * module verifies Apple's signed notifications LOCALLY with
+ * `SignedDataVerifier` from `@apple/app-store-server-library` against bundled
+ * root certificates. Apple sends to us; nothing goes back. So Apple is not on
+ * this list, and that asymmetry is deliberate rather than an omission.
  */
 const SUBS: { name: string; purpose: string; region: string }[] = [
   {
@@ -86,12 +102,15 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
     region: 'United States and other regions, per provider',
   },
   {
-    // Not optional to disclose: aggregator-routing.ts routes MiniMax, Qwen and
-    // Zhipu through OpenRouter on AGI's own keys, so prompt content for those
-    // models passes through OpenRouter as well as the model provider.
+    // CORRECTED 2026-08-14. The previous entry said MiniMax/Qwen/Zhipu only.
+    // lib/services/aggregator-routing.ts has TWO routes: those providers are
+    // permanently routed (isPermanentOpenRouterRoute), and
+    // `isOpenRouterFailoverRoute` additionally returns true for EVERY
+    // catalogued chat model that is not already routed. So any Managed Cloud
+    // chat model can reach OpenRouter on a failover, not just three.
     name: 'OpenRouter',
     purpose:
-      'Inference routing for the MiniMax, Qwen and Zhipu models on Managed Cloud. Prompt content for those models passes through OpenRouter on its way to the model provider.',
+      'Inference routing on Managed Cloud, in two situations. (1) Always, for the MiniMax, Qwen and Zhipu models — prompt content for those passes through OpenRouter on its way to the model provider. (2) As a failover for any other catalogued chat model when the direct route to its provider fails. That second case means prompt content for a model you selected from any provider can pass through OpenRouter, and we would rather say so than let the narrower first case imply otherwise.',
     region: 'United States',
   },
   {
@@ -114,6 +133,47 @@ const SUBS: { name: string; purpose: string; region: string }[] = [
     name: 'Expo',
     purpose:
       'Two roles for the iOS and Android apps. (1) Push delivery: notification titles and bodies — including the names you give scheduled tasks — are relayed through Expo on their way to Apple and Google. (2) Over-the-air updates: every app launch requests an update manifest from Expo, which sees the device IP and build fingerprint.',
+    region: 'United States',
+  },
+  //
+  // ── ADDED 2026-08-14 ────────────────────────────────────────────────────
+  // Six recipients that were live in production and absent from this page.
+  // Each one is cited to the call site so the row can be checked, not trusted.
+  //
+  {
+    name: 'Resend',
+    purpose:
+      'Transactional email, in three narrow paths and no others. (1) Support escalation: when a live-support session is escalated, the conversation transcript and the contact email you gave are emailed to our support address (lib/support/handoff/escalation-email.ts). (2) Scheduled-task notifications: if you enable them in Settings, the task name and your email address are used to tell you a run finished — the body carries no task output (lib/services/notification-email-service.ts). (3) Operational alerts to us, carrying user-linked job identifiers (lib/services/video-incident-alert-service.ts). There is no account-lifecycle email: no signup, deletion-confirmation, breach or policy-change mail is sent by anything.',
+    region: 'United States',
+  },
+  {
+    name: 'Runway',
+    purpose:
+      'Video generation. The prompt text you type is sent to Runway when you generate a video with one of its models (app/api/media/video/generate/route.ts). Only reachable when an operator has configured a Runway key; otherwise the route refuses rather than silently choosing another provider.',
+    region: 'United States',
+  },
+  {
+    name: 'Perplexity',
+    purpose:
+      'Two distinct roles, and the second was previously undisclosed. (1) Inference for its own models on Managed Cloud, as listed in the model-provider row above. (2) The backend for the platform web-search tool: when the assistant searches the web for you, your search query is sent to Perplexity (lib/web-search/web-search-tool.ts). That happens on the model’s initiative during a conversation, not only when you visit a search box.',
+    region: 'United States',
+  },
+  {
+    name: 'Google (Play Android Publisher)',
+    purpose:
+      'Verifying Android in-app purchases. The purchase token from your device is sent to Google to confirm a subscription is genuine and current (lib/server/mobile-iap-store-verification.ts). Apple is deliberately NOT listed for the equivalent iOS path: Apple’s signed notifications are verified locally against bundled root certificates, so nothing is sent back to Apple.',
+    region: 'United States',
+  },
+  {
+    name: 'OpenStreetMap Foundation (Nominatim)',
+    purpose:
+      'Geocoding for the maps tool. A place name or location you ask about is sent to Nominatim to resolve it to coordinates (lib/services/map-geocoding-service.ts). Nominatim’s usage policy requires an identifying User-Agent, so the request is attributable to AGI rather than to you.',
+    region: 'European Union',
+  },
+  {
+    name: 'GitHub',
+    purpose:
+      'The GitHub connector. When you install it, repository content and metadata you authorise are read through the GitHub API on your behalf (lib/github-app.ts). Nothing is read until you install the app and grant it access, and you can revoke it at GitHub at any time.',
     region: 'United States',
   },
 ];
@@ -169,19 +229,68 @@ export default function SubprocessorsPage() {
             <Link href="/changelog" style={{ color: 'var(--agi-ink)' }}>
               /changelog
             </Link>
-            , which you can subscribe to. We deliberately do not promise emailed notice:{' '}
-            <strong>
-              there is no transactional email system in this product today, so a commitment to email
-              you is one we could not perform
-            </strong>
-            . To object to a new subprocessor on reasonable data protection grounds, write to us
-            within 30 days of publication — the objection and termination route is in section 05 of
-            the{' '}
+            , which you can subscribe to. <strong>We do not promise emailed notice.</strong> The
+            product can send email in three narrow paths &mdash; support escalation, scheduled-task
+            notifications, and operational alerts to us &mdash; and none of them can mail an
+            arbitrary list of customers. Until something can, a commitment to email you about a
+            subprocessor change is one we could not perform. To object to a new subprocessor on
+            reasonable data protection grounds, write to us within 30 days of publication &mdash;
+            the objection and termination route is in section 05 of the{' '}
             <Link href="/dpa" style={{ color: 'var(--agi-ink)' }}>
               DPA
             </Link>
             .
           </p>
+        </section>
+
+        <section className="agi-section">
+          <p className="agi-section-eyebrow">
+            Corrections made on {POLICY_LAST_UPDATED.subprocessors}
+          </p>
+          <p className="agi-page-lede" style={{ marginTop: 0 }}>
+            A review of what actually leaves this product found this page had been wrong in both
+            directions, and we would rather publish the correction than quietly reissue the list.
+          </p>
+          <ul className="agi-reasons">
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">Six recipients were missing</h3>
+              <p className="agi-reason-p">
+                Resend, Runway, Perplexity&rsquo;s web-search role, Google&rsquo;s Play verification
+                API, OpenStreetMap&rsquo;s Nominatim and GitHub were all receiving data while absent
+                from this page. They are listed above with what each one receives.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">
+                An email provider was removed on 5 August that had never stopped running
+              </h3>
+              <p className="agi-reason-p">
+                It was delisted because no email package appeared in our dependencies. It does not
+                use one &mdash; it calls the provider&rsquo;s HTTP API directly, so the check that
+                justified the removal could not have found it. Support transcripts were being
+                emailed the whole time. That is the most serious thing this review found, and it is
+                fixed above.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">The OpenRouter entry was narrower than the code</h3>
+              <p className="agi-reason-p">
+                It named three model families. OpenRouter is also the failover for every other
+                catalogued chat model, so prompt content for a model from any provider can pass
+                through it. The row now says so.
+              </p>
+            </li>
+            <li className="agi-reason">
+              <h3 className="agi-reason-h">One reported recipient turned out not to be one</h3>
+              <p className="agi-reason-p">
+                Apple was reported as receiving purchase identifiers alongside Google. It does not:
+                Apple&rsquo;s signed receipts are verified on our own servers against bundled
+                certificates, and nothing is sent back. We checked rather than adding the row, and
+                we are noting the near-miss because a list padded with recipients that receive
+                nothing is unreliable in the same way as one with gaps.
+              </p>
+            </li>
+          </ul>
         </section>
         <section className="agi-section">
           <p className="agi-section-eyebrow">What about LLM providers?</p>
