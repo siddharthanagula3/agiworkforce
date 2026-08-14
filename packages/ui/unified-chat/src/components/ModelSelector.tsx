@@ -550,6 +550,11 @@ export function ModelSelector({
     selectableModels,
     selectedModelId,
     modelCatalogStatus,
+    // Read above to decide whether an unadmitted selection falls back to the
+    // first selectable model or to none. Omitting it meant a boundary switch
+    // INTO cloud_managed left the selection empty until some other dependency
+    // happened to change, because the effect never re-ran on the switch itself.
+    executionMode,
   ]);
 
   // Provider-switch gate — when a user whose tier cannot switch provider
