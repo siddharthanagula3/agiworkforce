@@ -1297,3 +1297,86 @@ surface, a second subscription lifecycle, refunds and reconciliation in two
 systems, and `resolveSubscriptionBillingSource` gaining a fourth owner alongside
 `stripe` / `apple` / `google`. That is a substantial build and should not start
 until question 1 is answered.
+
+## 29. Mobile IAP is built and dark — the blockers are all accounts, not code
+
+**Status:** `BLOCKED_BY_HUMAN` — eight items, none of them engineering.
+
+Full decision document (pricing tables, per-surface UPI answer, sequencing):
+<https://claude.ai/code/artifact/58fe8b40-faa9-4247-bdbd-6595e43e7a62>
+
+### 29a. The finding that reframes the mobile work
+
+The in-app purchase path is **already implemented end to end** — client purchase
+via `expo-iap`, server-side Apple and Google verification
+(`apps/web/lib/server/mobile-iap-store-verification.ts`), notification receivers
+at `app/api/mobile/iap/{apple,google}-notifications`, catalog at
+`app/api/mobile/iap/catalog`, product keys in
+`packages/contracts/types/src/mobile-iap.ts`. It is switched off behind
+`MOBILE_IAP_ENABLED` because no store products or credentials exist.
+
+Consequence: **turning IAP on is what ships UPI on mobile.** Play Billing carries
+UPI and UPI AutoPay natively; Apple accepts UPI as an Apple Account funding
+method. Both stores also auto-convert prices per storefront. Three of the four
+stated goals — regional pricing, UPI for Indian mobile users, native in-app
+purchases — are delivered on mobile by clearing paperwork, not by writing code.
+
+Running AGI's own UPI checkout (Razorpay, Stripe UPI) inside the **iOS** app for
+a subscription is not merely unbuilt, it is **prohibited** by App Store guideline
+3.1.1. Android alternative billing is legal in India but yields only a
+4-percentage-point fee discount, must run alongside Play Billing, and requires
+reporting every transaction to Google within 24 hours.
+
+### 29b. Cleared, not a blocker: Google Play Billing 8
+
+The 2026-08-31 deadline is real and gates **new apps** (which AGI is), with an
+extension available to 2026-11-01. But `expo-iap@5.3.0` does not depend on
+BillingClient directly — it resolves `io.github.hyochan.openiap:openiap-google`
+`3.3.0` (pinned in the package's `openiap-versions.json`), which is built on
+Play Billing Library 8. **Compliant.** Confirm with a Gradle dependency tree on
+the first real Android build rather than trusting this note.
+
+### 29c. The eight founder items
+
+Ordered by what they unblock. Detail in the artifact above.
+
+| #   | Item                              | Artifact required                                                                    |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------ |
+| 1   | Apple Paid Applications Agreement | Signed + Tax (W-9), Banking, Contacts. Gates 2–5.                                    |
+| 2   | Apple Small Business Program      | 30% → 15%. AGI qualifies today. Re-file annually.                                    |
+| 3   | Play Console merchant profile     | **Permanent link — cannot be changed later.**                                        |
+| 4   | 9 product IDs in both stores      | 5 subscriptions + 4 consumable top-ups                                               |
+| 5   | Store server credentials          | `APPLE_APP_STORE_*`, `GOOGLE_PLAY_*`, `MOBILE_IAP_*_PRODUCT_IDS_JSON`, Pub/Sub topic |
+| 6   | Store listing copy                | Still promises browser checkout; first-review rejection risk                         |
+| 7   | Tax registration                  | India OIDAR, EU Non-Union OSS, UK VAT — all threshold-free                           |
+| 8   | Max 15x India price               | Blocks INR Stripe Price creation (see §28a)                                          |
+
+Item 7 is the one where delay costs money rather than time: all three appear to
+trigger on the first sale with no minimum, and the web product is already live.
+Confirm the threshold claim with a tax advisor — it was not verifiable from
+primary sources.
+
+### 29d. Engineering work this surfaced (not founder-blocked)
+
+- **A currency-keyed price table.** Only `usd` and `inr` have resolution paths
+  today; every EUR/GBP/JPY/BRL buyer is served plain USD. Adding a currency means
+  editing three files across two packages. Do this **before** adding a third
+  currency, not after the sixth.
+- **India e-mandate handling.** Stripe holds Indian card renewals in `processing`
+  for 26 hours with mandate-specific decline codes. Zero references in the repo
+  (§28b). Only needed once INR billing is live.
+- **Per-currency Price ID slots for `pro`/`max`/`max_15x`** — only Basic and Team
+  have them.
+- **The 7-seat Team threshold** as a real checkout check, not a docs note.
+
+### 29e. Two market facts worth acting on
+
+- **Claude has no UPI anywhere**, including its July 2026 India rupee launch.
+  UPI is a real differentiator against Anthropic and table stakes against OpenAI
+  and Google.
+- **"Match Claude's pricing" does not mean pricing lower in India.** Anthropic
+  prices India _above_ a straight USD conversion. AGI's INR ladder already sits
+  below Claude's — a fine share-buying posture, but it should be deliberate.
+- **Check before launching Basic in India:** if OpenAI's free-ChatGPT-Go-for-a-year
+  promotion is still running, paid ₹399 Basic competes with a free equivalent.
+  Whether it is still live was not established.
