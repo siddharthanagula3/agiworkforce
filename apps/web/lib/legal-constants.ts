@@ -129,6 +129,8 @@ export const POLICY_LAST_UPDATED = {
   /** India — DPDP Act, 2023 notice and the data-principal rights page. */
   indiaPrivacy: '2026-08-13',
   dataRights: '2026-08-13',
+  /** Plain-language companion to the privacy policy. */
+  dataUse: '2026-08-14',
 } as const;
 
 /**
@@ -168,6 +170,14 @@ export const CANONICAL_POLICY_ROUTES = {
    * it has a URL of its own rather than living behind a support mailbox.
    */
   dataRights: '/privacy/requests',
+  /**
+   * Plain-language explainer. NOT a second source of truth: it links into
+   * /privacy for every number and every commitment, so the legal instrument
+   * stays the only place a retention window or a recipient is stated. If you
+   * find yourself restating a fact here rather than linking to it, that is the
+   * drift this note exists to stop.
+   */
+  dataUse: '/data-use',
 } as const;
 
 /** Alias → canonical. Mirrored by the redirect table in `next.config.ts`. */
