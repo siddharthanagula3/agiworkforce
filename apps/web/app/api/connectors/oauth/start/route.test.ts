@@ -81,8 +81,12 @@ afterEach(() => {
 });
 
 describe('GET /api/connectors/oauth/start', () => {
+  // trello, not linear: 2f4cebaf4 gave linear a verified remote MCP endpoint, so
+  // it now takes the self-service discovery branch and fails there (502) rather
+  // than reaching the "no OAuth app configured in this deployment" branch. A
+  // connector with no MCP endpoint is what still exercises that branch.
   it('refuses to start a flow for a provider with no OAuth app configured', async () => {
-    const response = await GET(request('?connectorId=linear'));
+    const response = await GET(request('?connectorId=trello'));
 
     expect(response.status).toBe(307);
     const location = new URL(response.headers.get('location') as string);
@@ -92,10 +96,22 @@ describe('GET /api/connectors/oauth/start', () => {
   });
 
   it('answers a native client honestly in JSON mode instead of redirecting', async () => {
-    const response = await GET(request('?connectorId=linear&mode=json'));
+    const response = await GET(request('?connectorId=trello&mode=json'));
 
     expect(response.status).toBe(501);
     await expect(response.json()).resolves.toMatchObject({ status: 'unavailable' });
+  });
+
+  it('reports a self-service discovery failure as an upstream failure, not as unconfigured', async () => {
+    // linear HAS an MCP endpoint, so with nothing configured the route tries
+    // live client registration and that is what fails. Saying "unavailable /
+    // 501" there would blame this deployment's configuration for an upstream
+    // problem, so the branch answers 502 instead. Pinned because the two
+    // failures look identical to a user and must not be conflated.
+    const response = await GET(request('?connectorId=linear&mode=json'));
+
+    expect(response.status).toBe(502);
+    expect(mocks.createPending).not.toHaveBeenCalled();
   });
 
   it('sends the user to the provider with PKCE, state, and the configured redirect', async () => {

@@ -100,7 +100,14 @@ describe('POST /api/portal', () => {
   it.each([
     ['apple', { apple_original_transaction_id: 'apple-tx-1' }],
     ['google', { google_purchase_token: 'play-token-1' }],
-    ['manual', {}],
+    // Genuinely manual: no store identifier AND no Stripe customer id. A paid
+    // row that carries a Stripe CUSTOMER but no subscription id now resolves to
+    // 'stripe', not 'manual' — it is Stripe-billed with the id not yet
+    // recorded, and classifying it as manual told those users their
+    // subscription was "managed by your organization", which was both false and
+    // unactionable (subscription-billing-owner.ts). Keeping
+    // `stripe_customer_id` here would assert that old, wrong behaviour.
+    ['manual', { stripe_customer_id: null }],
     [
       'unverified',
       { stripe_subscription_id: 'sub_123', apple_original_transaction_id: 'apple-tx-1' },
