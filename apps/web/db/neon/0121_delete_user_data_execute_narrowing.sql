@@ -1,0 +1,72 @@
+-- =============================================================================
+-- Migration: 0121_delete_user_data_execute_narrowing.sql
+-- Purpose  : Close SEC-89 — revoke the PUBLIC EXECUTE grant that 0043 left on
+--            `public.delete_user_data(text)` after making it SECURITY DEFINER.
+--
+-- The defect
+-- -----------------------------------------------------------------------------
+-- 0043_audit_log_immutability.sql made the audit log immutable by REVOKEing
+-- DELETE, then converted two functions to SECURITY DEFINER so the two
+-- legitimate purges still worked: retention cleanup and GDPR erasure. It said
+-- so itself, in a note that was never acted on:
+--
+--   "once delete_user_data is SECURITY DEFINER, any grantee of EXECUTE can
+--    purge ANY user's audit trail by p_user_id"
+--
+-- Postgres grants EXECUTE on a new function to PUBLIC by default, so that note
+-- described the shipped state. The immutability control and the erasure path
+-- cancelled each other out: rows the REVOKE protected could still be deleted by
+-- anyone who could call the function, for any user id they chose to pass.
+--
+-- Why revoking is safe now, which is what 0043 could not yet establish
+-- -----------------------------------------------------------------------------
+-- 0043 declined to revoke because it "could break the legitimate caller". That
+-- caller has since gone dead. `apps/web/app/api/user/data/route.ts` calls
+-- `delete_user_data($1)` only inside `if (!durableVideoSchemaProvisioned)`, and
+-- 0105_durable_video_generation_jobs.sql creates `video_generation_jobs` — the
+-- table that flag probes. Any database that has run migrations through 0105
+-- therefore takes the canonical lifecycle-safe erasure path and never reaches
+-- the legacy function. This migration is 0121, so by the time it applies, 0105
+-- has applied.
+--
+-- The function is left in place rather than dropped: it is still the correct
+-- erasure implementation for a database that predates 0105, and dropping it
+-- would turn a fallback into a hard failure.
+--
+-- Not changed here: `cleanup_old_security_logs()` is the other SECURITY DEFINER
+-- function 0043 created, and it has a LIVE caller —
+-- `apps/web/lib/services/security-monitoring-service.ts:427`. Revoking PUBLIC
+-- EXECUTE on it would break retention cleanup, and it takes no user id, so it
+-- cannot be aimed at a chosen victim the way delete_user_data can. It needs its
+-- own grant to a named job role, which is a separate decision.
+--
+-- Ownership note: revoking from PUBLIC does not lock out the function owner —
+-- an owner retains EXECUTE independently of the PUBLIC grant. No role is
+-- granted EXECUTE here on purpose: granting it back to `app_rls` (the per-user
+-- request role) would reinstate exactly the vulnerability being closed.
+-- =============================================================================
+
+revoke execute on function public.delete_user_data(text) from public;
+
+-- =============================================================================
+-- VERIFICATION — run MANUALLY on a throwaway Neon BRANCH before applying to
+-- production. (Commented so it never runs during apply.)
+-- =============================================================================
+--
+-- -- (a) PUBLIC no longer holds EXECUTE, and the owner still does.
+-- select pg_get_userbyid(p.proowner) as owner,
+--        has_function_privilege('public', p.oid, 'execute') as public_execute
+-- from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+-- where n.nspname = 'public' and p.proname = 'delete_user_data';
+-- --   EXPECT: public_execute = false.
+--
+-- -- (b) The runtime role cannot call it.
+-- select has_function_privilege('app_rls', p.oid, 'execute')
+-- from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+-- where n.nspname = 'public' and p.proname = 'delete_user_data';
+-- --   EXPECT: false.
+--
+-- -- (c) The path that actually runs is unaffected: video_generation_jobs must
+-- --     exist, which is what routes erasure away from this function.
+-- select to_regclass('public.video_generation_jobs') is not null as provisioned;
+-- --   EXPECT: true.
