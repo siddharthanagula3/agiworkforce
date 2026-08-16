@@ -100,7 +100,10 @@ function configuredModel(model: string): void {
     ),
     update: vi.fn().mockResolvedValue(undefined),
     has: vi.fn().mockReturnValue(false),
-    inspect: vi.fn().mockReturnValue(undefined),
+    // `Config.model()` reads the user/global scope via `inspect()`, not `get()`,
+    // so a checked-out .vscode/settings.json cannot move the trust boundary.
+    // Stubbing only `get()` silently yields DEFAULTS.model instead.
+    inspect: vi.fn((key: string) => (key === 'model' ? { key, globalValue: model } : undefined)),
   } as unknown as ReturnType<typeof vscode.workspace.getConfiguration>);
 }
 

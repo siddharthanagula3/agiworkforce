@@ -88,3 +88,33 @@ describe('checkForInjection svg rule linear rewrite', () => {
     expect(checkForInjection(`<svg ${'a'.repeat(100_000)}`).safe).toBe(true);
   });
 });
+
+describe('checkForInjection event-handler rule linear rewrite', () => {
+  it('still flags a handler after an attribute boundary', () => {
+    expect(checkForInjection('<div onclick=alert').safe).toBe(false);
+  });
+
+  it('still flags a handler at the very start of the input', () => {
+    // The boundary form is split in two so that offset 0, which has no
+    // preceding character to consume, keeps matching.
+    expect(checkForInjection('onerror=x').safe).toBe(false);
+  });
+
+  it('answers immediately on the input that made the old expression quadratic', () => {
+    // /on\w+\s*=/i matched "on" at every other offset here and re-scanned the
+    // tail from each, which is what js/polynomial-redos reported.
+    expect(checkForInjection('on'.repeat(100_000)).safe).toBe(true);
+  });
+
+  it('no longer flags "on" embedded inside a longer attribute name', () => {
+    // Narrower than the original, and deliberately so: neither `xonclick` nor
+    // the `data-onclick` data attribute is an event handler, and the original
+    // flagged both. Recorded here so the narrowing is a decision, not drift.
+    expect(checkForInjection('<div xonclick=x').safe).toBe(true);
+    expect(checkForInjection('<div data-onclick=x').safe).toBe(true);
+  });
+
+  it('still flags a handler whose name is uppercase or spaced before "="', () => {
+    expect(checkForInjection('<div ONLOAD =x').safe).toBe(false);
+  });
+});
