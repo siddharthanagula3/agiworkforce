@@ -270,17 +270,6 @@ describe('useSupportPresence defaults to unavailable', () => {
   });
 });
 
-/**
- * REAL TIMERS on purpose.
- *
- * These two cases were originally written with `vi.useFakeTimers()`. RTL's
- * `waitFor` schedules its own polling on `setTimeout`, and when that timer is
- * faked but never advanced by RTL, the assertion can only ever time out — the
- * test would have "failed" for a reason that has nothing to do with the widget.
- * A short REAL deadline (120ms) exercises exactly the same production code path
- * — `useSupportSession`'s independent client-side expiry timer — and actually
- * fails when that timer is deleted. Verified both ways.
- */
 describe('a waiting handoff can never outlive its deadline', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -309,7 +298,6 @@ describe('a waiting handoff can never outlive its deadline', () => {
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
         const url = String(input);
-        // Creation succeeds with a 120ms deadline...
         if (url.endsWith('/api/support/handoff')) {
           return Promise.resolve(
             jsonResponse({
@@ -325,10 +313,6 @@ describe('a waiting handoff can never outlive its deadline', () => {
             }),
           );
         }
-        // ...and every subsequent status poll 500s. That is the exact case the
-        // client-side deadline exists to survive: a wedged server can no longer
-        // hold the user in a "connecting…" state, because the browser stops
-        // waiting on its own authority.
         if (url.includes('/api/support/handoff/')) {
           pollCalls.push(url);
           return Promise.resolve(jsonResponse({}, 500));
@@ -352,7 +336,6 @@ describe('a waiting handoff can never outlive its deadline', () => {
       { timeout: 3000 },
     );
 
-    // Nothing the server said moved it on — the client did it unilaterally.
     expect(pollCalls.every((url) => url.includes('sess-1'))).toBe(true);
   });
 
@@ -366,7 +349,6 @@ describe('a waiting handoff can never outlive its deadline', () => {
             sessionId: 'sess-2',
             referenceId: 'AGI-20260805-33333333',
             status: 'waiting',
-            // waitExpiresAt deliberately missing.
             headline: 'Connecting you to an agent…',
           }),
         ),
@@ -377,9 +359,6 @@ describe('a waiting handoff can never outlive its deadline', () => {
     render(<Probe />);
     await user.click(screen.getByRole('button', { name: 'escalate' }));
 
-    // A deadline-less "live" response is the single most damaging shape this
-    // feature can receive, so it is treated as a failed handoff rather than
-    // rendered as an unbounded wait.
     await waitFor(() => {
       expect(screen.getByTestId('kind')).toHaveTextContent('failed');
     });

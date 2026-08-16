@@ -1,7 +1,3 @@
-/**
- * @file Middleware exports
- * @description Central export point for all security middleware
- */
 
 export {
   WebSocketRateLimiter,

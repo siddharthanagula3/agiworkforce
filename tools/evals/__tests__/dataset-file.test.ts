@@ -1,15 +1,3 @@
-/**
- * `loadDataset` reads `datasets/<suite>.json` and then re-checks that the file
- * agrees with its own filename. That guard is unreachable through the committed
- * corpora by design, so it is exercised here against a stubbed filesystem —
- * otherwise the one branch that stops a mis-copied corpus file would ship
- * untested.
- *
- * The failure it prevents is silent: copy `refusal.json` to `jailbreak.json`,
- * forget to change `suite`, and `loadAllDatasets` returns the refusal corpus
- * twice while the jailbreak corpus vanishes from the run. Every gate still
- * passes and nothing has been measured.
- */
 
 import { describe, expect, it, vi } from 'vitest';
 

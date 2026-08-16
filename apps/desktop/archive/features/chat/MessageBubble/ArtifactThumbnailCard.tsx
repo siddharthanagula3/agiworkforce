@@ -1,12 +1,3 @@
-/**
- * ArtifactThumbnailCard — inline clickable card rendered after an assistant
- * message when `message.artifacts` is non-empty.
- *
- * Clicking opens the existing ArtifactPanel via useArtifactStore.
- * Trust-boundary chips (privacy / source-surface labels) are preserved from
- * the GeneratedFilePresentation when a generatedFile / computeSession is
- * attached to the artifact metadata; for plain local artifacts they are omitted.
- */
 
 import { useCallback } from 'react';
 import {
@@ -23,8 +14,6 @@ import {
 import { cn } from '../../../lib/utils';
 import { useArtifactStore } from '../../../stores/artifactStore';
 import type { Artifact, ArtifactType } from '../../../types/chat';
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function kindLabel(type: ArtifactType): string {
   switch (type) {
@@ -105,7 +94,6 @@ function badgeColorClass(type: ArtifactType): string {
   }
 }
 
-/** First 3 non-empty lines of content for non-renderable types. */
 function codePreview(artifact: Artifact): string | null {
   if (['html', 'react', 'svg', 'component'].includes(artifact.type)) return null;
   const lines = artifact.content
@@ -115,8 +103,6 @@ function codePreview(artifact: Artifact): string | null {
     .slice(0, 3);
   return lines.length > 0 ? lines.join('\n') : null;
 }
-
-// ─── Single card ─────────────────────────────────────────────────────────────
 
 interface SingleCardProps {
   artifact: Artifact;
@@ -185,8 +171,6 @@ function SingleCard({ artifact, onClick }: SingleCardProps) {
   );
 }
 
-// ─── Overflow card ────────────────────────────────────────────────────────────
-
 function OverflowCard({ count, onClick }: { count: number; onClick: () => void }) {
   return (
     <button
@@ -206,8 +190,6 @@ function OverflowCard({ count, onClick }: { count: number; onClick: () => void }
     </button>
   );
 }
-
-// ─── Public component ─────────────────────────────────────────────────────────
 
 export interface ArtifactThumbnailRowProps {
   artifacts: Artifact[];

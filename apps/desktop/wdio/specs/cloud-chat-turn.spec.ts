@@ -1,31 +1,3 @@
-/**
- * Desktop Cloud chat turn — the demo spine, on the real Tauri binary.
- *
- * Covers, against the shipping renderer (not a vite-served DOM):
- *   DES-C03  the outbound completions body never carries `thinking_mode: false`
- *            for a model whose catalog entry sets
- *            `reasoning.canDisableThinking: false` (the route answers that with
- *            a 422 `invalid_thinking_configuration` before any generation).
- *   DES-C24  `assistant_message_id` is present (server-side durability net).
- *   DES-C25  `client_timezone` is present and IANA-valid.
- *   DES-C04  a completed turn exposes a Retry that re-issues a completion, and
- *            a mid-stream failure exposes a working Retry rather than a blank
- *            bubble.
- *
- * HOW THE CLOUD SESSION IS OBTAINED WITHOUT A HUMAN
- * The native binary cannot use the dev-browser session seed (`isLocalDevBrowser`
- * is false under Tauri) and `unified-auth-storage` deliberately persists no
- * token — the session is revalidated from the native credential vault on every
- * launch. So this spec mocks the four Tauri commands the device flow actually
- * invokes (`apps/desktop/src/services/cloudAccountAuth.ts` `authorizeCloudAccount`)
- * through the shared Cloud-session helper and answers the app's own
- * `window.fetch` for the managed-cloud origin. No real account, no real
- * network, no reload race: the fetch stub is installed BEFORE sign-in starts,
- * so every request the session makes is already covered.
- *
- * Model ids and reasoning contracts are read from the shared registry at run
- * time — never hardcoded here.
- */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -37,14 +9,6 @@ import {
 
 const ACCOUNT_ID = 'wdio-cloud-user';
 
-/**
- * The model registry is the source of truth (see the repo rule: never invent or
- * hardcode a model id). Read the catalog JSON directly rather than importing
- * `@agiworkforce/types` — the wdio runner loads specs, not the whole workspace
- * TS graph.
- */
-// Specs load as ESM (no __dirname); wdio runs from apps/desktop — same
-// assumption wdio.conf.ts's onPrepare already relies on.
 const MODELS_JSON_PATH = path.resolve(
   process.cwd(),
   '../../packages/contracts/types/src/models.json',
@@ -58,7 +22,6 @@ interface CatalogModel {
   reasoning?: { canDisableThinking?: boolean };
 }
 
-/** A live catalog model that cannot disable thinking — the DES-C03 case. */
 const alwaysOnModel = (() => {
   const catalog = JSON.parse(fs.readFileSync(MODELS_JSON_PATH, 'utf8')) as {
     models: Record<string, CatalogModel>;
@@ -83,14 +46,6 @@ interface CapturedRequest {
   authorization: string | null;
 }
 
-/**
- * Installs a fetch stub over the managed-cloud origin.
- *
- * Records every request and answers the endpoints a Cloud session touches.
- * `mode` selects the completions behaviour: a clean SSE turn, or a stream that
- * commits a 200 and then fails mid-flight (`x_stream_error`), which is exactly
- * the case DES-C04's Retry has to recover from.
- */
 async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<void> {
   await browser.execute(
     (userId: string, streamMode: string, discoveredModel: CatalogModel) => {
@@ -163,10 +118,6 @@ async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<vo
               ? input.toString()
               : (input as Request).url;
         const url = new URL(rawUrl, window.location.href);
-        // mockDeviceAuthorization learns the canonical WEB_APP_URL from the
-        // app's real `account_store_api_base_url` call. Match that value at
-        // request time so this test follows Vite env resolution instead of
-        // duplicating a production or localhost origin in Node.
         if (
           typeof win.__agiWdioCloudOrigin !== 'string' ||
           url.origin !== win.__agiWdioCloudOrigin
@@ -225,7 +176,6 @@ async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<vo
             }
             return json({ conversations: [], hasMore: false, nextOffset: 0 });
           }
-          // Message create / delete / single-conversation read.
           if ((init?.method ?? 'GET').toUpperCase() === 'DELETE') {
             return json({ success: true });
           }
@@ -283,8 +233,6 @@ async function installCloudFetchStub(mode: 'ok' | 'midstream-error'): Promise<vo
           return json({ credits: { balanceCents: 1_000_00 } });
         }
 
-        // Anything else on our cloud origin: succeed emptily rather than
-        // letting a real request escape the harness.
         return json({});
       };
     },
@@ -327,9 +275,6 @@ async function enterCloudModeSignedIn(): Promise<void> {
     { timeout: 60_000, interval: 500, timeoutMsg: 'Desktop shell never finished loading' },
   );
 
-  // A prior interrupted Cloud journey can leave the isolated profile on the
-  // signed-out Cloud surface. Normalize through the product's own Local-mode
-  // action before looking for the shell tab strip.
   const useLocalMode = await $('button=Use Local Mode');
   if (await useLocalMode.isExisting()) {
     await useLocalMode.click();
@@ -339,20 +284,12 @@ async function enterCloudModeSignedIn(): Promise<void> {
   await cloudTab.waitForDisplayed({ timeout: 20_000 });
   await cloudTab.click();
 
-  // Native email/password sign-in is primary. This journey deliberately uses
-  // the explicit browser fallback because its approval boundary is mocked.
   await completeMockedDeviceSignIn();
 
-  // The mocked device flow approves on the first poll (interval clamps to the
-  // 3s floor in requestDeviceAuthorization), then /api/me resolves off the stub.
   const composer = await $('textarea[aria-label="Chat message input"]');
   await composer.waitForDisplayed({ timeout: 60_000 });
 }
 
-/**
- * Selects `modelName` in the composer's model popover, expanding every
- * collapsed provider group first.
- */
 async function selectComposerModel(modelName: string): Promise<void> {
   const trigger = await $('button[aria-label="Select model"]');
   await trigger.waitForDisplayed({ timeout: 20_000 });
@@ -363,22 +300,14 @@ async function selectComposerModel(modelName: string): Promise<void> {
   });
   await trigger.click();
 
-  // Scope every popover query to the portalled Radix content: the trigger
-  // itself renders the selected model's name, so an unscoped text match would
-  // hit the trigger (closing the popover) instead of the option.
   const popover = await $('[data-radix-popper-content-wrapper]');
   await popover.waitForDisplayed({ timeout: 10_000 });
 
-  // Provider groups can start collapsed; expand them all before looking.
   const groupHeaders = await popover.$$('button[aria-expanded="false"]');
   for (const header of groupHeaders) {
     if (await header.isDisplayed()) await header.click();
   }
 
-  // The embedded WebKit driver reports portalled Radix descendants as hidden
-  // even while their containing popover is visibly rendered. Resolve the
-  // button inside the already-verified visible popover and dispatch its normal
-  // DOM click so the React selection handler still owns the state change.
   const selected = await browser.execute(
     (root: Element, expectedName: string) => {
       const option = Array.from(root.querySelectorAll('button')).find((button) =>
@@ -404,10 +333,6 @@ async function selectComposerModel(modelName: string): Promise<void> {
     },
   );
 
-  // A programmatic click preserves the component's selection handler but the
-  // embedded WebKit provider does not deliver Radix's dismissable-layer event.
-  // Close the still-open popover through its real trigger before interacting
-  // with the composer underneath it.
   if ((await trigger.getAttribute('data-state')) === 'open') {
     await trigger.click();
   }
@@ -453,9 +378,6 @@ describe('AGI Desktop Cloud chat turn', () => {
   });
 
   after(async () => {
-    // Leave the shared wdio profile in Local mode so the next spec file does
-    // not boot into the Cloud auth screen, even when a before/test assertion
-    // failed while the signed-out Cloud surface was mounted.
     await restoreLocalModeProfile();
   });
 
@@ -498,11 +420,8 @@ describe('AGI Desktop Cloud chat turn', () => {
     expect(body).toBeDefined();
     expect(body!['model']).toBe(alwaysOnModel.id);
 
-    // DES-C03: the 422 trigger. Either the field is absent or it is true —
-    // `false` is the exact value the route refuses for this model.
     expect(body!['thinking_mode']).not.toBe(false);
 
-    // DES-C24 / DES-C25.
     expect(typeof body!['assistant_message_id']).toBe('string');
     expect(String(body!['assistant_message_id'])).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
@@ -512,7 +431,6 @@ describe('AGI Desktop Cloud chat turn', () => {
     expect(String(timeZone).length).toBeLessThanOrEqual(64);
     expect(Intl.supportedValuesOf('timeZone')).toContain(String(timeZone));
 
-    // The turn rendered a reply, not an error bubble.
     expect(await assistant.getText()).toContain('Cloud reply');
   });
 
@@ -530,8 +448,6 @@ describe('AGI Desktop Cloud chat turn', () => {
       timeoutMsg: 'Retry did not re-issue a completions request',
     });
 
-    // The replacement re-sends the SAME prompt, and only after it runs are the
-    // superseded durable rows dropped.
     const requests = await readCapturedRequests();
     const [replay] = completionBodies(requests);
     const messages = (replay!['messages'] ?? []) as Array<{ role: string; content: unknown }>;
@@ -556,7 +472,6 @@ describe('AGI Desktop Cloud chat turn', () => {
     await clearCapturedRequests();
     await sendTurn('Now fail mid-stream.');
 
-    // The "Response may be incomplete" notice owns the mid-stream Retry.
     const notice = await $('button[aria-label="Regenerate this response"]');
     await notice.waitForDisplayed({ timeout: 60_000 });
 

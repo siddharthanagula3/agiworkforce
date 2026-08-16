@@ -50,11 +50,6 @@ function getConfig(
   }
 }
 
-/**
- * ConnectionStatusBar -- Shows current desktop connection state.
- * Tapping navigates to the companion/pairing screen.
- * Use this anywhere you need to show connection status.
- */
 export function ConnectionStatusBar() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -81,10 +76,6 @@ export function ConnectionStatusBar() {
   );
 }
 
-/**
- * ConnectionDot -- Minimal dot indicator for connection status.
- * Suitable for headers or compact layouts.
- */
 export function ConnectionDot() {
   const colors = useThemeColors();
   const status = useConnectionStore((s) => s.status);

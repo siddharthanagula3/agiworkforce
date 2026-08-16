@@ -1,8 +1,3 @@
-/**
- * Rendering-parity tests: spreadsheet (CSV/TSV/JSON parsing + sort + cell
- * copy + truncation), presentation (slide split + keyboard nav + dots), and
- * email (header parsing + chrome + copy-as-text).
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, act, within } from '@testing-library/react';
@@ -35,10 +30,6 @@ function makeArtifact(overrides: {
     content: overrides.content ?? '',
   };
 }
-
-// ---------------------------------------------------------------------------
-// tabular parsing — edge cases
-// ---------------------------------------------------------------------------
 
 describe('parseTabular', () => {
   it('parses plain CSV with a header row', () => {
@@ -136,15 +127,9 @@ describe('parseTabular', () => {
   });
 
   it('escapes a backslash before the pipe it precedes, so the cell cannot split', () => {
-    // Escaping order regression. With pipes escaped first, `a\|b` became
-    // `a\\|b` — markdown renders `\\` as a literal backslash and then treats
-    // the pipe as an unescaped COLUMN SEPARATOR, splitting the row into three
-    // cells against a two-column header. Windows paths and regex literals in
-    // model-generated tables hit this readily.
     const data = parseTabular('a,b\n"x\\|y",2')!;
     const table = toMarkdownTable(data);
     expect(table).toBe('| a | b |\n| --- | --- |\n| x\\\\\\|y | 2 |');
-    // Every row must still have exactly the header's column count.
     const rows = table.split('\n').map((line) => line.split(/(?<!\\)\|/).length);
     expect(new Set(rows).size).toBe(1);
   });
@@ -156,10 +141,6 @@ describe('parseTabular', () => {
     ]);
   });
 });
-
-// ---------------------------------------------------------------------------
-// SpreadsheetArtifact — interactions
-// ---------------------------------------------------------------------------
 
 describe('SpreadsheetArtifact interactions', () => {
   const csv = 'name,score\nCharlie,5\nAlice,30\nBob,7';
@@ -191,13 +172,13 @@ describe('SpreadsheetArtifact interactions', () => {
     expect(firstColumnValues()).toEqual(['Charlie', 'Alice', 'Bob']);
 
     const scoreHeader = screen.getByTitle('Sort by score');
-    fireEvent.click(scoreHeader); // asc (numeric: 5, 7, 30)
+    fireEvent.click(scoreHeader);
     expect(firstColumnValues()).toEqual(['Charlie', 'Bob', 'Alice']);
 
-    fireEvent.click(scoreHeader); // desc
+    fireEvent.click(scoreHeader);
     expect(firstColumnValues()).toEqual(['Alice', 'Bob', 'Charlie']);
 
-    fireEvent.click(scoreHeader); // back to original order
+    fireEvent.click(scoreHeader);
     expect(firstColumnValues()).toEqual(['Charlie', 'Alice', 'Bob']);
   });
 
@@ -230,7 +211,6 @@ describe('SpreadsheetArtifact interactions', () => {
     expect(note.textContent).toContain(
       `Showing first ${SPREADSHEET_ROW_CAP} of ${SPREADSHEET_ROW_CAP + 20} rows`,
     );
-    // Row beyond the cap is not in the DOM.
     expect(screen.queryByText(`r${SPREADSHEET_ROW_CAP + 5}`)).toBeNull();
   });
 
@@ -244,10 +224,6 @@ describe('SpreadsheetArtifact interactions', () => {
     expect(cell.className).toContain('text-right');
   });
 });
-
-// ---------------------------------------------------------------------------
-// PresentationArtifact — slide split + navigation
-// ---------------------------------------------------------------------------
 
 describe('splitSlides', () => {
   it('splits on --- separator lines including CRLF and extra dashes', () => {
@@ -316,10 +292,6 @@ describe('PresentationArtifact navigation', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// EmailArtifact — header parsing + chrome + copy
-// ---------------------------------------------------------------------------
-
 describe('parseEmail', () => {
   it('parses a leading header block and body', () => {
     const parsed = parseEmail(
@@ -353,7 +325,6 @@ describe('EmailArtifact', () => {
     expect(screen.getByTestId('email-subject').textContent).toBe('Launch plan');
     expect(screen.getByText('team@example.com')).toBeDefined();
     expect(screen.getByText('exec@example.com')).toBeDefined();
-    // Body markdown renders (bold becomes <strong>)
     expect(screen.getByText('Hi all').tagName).toBe('STRONG');
   });
 

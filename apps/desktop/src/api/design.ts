@@ -1,16 +1,5 @@
-/**
- * Design API
- *
- * TypeScript bindings for the AI-powered CSS design assistant.
- * Wraps the Rust design commands: generate_css, apply_css, get_element_styles,
- * generate_color_scheme, suggest_improvements, tokens_to_css, check_accessibility.
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// ---------------------------------------------------------------------------
-// Types (mirror Rust structs — field names are camelCase for IPC)
-// ---------------------------------------------------------------------------
 
 export interface DesignContext {
   currentStyles?: string;
@@ -84,10 +73,6 @@ export interface AccessibilityReport {
   summary: string;
 }
 
-// ---------------------------------------------------------------------------
-// API functions
-// ---------------------------------------------------------------------------
-
 /**
  * Generate CSS from a natural-language description using an LLM.
  *
@@ -105,16 +90,10 @@ export async function generateCss(request: DesignRequest): Promise<DesignRespons
   return invoke<DesignResponse>('design_generate_css', { request });
 }
 
-/**
- * Apply CSS to a selector (returns an instruction string for the frontend to act on).
- */
 export async function applyCss(selector: string, css: string): Promise<string> {
   return invoke<string>('design_apply_css', { selector, css });
 }
 
-/**
- * Get the computed styles for a given CSS selector.
- */
 export async function getElementStyles(selector: string): Promise<string> {
   return invoke<string>('design_get_element_styles', { selector });
 }
@@ -142,17 +121,10 @@ export async function suggestImprovements(
   return invoke<DesignSuggestion[]>('design_suggest_improvements', { currentCss, goals });
 }
 
-/**
- * Convert a design-tokens object to a CSS custom-properties stylesheet.
- */
 export async function designTokensToCss(tokens: DesignTokens): Promise<string> {
   return invoke<string>('design_tokens_to_css', { tokens });
 }
 
-/**
- * Check CSS for WCAG accessibility issues.
- * Returns a report with a score, issue list, and passed checks.
- */
 export async function checkAccessibility(css: string): Promise<AccessibilityReport> {
   return invoke<AccessibilityReport>('design_check_accessibility', { css });
 }

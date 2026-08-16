@@ -1,20 +1,3 @@
-/**
- * HARD-008 — a child deadline must not outlive its parent.
- *
- * `runToolLoop` checks its wall-clock budget only at the TOP of a step. Before
- * this fix the per-tool-call cap was the fixed 120 s constant, so a tool call
- * admitted with a few seconds of budget left ran for a further two minutes and
- * pushed the invocation past `export const maxDuration = 300` on
- * `app/api/llm/v1/chat/completions/route.ts` — a platform SIGKILL, which skips
- * the generator `finally` that disposes the E2B sandbox and settles managed
- * usage.
- *
- * The loop clock is injected (`options.now`) so the scenario is deterministic:
- * the turn is 235 s into a 240 s budget when the tool starts, leaving 5 s. The
- * assertion is on the timeout MESSAGE ("timed out after 5s"), not on how long
- * the test takes, so the pre-fix behaviour fails loudly with "after 120s"
- * rather than merely hanging.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mockBuildToolLoopStream = vi.fn();
@@ -92,10 +75,6 @@ function makeProcessed(): ProcessedRequest {
   } as ProcessedRequest;
 }
 
-/**
- * Drive the loop under fake timers, pushing the clock far past BOTH the
- * clamped deadline and the unclamped 120 s one so either variant terminates.
- */
 async function drainWithFakeTimers(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   const decoder = new TextDecoder();
   let out = '';
@@ -132,8 +111,6 @@ describe('runToolLoop — per-tool deadline is clamped to the loop budget', () =
     const finalStep = sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]);
     mockBuildToolLoopStream.mockResolvedValueOnce(toolCallStep).mockResolvedValueOnce(finalStep);
 
-    // First `now()` is the loop's own start stamp; every later read reports the
-    // turn as 235 s into its 240 s budget, so 5 s remain when the tool starts.
     const base = 1_000_000;
     let reads = 0;
     const now = (): number => (reads++ === 0 ? base : base + 235_000);
@@ -143,7 +120,6 @@ describe('runToolLoop — per-tool deadline is clamped to the loop budget', () =
         approvalMode: 'auto',
         maxDurationMs: CHAT_TOOL_LOOP_BUDGET_MS,
         now,
-        // A tool that never settles: only the timeout can end it.
         toolExecutor: () => new Promise(() => {}),
       }),
     );
@@ -165,7 +141,6 @@ describe('runToolLoop — per-tool deadline is clamped to the loop budget', () =
     const finalStep = sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]);
     mockBuildToolLoopStream.mockResolvedValueOnce(toolCallStep).mockResolvedValueOnce(finalStep);
 
-    // Fresh turn: the clamp must not shorten a call that legitimately fits.
     const base = 2_000_000;
     const now = (): number => base;
 
@@ -182,19 +157,6 @@ describe('runToolLoop — per-tool deadline is clamped to the loop budget', () =
   });
 });
 
-/**
- * The provider call is the OTHER child started right after the same top-of-step
- * budget check, and it had no wall-clock bound at all: the only signal reaching
- * the adapter was the OPTIONAL client `AbortSignal`, and `buildToolLoopStream`
- * substitutes a never-triggered controller when the caller passes none (the
- * durable workflow path does). A wedged upstream therefore ran until the
- * platform killed the function — the same skipped-teardown outcome the tool
- * clamp exists to prevent.
- *
- * Without the clamp these two cases do not fail with a wrong message, they
- * never terminate: the loop awaits `collectProviderStream` on a stream that
- * never closes, so the suite fails on its own timeout.
- */
 describe('runToolLoop — the provider stream is clamped to the loop budget too', () => {
   beforeEach(() => {
     mockBuildToolLoopStream.mockReset();
@@ -205,7 +167,6 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
     vi.useRealTimers();
   });
 
-  /** A provider stream that connects and then never emits or closes. */
   function neverSettlingStream(): ReadableStream {
     return new ReadableStream({ start() {} });
   }
@@ -213,8 +174,6 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
   it('stops a wedged provider stream with the budget that is left, and still tears down', async () => {
     mockBuildToolLoopStream.mockResolvedValue(neverSettlingStream());
 
-    // Same shape as the tool case above: 235 s into a 240 s budget, so the
-    // provider call may have 5 s, not the rest of the platform's 300 s.
     const base = 3_000_000;
     let reads = 0;
     const now = (): number => (reads++ === 0 ? base : base + 235_000);
@@ -224,9 +183,6 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
         approvalMode: 'auto',
         maxDurationMs: CHAT_TOOL_LOOP_BUDGET_MS,
         now,
-        // A rotation must NOT be attempted: the budget is gone, not the
-        // provider. If the loop consulted this, the assertion below on the
-        // single call would fail.
         failover: {
           next: () => {
             throw new Error('failover consulted for a budget stop');
@@ -236,8 +192,6 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
     );
 
     expect(output).toContain("ran past this turn's remaining time budget (5s)");
-    // The teardown the budget exists to protect actually ran: the terminal
-    // flush reached the client instead of being skipped by a SIGKILL.
     expect(output).toContain('[DONE]');
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
   });
@@ -245,8 +199,6 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
   it('lets a fresh turn use the whole remaining budget before cutting the stream', async () => {
     mockBuildToolLoopStream.mockResolvedValue(neverSettlingStream());
 
-    // Nothing spent yet: the cap is the loop budget itself, NOT some second
-    // hand-picked per-call number.
     const base = 4_000_000;
     const now = (): number => base;
 
@@ -264,26 +216,11 @@ describe('runToolLoop — the provider stream is clamped to the loop budget too'
   });
 });
 
-/**
- * Three properties of the clamp that the SSE bytes above cannot show, because
- * they are about what happens to the UPSTREAM request rather than to the loop:
- *
- *  - on expiry the derived signal is aborted, so the provider connection is
- *    released instead of streaming (and billing) into a reader nobody drains;
- *  - a client cancel still reaches the adapter, which used to be true only
- *    because `options.signal` was passed straight through — the derived
- *    controller must not swallow it, including when the cancel landed before
- *    dispatch;
- *  - the deadline timer is cleared on the happy path, so a normal turn does
- *    not leave a 240 s timer pending behind it.
- */
 describe('withProviderStreamDeadline — the signal handed to the adapter', () => {
   it('aborts the adapter signal on expiry, with the deadline error as the reason', async () => {
     let adapterSignal: AbortSignal | undefined;
     const pending = withProviderStreamDeadline((signal) => {
       adapterSignal = signal;
-      // An upstream that ignores the clock entirely — only the clamp can
-      // end this.
       return new Promise<never>(() => {});
     }, 20);
 
@@ -336,8 +273,6 @@ describe('withProviderStreamDeadline — the signal handed to the adapter', () =
       await expect(
         withProviderStreamDeadline(() => Promise.resolve('drained'), CHAT_TOOL_LOOP_BUDGET_MS),
       ).resolves.toBe('drained');
-      // A leaked timer here would hold the invocation open for the rest of the
-      // loop budget after the turn is already done.
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();

@@ -30,9 +30,6 @@ export default defineConfig({
 
   projects: [
     {
-      // Desktop Cloud surfaces behind the mock cloud session. Kept as its own
-      // project because it needs the cloud-target bundle (no
-      // VITE_DESKTOP_UI_DEV_LOCAL) — see e2e/cloud-surfaces.spec.ts.
       name: 'cloud-surfaces',
       testMatch: '**/cloud-surfaces.spec.ts',
     },
@@ -102,8 +99,6 @@ export default defineConfig({
     },
   ],
 
-  // In CI, we start the dev server manually in the workflow
-  // This allows faster startup and better control over the process
   webServer: process.env['CI'] ? undefined : undefined,
 
   globalTimeout: process.env['CI'] ? 1800000 : 3600000,

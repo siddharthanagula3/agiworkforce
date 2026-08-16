@@ -89,8 +89,6 @@ describe('chatStore — new-conversation composer toggles', () => {
       videoMode: true,
       imageMode: false,
     });
-    // Adoption consumes the pending bucket. A later new chat must start from
-    // the canonical defaults rather than inherit the previous conversation.
     expect(useChatStore.getState().getComposerToggles(null).videoMode).toBe(false);
   });
 
@@ -125,9 +123,6 @@ describe('chatStore — per-conversation transcript scope', () => {
       { id: 'assistant-1', role: 'assistant', content: 'B answer', createdAt },
     ]);
 
-    // Conversation A finishes after the user has navigated to B. The ids are
-    // deliberately identical so only the explicit conversation scope can
-    // prevent the background update from touching B's visible message.
     updateMessage('assistant-1', { content: 'A complete' }, 'conv-a');
 
     const stateWhileBIsActive = useChatStore.getState();
@@ -144,16 +139,6 @@ describe('chatStore — per-conversation transcript scope', () => {
   });
 });
 
-/**
- * Regression coverage for the cross-conversation streaming-flag leak
- * (streaming/approval cluster Finding 5): `isStreaming`/`isLoading` used to
- * be plain global booleans, so switching conversations mid-stream either (a)
- * showed a brand-new/switched-to conversation as falsely "generating" (stale
- * true left over from the conversation navigated away from), or (b) an
- * orphaned background stream's completion callback wiped a genuinely-active
- * NEW stream's flag out from under it. See `streamingConversationIds`'s doc
- * comment on ChatState for the fix shape (mirrors mobile's chatExecutionStore).
- */
 describe('chatStore — per-conversation streaming scope', () => {
   beforeEach(() => {
     useChatStore.getState().reset();
@@ -163,16 +148,14 @@ describe('chatStore — per-conversation streaming scope', () => {
     const { startStreaming, setActiveConversationWithMessages } = useChatStore.getState();
 
     startStreaming('msg-a', 'conv-a');
-    expect(selectIsActiveConversationStreaming(useChatStore.getState())).toBe(false); // no active id yet
+    expect(selectIsActiveConversationStreaming(useChatStore.getState())).toBe(false);
 
     useChatStore.setState({ activeConversationId: 'conv-a' });
     expect(selectIsActiveConversationStreaming(useChatStore.getState())).toBe(true);
 
-    // Switch to a conversation with no live stream of its own.
     setActiveConversationWithMessages('conv-b', []);
     expect(selectIsActiveConversationStreaming(useChatStore.getState())).toBe(false);
     expect(useChatStore.getState().isLoading).toBe(false);
-    // A's stream is still genuinely running in the background.
     expect(useChatStore.getState().streamingConversationIds).toEqual(['conv-a']);
   });
 
@@ -193,26 +176,20 @@ describe('chatStore — per-conversation streaming scope', () => {
     const { startStreaming, stopStreaming, setLoading, setActiveConversationWithMessages } =
       useChatStore.getState();
 
-    // Conversation A starts streaming (every real caller pairs startStreaming
-    // with setLoading(true)), then the user switches to B and sends there
-    // too, so B has its own genuinely-live send in flight when A's finally
-    // completes in the background.
     startStreaming('msg-a', 'conv-a');
     setLoading(true);
     setActiveConversationWithMessages('conv-b', []);
     startStreaming('msg-b', 'conv-b');
     setLoading(true);
 
-    expect(selectIsActiveConversationStreaming(useChatStore.getState())).toBe(true); // B is active + streaming
+    expect(selectIsActiveConversationStreaming(useChatStore.getState())).toBe(true);
     expect(useChatStore.getState().streamingConversationIds.sort()).toEqual(['conv-a', 'conv-b']);
     expect(useChatStore.getState().isLoading).toBe(true);
 
-    // A's background stream now completes -- its teardown must scope to A.
     stopStreaming('conv-a');
     setLoading(false, 'conv-a');
 
     expect(useChatStore.getState().streamingConversationIds).toEqual(['conv-b']);
-    // B (the currently active, genuinely-streaming conversation) is untouched.
     expect(selectIsActiveConversationStreaming(useChatStore.getState())).toBe(true);
     expect(useChatStore.getState().isLoading).toBe(true);
   });
@@ -237,7 +214,6 @@ describe('chatStore — per-conversation streaming scope', () => {
     setActiveConversationWithMessages('conv-b', []);
     startStreaming('msg-b', 'conv-b');
 
-    // stopGeneration() calls stopStreaming() with no argument.
     stopStreaming();
 
     expect(useChatStore.getState().streamingConversationIds).toEqual(['conv-a']);
@@ -260,8 +236,6 @@ describe('chatStore — per-conversation error scope', () => {
     setActiveConversationWithMessages('conv-b', []);
     expect(useChatStore.getState().error).toBeNull();
 
-    // Conversation A's request settles after B is already visible. Its error
-    // belongs in A's failed assistant turn, never in B's top banner.
     setError('Request failed: 504', 'conv-a');
     expect(useChatStore.getState().error).toBeNull();
 

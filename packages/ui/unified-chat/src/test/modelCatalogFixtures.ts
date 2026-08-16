@@ -5,11 +5,6 @@ import {
   type SelectedAutoRoute,
 } from '@agiworkforce/routing';
 
-/**
- * Resolve a catalog entry by the behavior a test needs, never by a concrete
- * provider model name. This keeps UI regression tests valid when the roster is
- * replaced in the canonical registry.
- */
 export function requireCatalogModel(
   predicate: (model: ModelMetadata) => boolean,
   requiredBehavior: string,
@@ -21,7 +16,6 @@ export function requireCatalogModel(
   return model;
 }
 
-/** Require a successful registry route and expose its catalog-owned identity. */
 export function requireSelectedCatalogRoute(
   request: AutoRoutingRequest,
   requiredBehavior: string,
@@ -35,7 +29,6 @@ export function requireSelectedCatalogRoute(
   return decision;
 }
 
-/** Find a catalog model that remains executable through a specific host route. */
 export function requireRoutableCatalogModel(
   predicate: (model: ModelMetadata) => boolean,
   route: Omit<AutoRoutingRequest, 'selection'>,

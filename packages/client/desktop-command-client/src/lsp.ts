@@ -1,10 +1,5 @@
-/**
- * LSP API — typed wrappers for lsp_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface LSPServer {
   language: string;
@@ -56,8 +51,6 @@ export interface Diagnostic {
   severity?: number;
   source?: string;
 }
-
-// ---- Commands ----
 
 export async function lspStartServer(language: string, rootPath: string): Promise<LSPServer> {
   return command<LSPServer>('lsp_start_server', { language, rootPath });

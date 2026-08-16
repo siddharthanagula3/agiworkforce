@@ -17,7 +17,6 @@ interface TimeSavedChartProps {
   loading?: boolean;
 }
 
-/** Props for custom tooltip content in Recharts */
 interface CustomTooltipProps<TValue extends ValueType, TName extends NameType> {
   active?: boolean;
   payload?: ReadonlyArray<Payload<TValue, TName>>;

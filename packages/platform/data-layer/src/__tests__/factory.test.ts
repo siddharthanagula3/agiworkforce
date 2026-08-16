@@ -1,6 +1,3 @@
-/**
- * Factory tests. We assert env-resolution and error paths.
- */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   createDatabaseClient,
@@ -61,10 +58,8 @@ describe('createDatabaseClient', () => {
   it('Neon adapter is constructed lazily without opening a connection', async () => {
     process.env['AGI_DATABASE_PROVIDER'] = 'neon';
     process.env['AGI_DATABASE_URL'] = 'postgresql://u:p@ep.neon.tech/db';
-    // Construction must NOT throw — connections open on first query.
     const db = createDatabaseClient();
     expect(db).toBeInstanceOf(NeonDatabaseAdapter);
-    // Dispose without ever connecting must be safe (no network in tests).
     await expect(db.dispose()).resolves.toBeUndefined();
   });
 

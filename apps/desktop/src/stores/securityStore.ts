@@ -3,15 +3,11 @@ import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
 
-// --- Auth types (mirrors Rust sys::security::AuthToken) ---
-
 export interface AuthToken {
   access_token: string;
   token_type: string;
   expires_in: number;
 }
-
-// --- Approval types (mirrors Rust sys::commands::operations) ---
 
 export interface ApprovalRequestPayload {
   id: string;
@@ -28,25 +24,18 @@ export interface ApprovalRequestPayload {
   details?: Record<string, unknown>;
 }
 
-// --- Store interface ---
-
 interface SecurityState {
-  // Secret manager
   isCheckingSecret: boolean;
   secretError: string | null;
 
-  // Operation approvals
   pendingApprovalId: string | null;
 
-  // --- Rust auth (local/offline auth) ---
   authLogin: (email: string, password: string) => Promise<AuthToken>;
 
-  // --- Secret manager ---
   hasSecret: (key: string) => Promise<boolean>;
   setSecret: (key: string, value: string) => Promise<void>;
   deleteSecret: (key: string) => Promise<void>;
 
-  // --- Operation approvals (AGI executor approval flow) ---
   approveOperation: (approvalId: string) => Promise<void>;
   rejectOperation: (approvalId: string, reason?: string) => Promise<void>;
 

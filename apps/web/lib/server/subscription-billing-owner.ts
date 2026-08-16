@@ -8,12 +8,6 @@ export type SubscriptionBillingSource = MeSubscriptionSource | 'unverified';
 interface SubscriptionBillingOwnerRow {
   plan_tier: string;
   status: string;
-  /**
-   * Present on any row Stripe has ever billed, and written at checkout — well
-   * before `checkout.session.completed` delivers the subscription id. It is what
-   * separates "Stripe bills this, we just have not recorded which subscription
-   * yet" from "an administrator provisioned this outside Stripe".
-   */
   stripe_customer_id?: string | null;
   stripe_subscription_id?: string | null;
   apple_original_transaction_id?: string | null;
@@ -29,7 +23,6 @@ const TERMINAL_SUBSCRIPTION_STATUSES = new Set([
   'incomplete_expired',
 ]);
 
-/** Store renewal delivery may lag the paid-through timestamp. */
 const STORE_RENEWAL_GRACE_MS = 3 * 24 * 60 * 60 * 1000;
 
 export interface SubscriptionBillingOwnerPolicy {
@@ -46,15 +39,6 @@ function hasIdentifier(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-/**
- * Resolve the one billing owner from the canonical subscription row.
- *
- * The three provider identifiers are mutually exclusive by product contract,
- * but the database's individual UNIQUE constraints do not enforce that
- * relationship. Multiple identifiers, or a malformed Stripe subscription id,
- * therefore fail closed as `unverified` instead of guessing which provider is
- * still collecting payment.
- */
 export function resolveSubscriptionBillingSource(
   subscription: SubscriptionBillingOwnerRow | null | undefined,
 ): SubscriptionBillingSource {
@@ -72,21 +56,6 @@ export function resolveSubscriptionBillingSource(
   if (hasGoogleId) return 'google';
   if ((subscription.plan_tier || '').trim().toLowerCase() === 'free') return 'none';
 
-  // A paid row with a Stripe CUSTOMER but no subscription id is Stripe-billed
-  // with the id not yet recorded — a delayed `checkout.session.completed`, or a
-  // legacy row written before the column existed. Falling through to 'manual'
-  // here told those users "this subscription is managed by your organization"
-  // and refused the upgrade with a 409, which is both false and unactionable.
-  //
-  // It also made the recovery in `resolveStripeSubscriptionForUpgrade`
-  // unreachable: that function exists precisely to find the live subscription
-  // by customer id, and the ownership gate rejected the request before it could
-  // run. Classifying as 'stripe' lets the recovery do its job; when it finds no
-  // owned live subscription the route still refuses, with the honest
-  // `checkout_required` instead of an invented org policy.
-  //
-  // No authorization is widened by this: the recovery independently verifies
-  // that the subscription belongs to this customer AND carries this user's id.
   if (isStripeCustomerId(subscription.stripe_customer_id)) return 'stripe';
 
   return 'manual';
@@ -96,11 +65,6 @@ export function isTerminalSubscriptionStatus(status: string): boolean {
   return TERMINAL_SUBSCRIPTION_STATUSES.has(status.trim().toLowerCase());
 }
 
-/**
- * Preserve the existing legacy-store expiry rule used by SubscriptionService.
- * Native notification handlers write `expired` directly, but historical store
- * rows have no lifecycle feed and must age out from their paid-through date.
- */
 export function resolveEffectiveSubscriptionBillingStatus(
   subscription: SubscriptionBillingOwnerRow | null | undefined,
   now = Date.now(),
@@ -127,14 +91,6 @@ export function resolveEffectiveSubscriptionBillingStatus(
     : status;
 }
 
-/**
- * One server-side decision for every Stripe entry point.
- *
- * A terminal Apple/Google/manual entitlement may be replaced by a new web
- * checkout, but it can never enter Stripe's portal or prorated-upgrade path.
- * Unverified ownership stays blocked even after a terminal-looking status: the
- * server cannot safely prove that another provider stopped billing.
- */
 export function getSubscriptionBillingOwnerPolicy(
   subscription: SubscriptionBillingOwnerRow | null | undefined,
   now = Date.now(),

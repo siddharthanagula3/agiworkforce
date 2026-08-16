@@ -1,24 +1,13 @@
-/**
- * ActiveToolStreams Component
- *
- * Container component that displays all currently active tool streams.
- * Shows real-time progress for running tools and recent completions.
- */
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useUnifiedChatStore, type ToolStreamStateEntry } from '../../../stores/unifiedChatStore';
 import { ToolExecutionProgress } from './ToolExecutionProgress';
 
 export interface ActiveToolStreamsProps {
-  /** Whether to show only running streams or include recent completions */
   showCompleted?: boolean;
-  /** Maximum number of streams to display */
   maxStreams?: number;
-  /** Custom class name */
   className?: string;
-  /** Callback when a stream is cancelled */
   onCancelStream?: (toolId: string) => void;
-  /** Callback when a stream is retried */
   onRetryStream?: (toolId: string) => void;
 }
 
@@ -36,20 +25,16 @@ export const ActiveToolStreams: React.FC<ActiveToolStreamsProps> = ({
     })),
   );
 
-  // Convert Map to array and filter
   const streams = React.useMemo(() => {
     const allStreams = Array.from(activeToolStreams.values());
 
-    // Filter based on showCompleted setting
     const filtered = showCompleted ? allStreams : allStreams.filter((s) => s.status === 'running');
 
-    // Sort by start time (most recent first) and limit
     return filtered
       .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
       .slice(0, maxStreams);
   }, [activeToolStreams, showCompleted, maxStreams]);
 
-  // Don't render if no streams
   if (streams.length === 0) {
     return null;
   }
@@ -69,7 +54,6 @@ export const ActiveToolStreams: React.FC<ActiveToolStreamsProps> = ({
     // If no retry handler provided, the button will be disabled
   };
 
-  // Only show retry button if handler is provided
   const canRetry = (stream: ToolStreamStateEntry) =>
     stream.retryable && onRetryStream !== undefined;
 
@@ -88,10 +72,6 @@ export const ActiveToolStreams: React.FC<ActiveToolStreamsProps> = ({
   );
 };
 
-/**
- * Hook to get active tool streams count
- * Returns a primitive (number), so no shallow comparison needed.
- */
 export function useActiveToolStreamsCount(): number {
   return useUnifiedChatStore((state) => {
     let count = 0;
@@ -102,10 +82,6 @@ export function useActiveToolStreamsCount(): number {
   });
 }
 
-/**
- * Hook to get all active tool streams
- * Uses useShallow to avoid re-renders when the returned array is structurally equal.
- */
 export function useActiveToolStreams(): ToolStreamStateEntry[] {
   const activeToolStreams = useUnifiedChatStore(
     useShallow((state) => {

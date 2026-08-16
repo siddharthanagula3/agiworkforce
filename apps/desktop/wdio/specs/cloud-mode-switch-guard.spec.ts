@@ -1,19 +1,3 @@
-/**
- * DES-C16 — a mid-stream Local↔Cloud switch must be refused.
- *
- * A mode switch flips `runtimeAppMode`, disposes the CloudRuntime
- * (`desktopChatRuntime.disposeActiveDesktopChatRuntime`) and wipes the
- * conversation boundary (`App.tsx`), so it destroys the in-flight response.
- * `appModeStore.setMode` already refused while `isChatStoreStreaming()` was
- * true — but that helper read `useChatMessageStore`, which never carries
- * `isStreaming` (it lives on the execution store), and it never consulted
- * `@agiworkforce/unified-chat`'s shared store, which is where every Managed
- * Cloud turn streams. The guard was therefore permanently false and a toggle
- * click mid-answer succeeded.
- *
- * This spec holds a real Cloud stream open with a stalled SSE response and then
- * clicks the Local tab.
- */
 import {
   completeMockedDeviceSignIn,
   installCloudApiStubs,
@@ -54,8 +38,6 @@ describe('AGI Desktop mid-stream mode-switch guard', () => {
       models: 'ok',
       conversations: 'ok',
       projects: 'ok',
-      // Opens an SSE stream that never sends [DONE], so the app stays in the
-      // streaming state for the whole test.
       completions: 'stall',
     });
     await mockDeviceAuthorization();
@@ -70,8 +52,6 @@ describe('AGI Desktop mid-stream mode-switch guard', () => {
     expect(await persistedAppMode()).toBe('cloud');
     expect(await activeModeTab()).toBe('Cloud');
 
-    // Start a Cloud turn. `useChat` calls `startStreaming` at send time, so the
-    // shared store reports isStreaming before any chunk arrives.
     await composer.click();
     await composer.addValue('Hold this stream open for the mode-switch guard.');
 
@@ -79,11 +59,9 @@ describe('AGI Desktop mid-stream mode-switch guard', () => {
     await sendButton.waitForDisplayed({ timeout: 30_000 });
     await sendButton.click();
 
-    // Wait for the user turn to land, which only happens after the send starts.
     const userMessage = await $('[data-role="user"]');
     await userMessage.waitForDisplayed({ timeout: 60_000 });
 
-    // Now attempt the switch that used to silently destroy the response.
     const localTab = await $('button[role="tab"]=Local');
     await localTab.waitForDisplayed({ timeout: 30_000 });
     await localTab.click();
@@ -100,7 +78,6 @@ describe('AGI Desktop mid-stream mode-switch guard', () => {
       },
     );
 
-    // The refusal must be real, not just a toast over a completed switch.
     expect(await activeModeTab()).toBe('Cloud');
     expect(await persistedAppMode()).toBe('cloud');
     await expect($('textarea[aria-label="Chat message input"]')).toBeDisplayed();
@@ -112,9 +89,6 @@ describe('AGI Desktop mid-stream mode-switch guard', () => {
   it('allows the switch again once the stream is stopped', async function () {
     this.timeout(180_000);
 
-    // Stop generation returns the stores to idle; the guard must then let go
-    // rather than pinning the user in Cloud mode. The composer's send control
-    // becomes this Stop button for the duration of a stream (SendButton.tsx).
     const stopButton = await $('button[aria-label="Stop the current response"]');
     await stopButton.waitForDisplayed({ timeout: 30_000 });
     await stopButton.click();

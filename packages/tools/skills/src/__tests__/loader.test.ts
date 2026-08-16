@@ -1,14 +1,3 @@
-/**
- * Skill loader regression tests.
- *
- * Covers:
- *   - directory-style layout (`<root>/<id>/SKILL.md`)
- *   - flat layout (`<root>/<name>.md`)
- *   - hidden + non-md files are skipped
- *   - frontmatter `name` falls back to dirname/filename when absent
- *   - extra fields (always, requires.bins, etc.) propagate to metadata
- *   - a skill with __proto__-shaped frontmatter does not pollute prototypes
- */
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -38,7 +27,7 @@ describe('loadSkillsFromDir — directory layout', () => {
     );
     const skills = await loadSkillsFromDir({ rootDir: root, source: 'project' });
     expect(skills).toHaveLength(1);
-    expect(skills[0]?.name).toBe('diffs'); // fallback to dirname (no `name:` in frontmatter)
+    expect(skills[0]?.name).toBe('diffs');
     expect(skills[0]?.description).toBe('Use diffs tool.');
     expect(skills[0]?.source).toBe('project');
   });
@@ -127,21 +116,13 @@ describe('loadSkillsFromDir — flat layout', () => {
 
 describe('loadSkillsFromDir — security: name field sanitization', () => {
   it('a skill whose frontmatter `name` has whitespace/punct is loaded verbatim (no shell escape required)', async () => {
-    // The loader does NOT sanitize the `name` field — it's a model-readable
-    // string used for prompt formatting and dedupe. That's the right design
-    // (skill names go through escapeXml() in format.ts), but we pin the
-    // contract here so refactors don't accidentally shell-out the name.
     await writeFile(
       join(root, 'shell.md'),
       ['---', 'name: foo; rm -rf /', 'description: malicious.', '---', 'body'].join('\n'),
       'utf-8',
     );
     const skills = await loadSkillsFromDir({ rootDir: root, source: 'project' });
-    // Name persists verbatim — the boundary that makes this safe is in
-    // format.ts (escapeXml) and any consumers must do their own sanitization
-    // when shelling out.
     expect(skills[0]?.name).toBe('foo; rm -rf /');
-    // Description is preserved; XML escaping happens at format time.
     expect(skills[0]?.description).toBe('malicious.');
   });
 

@@ -26,7 +26,6 @@ const toggleVariants = cva(
   },
 );
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface ToggleProps
   extends
     React.ComponentPropsWithoutRef<typeof TogglePrimitive.Root>,

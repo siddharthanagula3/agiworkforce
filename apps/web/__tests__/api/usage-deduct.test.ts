@@ -18,8 +18,6 @@ vi.mock('@/lib/rate-limit', () => ({
 const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-auth-id' }));
 vi.mock('@clerk/nextjs/server', () => ({ auth: () => mockClerkAuth() }));
 
-// assertAccountActive (getClerkAuthUser) reads account_status and fails closed on
-// error; provide an active row so this suite exercises the route, not auth denial.
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: () => ({ query: vi.fn().mockResolvedValue([{ account_status: 'active' }]) }),
 }));

@@ -36,7 +36,6 @@ describe('StreamingArtifactView · progressive render from a simulated stream', 
     rerender(<StreamingArtifactView artifact={makeArtifact('<!DOCTYPE html>\n<html>\n<body>')} />);
     expect(code()).toContain('<!DOCTYPE html>');
     expect(code()).toContain('<body>');
-    // Still marked as writing while chunks keep arriving
     expect(screen.getByText('Writing…')).toBeInTheDocument();
   });
 });

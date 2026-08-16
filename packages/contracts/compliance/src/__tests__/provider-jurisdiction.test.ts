@@ -49,7 +49,6 @@ describe('isProviderRoutingAllowed — default-off gate', () => {
     const ledger = new InMemoryConsentLedger();
     ledger.optIn('deepseek');
     expect(isProviderRoutingAllowed('deepseek', ledger)).toBe(true);
-    // Other three remain off.
     expect(isProviderRoutingAllowed('moonshot', ledger)).toBe(false);
     expect(isProviderRoutingAllowed('qwen', ledger)).toBe(false);
     expect(isProviderRoutingAllowed('zhipu', ledger)).toBe(false);

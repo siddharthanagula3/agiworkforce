@@ -1,9 +1,3 @@
-/**
- * AgentsSettings
- *
- * Configuration for proven agent behavior: approval mode, execution
- * preferences, and custom agent files backed by Tauri commands.
- */
 
 import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';

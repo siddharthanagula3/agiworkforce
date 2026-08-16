@@ -46,10 +46,6 @@ import {
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 
-// The sheet reads safe-area insets to clear the home indicator (it is bottom-
-// anchored and flush to the edge). Supply real metrics rather than mocking the
-// hook, so a missing provider stays a visible failure — matching
-// voice-inline-bar.test.tsx.
 const METRICS: Metrics = {
   frame: { x: 0, y: 0, width: 390, height: 844 },
   insets: { top: 47, left: 0, right: 0, bottom: 34 },

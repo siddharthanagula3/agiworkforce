@@ -1,19 +1,3 @@
-/**
- * OpenAI Chat Completions API compat defaults.
- *
- * For each (provider, endpointClass) pair, decides:
- *   - `supportsStore` — can the request include `store: true`?
- *   - `supportsDeveloperRole` — does this endpoint accept role: "developer"?
- *   - `supportsReasoningEffort` — does this endpoint accept reasoning.effort?
- *   - `supportsUsageInStreaming` — does it emit usage in stream chunks?
- *   - `maxTokensField` — `max_completion_tokens` (modern) vs `max_tokens` (legacy)
- *   - `thinkingFormat` — openai | openrouter | deepseek | zai
- *   - `visibleReasoningDetailTypes` — which reasoning detail types to surface
- *   - `supportsStrictMode` — does this endpoint support OpenAI strict tools?
- *
- * Ported from OpenClaw `src/agents/openai-completions-compat.ts` (MIT, Peter Steinberger).
- * See THIRD_PARTY_LICENSES.md at repo root for full attribution.
- */
 
 import type { ProviderEndpointClass, ProviderRequestCapabilities } from './provider-attribution';
 import { resolveProviderRequestCapabilities } from './provider-attribution';

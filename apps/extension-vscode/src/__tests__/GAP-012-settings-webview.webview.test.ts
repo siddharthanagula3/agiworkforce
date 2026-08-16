@@ -76,7 +76,6 @@ function boot(): ReturnType<typeof vi.fn> {
   const script = Array.from(parsed.querySelectorAll('script')).find((candidate) =>
     candidate.textContent?.includes('acquireVsCodeApi()'),
   );
-  // llm-guardrail-allow: executes repository-owned settings webview JavaScript in jsdom
   new Function(script?.textContent ?? '')();
   return postMessage;
 }
@@ -103,7 +102,6 @@ describe('settings webview', () => {
     expect(html).toMatch(/script-src\s+'nonce-settings-test-nonce'/u);
     expect(html).not.toMatch(/script-src[^;]*'unsafe-(?:inline|eval)'/u);
     for (const script of scripts) {
-      // llm-guardrail-allow: parser-only use in a test; the function is never invoked here
       expect(() => new Function(script.textContent ?? '')).not.toThrow();
     }
   });
@@ -193,10 +191,6 @@ describe('settings webview', () => {
       expect(row.querySelector('.capability-availability-status')?.textContent).toBe(
         'Unavailable in this context',
       );
-      // Availability used to be a hover-only `title` tooltip. It is now a
-      // visible second column (.surface-availability), which is why the grid
-      // caps that column's width — see settingsWebviewContent.ts:685-692.
-      // Hover-only disclosure was unreachable by keyboard and touch.
       expect(row.querySelector('.surface-availability')?.textContent).toMatch(
         /^Available in .+\.$/u,
       );

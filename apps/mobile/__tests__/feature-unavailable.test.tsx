@@ -1,18 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Tests for FeatureUnavailable — the fallback shown for routes gated OFF in
- * this build (e.g. /schedules, /companion when their feature flags are off).
- *
- * Regression coverage: the "Go back" control mixed an icon and text as
- * children of a single `<Text onPress accessibilityRole="button">`. Nesting a
- * non-Text child (the ArrowLeft SVG icon) inside a Text with its own
- * accessibility role produced 3 separate accessible nodes in the runtime
- * accessibility tree (confirmed live via XcodeBuildMCP) instead of one — a
- * VoiceOver user would hear "Go back" three times in a row. Fixed by moving
- * to a single `Pressable` with an explicit `accessibilityLabel` wrapping the
- * icon + text, matching the working pattern used elsewhere in this codebase
- * (e.g. the Settings ProfileHeader row).
- */
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
@@ -57,8 +43,6 @@ describe('FeatureUnavailable', () => {
   it('exposes exactly one "Go back" accessible control, not a duplicated/split one', () => {
     const { getAllByLabelText } = render(<FeatureUnavailable feature="Scheduled tasks" />);
 
-    // Regression guard: previously the icon+text mix produced multiple nodes
-    // that a query for this label could match independently.
     expect(getAllByLabelText('Go back')).toHaveLength(1);
   });
 

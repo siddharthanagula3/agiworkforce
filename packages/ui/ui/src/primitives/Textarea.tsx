@@ -3,17 +3,8 @@
 import * as React from 'react';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
-  /**
-   * Marks the textarea as having a validation error: applies a destructive
-   * border / focus ring and sets `aria-invalid`. Additive and opt-in.
-   */
   hasError?: boolean;
-  /**
-   * ID of an element describing this textarea (e.g. an error message). Merged
-   * into `aria-describedby` alongside any value the caller already passed.
-   */
   errorMessageId?: string;
   ref?: React.Ref<HTMLTextAreaElement>;
 }

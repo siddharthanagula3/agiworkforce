@@ -26,7 +26,6 @@ const neutralPersonalization = (): PersonalizationPreferences => ({
   detail: 3,
   emojiUsage: 'sometimes',
 });
-// Mutable holder the mocked settingsStore reads; reset to neutral in beforeEach.
 const personalizationMock: { current: PersonalizationPreferences } = {
   current: neutralPersonalization(),
 };
@@ -52,8 +51,6 @@ vi.mock('../../stores/appModeStore', () => ({
       mode: 'local',
     }),
   },
-  // TauriRuntime.ts uses selectPrivacyMode (lines 172/461); the mock must
-  // export it or those calls throw and the create→send flow aborts.
   selectPrivacyMode: (state: { mode: string }) => (state.mode === 'local' ? 'local' : 'managed'),
 }));
 
@@ -72,9 +69,6 @@ vi.mock('../../stores/chat/chatStore', () => ({
   },
 }));
 
-// Mock the heavy settingsStore (its real import chain — voice.ts, plan
-// subscriptions — fails under this file's isolated mocks). TauriRuntime reads
-// only .personalization to inject the Response-Style block into the prompt.
 vi.mock('../../stores/settingsStore', () => ({
   useSettingsStore: {
     getState: () => ({ personalization: personalizationMock.current }),
@@ -85,9 +79,6 @@ describe('TauriRuntime', () => {
   let resetArtifactStore: () => void;
 
   beforeAll(async () => {
-    // This runtime module is intentionally large. Transform it once outside the
-    // per-test budget so a busy root Turbo graph cannot charge module loading to
-    // an otherwise synchronous runtime assertion.
     const [{ useArtifactStore }] = await Promise.all([
       import('../../stores/artifactStore'),
       import('../TauriRuntime'),
@@ -218,8 +209,6 @@ describe('TauriRuntime', () => {
   });
 
   it('injects the personalization "Response Style" settings into customInstructions', async () => {
-    // A non-neutral profile must reach the model; before this wiring
-    // personalizationToPrompt had zero callers.
     personalizationMock.current = {
       ...neutralPersonalization(),
       formality: 5,
@@ -376,15 +365,6 @@ describe('TauriRuntime', () => {
     });
   });
 
-  // LOCAL-CHAT-NOINVOKE-01 root-cause regression (2026-07-03): the AgentControl
-  // composer chip's `agentMode` is a permission-style value ('ask' | 'auto' |
-  // 'plan' | 'bypass') that is ALWAYS a non-empty string once a conversation
-  // exists — 'ask' is the default. A prior `agentMode ? true : undefined`
-  // mapping forced `enableAgentMode: true` on every send, which for an
-  // explicit (non-"auto") model routes the backend into the full computer-use
-  // AgentOrchestrator instead of a plain chat completion — the exact "user
-  // message shows, assistant reply never arrives" Local-mode failure. This
-  // pins `enableAgentMode` to never be forwarded from the default 'ask' mode.
   it('never forwards enableAgentMode:true for the default AgentControl mode', async () => {
     const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();
@@ -401,14 +381,6 @@ describe('TauriRuntime', () => {
     expect(request.request['enableAgentMode']).toBeUndefined();
   });
 
-  // DESKTOP-ARTIFACTS-ENTIRELY-UNWIRED-01 fix regression: TauriRuntime must
-  // listen for the `chat:artifact` event (emitted by
-  // core/llm/tool_executor/artifact_tools.rs::execute_create_artifact_tool
-  // when the model calls the `create_artifact` tool) and surface it as an
-  // `{ type: 'artifact' }` StreamEvent — the same event -> chunk -> event
-  // pipeline already proven for tool_call/tool_result above. This is the
-  // deterministic frontend-side proof that the wiring works, independent of
-  // whether a live local model actually decides to call the tool.
   it('surfaces a chat:artifact event as an artifact StreamEvent', async () => {
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'chat_send_message') {
@@ -465,10 +437,6 @@ describe('TauriRuntime', () => {
     });
   });
 
-  // DESKTOP-ARTIFACT-TOKEN-STREAMING: `create_artifact` arguments stream in
-  // over `chat:artifact-progress` before the tool executes. The runtime must
-  // surface a display-only draft (panel open, title/type, growing content) and
-  // hand off to the durable artifact when `chat:artifact` lands.
   it('renders a progressive artifact draft while create_artifact arguments stream', async () => {
     const argsChunks = [
       '{"artifact_type":"markdown"',
@@ -531,7 +499,6 @@ describe('TauriRuntime', () => {
     const { TauriRuntime } = await import('../TauriRuntime');
     await new TauriRuntime().sendMessage('frontend-conversation-id', 'Write release notes');
 
-    // While streaming: a display-only draft with the partial content.
     expect(draftSnapshots).toHaveLength(1);
     expect(draftSnapshots[0]).toMatchObject({
       key: 'assistant-1:0',
@@ -541,7 +508,6 @@ describe('TauriRuntime', () => {
       complete: true,
     });
 
-    // After the real artifact lands: draft gone, panel points at the artifact.
     const finalState = useArtifactStore.getState();
     expect(finalState.draft).toBeNull();
     expect(finalState.activeArtifactId).toBe('artifact-final');
@@ -590,7 +556,6 @@ describe('TauriRuntime', () => {
 
     const finalState = useArtifactStore.getState();
     expect(finalState.draft).toBeNull();
-    // The preview opened the panel, so abandoning it must close the panel too.
     expect(finalState.panelOpen).toBe(false);
     expect(finalState.activeArtifactId).toBeNull();
   });
@@ -907,8 +872,6 @@ describe('TauriRuntime', () => {
     });
   });
 
-  // Mirrors the conversation-id filter already proven for chat:stream-chunk —
-  // an artifact event for a DIFFERENT conversation must not leak into this turn.
   it('ignores a chat:artifact event for a different conversation', async () => {
     invokeMock.mockImplementation(async (command: string) => {
       if (command === 'chat_send_message') {
@@ -1059,11 +1022,6 @@ describe('TauriRuntime', () => {
     ]);
   });
 
-  // DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01 regression: `options.attachments`
-  // (real `File` objects held by ChatInput) must be base64-encoded and
-  // forwarded to `chat_send_message` in the shape the Rust `ChatAttachment`
-  // struct expects (`apps/desktop/src-tauri/src/sys/commands/chat/types.rs`)
-  // — previously this was hardcoded to `undefined` regardless of input.
   it('encodes attachments to base64 and forwards them on chat_send_message', async () => {
     const { TauriRuntime } = await import('../TauriRuntime');
     const runtime = new TauriRuntime();

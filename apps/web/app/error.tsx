@@ -81,7 +81,6 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log error with digest for server-side correlation without exposing stack traces
     logger.error('Unhandled Next.js error boundary caught', {
       digest: error.digest,
       message: error.message,

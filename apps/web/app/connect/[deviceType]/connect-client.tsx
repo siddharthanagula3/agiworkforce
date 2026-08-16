@@ -5,12 +5,6 @@ import { useAuth } from '@clerk/nextjs';
 import { useState } from 'react';
 import { Button } from '@agiworkforce/ui';
 
-/** Human label for a device_type slug (falls back to the raw slug). */
-/// Device types that can actually complete a pairing. The route is dynamic, so
-/// without this list `/connect/<anything>` rendered a full "Connect X to AGI?"
-/// approval screen — including the security notice — for a device that does not
-/// exist. An approval prompt for a made-up device is a phishing primitive, not
-/// just a cosmetic 404.
 export const KNOWN_DEVICE_TYPES = [
   'vscode',
   'cursor',
@@ -43,18 +37,6 @@ export function friendlyDeviceName(deviceType: string): string {
   }
 }
 
-/**
- * Device-connect approval for the editor/CLI device-code flow.
- *
- * The extension opens /connect/<deviceType>?device_id=…&device_fingerprint=…
- * and polls POST /api/device/poll for {status:'approved', access_token}. The
- * extension is not yet authenticated, so the ROW for its device_id must be
- * created + approved here, by the signed-in browser session. We reuse the two
- * existing endpoints rather than adding a third:
- *   1. POST /api/device/link    — upserts a pending row for this device_id.
- *   2. POST /api/device/approve — binds this user + mints the access token
- *      (encryptToken(getToken())) that the device poll returns.
- */
 export function ConnectDeviceClient({
   deviceId,
   deviceFingerprint,
@@ -74,7 +56,6 @@ export function ConnectDeviceClient({
     (deviceFingerprint ? `&device_fingerprint=${encodeURIComponent(deviceFingerprint)}` : '');
   const signInHref = `/login?redirectTo=${encodeURIComponent(returnTo)}`;
 
-  // Fetch a fresh CSRF token per state-changing call (double-submit pattern).
   const freshCsrf = async (): Promise<string> => {
     const res = await fetch('/api/csrf', { method: 'GET', credentials: 'include' });
     const json = (await res.json().catch(() => null)) as { token?: string } | null;
@@ -101,7 +82,6 @@ export function ConnectDeviceClient({
     setLoading('approve');
     setMessage(null);
     try {
-      // 1. Create/refresh the pending device row bound to this device_id.
       const linkRes = await fetch('/api/device/link', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': await freshCsrf() },
@@ -121,7 +101,6 @@ export function ConnectDeviceClient({
         throw new Error(errText(linkData, 'Failed to start device sign-in'));
       }
 
-      // 2. Approve it — mints the access token this device will poll for.
       const approveRes = await fetch('/api/device/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-csrf-token': await freshCsrf() },
@@ -141,8 +120,6 @@ export function ConnectDeviceClient({
     }
   };
 
-  // Deny never creates/approves a row, so the requesting device simply times
-  // out — the correct outcome for a rejected request.
   const deny = () => {
     setMessage({
       type: 'success',

@@ -1,24 +1,4 @@
 #!/usr/bin/env node
-// check-model-catalog-integrity.mjs
-//
-// E7 / P1-CATALOG class-guard: the single source of truth for model IDs is
-// packages/contracts/types/src/models.json. This guard fails if NON-TEST TypeScript
-// shipping code OR hand-maintained doc files (.md/.mdx) reference a model ID
-// that is NOT in the canonical catalog (i.e. a removed/ghost/drifted ID). It
-// is the durable backstop for the recurring catalog-drift class tracked by the
-// current model-registry tests and known-flaws ledger.
-// Scope:
-//   - .ts/.tsx under apps/ packages/ services/ (excluding tests, specs,
-//     __tests__, dist, node_modules, .next, _archive). Comment lines (JSDoc///)
-//     are skipped — doc examples are hygiene, not live behavior.
-//   - .md/.mdx under apps/ packages/ services/ (same exclusions). HTML comment
-//     lines (<!-- ... -->) are skipped for markdown files.
-//
-// The Rust catalog reads models.json via include_str!, so Rust drift is covered
-// by `cargo test` + the Rust ghost-model tests; this guard targets the
-// hand-maintained TS and doc sites.
-//
-// Extend DISALLOWED when curating models.json (remove an ID -> add it here).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,30 +22,16 @@ const RETIRED_MODELS = JSON.parse(
   ),
 );
 
-// Deprecated, removed, or unverified model IDs that must not appear in selectable
-// catalog structures. Notes and canonicalization aliases may mention these IDs
-// when documenting/migrating deprecations; provider defaults, task routes, tiers,
-// presets, and model entries may not.
 const REMOVED_SELECTABLE_MODEL_IDS = new Set([
   ...(RETIRED_MODELS.retiredModelIds ?? []),
   ...(RETIRED_MODELS.guardedNonCanonicalModelIds ?? []),
 ]);
 
-// Confirmed-removed SELECTABLE model IDs that must not appear in live TS code as
-// catalog entries, defaults, or selectable-model references.
-// Source: the catalog-owned retired-model registry. OpenAI GPT identifiers are
-// also checked generically against the canonical catalog below, so
-// deleting a model cannot also delete the guard's knowledge of its spelling.
 const DISALLOWED_SUBSTRING = [...REMOVED_SELECTABLE_MODEL_IDS];
 
-// Numeric GPT identifiers that are not present in canonical metadata are stale
-// by definition. This intentionally derives the allow-list from the catalog;
-// there is no retired-model denylist to update when the provider roster moves.
 const GPT_MODEL_ID_PATTERN = /\bgpt-[0-9][a-z0-9._-]*\b/gi;
 
 const ID_CHAR = /[A-Za-z0-9._/-]/;
-// True if `id` appears in `line` as a whole token (not part of a longer model id like
-// provider model literals. Bounds: adjacent characters must NOT be id-chars.
 function containsToken(line, id) {
   let from = 0;
   for (;;) {
@@ -101,8 +67,6 @@ const SKIP_DIR = new Set([
 const isTestFile = (f) => /\.(test|spec)\.[cm]?tsx?$/.test(f) || /\.stories\./.test(f);
 const isTs = (f) => /\.[cm]?tsx?$/.test(f);
 const isMd = (f) => /\.mdx?$/.test(f);
-// Historical records are excluded from this legacy guard; the strict repository
-// model-literal guard separately inventories comments, snapshots, and docs.
 const isHistoricalDoc = (f) => /^(CHANGELOG|HISTORY|RELEASES?|CHANGES)([.-]|$)/i.test(f);
 
 function* walk(dir) {
@@ -126,13 +90,11 @@ function* walk(dir) {
   }
 }
 
-// Skip comment lines in TypeScript/TSX (JSDoc examples are not live behavior).
 function isCommentLine(line) {
   const t = line.trim();
   return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*') || t.startsWith('*/');
 }
 
-// Skip HTML comment lines in Markdown (<!-- ... -->).
 function isMdCommentLine(line) {
   const t = line.trim();
   return t.startsWith('<!--');
@@ -218,9 +180,6 @@ for (const file of CATALOG_INPUTS) {
       recordCatalogValue(file, `providers.${providerId}.taskRouting.${task}`, modelId);
     }
     for (const [alias, target] of Object.entries(provider?.canonicalization ?? {})) {
-      // Canonicalization keys are non-selectable legacy inputs used to migrate
-      // previous chats/config forward. Only the target must be a current,
-      // selectable-safe ID.
       recordCatalogValue(file, `providers.${providerId}.canonicalization.${alias}`, target);
     }
   }

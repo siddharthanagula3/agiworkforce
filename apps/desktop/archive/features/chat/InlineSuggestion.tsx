@@ -1,18 +1,9 @@
-/**
- * InlineSuggestion Component
- *
- * Displays ghost text suggestion inline with the user's input.
- * Similar to Gemini CLI's prompt completion feature.
- */
 
 import React from 'react';
 
 export interface InlineSuggestionProps {
-  /** The current input content */
   content: string;
-  /** The suggestion text to display */
   suggestion: string;
-  /** Whether the suggestion is loading */
   isLoading: boolean;
 }
 

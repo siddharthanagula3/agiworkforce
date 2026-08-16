@@ -1,23 +1,10 @@
-/**
- * CHT-006 fix: Clipboard utilities with proper error handling and fallback
- *
- * Provides cross-browser clipboard functionality with:
- * - Modern Clipboard API when available
- * - Fallback to document.execCommand for older browsers/restricted contexts
- * - User-visible error messages via toast
- * - Promise-based API for async/await usage
- */
 
 import { toast } from 'sonner';
 
 export interface CopyToClipboardOptions {
-  /** Show success toast on copy (default: true) */
   showSuccessToast?: boolean;
-  /** Show error toast on failure (default: true) */
   showErrorToast?: boolean;
-  /** Custom success message */
   successMessage?: string;
-  /** Custom error message */
   errorMessage?: string;
 }
 
@@ -54,7 +41,6 @@ export async function copyToClipboard(
     errorMessage = 'Failed to copy to clipboard',
   } = options;
 
-  // Try modern Clipboard API first
   if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
     try {
       await navigator.clipboard.writeText(text);
@@ -63,13 +49,11 @@ export async function copyToClipboard(
       }
       return true;
     } catch (err) {
-      // Clipboard API failed (e.g., permissions denied, insecure context)
       console.warn('[Clipboard] Modern API failed, trying fallback:', err);
       // Fall through to fallback
     }
   }
 
-  // Fallback: Create a temporary textarea and use execCommand
   try {
     const success = fallbackCopyToClipboard(text);
     if (success) {
@@ -89,38 +73,29 @@ export async function copyToClipboard(
   }
 }
 
-/**
- * Fallback copy using document.execCommand (for older browsers/restricted contexts)
- */
 function fallbackCopyToClipboard(text: string): boolean {
   const textarea = document.createElement('textarea');
 
-  // Style to make it invisible but still functional
   textarea.style.position = 'fixed';
   textarea.style.left = '-9999px';
   textarea.style.top = '-9999px';
   textarea.style.opacity = '0';
   textarea.style.pointerEvents = 'none';
 
-  // Prevent scrolling to the element
   textarea.style.zIndex = '-1';
 
-  // Set the text
   textarea.value = text;
-  textarea.setAttribute('readonly', ''); // Prevent keyboard from showing on mobile
+  textarea.setAttribute('readonly', '');
 
   document.body.appendChild(textarea);
 
   try {
-    // Select the text
     textarea.select();
-    textarea.setSelectionRange(0, text.length); // For mobile devices
+    textarea.setSelectionRange(0, text.length);
 
-    // Execute the copy command
     const success = document.execCommand('copy');
     return success;
   } finally {
-    // Always clean up
     document.body.removeChild(textarea);
   }
 }
@@ -140,14 +115,10 @@ export async function readFromClipboard(): Promise<string | null> {
     }
   }
 
-  // No fallback for reading - clipboard read requires user permission
   console.warn('[Clipboard] Clipboard read not supported in this context');
   return null;
 }
 
-/**
- * Check if clipboard operations are supported
- */
 export function isClipboardSupported(): boolean {
   return Boolean(
     (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') ||

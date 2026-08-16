@@ -1,13 +1,7 @@
-/**
- * inlineCompletionProvider.test.ts — Tests for inline completion logic
- *
- * Tests the extractCompletionText function and provider behavior patterns.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { AgiWorkforcePaywallError } from '../utils/api';
 
-// Replicate the extractCompletionText function for testing
 function extractCompletionText(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed === '') {
@@ -90,13 +84,13 @@ describe('inline completion cache logic', () => {
   const CACHE_TTL_MS = 15_000;
 
   it('considers cache valid within TTL', () => {
-    const createdAt = Date.now() - 5_000; // 5 seconds ago
+    const createdAt = Date.now() - 5_000;
     const isValid = Date.now() - createdAt <= CACHE_TTL_MS;
     expect(isValid).toBe(true);
   });
 
   it('considers cache stale after TTL', () => {
-    const createdAt = Date.now() - 20_000; // 20 seconds ago
+    const createdAt = Date.now() - 20_000;
     const isValid = Date.now() - createdAt <= CACHE_TTL_MS;
     expect(isValid).toBe(false);
   });
@@ -113,11 +107,6 @@ describe('inline completion cache logic', () => {
   });
 });
 
-// ── Paywall suppression logic ────────────────────────────────────────────────
-// Test the paywall-suppression flag logic used in AgiInlineCompletionProvider.
-// We replicate the flag state machine in isolation because the full provider
-// requires a VS Code extension host.
-
 describe('inline completion paywall suppression', () => {
   it('AgiWorkforcePaywallError is an Error subclass', () => {
     const err = new AgiWorkforcePaywallError('chat', 'hobby', 'reason');
@@ -126,7 +115,6 @@ describe('inline completion paywall suppression', () => {
   });
 
   it('paywall flag prevents further completion attempts', () => {
-    // Simulate the flag state machine from AgiInlineCompletionProvider
     let paywallSuppressed = false;
 
     function shouldAttemptCompletion(): boolean {
@@ -141,12 +129,10 @@ describe('inline completion paywall suppression', () => {
 
     expect(shouldAttemptCompletion()).toBe(true);
 
-    // First paywall hit
     handleError(new AgiWorkforcePaywallError('chat', 'hobby', 'Token cap exceeded'));
     expect(paywallSuppressed).toBe(true);
     expect(shouldAttemptCompletion()).toBe(false);
 
-    // Subsequent paywall hits don't change state (idempotent)
     handleError(new AgiWorkforcePaywallError('chat', 'hobby', 'Token cap exceeded'));
     expect(paywallSuppressed).toBe(true);
     expect(shouldAttemptCompletion()).toBe(false);
@@ -161,13 +147,11 @@ describe('inline completion paywall suppression', () => {
       }
     }
 
-    // Generic error — should NOT set flag
     handleError(new Error('Network error'));
     expect(paywallSuppressed).toBe(false);
   });
 
   it('returns empty completions on paywall (simulated)', async () => {
-    // Simulate the catch block returning [] on paywall
     async function simulateProvide(shouldThrowPaywall: boolean): Promise<unknown[]> {
       try {
         if (shouldThrowPaywall) {
@@ -197,7 +181,7 @@ describe('inline completion paywall suppression', () => {
         if (error instanceof AgiWorkforcePaywallError) {
           return [];
         }
-        throw error; // re-throw unexpected errors
+        throw error;
       }
     }
 

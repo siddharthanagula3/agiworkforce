@@ -1,18 +1,3 @@
-/**
- * SIX-23 — `/compare` is a Managed-Cloud-only surface.
- *
- * Before this fix the palette offered `/compare` in Local Mode with no gate,
- * `src/features/compare/index.tsx` had no app-mode check, and both panes
- * rendered `EgressBlockedError.message` verbatim — an internal string starting
- * "egressGuard refused: outbound request to our managed-cloud host …".
- *
- * These tests lock three things:
- *   1. In Local Mode the screen refuses with the standard boundary notice and
- *      never renders a composer, so no send can be attempted.
- *   2. Even if a send is forced, no cloud stream is started.
- *   3. An `EgressBlockedError` that reaches a pane is mapped to user-facing
- *      copy — the raw guard message never appears on screen.
- */
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
@@ -123,8 +108,6 @@ describe('CompareScreen in Local Mode', () => {
   });
 
   it('refuses a forced send without starting any cloud stream', () => {
-    // Mount in Cloud to capture the composer handler, then flip to Local — the
-    // belt-and-braces path for a boundary change mid-session.
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const view = render(<CompareScreen />);
     const send = capturedOnSend;

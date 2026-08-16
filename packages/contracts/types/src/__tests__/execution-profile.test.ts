@@ -1,12 +1,3 @@
-/**
- * ExecutionProfile contract tests (`../sessions/execution-profile`).
- *
- * Covers the R5 "one Local/Cloud toggle resolving five internal planes"
- * contract: `resolveExecutionProfile` is exercised for both toggle values and
- * both sub-modes per side, every resolved profile round-trips through
- * `validateExecutionProfile` with zero violations, and every cross-plane
- * invariant has a dedicated test that tampers exactly one plane.
- */
 import { describe, expect, it } from 'vitest';
 import {
   assertExecutionProfile,
@@ -46,7 +37,6 @@ describe('resolveExecutionProfile — local toggle', () => {
     expect(profile.inference.providerMode).toBe('DirectByok');
     expect(profile.identity.source).toBe('byok_credential_store');
     expect(profile.data.storageScope).toBe('direct_byok_provider');
-    // Tools/workflow stay local under BYOK too — only the model call leaves the device.
     expect(profile.tools.cloudExecutionAllowed).toBe(false);
     expect(profile.workflow.orchestrator).toBe('local_agent_loop');
   });

@@ -26,8 +26,6 @@ describe('scim provisioning migration', () => {
   });
 
   it('never edits the applied 0076 control-plane migration', () => {
-    // 0084 must be purely additive. If SCIM state had been bolted onto the
-    // already-applied 0076 tables, these columns would live there instead.
     expect(enterpriseControlPlane).not.toContain('scim_tokens');
     expect(enterpriseControlPlane).not.toContain('directory_sync_events');
   });
@@ -37,18 +35,13 @@ describe('scim provisioning migration', () => {
     expect(migration).toContain(
       "token_prefix text not null unique check (token_prefix ~ '^[0-9a-f]{16}$')",
     );
-    // Revocation and expiry must both be representable or a leaked token is
-    // permanent.
     expect(migration).toContain('revoked_at timestamptz');
     expect(migration).toContain('expires_at timestamptz');
     expect(migration).toContain('last_used_at timestamptz');
-    // No column may hold the raw secret.
     expect(migration).not.toMatch(/token_plaintext|raw_token|token_secret/u);
   });
 
   it('pins the entitlement subject on the token row', () => {
-    // Subscriptions are per-user; a machine SCIM request has no user, so the
-    // issuing admin is persisted and re-checked per request.
     expect(migration).toContain('created_by_user_id text not null');
   });
 
@@ -56,7 +49,6 @@ describe('scim provisioning migration', () => {
     const cascades = migration.match(
       /references public\.directory_sync_connections\(id\) on delete cascade/gu,
     );
-    // scim_tokens, scim_provisioned_users, scim_groups, directory_sync_events
     expect(cascades?.length).toBe(4);
   });
 
@@ -87,8 +79,6 @@ describe('scim provisioning migration', () => {
     expect(migration).toContain(
       "mapped_role text check (mapped_role is null or mapped_role in ('admin', 'member', 'viewer'))",
     );
-    // The CHECK constraint's value list is the enforcement point; 'owner' must
-    // not appear in it. (The surrounding comment mentions 'owner' on purpose.)
     const constraint = /mapped_role in \(([^)]*)\)/u.exec(migration)?.[1] ?? '';
     expect(constraint).not.toContain('owner');
     expect(constraint).toContain("'admin'");

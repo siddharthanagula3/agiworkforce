@@ -1,16 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-/**
- * The repo's first push SEND path. `POST /api/mobile/push-token` had been
- * storing `mobile_devices.push_token` all along and nothing read the column —
- * tokens collected, never used, which is why every push toggle was removed from
- * Settings.
- *
- * The two failure modes worth guarding: a push failure escaping into the caller
- * (a scheduled task must never be reported failed because Expo had a bad
- * minute), and dead tokens being retried forever after an app is uninstalled.
- */
-
 const mocks = vi.hoisted(() => ({ query: vi.fn(), execute: vi.fn(), fetch: vi.fn() }));
 
 vi.mock('server-only', () => ({}));
@@ -51,7 +40,6 @@ describe('getPushTokensForUser', () => {
   });
 
   it('drops values that are not push tokens', async () => {
-    // A corrupted column must not turn into an outbound request.
     mocks.query.mockResolvedValue([
       { push_token: TOKEN_A },
       { push_token: 'https://evil.test/webhook' },
@@ -93,7 +81,6 @@ describe('sendPushToUser — dead tokens', () => {
 
     expect(result.sent).toBe(1);
     expect(result.invalidated).toBe(1);
-    // Left in place, this token is retried on every future notification forever.
     const [sql, params] = mocks.execute.mock.calls[0]!;
     expect(String(sql)).toContain('set push_token = null');
     expect(params).toEqual([[TOKEN_B]]);
@@ -108,7 +95,6 @@ describe('sendPushToUser — dead tokens', () => {
   });
 
   it('does not clear tokens for other kinds of error', async () => {
-    // A transient provider error is not proof the device is gone.
     expoReturns([{ status: 'error', details: { error: 'MessageRateExceeded' } }]);
 
     const result = await sendPushToUser('user-1', { title: 'Done', body: 'x' });

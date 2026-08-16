@@ -1,18 +1,3 @@
-/**
- * The gateway's `build` script is plain `tsc` over `tsconfig.json`, and that
- * tsconfig is also the only type gate this package has in CI. It used to
- * `include: ["src/**\/*"]` with nothing excluded, so every test file was part
- * of the emitted CommonJS program: `import.meta.dirname` in one of them broke
- * `pnpm build` with TS1343, which failed the "Build affected deployable
- * JavaScript surfaces" step and took the whole `check` job — and therefore
- * every E2E job gated on it — red.
- *
- * The TS1343 was the loud symptom. The quiet one is that `dist/` shipped test
- * code that `require`s vitest, a devDependency absent from a production
- * install. A test file without `import.meta` would restore that silently, so
- * assert the program's shape rather than trusting the next compile to
- * complain.
- */
 
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';

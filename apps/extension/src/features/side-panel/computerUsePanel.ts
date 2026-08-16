@@ -1,29 +1,7 @@
-/**
- * computerUsePanel.ts — Side-panel Computer Use demo UI.
- *
- * Builds and manages the "Computer Use" tab UI injected into the side panel.
- * Responsibilities:
- *   - Render a live action log (each tool call: icon + description + timestamp)
- *   - Show screenshot thumbnails of what the agent sees after each screenshot action
- *   - Show a handoff banner when escalation fires ("Autofill stalled — switching
- *     to computer use")
- *   - Surface the "Ask before acting" gate toggle (default-on)
- *   - Accept structured AgentLoopStep events and append them incrementally
- *
- * DESIGN TOKENS ONLY — no hex colours. All colours reference var(--agi-ext-*)
- * tokens from the design-tokens package.
- *
- * This module is imported by side_panel.ts and wired into the tab switcher.
- * It does NOT import runAgentLoop directly to avoid bundling the CDP driver
- * into the panel context (the loop runs in the service worker). Events are
- * communicated via chrome.runtime.sendMessage / onMessage.
- */
 
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
 import { APPROVAL_TIMEOUT_MS } from '../computer-use/agentLoop';
 import { getAuthToken } from '../computer-use/cloudAgentClient';
-
-// ─── CSS injected into the side panel's adoptedStyleSheets ───────────────────
 
 export const COMPUTER_USE_PANEL_CSS = `
   /* Computer Use tab panel */
@@ -466,8 +444,6 @@ export const COMPUTER_USE_PANEL_CSS = `
   }
 `;
 
-// ─── Tool icon map ────────────────────────────────────────────────────────────
-
 const TOOL_ICONS: Record<string, string> = {
   screenshot: 'camera_icon',
   click: 'cursor_icon',
@@ -478,7 +454,6 @@ const TOOL_ICONS: Record<string, string> = {
   find: 'search_icon',
 };
 
-/** Simple text emoji stand-ins (no external icon dep in this UI context). */
 const TOOL_EMOJI: Record<string, string> = {
   screenshot: '\u{1F4F8}', // camera
   click: '\u{1F5B1}', // mouse
@@ -497,9 +472,6 @@ const KIND_EMOJI: Record<string, string> = {
   screenshot: '\u{1F4F8}', // camera
 };
 
-// ─── Public API ────────────────────────────────────────────────────────────────
-
-/** How a Run Autofill attempt ended. */
 export type AutofillOutcome = 'escalation' | 'success' | 'error';
 
 const AUTOFILL_OUTCOME_PRESENTATION: Record<AutofillOutcome, { title: string; icon: string }> = {
@@ -518,76 +490,33 @@ const AUTOFILL_OUTCOME_PRESENTATION: Record<AutofillOutcome, { title: string; ic
 };
 
 export interface ComputerUsePanelAPI {
-  /** The panel root element — append to document.body and show via CSS class. */
   panelEl: HTMLElement;
-  /** Append a step to the live action log. */
   appendStep(step: AgentLoopStep & { screenshotBase64?: string }): void;
-  /**
-   * Show the outcome banner.
-   *
-   * `kind` picks the headline and icon: an escalation, a completed autofill and
-   * a failure are three different endings. They previously shared the single
-   * build-time headline "Autofill stalled — switching to computer use", so a
-   * successful run announced itself as a stall.
-   */
   showHandoffBanner(reason: string, kind?: AutofillOutcome): void;
-  /** Hide the handoff banner. */
   hideHandoffBanner(): void;
-  /** Clear all log entries. */
   clearLog(): void;
-  /** Whether "ask before acting" is currently enabled. */
   isAskBeforeActing(): boolean;
-  /**
-   * Show an approval card for a pending action. Calls resolve(true/false) when
-   * the user clicks Allow or Deny.
-   */
   showApprovalCard(
     toolName: string,
     description: string,
     resolve: (allowed: boolean) => void,
   ): void;
-  /**
-   * Register the callback that fires when the user clicks the "Run Autofill"
-   * button in the controls bar. Called by side_panel.ts during buildUI() to
-   * wire in the orchestration logic (send AGI_RUN_AUTOFILL to content script,
-   * evaluate escalation decision, optionally send AGI_START_COMPUTER_USE to
-   * the background).
-   */
   onRunAutofill(handler: () => void): void;
-  /**
-   * P2-7: Update the usage meter with the latest step/token counts.
-   * Called by the agent loop via onUsageUpdate.
-   */
   updateUsageMeter(usage: AgentLoopUsage): void;
-  /**
-   * Re-check the cloud auth token and update the auth-status chip.
-   * Called by side_panel.ts whenever the Computer Use tab becomes visible,
-   * so the chip reflects the latest Clerk session state.
-   */
   refreshAuthChip(): void;
-  /** Reflect the authoritative background run lifecycle in visible controls. */
   setRunState(running: boolean, runId?: string, generation?: number): void;
-  /** True only for events belonging to the panel's current run. */
   ownsRun(runId: unknown): boolean;
 }
 
-/**
- * Build the Computer Use side-panel tab and return an API for driving it.
- * Call once during side_panel.ts:buildUI().
- */
 export function buildComputerUsePanel(): ComputerUsePanelAPI {
-  // ── Root element ───────────────────────────────────────────────────────────
   const panelEl = document.createElement('div');
   panelEl.id = 'sp-cu-panel';
 
-  // ── Handoff banner ─────────────────────────────────────────────────────────
   const banner = document.createElement('div');
   banner.className = 'sp-cu-banner';
 
   const bannerIcon = document.createElement('div');
   bannerIcon.className = 'sp-cu-banner-icon';
-  // Both are set per outcome by showHandoffBanner(); the banner is hidden until
-  // then, so there is no build-time headline to contradict the result.
   bannerIcon.textContent = '';
 
   const bannerText = document.createElement('div');
@@ -607,7 +536,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   banner.appendChild(bannerText);
   panelEl.appendChild(banner);
 
-  // ── Controls bar ───────────────────────────────────────────────────────────
   const controls = document.createElement('div');
   controls.className = 'sp-cu-controls';
 
@@ -623,18 +551,8 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   const askCheckbox = document.createElement('input');
   askCheckbox.type = 'checkbox';
   askCheckbox.id = 'sp-cu-ask-checkbox';
-  // Default: ON (ask before acting). Autonomous CDP browser control on a
-  // prompt-injectable page must default to human-in-the-loop (trust-boundary
-  // P0). Unchecking is an explicit "autopilot" opt-out; the authoritative gate
-  // is in background.ts (an unset pref is treated as ask-before-acting).
   askCheckbox.checked = true;
 
-  // Rehydrate the persisted gate. The synchronous default above stays ON so the
-  // control is never briefly wrong during this async round-trip; only an
-  // explicit stored `false` (the autopilot opt-out) unchecks it, which is the
-  // same rule the authoritative gate in background.ts applies. Without this the
-  // panel rendered "ask before acting" checked while background.ts ran the agent
-  // with no approval gate — a control misreporting the trust boundary it names.
   let askPreferenceMutation = 0;
   chrome.storage?.local?.get('agi_cu_ask_before_acting', (items) => {
     if (chrome.runtime?.lastError) return;
@@ -642,8 +560,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     askCheckbox.checked = items?.['agi_cu_ask_before_acting'] !== false;
   });
 
-  // Persist on toggle rather than only when Run Autofill escalates, so closing
-  // the panel without running anything cannot drop the user's choice.
   askCheckbox.addEventListener('change', () => {
     const next = askCheckbox.checked;
     const mutation = ++askPreferenceMutation;
@@ -652,9 +568,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       try {
         await chrome.storage.local.set({ agi_cu_ask_before_acting: next });
       } catch {
-        // The background reads the stored preference as the authoritative gate.
-        // Roll the visual control back so it cannot claim an opt-in/opt-out that
-        // never reached that boundary.
         if (askPreferenceMutation === mutation) askCheckbox.checked = !next;
         showHandoffBanner(
           'The Ask before acting setting could not be saved. The previous setting is still active.',
@@ -674,10 +587,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   clearBtn.className = 'sp-cu-clear-btn';
   clearBtn.textContent = 'Clear';
 
-  // "Run Autofill" trigger button.
-  // Clicking it fires the registered onRunAutofill handler (wired by side_panel.ts).
-  // The handler: queries the active tab, sends AGI_RUN_AUTOFILL to the content
-  // script, evaluates the escalation decision, and optionally starts the agent loop.
   const runAutofillBtn = document.createElement('button');
   runAutofillBtn.className = 'sp-cu-run-btn';
   runAutofillBtn.textContent = 'Run Autofill';
@@ -729,8 +638,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   ): Promise<void> {
     const runId = activeRunId;
     if (!runId) return;
-    // Tombstone locally before awaiting the worker. Any already-queued step or
-    // completion for this run is ignored from the instant the user clicks Stop.
     setRunState(false, runId);
     try {
       await chrome.runtime.sendMessage({
@@ -761,8 +668,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     });
   });
 
-  // Auth-status chip — green "Signed in" or amber "Sign in required".
-  // Checked once on panel build; re-checked whenever the panel becomes visible
   // via the exported refreshAuthChip() helper wired to the tab-switch event.
   const authChip = document.createElement('span');
   authChip.className = 'sp-cu-auth-chip unauthed';
@@ -793,7 +698,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         authLabel.textContent = 'Auth unavailable';
       });
   }
-  // Initial check
   refreshAuthChip();
 
   controls.appendChild(runAutofillBtn);
@@ -804,7 +708,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   controls.appendChild(clearBtn);
   panelEl.appendChild(controls);
 
-  // ── P2-7: Usage meter ─────────────────────────────────────────────────────
   const usageMeter = document.createElement('div');
   usageMeter.className = 'sp-cu-usage-meter';
   usageMeter.setAttribute('aria-label', 'Agent usage');
@@ -828,7 +731,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   usageMeter.appendChild(usageTokensEl);
   panelEl.appendChild(usageMeter);
 
-  // ── Action log ─────────────────────────────────────────────────────────────
   const logEl = document.createElement('div');
   logEl.id = 'sp-cu-log';
 
@@ -840,8 +742,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   logEl.appendChild(emptyEl);
 
   panelEl.appendChild(logEl);
-
-  // ─── Helpers ───────────────────────────────────────────────────────────────
 
   function fmtTime(): string {
     const d = new Date();
@@ -874,13 +774,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     timeEl.className = 'sp-cu-step-time';
     timeEl.textContent = fmtTime();
 
-    /**
-     * `.sp-cu-step-detail` is capped at 60px with `overflow: hidden`, so any
-     * detail longer than ~3 lines is cut off. Only the tool_call branch used to
-     * wire the toggle, which meant tool RESULTS and ERROR messages — the two a
-     * user most needs to read — were clipped with no way to reveal the rest.
-     * Every branch that sets detail text now goes through here.
-     */
     const makeExpandable = (): void => {
       detailEl.title = 'Click to expand';
       detailEl.style.cursor = 'pointer';
@@ -953,7 +846,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     stepEl.appendChild(timeEl);
     frag.appendChild(stepEl);
 
-    // Inline screenshot thumbnail (for screenshot steps with base64 data)
     if (step.kind === 'screenshot' && step.screenshotBase64) {
       const thumb = document.createElement('div');
       thumb.className = 'sp-cu-screenshot';
@@ -962,11 +854,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       img.alt = 'Agent screenshot';
       img.loading = 'lazy';
       thumb.appendChild(img);
-      // Click to open full-size — use a data: URL so we never call document.write()
       thumb.addEventListener('click', () => {
-        // Build a self-contained data: URL with a minimal HTML wrapper.
-        // This is safe: the content is fully base64-encoded PNG from our own CDP
-        // capture and never contains user-supplied HTML.
         const htmlContent =
           `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">` +
           `<title>AGI screenshot</title>` +
@@ -975,7 +863,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         const blob = new Blob([htmlContent], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         window.open(url, '_blank', 'noopener,noreferrer');
-        // Revoke after a short delay to allow the new tab to load
         setTimeout(() => URL.revokeObjectURL(url), 10_000);
       });
       frag.appendChild(thumb);
@@ -1013,13 +900,10 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       .join('\n');
   }
 
-  // ─── Public methods ────────────────────────────────────────────────────────
-
   function appendStep(step: AgentLoopStep & { screenshotBase64?: string }): void {
     setEmpty(false);
     const frag = buildStepEl(step);
     logEl.appendChild(frag);
-    // Auto-scroll to bottom
     logEl.scrollTop = logEl.scrollHeight;
   }
 
@@ -1081,13 +965,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     denyBtn.className = 'sp-cu-approval-deny';
     denyBtn.textContent = 'Skip';
 
-    /*
-     * The card MUST expire with the loop's gate. agentLoop resolves DENY after
-     * APPROVAL_TIMEOUT_MS, but that only settles its promise — it never touched
-     * this card. So an unattended card stayed on screen with Allow/Skip buttons
-     * that looked live, did nothing when pressed, and stacked up one per action
-     * for the rest of the run. Expire on the same deadline and say so.
-     */
     let settled = false;
     const expiry = setTimeout(() => {
       if (settled) return;
@@ -1127,7 +1004,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     card.appendChild(cardDesc);
     card.appendChild(btns);
 
-    // Insert approval card at top of log (above existing steps)
     logEl.insertBefore(card, logEl.firstChild);
     logEl.scrollTop = 0;
     allowBtn.focus();
@@ -1137,7 +1013,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     _runAutofillHandler = handler;
   }
 
-  /** P2-7: Update the usage meter with step and token counts. */
   function updateUsageMeter(usage: AgentLoopUsage): void {
     const { stepsUsed, maxSteps, totalTokens } = usage;
     usageStepsEl.textContent = `Steps: ${stepsUsed}/${maxSteps}`;
@@ -1152,7 +1027,6 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     }
   }
 
-  // Unused reference suppressor for TOOL_ICONS (kept for future SVG wiring)
   void TOOL_ICONS;
 
   return {

@@ -80,9 +80,6 @@ describe('price tier mapping', () => {
   });
 
   it('rejects a generic Stripe override for Team even though Team is self-serve', async () => {
-    // Team carries org-admin capability. Its entitlement must only ever come
-    // from a Price the deployment explicitly configured, never from a free-form
-    // override string where a typo becomes a free team_admin grant.
     process.env['PRICE_ID_OVERRIDES'] = 'price_team_override,team,monthly';
     const { getPlanTierFromPriceId } = await import('../price-tier-mapping');
 
@@ -90,9 +87,6 @@ describe('price tier mapping', () => {
   });
 
   it('registers both configured Team Prices so the webhook can provision a purchase', async () => {
-    // Without registration the webhook throws "Cannot provision subscription
-    // from an unregistered Stripe Price" AFTER the card is charged: money taken,
-    // entitlement never granted, Stripe retrying forever.
     process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'] = 'price_team_usd';
     process.env['STRIPE_PRICE_TEAM_MONTHLY_INR'] = 'price_team_inr';
     const { getPlanTierFromPriceId, isPriceIdRegistered, getTierMapping } =
@@ -114,9 +108,6 @@ describe('price tier mapping', () => {
   });
 
   it('registers the Team yearly Price at the yearly interval so the webhook can provision it', async () => {
-    // Decision #22: Team is sold yearly at $240/seat. The yearly Price must be
-    // registered just like the monthly ones, or a yearly Team purchase charges
-    // the card and then fails to provision on the unregistered-Price guard.
     process.env['STRIPE_PRICE_TEAM_MONTHLY_USD'] = 'price_team_usd';
     process.env['STRIPE_PRICE_TEAM_YEARLY_USD'] = 'price_team_yearly_usd';
     const { getPlanTierFromPriceId, isPriceIdRegistered, getTierMapping } =

@@ -75,7 +75,6 @@ describe('translateAnthropicStream — stop_reason mapping', () => {
     expect(stops[0]).toEqual({ type: 'stop', reason: 'refusal' });
 
     // Only one stop chunk -- the truncation-safety `finally` fallback must
-    // NOT fire a second one now that message_delta already emitted a reason.
     expect(out.filter((c) => c.type === 'stop')).toHaveLength(1);
   });
 
@@ -114,9 +113,6 @@ describe('translateAnthropicStream — stop_reason mapping', () => {
 
     const out = await collect(translateAnthropicStream(fromArray(events)));
     const stop = out.find((c) => c.type === 'stop');
-    // Pinned to today's actual (imperfect) behavior so a future intentional
-    // fix changes this test instead of silently drifting. See the tracked
-    // gap noted in stream.ts's mapStopReason.
     expect(stop).toEqual({ type: 'stop', reason: 'end_turn' });
   });
 });

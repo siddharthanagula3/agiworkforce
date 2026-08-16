@@ -1,9 +1,3 @@
-/**
- * SkillsPluginsSettings
- *
- * Shows AGI plugin resources, including compatibility-backed plugin,
- * skill, agent, and slash-command directories.
- */
 
 import {
   AlertCircle,
@@ -24,8 +18,6 @@ import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { selectCurrentFolder, useProjectStore } from '../../stores/projectStore';
 import { Button } from '@/ui/Button';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface InstalledPluginRecord {
   scope: 'user' | 'local';
@@ -76,8 +68,6 @@ interface TerminalCommandResult {
   durationMs: number;
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function pluginIdFromKey(key: string): { name: string; marketplace: string } {
   const parts = key.split('@');
   return { name: parts[0] ?? key, marketplace: parts[1] ?? '' };
@@ -99,7 +89,6 @@ function normalizeProjectPath(path: string | undefined): string | null {
 function normalizePluginSpec(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed === '') return null;
-  // Keep this strict to avoid shell injection in CLI execution.
   if (!/^[A-Za-z0-9._:@/-]+$/.test(trimmed)) return null;
   if (trimmed.length > 200) return null;
   return trimmed;
@@ -130,8 +119,6 @@ async function tryDirList(path: string): Promise<DirEntry[]> {
     return [];
   }
 }
-
-// ── Sub-components ────────────────────────────────────────────────────────────
 
 function SectionHeader({
   icon: Icon,
@@ -334,8 +321,6 @@ function EntryRow({
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
-
 export function SkillsPluginsSettings() {
   const allowedDirectories = useSettingsStore((s) => s.allowedDirectories);
   const currentProjectFolder = useProjectStore(selectCurrentFolder);
@@ -357,9 +342,6 @@ export function SkillsPluginsSettings() {
   const [agentsExpanded, setAgentsExpanded] = useState(false);
 
   const isNonTauri = !isTauriContext();
-  // Use the string primitive (not the array reference) as the dependency so
-  // useCallback doesn't re-create load on every render when the selector
-  // returns a new array instance with the same value.
   const projectRoot = currentProjectFolder ?? allowedDirectories[0] ?? null;
 
   const load = useCallback(async () => {
@@ -372,7 +354,6 @@ export function SkillsPluginsSettings() {
     setError(null);
 
     try {
-      // 1. Get home directory — skip user-level plugins if unavailable
       let homeDirPath: string | null = null;
       try {
         homeDirPath = await getHomeDir();
@@ -380,7 +361,6 @@ export function SkillsPluginsSettings() {
         console.warn('[SkillsPluginsSettings] Could not determine home directory');
       }
 
-      // 2. Load installed plugins from ~/.claude/plugins/installed_plugins.json
       const resolvedPlugins: ResolvedPlugin[] = [];
       if (homeDirPath) {
         try {
@@ -392,7 +372,6 @@ export function SkillsPluginsSettings() {
             plugins: Record<string, InstalledPluginRecord[]>;
           };
 
-          // Read all plugin manifests in parallel instead of serially.
           const entries = Object.entries(data.plugins ?? {});
           const normalizedProjectRoot = normalizeProjectPath(projectRoot ?? undefined);
           const resolved = await Promise.all(
@@ -439,14 +418,12 @@ export function SkillsPluginsSettings() {
         } catch {
           // plugin registry not available
         }
-      } // end if (homeDir)
+      }
       setPlugins(resolvedPlugins);
 
-      // 3. Load project-level resources from .claude/ subdirectories
       if (projectRoot) {
         const claudeDir = `${projectRoot}/.claude`;
 
-        // Commands
         const commandEntries = await tryDirList(`${claudeDir}/commands`);
         setCommands(
           commandEntries
@@ -455,19 +432,16 @@ export function SkillsPluginsSettings() {
             .sort((a, b) => a.name.localeCompare(b.name)),
         );
 
-        // Skills (each skill is a directory, so list skill dirs then their SKILL.md)
         const skillDirs = await tryDirList(`${claudeDir}/skills`);
         const skillEntries: ProjectEntry[] = [];
         for (const dir of skillDirs.filter((e) => e.is_dir)) {
           skillEntries.push({ name: dir.name, path: dir.path });
         }
-        // Also md files directly in skills/
         for (const file of skillDirs.filter((e) => e.is_file)) {
           skillEntries.push({ name: file.name, path: file.path });
         }
         setSkills(skillEntries.sort((a, b) => a.name.localeCompare(b.name)));
 
-        // Agents
         const agentEntries = await tryDirList(`${claudeDir}/agents`);
         setAgents(
           agentEntries

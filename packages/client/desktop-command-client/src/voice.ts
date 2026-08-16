@@ -1,10 +1,5 @@
-/**
- * Voice API — typed wrappers for voice_* Tauri commands (STT, TTS, wake word, PTT, barge-in).
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface VoiceTranscription {
   text: string;
@@ -84,8 +79,6 @@ export interface BargeInConfig {
   cooldownMs?: number;
 }
 
-// ---- STT ----
-
 export async function voiceTranscribeFile(audioPath: string): Promise<VoiceTranscription> {
   return command<VoiceTranscription>('voice_transcribe_file', { audioPath });
 }
@@ -122,8 +115,6 @@ export async function voiceTranscribeLocal(audioPath: string): Promise<VoiceTran
   return command<VoiceTranscription>('voice_transcribe_local', { audioPath });
 }
 
-// ---- TTS ----
-
 export async function voiceTtsSpeak(text: string): Promise<void> {
   return command<void>('voice_tts_speak', { text });
 }
@@ -136,7 +127,6 @@ export async function voiceTtsConfigure(config: TtsConfig): Promise<void> {
 export async function voiceTtsSpeakLocal(text: string): Promise<void> {
   return command<void>('voice_tts_speak_local', { text });
 }
-// ---- Wake Word ----
 
 export async function voiceWakeEnable(): Promise<void> {
   return command<void>('voice_wake_enable');
@@ -151,8 +141,6 @@ export async function voiceWakeConfigure(config: WakeWordConfig): Promise<void> 
   return command<void>('voice_wake_configure', { config });
 }
 
-// ---- Push-to-Talk ----
-
 export async function voicePttConfigure(config: PttConfig): Promise<void> {
   return command<void>('voice_ptt_configure', { config });
 }
@@ -165,8 +153,6 @@ export async function voicePttKeyDown(): Promise<void> {
 export async function voicePttKeyUp(): Promise<number | null> {
   return command<number | null>('voice_ptt_key_up');
 }
-
-// ---- Deepgram Streaming ----
 
 export async function voiceDeepgramConfigure(config: DeepgramConfig): Promise<void> {
   return command<void>('voice_deepgram_configure', { config });
@@ -183,8 +169,6 @@ export async function voiceDeepgramSendAudio(data: number[]): Promise<void> {
 export async function voiceDeepgramStatus(): Promise<DeepgramStreamStatus> {
   return command<DeepgramStreamStatus>('voice_deepgram_status');
 }
-
-// ---- Local Models ----
 
 export async function voiceConvertAudioToPcm(samples: number[]): Promise<number[]> {
   return command<number[]>('voice_convert_audio_to_pcm', { samples });
@@ -223,8 +207,6 @@ export async function voiceListLocalModels(): Promise<LocalModelsInfo> {
   return command<LocalModelsInfo>('voice_list_local_models');
 }
 
-// ---- Barge-In ----
-
 export async function voiceEnableBargeIn(): Promise<boolean> {
   return command<boolean>('voice_enable_barge_in');
 }
@@ -243,8 +225,6 @@ export async function voiceStartBargeInMonitoring(): Promise<void> {
 export async function voiceStopBargeInMonitoring(): Promise<void> {
   return command<void>('voice_stop_barge_in_monitoring');
 }
-
-// ---- Global PTT ----
 
 export async function voiceStartGlobalPtt(): Promise<void> {
   return command<void>('voice_start_global_ptt');

@@ -9,7 +9,6 @@ export function ExecutionSidecarTerminal() {
   const activeToolStreams = useToolStore((s) => s.activeToolStreams);
   const terminalCommands = useToolStore((s) => s.terminalCommands);
 
-  // Find active bash/terminal streams
   const activeTerminalStreams = useMemo(() => {
     return Array.from(activeToolStreams.values()).filter(
       (stream) =>
@@ -20,11 +19,9 @@ export function ExecutionSidecarTerminal() {
     );
   }, [activeToolStreams]);
 
-  // Build combined output from active streams and recent terminal commands
   const terminalOutput = useMemo(() => {
     const lines: string[] = [];
 
-    // Add recent terminal command outputs
     const recentCommands = terminalCommands.slice(-5);
     for (const cmd of recentCommands) {
       if (cmd.command) {
@@ -42,18 +39,15 @@ export function ExecutionSidecarTerminal() {
       lines.push('');
     }
 
-    // Add active stream output
     for (const stream of activeTerminalStreams) {
       if (stream.outputBuffer) {
         lines.push(...stream.outputBuffer.split('\n'));
       }
     }
 
-    // Cap to last N lines
     return lines.slice(-MAX_TERMINAL_LINES);
   }, [terminalCommands, activeTerminalStreams]);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {

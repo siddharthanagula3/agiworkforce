@@ -191,9 +191,6 @@ describe('getWorkModeEntitlementError', () => {
   });
 
   it('rejects non-streaming web_search on a generic-fallback provider before reserving credits', async () => {
-    // This catalog provider has no native web-search branch, so search would only run via the
-    // generic fallback tool, which requires streaming. A non-streaming request
-    // must be rejected (not silently answered without browsing).
     const request = new NextRequest('https://agiworkforce.com/api/llm/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -236,9 +233,6 @@ describe('getWorkModeEntitlementError', () => {
 });
 
 describe('free-trial capability gate — model-agnostic web search', () => {
-  // The current Free/Basic roster uses provider-native search-capable models.
-  // The free-trial capability gate must admit their web-search toggle while
-  // continuing to reject genuinely unsupported add-ons.
   const freeSubscription = {
     id: 'sub-free',
     user_id: 'user-free',
@@ -295,9 +289,6 @@ describe('free-trial capability gate — model-agnostic web search', () => {
     if (result.ok) {
       expect(result.resolvedTaskType).toBe('research');
       expect(result.chatRequest.web_search).toBe(true);
-      // Provider-native shape, so it follows the model. Haiku held the
-      // economy slot and emitted Anthropic's block; the economy tier is now
-      // Google, whose native search is `{ google_search: {} }`.
       expect(result.llmRequest.tools).toContainEqual({ google_search: {} });
     }
   });
@@ -374,7 +365,6 @@ describe('free-trial capability gate — model-agnostic web search', () => {
       };
       expect(result.response.status).toBe(400);
       expect(body.error.code).toBe('free_trial_model_capability');
-      // The refusal must stay actionable — it is the only signal a Free user gets.
       expect(body.error.message).toContain('code execution');
       expect(body.error.message).toMatch(/Pick a model that does|turn that option off/i);
     }
@@ -408,8 +398,6 @@ describe('resolveManagedUsageLeaseSeconds', () => {
   });
 
   it('protects every turn that can run as a durable workflow from premature recovery', () => {
-    // A run that chains bounded workflow invocations outlives a 900 s lease, and
-    // the recovery job would refund it mid-execution without ever saying so.
     expect(resolveManagedUsageLeaseSeconds({ work_mode: 'agiwork' })).toBe(86_400);
     expect(resolveManagedUsageLeaseSeconds({ work_mode: 'chat', web_search: true })).toBe(86_400);
     expect(resolveManagedUsageLeaseSeconds({ code_execution: true })).toBe(86_400);
@@ -422,22 +410,6 @@ describe('resolveManagedUsageLeaseSeconds', () => {
   });
 });
 
-/**
- * Bug 2 (web search "still cosmetic") root-cause proof — test at the injection hop.
- *
- * The client sends `web_search:true` and the composer only lets the toggle turn on
- * when the model's catalog `search` flag is set. The break was NOT client-side (the
- * prior "added deps to handleSubmit" fix): it is that the server only injects a
- * native search tool for anthropic/google, while xai/qwen/moonshot/openai models
- * ALSO carry (or carried) `search:true` in the catalog — so their toggle lit a
- * checkmark but the request went out with no tool and the model replied "I can't
- * browse the internet".
- *
- * These tests pin exactly which providers inject (so the composer's client-side gate,
- * `providerSupportsWebSearch`, can never drift from the server) and that unsupported
- * providers are a no-op at this hop — WP4's `shouldOfferGenericWebSearchTool` covers
- * them with the platform-executed fallback tool instead (tested below).
- */
 describe('appendWebSearchTool', () => {
   const caps = { search: true };
 
@@ -475,10 +447,6 @@ describe('appendWebSearchTool', () => {
   it.each(['xai', 'qwen', 'moonshot', 'deepseek', 'perplexity'])(
     'does NOT inject a tool for %s (no native path on this route — WP4 generic tool covers it)',
     (provider) => {
-      // Returns the existing tool list unchanged. xai/qwen/moonshot/deepseek
-      // are gated OUT of the composer toggle client-side (providerSupportsWebSearch)
-      // so this no-op is never reached with an enabled native-path toggle; all of
-      // them are covered by the generic fallback instead.
       const existing = [{ type: 'function', function: { name: 'x' } }];
       expect(appendWebSearchTool(provider, existing, caps)).toEqual(existing);
     },
@@ -547,12 +515,6 @@ describe('resolveWebFetchTools', () => {
   });
 });
 
-/**
- * WP4 — gates the platform-executed generic `web_search` function tool. Every
- * condition must hold or the tool is not offered; getting any one wrong either
- * reintroduces a cosmetic toggle (offering with no backend) or a stalled turn
- * (offering with no execution path, i.e. outside the tool loop).
- */
 describe('shouldOfferGenericWebSearchTool', () => {
   const baseArgs = {
     providerLower: 'openai',
@@ -622,12 +584,6 @@ describe('isFreeTierBlockedAddOn', () => {
   });
 });
 
-/**
- * CPST Stage-0 telemetry, managed cloud only
- * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2, field 5).
- * The resolver's route identity used to be computed and thrown away; the
- * processed request now carries it so the finalize call sites can persist it.
- */
 describe('processRequest CPST route identity', () => {
   const freeSubscription = {
     id: 'sub-free',
@@ -660,14 +616,10 @@ describe('processRequest CPST route identity', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) {
-      // Self-labelled `interim:` because ExecutionPlan (design doc §3) does not
-      // exist yet — no consumer may treat this as a real plan id.
       expect(result.routePlanId).toMatch(/^interim:/);
-      // harnessId, routeId, and the resolver's selection reason, in that order.
       expect(result.routePlanId?.split(':').length).toBeGreaterThanOrEqual(4);
       expect(result.resolvedTaskType).toBeTruthy();
       expect(typeof result.classifierConfidence).toBe('number');
-      // Nothing rotated, so the retry counter stays absent (unknown, not zero).
       expect(result.retries).toBeUndefined();
     }
   });

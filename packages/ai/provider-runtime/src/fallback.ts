@@ -27,26 +27,11 @@ import {
   type Provider,
 } from '@agiworkforce/types';
 
-/**
- * Strategy for picking the next model when the current one is failing.
- *
- *   - `same-provider-cheaper` — drop one quality tier within the same
- *     provider (Opus → Sonnet → Haiku). Best for capacity off-switch
- *     style failures: same provider, smaller cost, same vendor lock-in.
- *   - `economy-tier` — switch to the cheapest tools-capable economy
- *     model regardless of provider. Best for cost-sensitive Hobby
- *     users when everything is throttled.
- *   - `cross-provider` — try a different provider's flagship.
- *     Best for provider-side outages.
- */
 export type FallbackStrategy = 'same-provider-cheaper' | 'economy-tier' | 'cross-provider';
 
 export interface FallbackChainOptions {
-  /** Excluded models — already tried in this conversation. */
   exclude?: ReadonlySet<string>;
-  /** Required capabilities the fallback must support. */
   requireTools?: boolean;
-  /** Maximum number of fallback steps to enumerate. */
   maxDepth?: number;
 }
 
@@ -88,8 +73,6 @@ function sameProviderCheaper(
   requireTools: boolean,
   maxDepth: number,
 ): string[] {
-  // Walk all models for this provider, ordered by `(qualityTier desc, cost asc)`.
-  // qualityTier ordering: best > balanced > fast.
   const all = getProviderModels(current.provider, exclude, requireTools);
   const tierRank: Record<string, number> = { best: 3, balanced: 2, fast: 1 };
   const currentRank = tierRank[current.qualityTier] ?? 2;
@@ -98,7 +81,7 @@ function sameProviderCheaper(
     .sort((a, b) => {
       const ar = tierRank[a.qualityTier] ?? 2;
       const br = tierRank[b.qualityTier] ?? 2;
-      if (br !== ar) return br - ar; // prefer higher quality first within "<= current"
+      if (br !== ar) return br - ar;
       return a.inputCost + a.outputCost - (b.inputCost + b.outputCost);
     });
   return candidates.slice(0, maxDepth).map((m) => m.id);
@@ -128,9 +111,6 @@ function crossProviderFallback(
   requireTools: boolean,
   maxDepth: number,
 ): string[] {
-  // For each OTHER provider that has at least one tools-capable
-  // active model, pick the highest-quality option. Order providers
-  // by current's qualityTier first.
   const providers: Provider[] = [
     'anthropic',
     'openai',

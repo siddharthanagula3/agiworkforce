@@ -1,18 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Round-17 mobile snapshot — project-detail screen.
- *
- * Locks the RN tree shape of the `(app)/projects/[id].tsx` screen landed in
- * round 16. Mirrors the mock pattern used in `shared-primitives.snapshot.test.tsx`
- * + `onboarding.test.tsx`. Discharges the visual-verification gap for the
- * mobile surface — RN doesn't have a headless PNG pipeline in this repo, so
- * a frozen RN tree is the closest structural-parity check we can run in CI.
- *
- * Three variants: success state (rendered ProjectHeader), local-only fallback
- * (cloud project sync disabled), and missing-id empty state.
- *
- * 2026-05-22 round-17 capture sweep.
- */
 
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
@@ -27,15 +13,9 @@ let mockFeaturesAuth = true;
 let mockFeaturesCrossDeviceSync = true;
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -126,7 +106,6 @@ jest.mock('@/src/features/projects/store', () => ({
 jest.mock('@/stores/chatStore', () => ({
   useChatMessageStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ conversations: [] }),
-  // ProjectChatsTab is now mode-aware and reads cloud conversations in Cloud mode.
   useChatCloudMessageStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ conversations: [] }),
 }));

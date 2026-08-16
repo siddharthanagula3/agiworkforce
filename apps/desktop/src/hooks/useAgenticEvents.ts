@@ -395,7 +395,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
     'agi:tool_execution',
     safeHandler(ctx, 'agi:tool_execution', (payload) => {
       runtimeActivityHandlers.addToolExecution()(payload.execution);
-      // Extract tool name from various possible field names in the execution payload
       const exec = payload.execution as ToolExecution & {
         tool?: string;
         name?: string;
@@ -533,7 +532,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
       });
 
       if (!isConnected) {
-        // Allow preflight to run again on the next extension-native tool call.
         ctx.extensionPreflightChecked = false;
       } else {
         runExtensionPreflightCheck(ctx);
@@ -624,7 +622,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   );
   push(unlistenExtensionTaskResult);
 
-  // automation:permission_required — show Sonner toast + auto-open System Settings
   const unlistenPermRequired = await listen<{
     reason: string;
     message: string;
@@ -638,24 +635,20 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
       });
     };
     if (graceful) {
-      // Soft toast — agent fell back to normal LLM, user can enable if they want
       toast(message, {
         duration: 8000,
         action: { label: 'Open Settings', onClick: openSettings },
       });
     } else {
-      // Hard toast — user explicitly requested agent mode but it's unavailable
       toast.error(message, {
         duration: 12000,
         action: { label: 'Open Settings', onClick: openSettings },
       });
-      // Also open System Settings immediately so they can grant the permission
       openSettings();
     }
   });
   push(unlistenPermRequired);
 
-  // Calendar domain events -> unified action timeline
   const unlistenCalendarAuthStarted = await listen<string>(
     'calendar:auth_started',
     safeHandler(ctx, 'calendar:auth_started', (provider) => {
@@ -796,7 +789,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   );
   push(unlistenCalendarEventDeleted);
 
-  // Automation domain events -> unified action timeline
   const unlistenAutomationRecordingStarted = await listen<Record<string, unknown>>(
     'automation:recording_started',
     safeHandler(ctx, 'automation:recording_started', (payload) => {
@@ -903,7 +895,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   );
   push(unlistenAutomationScreenshotRequested);
 
-  // Cloud integration events -> unified action timeline
   const unlistenCloudAuthStarted = await listen<string>(
     'cloud:auth_started',
     safeHandler(ctx, 'cloud:auth_started', (provider) => {
@@ -1069,7 +1060,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   );
   push(unlistenCloudFolderCreated);
 
-  // Gmail integration events -> unified action timeline
   const unlistenGmailAuthStarted = await listen<string>(
     'gmail:auth_started',
     safeHandler(ctx, 'gmail:auth_started', (oauthState) => {
@@ -1162,7 +1152,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   );
   push(unlistenGmailDisconnected);
 
-  // MCP Tool Execution Events - show tool usage in action trail
   const unlistenMcpToolStarted = await listen<McpToolExecutionStartedPayload>(
     'mcp:tool_execution_started',
     (event) => {
@@ -1196,7 +1185,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
       const { tool_id, success, duration_ms } = event.payload;
       const toolName = getMcpToolDisplayName(tool_id);
 
-      // Find and update the existing entry
       const state = useUnifiedChatStore.getState();
       const existingEntry = state.actionLog.find(
         (log) => log.actionId === tool_id && log.status === 'running',
@@ -1270,7 +1258,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   );
   push(unlistenMcpConnection);
 
-  // Tool Stream Events - real-time progress for tool executions
   const unlistenToolStream = await listen<ToolStreamEventPayload>('agi:tool_stream', (event) => {
     if (!ctx.listenersActive) return;
     const { event: streamEvent, timestamp } = event.payload;
@@ -1279,18 +1266,12 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
       if (existingTimeout) {
         clearTimeout(existingTimeout);
       }
-      // AUDIT-STREAM-053 fix: Reconcile message metadata before cleaning up tool stream
-      // This ensures message artifacts reflect final status before stream is removed
-      // AUDIT-UI-053 fix: Also update top-level message metadata status so fallback works correctly
       const timeoutId = setTimeout(() => {
         if (ctx.listenersActive) {
           const state = useUnifiedChatStore.getState();
           const stream = state.activeToolStreams.get(toolId);
 
-          // If there's a stream with a final status, find the message containing this tool's artifact
-          // and update it to reflect final status before removing the stream
           if (stream) {
-            // Determine the final status - default to completed if still running
             const finalStatus = normalizeToolTerminalArtifactStatus(stream.status);
 
             reconcileToolArtifactTerminalState(state, toolId, {
@@ -1357,7 +1338,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
           }),
         );
 
-        // Also update action trail with progress message for real-time status
         if (progressEvent.message) {
           const addActionTrailEntry = useUnifiedChatStore.getState().addActionTrailEntry;
           addActionTrailEntry?.({
@@ -1487,7 +1467,6 @@ async function setupRuntimeActivityEventListeners(ctx: SharedListenerContext): P
   });
   push(unlistenToolStream);
 
-  // MCP server health and system events - sync with mcpStore
   try {
     const unlistenMcpServerUnhealthy = await listen<McpServerUnhealthyPayload>(
       'mcp:server_unhealthy',

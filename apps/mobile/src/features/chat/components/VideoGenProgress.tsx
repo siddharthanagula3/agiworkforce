@@ -1,11 +1,3 @@
-/**
- * Video generation progress shown in the thread while a task runs.
- *
- * Video is not image-with-a-longer-wait: the provider task runs for a minute or
- * more behind `/api/media/video/status`, so this deliberately says so rather
- * than showing a spinner that looks stalled. It replaces itself with
- * GeneratedVideo on completion (handled by the parent).
- */
 
 import { useEffect } from 'react';
 import { View } from 'react-native';
@@ -23,7 +15,6 @@ import { useThemeColors } from '@/src/ui/theme';
 
 export interface VideoGenProgressProps {
   prompt: string;
-  /** Real server-reported percentage. Omit for an indeterminate operation. */
   progress?: number;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'timeout';
   errorMessage?: string;

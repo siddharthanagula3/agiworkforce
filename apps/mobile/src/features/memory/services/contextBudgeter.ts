@@ -1,14 +1,3 @@
-/**
- * Context budget calculator for per-turn token estimation.
- *
- * Uses 4-chars-per-token approximation — no tokenizer shipped in v1 since
- * each model family has its own tokenizer. All thresholds are derived from
- * the model's contextWindow via getModelById(), never hardcoded.
- *
- * Thresholds:
- *   70% full → warn user (ContextWarningChip)
- *   80% full → trigger auto-compaction (memoryCompactor)
- */
 
 import {
   computeContextBudget as computeSharedContextBudget,
@@ -22,19 +11,13 @@ import type { ChatMessage } from '@/types/chat';
 export type BudgetStatus = 'ok' | 'warn' | 'compact';
 
 export interface ContextBudget {
-  /** Hard cap at 80% of model.contextWindow */
   hardCapTokens: number;
-  /** Warn threshold at 70% of model.contextWindow */
   warnThresholdTokens: number;
-  /** Estimated tokens used by current conversation history */
   usedTokens: number;
-  /** Fraction of hardCapTokens used (0-1) */
   usedFraction: number;
-  /** 'ok' | 'warn' | 'compact' */
   status: BudgetStatus;
 }
 
-/** Estimate token count using 4-chars-per-token approximation. */
 export function estimateTokens(text: string): number {
   return estimateTextTokens(text);
 }
@@ -51,7 +34,6 @@ function toContextMessage(msg: ChatMessage): AgentContextMessage {
 function getContextWindow(modelId: string): number {
   const model = getModelById(modelId);
   if (model?.contextWindow) return model.contextWindow;
-  // Fallback: use the first model in MODEL_LIST as a sensible default
   const fallback = MODEL_LIST[0] as ModelDef | undefined;
   return fallback?.contextWindow ?? 4096;
 }
@@ -92,10 +74,6 @@ export function computeContextBudget(
   return { hardCapTokens, warnThresholdTokens, usedTokens, usedFraction, status };
 }
 
-/**
- * Returns true when the conversation must be compacted before the next inference call.
- * Caller should invoke memoryCompactor.compact() when this returns true.
- */
 export function needsCompaction(
   modelId: string,
   messages: ChatMessage[],

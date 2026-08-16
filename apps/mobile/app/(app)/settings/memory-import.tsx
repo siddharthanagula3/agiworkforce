@@ -114,7 +114,6 @@ export default function MemoryImportScreen() {
       return;
     }
 
-    // Preview confirmation
     Alert.alert(
       'Import Preview',
       `Found ${facts.length} fact${facts.length !== 1 ? 's' : ''} from ${SOURCE_LABELS[source]}.\n\nPreview:\n• ${facts

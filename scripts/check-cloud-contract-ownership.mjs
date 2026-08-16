@@ -564,9 +564,6 @@ if (
   errors.push('Fixture generation must import POLICY_CONTAINER_FORMAT instead of hardcoding it');
 }
 
-// The @agiworkforce/services compatibility facade was deleted at M8
-// (2026-07-15); only anti-regression checks on the name remain elsewhere in
-// this script. The facade directory must not reappear.
 if (exists('packages/services')) {
   errors.push('packages/services facade was deleted at M8 and must not reappear');
 }

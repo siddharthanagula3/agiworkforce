@@ -1,16 +1,3 @@
-/**
- * errorExplainerProvider.ts — AI-powered error explanation and general code Q&A
- *
- * Provides two commands:
- *   1. `agi-workforce.explainError` — Sends diagnostics on the current line (or
- *      selection) plus surrounding code context to the LLM for explanation and fix.
- *   2. `agi-workforce.askAboutCode` — Free-form question input box; sends the
- *      question with the current editor context (selection or visible range) to
- *      the LLM and opens the response in a Markdown tab.
- *
- * Both commands use `vscode.window.withProgress` with cancellation support,
- * matching the `runInlineCommand` pattern in extension.ts.
- */
 
 import * as vscode from 'vscode';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
@@ -18,17 +5,8 @@ import { applyLlmEdit } from '../platform/applyEdit';
 import { logEvent, logError, TelemetryEvents } from '../core/telemetry';
 import { showCloudUtilityErrorActions } from '../core/cloudUtilityErrorActions';
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-/** Number of lines above/below the cursor to include as surrounding context. */
 const CONTEXT_RADIUS = 15;
 
-// ─── Activation ──────────────────────────────────────────────────────────────
-
-/**
- * Register the error-explainer and ask-about-code commands.
- * Call once from the main `activate()` in extension.ts.
- */
 export function activateErrorExplainer(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.explainError', () =>
@@ -40,8 +18,6 @@ export function activateErrorExplainer(context: vscode.ExtensionContext): void {
   );
 }
 
-// ─── explainError ────────────────────────────────────────────────────────────
-
 async function explainErrorCommand(context: vscode.ExtensionContext): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined) {
@@ -52,7 +28,6 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
   const document = editor.document;
   const selection = editor.selection;
 
-  // Collect diagnostics that overlap the current line or the active selection.
   const allDiagnostics = vscode.languages.getDiagnostics(document.uri);
   const relevantDiagnostics = allDiagnostics.filter((d) => {
     if (selection.isEmpty) {
@@ -60,7 +35,6 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
         d.range.start.line <= selection.active.line && d.range.end.line >= selection.active.line
       );
     }
-    // Selection is non-empty — include diagnostics that intersect with it.
     return d.range.start.line <= selection.end.line && d.range.end.line >= selection.start.line;
   });
 
@@ -69,7 +43,6 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
     return;
   }
 
-  // Build an error summary string from all matched diagnostics.
   const errorSummary = relevantDiagnostics
     .map((d, i) => {
       const severity = diagnosticSeverityLabel(d.severity);
@@ -80,7 +53,6 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
     })
     .join('\n');
 
-  // Determine the anchor line for context extraction.
   const anchorLine = selection.isEmpty ? selection.active.line : selection.start.line;
   const surroundingCode = extractSurroundingCode(document, anchorLine, CONTEXT_RADIUS);
   const lang = document.languageId;
@@ -127,8 +99,6 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
 
         progress.report({ increment: 100 });
 
-        // Build a selection covering the surrounding-code range so applyLlmEdit
-        // can offer the "Apply Inline" option for the fix code block.
         const contextSelection = new vscode.Selection(
           surroundingCode.startLine,
           0,
@@ -150,8 +120,6 @@ async function explainErrorCommand(context: vscode.ExtensionContext): Promise<vo
     },
   );
 }
-
-// ─── askAboutCode ────────────────────────────────────────────────────────────
 
 async function askAboutCodeCommand(context: vscode.ExtensionContext): Promise<void> {
   const question = await vscode.window.showInputBox({
@@ -208,7 +176,6 @@ async function askAboutCodeCommand(context: vscode.ExtensionContext): Promise<vo
 
         progress.report({ increment: 100 });
 
-        // Always open in a new Markdown tab — this is a Q&A flow, not an inline edit.
         const doc = await vscode.workspace.openTextDocument({
           content: `# AGI Workforce — Answer\n\n**Q:** ${question.trim()}\n\n---\n\n${result}`,
           language: 'markdown',
@@ -231,17 +198,12 @@ async function askAboutCodeCommand(context: vscode.ExtensionContext): Promise<vo
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 interface SurroundingCode {
   text: string;
   startLine: number;
   endLine: number;
 }
 
-/**
- * Extract lines around `anchorLine` with a ± radius, clamped to document bounds.
- */
 function extractSurroundingCode(
   document: vscode.TextDocument,
   anchorLine: number,
@@ -257,10 +219,6 @@ function extractSurroundingCode(
   };
 }
 
-/**
- * Build a context string from the active editor state.
- * Includes: file path, language, and either the selected text or the visible range.
- */
 function buildEditorContext(editor: vscode.TextEditor | undefined): string {
   if (editor === undefined) {
     return '(No file is currently open.)\n\n';
@@ -278,14 +236,12 @@ function buildEditorContext(editor: vscode.TextEditor | undefined): string {
     codeSnippet = document.getText(selection);
     contextLabel = `Selected code (lines ${selection.start.line + 1}–${selection.end.line + 1})`;
   } else {
-    // Use visible range to keep the prompt reasonably sized.
     const visibleRanges = editor.visibleRanges;
     if (visibleRanges.length > 0) {
       const visible = visibleRanges[0]!;
       codeSnippet = document.getText(visible);
       contextLabel = `Visible code (lines ${visible.start.line + 1}–${visible.end.line + 1})`;
     } else {
-      // Fallback: first 100 lines
       const maxLine = Math.min(document.lineCount - 1, 99);
       const range = new vscode.Range(0, 0, maxLine, document.lineAt(maxLine).text.length);
       codeSnippet = document.getText(range);
@@ -299,9 +255,6 @@ function buildEditorContext(editor: vscode.TextEditor | undefined): string {
   );
 }
 
-/**
- * Convert a DiagnosticSeverity enum value to a human-readable label.
- */
 function diagnosticSeverityLabel(severity: vscode.DiagnosticSeverity): string {
   switch (severity) {
     case vscode.DiagnosticSeverity.Error:

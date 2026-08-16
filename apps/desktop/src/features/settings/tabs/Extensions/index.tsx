@@ -14,12 +14,6 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-/**
- * Extensions settings section (source-of-truth IA · DESK-1/DESK-2). Surfaces the
- * real MCP-extension manager (install/uninstall/enable/disable via the
- * `extension_list` Tauri command), which previously existed but was orphaned —
- * not reachable from any settings nav entry.
- */
 export function ExtensionsTab() {
   return (
     <Suspense fallback={<Fallback label="Loading extensions..." />}>

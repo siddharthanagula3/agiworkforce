@@ -20,18 +20,8 @@ import {
 import { ConnectorOAuthTokenError, exchangeAuthorizationCode } from '@/lib/connectors/oauth-client';
 import { completeMcpAuthorization } from '@/lib/connectors/mcp-discovery';
 
-/** Longest authorization code we will forward to a token endpoint. */
 const MAX_CODE_LENGTH = 2048;
 
-/**
- * Hosted OAuth callback for connector authorization.
- *
- * NOTHING SECRET IS EVER REFLECTED. The response is a redirect to a
- * same-origin path carrying only `connector` and a coarse `status`; no token,
- * refresh token, authorization code, verifier, or `state` appears in the body,
- * in the redirect target, or in any log line here. Failure statuses are
- * deliberately coarse so the endpoint cannot be used as an oracle.
- */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
@@ -62,9 +52,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return redirectTo('/connectors', '', 'invalid_state');
   }
 
-  // Single-use claim happens BEFORE anything else that could fail, so a denial,
-  // a malformed code, or a token-endpoint error all leave the state spent and
-  // the callback non-replayable.
   let pending;
   try {
     pending = await consumePendingAuthorization(state);
@@ -79,9 +66,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return redirectTo('/connectors', '', 'invalid_state');
   }
 
-  // The pending row is bound to the user who STARTED the flow. A different
-  // signed-in account arriving with a valid state must not have a grant written
-  // for it — that is the connector-injection variant of session fixation.
   if (pending.userId !== userId) {
     logger.warn(
       { connectorId: pending.connectorId },
@@ -97,11 +81,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return redirectTo(pending.returnPath, pending.connectorId, 'failed');
   }
 
-  // DISCOVERY PATH. A pending row carrying an MCP URL was started by
-  // `beginMcpAuthorization`, where the endpoints came from live discovery
-  // rather than from the registry. It must be redeemed against those pinned
-  // endpoints — the registry has no entry to consult, and `iss` validation
-  // (RFC 9207) has to happen before the code is spent.
   if (pending.mcpUrl) {
     const completion = await completeMcpAuthorization({
       pending,
@@ -129,9 +108,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       detail: {
         resourceType: 'connector',
         connectorId: pending.connectorId,
-        // Distinguished from `oauth` so the trail shows this grant was
-        // authorized against a discovered authorization server rather than an
-        // operator-registered application.
         source: 'mcp-discovery',
         status: 'connected',
         scopes: completion.grantedScopes,
@@ -143,9 +119,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const provider = getConnectorOAuthProvider(pending.connectorId);
   if (!provider || !isAllowedConnectorOAuthRedirectUri(pending.redirectUri)) {
-    // The registry changed under a live flow. Exchanging now would either use a
-    // different client or replay a redirect_uri this deployment no longer
-    // issues, so refuse rather than guess.
     logger.warn(
       { connectorId: pending.connectorId },
       '[connector-oauth] callback rejected: provider configuration changed mid-flow',
@@ -175,8 +148,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (error instanceof ConnectorOAuthStoreUnavailableError) {
       return redirectTo(pending.returnPath, pending.connectorId, 'unavailable');
     }
-    // Only the status and the provider's machine-readable error code are
-    // logged — the token-endpoint body echoes the authorization code back.
     logger.warn(
       {
         connectorId: pending.connectorId,
@@ -188,8 +159,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return redirectTo(pending.returnPath, pending.connectorId, 'failed');
   }
 
-  // Scopes are recorded because they are the user-visible consequence of the
-  // grant; no credential material is in scope for the audit trail.
   await recordAuditEvent({
     userId,
     eventType: 'connector_added',

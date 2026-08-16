@@ -1,11 +1,3 @@
-/**
- * ProjectHeader tests.
- *
- * Pin the surface contract of the shared project-header card:
- * accent palette mapping, privacy/provider chip data attributes,
- * imported-from chip surfacing, surface chip rendering (canonical
- * order is enforced upstream by `summarizeProjectHeader`).
- */
 
 import { describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -95,7 +87,6 @@ describe('ProjectHeader', () => {
   it('omits the imported-from chip when the project is manual', () => {
     const presentation = buildPresentation({ importedFrom: 'manual' });
     render(<ProjectHeader presentation={presentation} />);
-    // 'Created in AGI' is rendered as the imported-from chip — manual is still emitted.
     expect(screen.getByTestId('project-header-imported-from').textContent).toContain(
       'Created in AGI',
     );

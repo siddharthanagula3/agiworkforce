@@ -1,17 +1,3 @@
-/**
- * @file audit-service.ts
- *
- * # Client injection contract (WEB-RLS-BYPASS mitigation)
- *
- * `log()` - SERVICE-CONTEXT. System/admin writes that must succeed even when
- *   the triggering request is unauthenticated (failed-auth logging). Uses
- *   `getNeonDb()` internally.
- *
- * `getOrganizationLogs()` - USER-CONTEXT. Caller passes a DatabaseAdapter.
- *   RT-09 fix: membership verified before any log rows are returned.
- *
- * Never add a private `getDatabase()` here. See lib/services/README.md.
- */
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
@@ -38,12 +24,6 @@ interface OrgMembershipRow {
 }
 
 export class AuditService {
-  /**
-   * Log an action.
-   * SERVICE-CONTEXT: audit log writes are inherently admin/system operations.
-   * The write must succeed even when the triggering request is unauthenticated
-   * (e.g., logging a failed auth attempt). Service-context is appropriate here.
-   */
   static async log(
     action: string,
     resource: string,
@@ -75,7 +55,6 @@ export class AuditService {
         ],
       );
     } catch (error) {
-      // Don't throw to avoid breaking main flow, just log error
       logger.error({ error, action, resource }, 'Failed to write audit log');
     }
   }
@@ -100,7 +79,6 @@ export class AuditService {
     callerUserId: string,
     limit = 50,
   ): Promise<AuditLog[]> {
-    // RT-09: Verify caller is a member of the org before returning any logs.
     const [membership] = await db
       .query<OrgMembershipRow>(
         `select user_id from organization_members

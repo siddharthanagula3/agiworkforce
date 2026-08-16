@@ -1,10 +1,3 @@
-/**
- * Non-secret identity for one authenticated Managed Cloud incarnation.
- *
- * `accountId` prevents data from crossing users. `authIncarnation` prevents a
- * durable run or delayed callback from surviving sign-out/sign-in even when
- * the same account signs back in. Neither field contains a bearer token.
- */
 export interface ManagedCloudOwner {
   accountId: string;
   authIncarnation: string;
@@ -38,7 +31,6 @@ function normalizeComponent(value: unknown): string | undefined {
   return normalized;
 }
 
-/** Runtime-validate identity crossing storage or extension-message boundaries. */
 export function normalizeManagedCloudOwner(value: unknown): ManagedCloudOwner | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
@@ -59,21 +51,6 @@ function decodeBase64UrlSegment(segment: string): string | null {
   }
 }
 
-/**
- * Derive owner identity from a Clerk session JWT's own claims.
- *
- * The MV3 background Clerk client loads with `standardBrowser: false` and does
- * not reliably hydrate `clerk.user` / `session.user`, so reading identity off
- * the resource objects alone can leave a perfectly valid, token-bearing session
- * "unowned" and lock the side panel out of Managed Cloud entirely. The bearer
- * always carries `sub` (account) and `sid` (session incarnation), which is the
- * same pair the server authenticates, so the claims are the correct fallback.
- *
- * The signature is deliberately NOT verified here: this token was just minted
- * by our own Clerk client inside our own extension, and the derived value is
- * only ever used to partition local state. Every authority decision that
- * matters still happens server-side against the full token.
- */
 export function managedCloudOwnerFromSessionToken(token: unknown): ManagedCloudOwner | null {
   if (typeof token !== 'string') return null;
   const segments = token.split('.');
@@ -111,13 +88,6 @@ export function sameManagedCloudOwner(
   );
 }
 
-/**
- * Exact credential equality for compare-and-clear auth transitions.
- *
- * Owner equality alone is insufficient: Clerk may rotate a bearer while the
- * same account/session remains current. A delayed 401 for the retired bearer
- * must not sign out that still-valid session.
- */
 export function sameManagedCloudCredential(
   left: ManagedCloudCredential | null | undefined,
   right: ManagedCloudCredential | null | undefined,
@@ -130,15 +100,10 @@ export function sameManagedCloudCredential(
   );
 }
 
-/** Stable, non-secret comparison key for in-memory maps only. */
 export function managedCloudOwnerKey(owner: ManagedCloudOwner): string {
   return JSON.stringify([owner.accountId, owner.authIncarnation]);
 }
 
-/**
- * Choose a cancellation credential without ever substituting another account's
- * ambient session for an admitted run's captured credential.
- */
 export function selectManagedCloudCancellationCredential(
   expectedOwner: ManagedCloudOwner,
   activeCredential: ManagedCloudCredential | null | undefined,
@@ -152,7 +117,6 @@ export function selectManagedCloudCancellationCredential(
     : null;
 }
 
-/** Identity check used before publishing any delayed operation callback. */
 export function isCurrentManagedCloudOperation<T extends object>(
   registered: T | undefined,
   operation: T,
@@ -160,7 +124,6 @@ export function isCurrentManagedCloudOperation<T extends object>(
   return registered === operation;
 }
 
-/** Renderer gate for delayed stream broadcasts after account/session changes. */
 export function isManagedCloudBroadcastOwnedBy(
   currentOwner: ManagedCloudOwner | null | undefined,
   admittedOwner: ManagedCloudOwner | null | undefined,

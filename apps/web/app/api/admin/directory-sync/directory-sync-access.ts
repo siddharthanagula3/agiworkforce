@@ -8,27 +8,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { resolveEntitlementPlan } from '@/lib/server/scim/scim-auth';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
 
-/**
- * Admin access control for the directory-sync control plane.
- *
- * Two defects in the original route are fixed here.
- *
- * 1. NO ENTITLEMENT GATE. The route had none, so any org owner on any plan —
- *    including free — could register a directory sync connection. Directory
- *    sync is sold as an Enterprise control, so it is gated on
- *    `canUseBillingPlanCapability(plan, 'enterprise_controls')`, which fails
- *    closed on an unknown or missing tier.
- *
- * 2. FIRST-MEMBERSHIP-WINS. Org resolution was
- *    `... where user_id = $1 and role in ('owner','admin') limit 1` with no
- *    organization filter, so an admin of two organizations silently operated
- *    on whichever row Postgres returned first. That was harmless while the
- *    route only stored a directory id; it stops being harmless the moment a
- *    SCIM bearer token can be minted against the wrong tenant. The caller now
- *    names the organization, and an implicit resolution is only accepted when
- *    it is unambiguous (exactly one administered organization).
- */
-
 export type DirectorySyncAccessFailure = { response: NextResponse };
 
 export interface DirectorySyncAccess {
@@ -97,8 +76,6 @@ export async function requireDirectorySyncAdmin(
   if (requestedOrganizationId !== null) {
     membership = memberships.find((row) => row.organization_id === requestedOrganizationId);
     if (!membership) {
-      // Do not confirm the organization exists to someone who does not
-      // administer it.
       return failure(403, 'Organization owner or admin role is required');
     }
   } else if (memberships.length === 1) {

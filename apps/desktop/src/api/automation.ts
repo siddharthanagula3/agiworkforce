@@ -224,11 +224,6 @@ export async function sendKeys(
   }
 }
 
-/**
- * Type text with forced focus — uses automation_type which always focuses the
- * target element before typing (unlike sendKeys/automation_send_keys which
- * optionally focuses based on the `focus` flag).
- */
 export async function typeTextForced(
   text: string,
   options: { elementId?: string; x?: number; y?: number } = {},
@@ -251,10 +246,6 @@ export async function typeTextForced(
   }
 }
 
-/**
- * Get the text value of an automation element by its ID.
- * Wires to automation_get_text (alias for automation_get_value).
- */
 export async function getElementText(elementId: string): Promise<string> {
   try {
     validateNonEmpty(elementId, 'elementId');

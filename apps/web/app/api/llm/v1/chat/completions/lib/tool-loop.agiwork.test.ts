@@ -1,11 +1,3 @@
-/**
- * CAP-048 — the AGI Work planning turn inside runToolLoop:
- *   - a tool-free plan turn runs BEFORE tool execution, emitting the goal +
- *     plan as durable journal events and an additive x_agiwork_plan frame
- *   - the plan is visibility-only: a failed/empty plan is non-fatal and the run
- *     proceeds exactly as it does without a goal
- *   - a run with no goal never runs the plan turn (no extra provider call)
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockBuildToolLoopStream = vi.fn();
@@ -90,7 +82,6 @@ async function drain(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
-/** Every delta object across the emitted SSE stream. */
 function deltas(output: string): Array<Record<string, unknown>> {
   return output
     .split('\n')
@@ -107,12 +98,10 @@ beforeEach(() => {
 
 describe('runToolLoop AGI Work planning turn', () => {
   it('runs a tool-free plan turn, emitting the goal, plan steps, and x_agiwork_plan', async () => {
-    // Turn 1 (the plan turn): a JSON array of steps.
     const planTurn = sseStreamFrom([
       chunk({ content: '["Research the topic", "Draft the summary", "Review it"]' }),
       chunk({}, 'stop'),
     ]);
-    // Turn 2 (the real work turn): a final answer, no tool calls.
     const workTurn = sseStreamFrom([chunk({ content: 'Done.' }), chunk({}, 'stop')]);
     mockBuildToolLoopStream.mockResolvedValueOnce(planTurn).mockResolvedValueOnce(workTurn);
 
@@ -122,21 +111,17 @@ describe('runToolLoop AGI Work planning turn', () => {
       }),
     );
 
-    // Two provider calls: the plan turn, then the work turn.
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(2);
-    // The plan turn is tool-free.
     const planRequest = mockBuildToolLoopStream.mock.calls[0]?.[2] as { tools?: unknown };
     expect(planRequest.tools).toBeUndefined();
 
     const allDeltas = deltas(output);
 
-    // Additive live plan frame with the parsed steps.
     const planFrame = allDeltas.find((d) => 'x_agiwork_plan' in d);
     expect(planFrame).toBeDefined();
     const steps = (planFrame as { x_agiwork_plan: { steps: unknown[] } }).x_agiwork_plan.steps;
     expect(steps).toHaveLength(3);
 
-    // Durable journal: the goal + plan ride progress-update agent events.
     const progressSummaries = allDeltas
       .flatMap((d) => ('x_agent_event' in d ? [d['x_agent_event']] : []))
       .map((e) => (e as { event?: { type?: string; progressId?: string; summary?: string } }).event)
@@ -157,7 +142,6 @@ describe('runToolLoop AGI Work planning turn', () => {
       runToolLoop(makeAgiWorkProcessed({ goal: 'Summarise the topic' }), { approvalMode: 'auto' }),
     );
 
-    // No plan frame, but the goal was still recorded and the run finished.
     expect(deltas(output).some((d) => 'x_agiwork_plan' in d)).toBe(false);
     expect(output).toContain('Done.');
     expect(output.includes('[DONE]')).toBe(true);
@@ -169,7 +153,6 @@ describe('runToolLoop AGI Work planning turn', () => {
 
     const output = await drain(runToolLoop(makeAgiWorkProcessed(), { approvalMode: 'auto' }));
 
-    // Exactly one provider call (the work turn), no plan frame.
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
     expect(deltas(output).some((d) => 'x_agiwork_plan' in d)).toBe(false);
   });

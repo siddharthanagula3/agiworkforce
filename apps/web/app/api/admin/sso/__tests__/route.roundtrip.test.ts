@@ -30,10 +30,6 @@ vi.mock('@/lib/api-auth', () => ({
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: (...args: unknown[]) => mockGetSubscription(...args) },
 }));
-// Only the DNS lookup is replaced. Token issuing, the record name/value
-// derivation, and the constant-time comparison keep running for real; the
-// resolution logic itself is covered against an injected resolver in
-// lib/server/sso/__tests__/domain-verification.test.ts.
 vi.mock('@/lib/server/sso/domain-verification', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/server/sso/domain-verification')>();
   return {
@@ -58,11 +54,6 @@ const METADATA_URL = 'https://example.okta.com/app/abc/sso/saml/metadata';
 
 type Row = Record<string, unknown>;
 
-/**
- * A tiny stand-in for the connections table. Statements are matched on their
- * shape so the test exercises the route's real sequencing rather than a fixed
- * list of canned responses.
- */
 const store = {
   connection: null as Row | null,
   role: 'owner' as string | null,
@@ -242,15 +233,10 @@ describe('SSO configuration round trip', () => {
     expect(body.connection.domain).toBe('example.com');
     expect(body.nextStep).toBe('verify_domain');
     expect(body.domainVerification.recordName).toBe('_agiworkforce-sso.example.com');
-    // Bounded by sso_connections_domain_verification_token_shape (migration
-    // 0083). The exact length is not pinned: the token carries its own expiry,
-    // so its width is an implementation detail of that encoding.
     expect(body.domainVerification.recordValue).toMatch(
       /^agiworkforce-sso-verification=[a-f0-9]{32,64}$/,
     );
 
-    // Nothing reached the identity provider: an unverified domain must never be
-    // registered anywhere that could route a sign-in.
     expect(mockCreateEnterpriseConnection).not.toHaveBeenCalled();
   });
 
@@ -315,10 +301,8 @@ describe('SSO configuration round trip', () => {
       connection: { status: string; domainVerification: unknown };
     };
     expect(verifiedBody.verified).toBe(true);
-    // The check ran against this connection's own challenge, not a bare domain.
     expect(mockVerifyDomainOwnership).toHaveBeenCalledWith('example.com', issuedToken);
     expect(verifiedBody.connection.status).toBe('awaiting_provider_configuration');
-    // The challenge is consumed, not left standing for a future re-claim.
     expect(verifiedBody.connection.domainVerification).toBeNull();
 
     const activated = await PATCH(
@@ -379,9 +363,6 @@ describe('SSO configuration round trip', () => {
     const connection = JSON.parse(raw).connection as Record<string, unknown>;
     expect(connection['status']).toBe('active');
 
-    // The provider reference is internal: the SP URLs an admin needs are
-    // returned, but no field addresses the connection at Clerk directly, and
-    // the 500KB metadata document is never shipped to a client.
     expect(connection).not.toHaveProperty('clerkConnectionId');
     expect(connection).not.toHaveProperty('clerk_connection_id');
     expect(raw).not.toContain('metadata_xml');
@@ -471,7 +452,6 @@ describe('SSO configuration round trip', () => {
     const body = (await response.json()) as { error: string; code: string };
     expect(body.code).toBe('not_entitled');
     expect(body.error).toMatch(/Enhanced Authentication add-on/);
-    // The database must not record a connection the provider never accepted.
     expect(store.connection!['is_active']).toBe(false);
     expect(store.connection!['clerk_connection_id']).toBeNull();
   });
@@ -608,7 +588,6 @@ describe('SSO authorization within an entitled organization', () => {
     store.role = 'owner';
     await createDraft();
 
-    // Caller owns another org but has no role in the one that holds the row.
     store.roleByOrg = { [ORG_ID]: '', [OTHER_ORG_ID]: 'owner' };
     store.role = null;
 

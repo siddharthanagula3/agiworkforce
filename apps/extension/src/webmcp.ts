@@ -1,26 +1,10 @@
 import { logger } from './utils';
 import { safeJsonParse, MAX_WEBMCP_SCHEMA_BYTES } from './background/policy';
 
-/** Escape a string for use inside a CSS attribute selector value (double-quoted). */
 function escapeAttrValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
-// SECURITY (chrome-MED-5, audit 2026-05-05): WebMCP `tool-name` and
-// `tool-description` are read directly off untrusted page DOM attributes and
-// flow into:
-//   1. Side-panel text rendering (safe via createTextNode on each insert).
-//   2. A textarea value pre-fill: `Use the ${tool.name} tool to ` — the
-//      attacker-controlled string is shown to the user as if it were
-//      legitimate copy and may social-engineer them into sending crafted
-//      prompts to the LLM.
-//   3. CSS-selector construction: `form[tool-name="${escapeAttrValue(name)}"]`
-//      — `escapeAttrValue` only escapes `\` and `"`, so other selector
-//      metacharacters could affect matching even without breaking out.
-// We restrict tool names to a conservative identifier class (alpha leading,
-// alphanumerics + `_`, `-`, `.`, space afterward, max 64 chars) and cap the
-// description at 500 chars. Names that fail the pattern are dropped with a
-// debug log; descriptions are silently truncated.
 const TOOL_NAME_MAX_CHARS = 64;
 const TOOL_DESCRIPTION_MAX_CHARS = 500;
 const TOOL_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_\-. ]{0,63}$/;
@@ -54,14 +38,6 @@ export interface WebMCPCallToolResponse {
   error?: string;
 }
 
-// ─── Declarative tool detection (HTML form attributes) ────────────────────────
-
-/**
- * Scan the DOM for forms annotated with WebMCP declarative attributes:
- *   <form tool-name="..." tool-description="...">
- *     <input name="param" tool-param-description="..." />
- *   </form>
- */
 export function discoverDeclarativeTools(): WebMCPToolInfo[] {
   const tools: WebMCPToolInfo[] = [];
 
@@ -70,9 +46,6 @@ export function discoverDeclarativeTools(): WebMCPToolInfo[] {
     const rawName = form.getAttribute('tool-name');
     const rawDescription = form.getAttribute('tool-description') || '';
     if (!rawName) continue;
-    // chrome-MED-5: drop tools with non-conforming names so a hostile page
-    // can't smuggle CSS metacharacters or visually-deceptive Unicode into
-    // the side-panel UI.
     if (!isValidToolName(rawName)) {
       logger.debug('WebMCP: tool-name rejected (length or character class)', {
         nameSnippet: rawName.slice(0, 32),
@@ -82,7 +55,6 @@ export function discoverDeclarativeTools(): WebMCPToolInfo[] {
     const name = rawName;
     const description = rawDescription.slice(0, TOOL_DESCRIPTION_MAX_CHARS);
 
-    // Build input schema from form fields
     const properties: Record<string, Record<string, unknown>> = {};
     const required: string[] = [];
 
@@ -90,8 +62,6 @@ export function discoverDeclarativeTools(): WebMCPToolInfo[] {
     for (const field of fields) {
       const fieldName = field.getAttribute('name');
       if (!fieldName) continue;
-      // Same character-class guard for parameter names — they also flow into
-      // selector strings (`[name="${escapeAttrValue(key)}"]`) at line 253.
       if (!isValidToolName(fieldName)) {
         logger.debug('WebMCP: param name rejected (length or character class)', {
           nameSnippet: fieldName.slice(0, 32),
@@ -133,12 +103,9 @@ export function discoverDeclarativeTools(): WebMCPToolInfo[] {
   return tools;
 }
 
-// ─── Imperative tool detection (navigator.modelContext) ───────────────────────
-
 export function discoverImperativeTools(): WebMCPToolInfo[] {
   const tools: WebMCPToolInfo[] = [];
 
-  // Try Chromium early-preview testing API
   const testing = (
     navigator as {
       modelContextTesting?: {
@@ -151,16 +118,9 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
     try {
       const registered = testing.listTools();
       for (const tool of registered) {
-        // M-03 audit 2026-05-19: page-supplied schemas can be arbitrarily
-        // large. Cap at MAX_WEBMCP_SCHEMA_BYTES (64 KB) so a hostile page
-        // can't DoS the content script with a multi-MB schema. safeJsonParse
-        // returns undefined on oversize / parse-failure; we drop those tools.
         const parsedSchema = tool.inputSchema
           ? safeJsonParse<Record<string, unknown>>(tool.inputSchema, MAX_WEBMCP_SCHEMA_BYTES)
           : undefined;
-        // SECURITY (audit batch-223 [LOW] validation bypass, fixed 2026-06-13):
-        // imperative page-supplied tool names/descriptions must get the same
-        // isValidToolName + length-cap hardening the declarative path applies.
         if (!isValidToolName(tool.name)) continue;
         tools.push({
           name: tool.name,
@@ -175,7 +135,6 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
     }
   }
 
-  // Try MCPB extensions (listTools on modelContext itself)
   const mc = (
     navigator as {
       modelContext?: {
@@ -208,8 +167,6 @@ export function discoverImperativeTools(): WebMCPToolInfo[] {
   return tools;
 }
 
-// ─── Combined discovery ───────────────────────────────────────────────────────
-
 export function discoverAllTools(): WebMCPDiscoveryResult {
   const hasModelContext =
     typeof navigator !== 'undefined' &&
@@ -218,13 +175,12 @@ export function discoverAllTools(): WebMCPDiscoveryResult {
   const declarativeTools = discoverDeclarativeTools();
   const imperativeTools = hasModelContext ? discoverImperativeTools() : [];
 
-  // Deduplicate by name (imperative takes precedence)
   const toolMap = new Map<string, WebMCPToolInfo>();
   for (const tool of declarativeTools) {
     toolMap.set(tool.name, tool);
   }
   for (const tool of imperativeTools) {
-    toolMap.set(tool.name, tool); // overwrites declarative if same name
+    toolMap.set(tool.name, tool);
   }
 
   return {
@@ -235,12 +191,9 @@ export function discoverAllTools(): WebMCPDiscoveryResult {
   };
 }
 
-// ─── Tool invocation ──────────────────────────────────────────────────────────
-
 export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCallToolResponse> {
   const { name, arguments: args = {} } = request;
 
-  // Try Chromium testing API first
   const testing = (
     navigator as {
       modelContextTesting?: {
@@ -256,9 +209,6 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
   if (testing && typeof testing.executeTool === 'function') {
     try {
       const resultJson = await testing.executeTool(name, JSON.stringify(args));
-      // M-03: page-tool result must respect the same size cap as the input
-      // schema. Oversize results become `null` rather than throwing or
-      // burning CPU on the parse.
       const parsedResult = resultJson
         ? (safeJsonParse(resultJson, MAX_WEBMCP_SCHEMA_BYTES) ?? null)
         : null;
@@ -271,7 +221,6 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
     }
   }
 
-  // Try MCPB extensions callTool
   const mc = (
     navigator as {
       modelContext?: {
@@ -295,23 +244,11 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
     }
   }
 
-  // Fallback: try declarative form submission
   const form = document.querySelector(
     `form[tool-name="${escapeAttrValue(name)}"]`,
   ) as HTMLFormElement | null;
   if (form) {
     try {
-      // SECURITY (M-06 audit 2026-05-19): the form-fallback path fills
-      // page-supplied form fields with model-supplied argument values and
-      // submits — bypassing the user's confirmation. A poisoned tool
-      // description (Invariant Labs TPA / CyberArk "Poison Everywhere")
-      // can social-engineer the model into supplying attacker-shaped
-      // values. Surface a confirmation showing the tool name and the
-      // submitted values before requestSubmit().
-      //
-      // The autofill path uses the same pattern (content.ts handleAutoFillJobApplication
-      // line ~1252-1263). Both paths require window.confirm before any
-      // submission.
       const argLines = Object.entries(args)
         .map(([k, v]) => `  ${k}: ${String(v).slice(0, 120)}`)
         .join('\n');
@@ -324,7 +261,6 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
           error: 'User cancelled the tool invocation.',
         };
       }
-      // Fill form fields from args
       for (const [key, value] of Object.entries(args)) {
         const field = form.querySelector(`[name="${escapeAttrValue(key)}"]`) as
           | HTMLInputElement
@@ -337,7 +273,6 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
           field.dispatchEvent(new Event('change', { bubbles: true }));
         }
       }
-      // Submit
       form.requestSubmit();
       return { success: true, result: { submitted: true, toolName: name } };
     } catch (e) {
@@ -354,8 +289,6 @@ export async function callTool(request: WebMCPCallToolRequest): Promise<WebMCPCa
   };
 }
 
-// ─── Mutation observer for dynamic tool registration ──────────────────────────
-
 let toolChangeCallback: ((tools: WebMCPToolInfo[]) => void) | null = null;
 let mutationObserver: MutationObserver | null = null;
 let mutationDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -363,8 +296,6 @@ let mutationDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 export function watchForToolChanges(callback: (tools: WebMCPToolInfo[]) => void): void {
   toolChangeCallback = callback;
 
-  // Watch for DOM changes (new declarative forms).
-  // Debounce to avoid expensive discoverAllTools() on rapid SPA mutations.
   mutationObserver = new MutationObserver(() => {
     if (!toolChangeCallback) return;
     if (mutationDebounceTimer !== null) clearTimeout(mutationDebounceTimer);
@@ -384,7 +315,6 @@ export function watchForToolChanges(callback: (tools: WebMCPToolInfo[]) => void)
     attributeFilter: ['tool-name', 'tool-description'],
   });
 
-  // Watch for imperative tool changes via toolschanged event
   const mc = (
     navigator as {
       modelContext?: {
@@ -402,7 +332,6 @@ export function watchForToolChanges(callback: (tools: WebMCPToolInfo[]) => void)
     });
   }
 
-  // Also try the testing API callback
   const testing = (
     navigator as {
       modelContextTesting?: {
@@ -433,8 +362,6 @@ export function stopWatchingToolChanges(): void {
   toolChangeCallback = null;
 }
 
-// Ensure the MutationObserver is disconnected when the page unloads to prevent
-// stale observers from accumulating on SPA navigations or tab closures.
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', stopWatchingToolChanges);
 }

@@ -14,15 +14,10 @@ import { cn } from '../../lib/utils';
 import { toast } from 'sonner';
 
 export interface VoiceMicButtonProps {
-  /** Callback when transcription is complete */
   onTranscription: (text: string) => void;
-  /** Whether the button is disabled */
   disabled?: boolean;
-  /** Custom class name */
   className?: string;
-  /** Size variant */
   size?: 'sm' | 'md' | 'lg';
-  /** Whether to show in simple mode (minimal UI) */
   isSimpleMode?: boolean;
 }
 

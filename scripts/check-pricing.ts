@@ -29,8 +29,6 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = (() => {
-  // Both Node and tsx populate import.meta.url; fall back to cwd when run by
-  // an unusual launcher (e.g. ts-node piped through stdin).
   try {
     return fileURLToPath(new URL('.', import.meta.url));
   } catch {
@@ -41,18 +39,6 @@ const __dirname = (() => {
 const REPO_ROOT = join(__dirname, '..');
 const MODELS_JSON_PATH = join(REPO_ROOT, 'packages/contracts/types/src/models.json');
 
-// ============================================================================
-// Provider scraper config
-// ----------------------------------------------------------------------------
-// Each provider gets:
-//   - url: pricing page (kept narrow + deterministic where possible).
-//   - selector: how to find the pricing block (regex on raw HTML).
-//   - models: id -> price extractor (returns { input?, output?, cached_input? })
-// ----------------------------------------------------------------------------
-// PROVIDERS WITHOUT A WORKING SCRAPER are marked `manualOnly: true` and emit
-// a warning instead of attempting a brittle parse — saves cron failures.
-// ============================================================================
-
 interface PriceSnapshot {
   readonly input?: number;
   readonly output?: number;
@@ -62,13 +48,7 @@ interface PriceSnapshot {
 interface ProviderConfig {
   readonly providerLabel: string;
   readonly url: string;
-  /** When true the scraper just emits a manual-review warning and skips. */
   readonly manualOnly?: boolean;
-  /**
-   * Map of `models.json` ID -> regex extracting input / output / cached_input
-   * from the page HTML. The regex MUST be anchored well enough to survive
-   * minor copy edits (e.g. "Input: $0.14 / 1M tokens").
-   */
   readonly extractors?: Record<string, RegExp>;
 }
 
@@ -76,8 +56,6 @@ const PROVIDER_CONFIGS: ReadonlyArray<ProviderConfig> = [
   {
     providerLabel: 'DeepSeek',
     url: 'https://api-docs.deepseek.com/quick_start/pricing',
-    // The DeepSeek pricing table is JS-rendered; the static HTML body has
-    // only placeholders. The cron emits a manual-review warning.
     manualOnly: true,
   },
   {
@@ -107,10 +85,6 @@ const PROVIDER_CONFIGS: ReadonlyArray<ProviderConfig> = [
   },
 ];
 
-// ============================================================================
-// Catalog types — narrow handle on models.json
-// ============================================================================
-
 interface ModelEntry {
   id: string;
   provider: string;
@@ -120,7 +94,6 @@ interface ModelEntry {
   deprecation_date?: string | null;
   promo_expires_at?: string | null;
   post_promo_prices?: PriceSnapshot;
-  // ...other catalog fields we don't touch.
   [key: string]: unknown;
 }
 
@@ -131,10 +104,6 @@ interface ModelsJson {
   models: Record<string, ModelEntry>;
   [key: string]: unknown;
 }
-
-// ============================================================================
-// Drift detection
-// ============================================================================
 
 interface PriceDrift {
   readonly modelId: string;
@@ -176,17 +145,12 @@ function diffPrices(modelId: string, catalog: ModelEntry, scraped: PriceSnapshot
   return drifts;
 }
 
-// ============================================================================
-// HTTP fetch — minimal, no third-party deps
-// ============================================================================
-
 async function fetchHtml(url: string, timeoutMs = 30_000): Promise<string> {
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url, {
       headers: {
-        // Polite UA so providers can identify + rate-limit us appropriately.
         'User-Agent': 'AGI-workforce-pricing-checker/1.0 (+https://agiworkforce.com/ops)',
         Accept: 'text/html,application/xhtml+xml',
       },
@@ -200,10 +164,6 @@ async function fetchHtml(url: string, timeoutMs = 30_000): Promise<string> {
     clearTimeout(t);
   }
 }
-
-// ============================================================================
-// Provider scrape (placeholder — manual-only providers warn + skip)
-// ============================================================================
 
 interface ScrapeResult {
   readonly provider: string;
@@ -226,10 +186,6 @@ async function scrapeProvider(cfg: ProviderConfig): Promise<ScrapeResult> {
     const html = await fetchHtml(cfg.url);
     const prices: Record<string, PriceSnapshot> = {};
     for (const [modelId, _re] of Object.entries(cfg.extractors)) {
-      // The extractor regex extracts (input, output, cached_input) from HTML.
-      // Real implementations live in provider-specific helpers; until the
-      // pricing pages stabilize on a non-JS-rendered layout, this loop is
-      // exercised by the test suite via fixture HTML, not live HTTP.
       const m = html.match(_re);
       if (m && m.groups) {
         const snap: PriceSnapshot = {};
@@ -255,10 +211,6 @@ async function scrapeProvider(cfg: ProviderConfig): Promise<ScrapeResult> {
     };
   }
 }
-
-// ============================================================================
-// Main
-// ============================================================================
 
 async function main(): Promise<void> {
   if (!existsSync(MODELS_JSON_PATH)) {
@@ -293,10 +245,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Promo-expiry watchdog. Independent of scrapers: scans the catalog itself
-  // and warns when any catalog-owned `promo_expires_at` is approaching.
-  // ---------------------------------------------------------------------------
   const now = new Date();
   const fourteenDaysMs = 14 * 24 * 60 * 60 * 1000;
   const promoWatch: string[] = [];
@@ -316,10 +264,6 @@ async function main(): Promise<void> {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Output report. The cron's caller reads stdout; the exit code drives
-  // the auto-PR step in `.github/workflows/check-pricing.yml`.
-  // ---------------------------------------------------------------------------
   const report = {
     runAt: now.toISOString(),
     catalogLastUpdated: catalog.lastUpdated,
@@ -332,7 +276,6 @@ async function main(): Promise<void> {
 
   console.log(JSON.stringify(report, null, 2));
 
-  // Persist the report so the auto-PR workflow can attach it as the body.
   const reportPath = join(REPO_ROOT, 'audit', 'pricing-report.json');
   try {
     writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n');

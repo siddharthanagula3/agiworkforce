@@ -6,16 +6,6 @@ export interface WaitlistEntry {
   referralSource?: string;
 }
 
-/**
- * Canonical production web origin for this extension.
- *
- * The managed-cloud transport in features/cloud-bridge/freeTrialClient.ts already
- * pins the same origin (FREE_TRIAL_GATEWAY). Failing closed here when no build
- * env var is present made every packaged build report "not wired" for a feature
- * whose destination is fixed and known, so the default is the pin, not an error.
- * A build may still override it, but validateWebApiBaseUrl() keeps the override
- * inside the agiworkforce.com allowlist (or localhost for development).
- */
 const DEFAULT_WEB_API_BASE_URL = 'https://agiworkforce.com';
 
 const WEB_API_INVALID_CONFIG_ERROR =

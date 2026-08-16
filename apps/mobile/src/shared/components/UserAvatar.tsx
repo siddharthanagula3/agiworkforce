@@ -4,25 +4,13 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
 export interface UserAvatarProps {
-  /** Circle diameter in points. Everything else scales from this. */
   size: number;
-  /** Clerk's `user.imageUrl`. Null/undefined in Local mode or while loading. */
   uri?: string | null;
-  /** Name the initial is derived from. Blank falls back to the person glyph. */
   initials?: string | null;
   testID?: string;
   accessibilityLabel?: string;
 }
 
-/**
- * The one avatar every signed-in surface draws.
- *
- * Settings and Profile each hand-rolled a letter tile and never read
- * `clerkUser.imageUrl`, while the Account screen did — so the same signed-in
- * user saw their photo on one screen and a grey letter on the other two.
- * Preferring the photo here makes all three agree, and the initials/glyph
- * fallback keeps Local mode (which has no account to own a photo) intact.
- */
 export function UserAvatar({
   size,
   uri,
@@ -43,8 +31,6 @@ export function UserAvatar({
           width: size,
           height: size,
           borderRadius: radius,
-          // Drawn under a remote image so the circle keeps its shape while the
-          // photo is still loading rather than flashing the page background.
           backgroundColor: colors.surfaceHover,
         }}
       />

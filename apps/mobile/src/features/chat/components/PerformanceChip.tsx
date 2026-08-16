@@ -1,6 +1,3 @@
-// On-device performance chip. Renders the measured decode rate (tokens/sec)
-// under a completed local-model reply. Shows nothing when no measured value is
-// available (e.g. cloud replies, or a single-token response).
 
 import type { ReactElement } from 'react';
 import { View } from 'react-native';

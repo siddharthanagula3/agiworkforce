@@ -14,12 +14,6 @@ function Fallback({ label }: { label: string }) {
   );
 }
 
-/**
- * "AGI in Chrome" settings section (source-of-truth IA · DESK-1/DESK-2).
- * Surfaces the real, previously-orphaned browser-extension bridge status
- * (`BridgeStatusCard` — desktop ⇄ Chrome/VS Code native-messaging bridge,
- * connected/disconnected diagnostics).
- */
 export function AgiInChromeTab() {
   return (
     <Suspense fallback={<Fallback label="Loading browser bridge..." />}>

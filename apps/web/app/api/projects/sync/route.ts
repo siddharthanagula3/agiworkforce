@@ -1,29 +1,3 @@
-/**
- * Cross-device cloud PROJECTS sync — delta sync (mirrors /api/chat/sync + /api/memory/sync).
- * Design: docs/plans/shared-cloud-state-2026-06-22.md
- *
- *   GET  /api/projects/sync?since=<server_version cursor>
- *        → user_projects rows with server_version > cursor (INCLUDING tombstones,
- *          deleted_at IS NOT NULL, so deletes propagate), scoped to the
- *          authenticated user, plus the next cursor + hasMore.
- *   POST /api/projects/sync  { projects: [...] }
- *        → compare-and-swap by id + baseVersion. user_id is set SERVER-SIDE from
- *          the verified session (never the body); RLS WITH CHECK is the backstop.
- *          Client wall clocks never participate. A stale write is rejected and
- *          the current server row is returned as the deterministic server winner.
- *          deletedAt is only a tombstone signal; the server owns the persisted
- *          deletion timestamp.
- *
- * Scope (v1): the CORE shareable project content — name, description, instructions,
- * color, is_archived, metadata. Local-specific routing hints (default_privacy_mode,
- * default_provider_mode, allowed_surfaces) are intentionally NOT synced so a project
- * created in one trust mode can't push a trust default onto another device. Knowledge-
- * file BYTES are out of scope (follow the media/blob path, not this delta JSON).
- *
- * Hardening: runs through getUserScopedDb (RLS-scoped) — NOT the app-layer-only
- * getNeonDb the CRUD routes use. Trust boundary: managed-cloud only; Local/BYOK
- * projects have no cloud_id and are never pushed/pulled (enforced client-side).
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ProjectsSyncPushRequestSchema, ServerVersionSchema } from '@agiworkforce/cloud-contracts';
@@ -43,13 +17,7 @@ import {
 
 const MAX_PROJECTS_PULL = 500;
 
-// Wire shape from the shared cloud contract (restructure Wave 4) — enforced
-// by route.contract.test.ts, consumed at runtime by mobile's cloudSyncEngine.
 type ProjectDelta = import('@agiworkforce/cloud-contracts').ProjectWireDelta;
-
-// ---------------------------------------------------------------------------
-// Pull
-// ---------------------------------------------------------------------------
 
 async function handlePull(request: NextRequest, url: URL) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
@@ -92,10 +60,6 @@ async function handleGet(request: NextRequest) {
   const url = new URL(request.url);
   return handlePull(request, url);
 }
-
-// ---------------------------------------------------------------------------
-// Push
-// ---------------------------------------------------------------------------
 
 async function handlePost(request: NextRequest) {
   const { db, userId, organizationId } = await getUserScopedDb(request);
@@ -254,10 +218,6 @@ async function handlePost(request: NextRequest) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 /**
  * SAFE next pull cursor for the single-table projects delta. Single table → the
  * cursor is the highest delivered server_version (last element; rows arrive ordered
@@ -273,7 +233,6 @@ export function computeProjectsPullCursor(
   return bigintGreater(frontier, since) ? frontier : since;
 }
 
-/** Max of a set of bigint-as-string server_versions. */
 function maxServerVersion(
   base: string,
   ...lists: Array<Array<{ server_version: string }>>
@@ -287,7 +246,6 @@ function maxServerVersion(
   return max;
 }
 
-/** Compare two non-negative integer strings without precision loss. */
 function bigintGreater(a: string, b: string): boolean {
   const na = a.replace(/^0+/, '') || '0';
   const nb = b.replace(/^0+/, '') || '0';

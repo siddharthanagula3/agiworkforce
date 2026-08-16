@@ -1,13 +1,7 @@
-/**
- * Credits Balance API Tests
- *
- * Tests for /api/llm/v1/credits/balance endpoint
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -27,7 +21,6 @@ vi.mock('@/lib/cors', () => ({
   })),
 }));
 
-// Mock services
 vi.mock('@/lib/services/credit-service', () => ({
   CreditService: {
     getBalance: vi.fn(),
@@ -45,7 +38,6 @@ vi.mock('@/lib/services/free-trial-service', () => ({
   getFreeTrialPublicUsage: (...args: unknown[]) => mockGetFreeTrialPublicUsage(...args),
 }));
 
-// Mock errors — real implementations so createError.* returns proper AppError instances
 vi.mock('@/lib/errors', async () => {
   const actual = await vi.importActual<typeof import('@/lib/errors')>('@/lib/errors');
   return {
@@ -55,19 +47,16 @@ vi.mock('@/lib/errors', async () => {
   };
 });
 
-// Mock Clerk auth
 const mockGetClerkAuthUser = vi.fn();
 
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// Mock cloud database service client (used by CreditService/SubscriptionService)
 vi.mock('@/lib/neon-db', () => ({
   getServiceClient: vi.fn(() => ({})),
 }));
 
-// Import after mocks
 import { GET, OPTIONS } from '@/app/api/llm/v1/credits/balance/route';
 import { CreditService } from '@/lib/services/credit-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
@@ -237,7 +226,6 @@ describe('Credits Balance API', () => {
         });
 
         const response = await GET(request);
-        // Should return 403 since subscription couldn't be fetched
         expect(response.status).toBe(403);
       });
 
@@ -290,9 +278,6 @@ describe('Credits Balance API', () => {
         );
         const data = await response.json();
 
-        // Free still meters and still reports whether it may continue and when
-        // the window resets — but its allowance is internal (2026-08-08), so no
-        // percentage is published even though the service computed 75.
         expect(data.credits).toMatchObject({
           usage_percentage: null,
           usage_visible: false,
@@ -303,8 +288,6 @@ describe('Credits Balance API', () => {
       });
 
       it('never leaks a Free allowance number anywhere in the payload', async () => {
-        // Suppression is at the API boundary, not the UI: the response is
-        // readable in devtools, so a hidden meter would not withhold anything.
         vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({
           ...mockSubscription,
           plan_tier: 'free',
@@ -336,7 +319,6 @@ describe('Credits Balance API', () => {
 
         const response = await GET(request);
 
-        // Note: The actual headers are set via getCorsHeaders mock
         expect(response.status).toBe(200);
       });
     });

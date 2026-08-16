@@ -15,7 +15,6 @@ export const ManagedCloudScheduleRecurrenceSchema = z.enum([
 ]);
 export type ManagedCloudScheduleRecurrence = z.infer<typeof ManagedCloudScheduleRecurrenceSchema>;
 
-/** Exact create/update payload accepted by the Managed Cloud schedules API. */
 export const ManagedCloudScheduleMutationSchema = z.object({
   name: z.string().trim().min(1).max(500),
   description: z.string().max(2_000).nullable(),
@@ -228,10 +227,6 @@ async function scheduleHttpError(response: Response): Promise<ManagedCloudSchedu
   );
 }
 
-/**
- * Runtime-validated schedules client shared by cookie and bearer-token hosts.
- * Authentication remains the host adapter's responsibility.
- */
 export function createManagedCloudSchedulesClient(
   config: ManagedCloudSchedulesClientConfig = {},
 ): ManagedCloudSchedulesClient {

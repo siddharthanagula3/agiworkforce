@@ -1,18 +1,11 @@
-/**
- * Tests that toolStatusEvent threads tool args through the SSE payload on
- * running events, enabling ToolCallCard to render a syntax-highlighted
- * code Request block via detectCodeBlock.
- */
 import { describe, it, expect } from 'vitest';
 import { toolStatusEvent } from './tool-loop';
 
-/** Parse the JSON payload from a `data: {...}\n\n` SSE line. */
 function parseSse(line: string): Record<string, unknown> {
   const stripped = line.replace(/^data: /, '').trim();
   return JSON.parse(stripped) as Record<string, unknown>;
 }
 
-/** Extract x_tool_status from a parsed SSE payload. */
 function extractStatus(parsed: Record<string, unknown>): Record<string, unknown> {
   const choices = parsed['choices'] as Array<Record<string, unknown>>;
   const delta = choices[0]?.['delta'] as Record<string, unknown>;
@@ -67,7 +60,6 @@ describe('toolStatusEvent', () => {
     const args = { language: 'python', code: 'import numpy as np' };
     const line = toolStatusEvent('execute_code', 'running', MODEL, args);
     const status = extractStatus(parseSse(line));
-    // Simulate what useChatStream would store as MessageToolEntry.parameters
     const parameters = status['args'] as Record<string, unknown>;
     expect(typeof parameters['language']).toBe('string');
     expect(typeof parameters['code']).toBe('string');

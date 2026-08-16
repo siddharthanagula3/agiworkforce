@@ -1,13 +1,7 @@
-/**
- * Memory API Tests
- *
- * Tests for GET /api/memory (list memories) and POST /api/memory (create memory)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -25,20 +19,16 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn(() => null),
 }));
 
-// Clerk auth mock
 const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockClerkAuth(),
 }));
 
-// Neon DB mock
 const mockQuery = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (sql: string, params: unknown[]) => {
-      // assertAccountActive() in getClerkAuthUser issues its own account_status
-      // lookup ahead of the route's real query; keep it out of mockQuery's queue.
       if (typeof sql === 'string' && sql.includes('account_status')) {
         return Promise.resolve([]);
       }
@@ -60,21 +50,14 @@ const mockMemoryRow = {
   updated_at: '2024-06-01T00:00:00Z',
 };
 
-// Import after all mocks are registered
 import { GET, POST } from '@/app/api/memory/route';
 
 describe('Memory API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Restore Clerk auth default
     mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
-    // Default: GET returns a list of memories
     mockQuery.mockResolvedValue([mockMemoryRow]);
   });
-
-  // ---------------------------------------------------------------------------
-  // GET /api/memory
-  // ---------------------------------------------------------------------------
 
   describe('GET /api/memory', () => {
     it('should return 200 with list of memories for authenticated user', async () => {
@@ -151,11 +134,6 @@ describe('Memory API', () => {
     });
 
     it('should authenticate successfully with valid session', async () => {
-      // Cookie-session test: no Authorization header. A placeholder Bearer
-      // string here would be a present-but-unverifiable credential, which
-      // getClerkAuthUser now rejects outright rather than falling back to
-      // the (also-mocked) cookie session — see WEB-AUTH-BEARER-COOKIE-
-      // PRINCIPAL-DIVERGENCE-01. This test is about the session path.
       const request = new NextRequest('http://localhost/api/memory', {
         method: 'GET',
       });
@@ -197,7 +175,6 @@ describe('Memory API', () => {
     });
 
     it('should respect the limit query parameter (capped at 100)', async () => {
-      // Request with limit=200 should be capped to 100 and still return 200
       const request = new NextRequest('http://localhost/api/memory?limit=200', {
         method: 'GET',
       });
@@ -224,10 +201,6 @@ describe('Memory API', () => {
       expect(response.status).toBe(200);
     });
   });
-
-  // ---------------------------------------------------------------------------
-  // POST /api/memory
-  // ---------------------------------------------------------------------------
 
   describe('POST /api/memory', () => {
     it('should return 201 with created memory for valid request', async () => {
@@ -409,7 +382,6 @@ describe('Memory API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      // Verify query was called (trimming is validated inside the route handler)
       expect(mockQuery).toHaveBeenCalledTimes(1);
     });
 
@@ -425,7 +397,6 @@ describe('Memory API', () => {
       const response = await POST(request);
       expect(response.status).toBe(201);
 
-      // Verify query was called with null category
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('insert into user_memories'),
         expect.arrayContaining([null]),

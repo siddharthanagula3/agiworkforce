@@ -30,11 +30,6 @@ function getCloudStore(): ConversationMessageStore {
   return useChatCloudMessageStore as unknown as ConversationMessageStore;
 }
 
-/**
- * Resolve the single physical repository that owns a conversation.
- * Conversation records determine ownership; stale message-only residue cannot
- * steal a Cloud conversation back into Local storage.
- */
 export function getConversationMessageStore(
   conversationId: string,
 ): ConversationMessageStore {
@@ -56,7 +51,5 @@ export function getConversationMessageStore(
     return cloudStore;
   }
 
-  // Compatibility for orphaned pre-separation local drafts. All newly created
-  // conversations have an owner record before any message action runs.
   return localStore;
 }

@@ -1,16 +1,3 @@
-/**
- * @file Chat API Routes (Mobile <-> Desktop)
- * @security
- * - Rate limiting: Applied per-endpoint based on operation type
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Authentication: JWT required for all endpoints
- * - Ownership validation: Users can only access their own desktop conversations
- *
- * Rate limit rationale (OWASP compliant):
- * - POST /message: 30/min - sending messages is action-based
- * - GET /history: 60/min - read operation, paginated
- * - GET /conversations: 30/min - list operation
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -25,22 +12,10 @@ import { randomUUID } from 'crypto';
 
 const router: Router = Router();
 
-// GW-1 (audit 2026-05-03): authenticate FIRST, then rate-limit. The
-// previous order (rate-limit before authenticateToken) was inconsistent
-// with desktop.ts/mobile.ts and meant any future route inserted between
-// them would silently bypass auth. Putting auth at the top of the chain
-// makes it impossible to forget.
 router.use(authenticateToken);
 
-// SECURITY: Baseline rate limit for all chat endpoints (100/min fallback)
-// — applied AFTER auth so the per-IP bucket reflects authenticated traffic.
 router.use(createRateLimiter('default'));
 
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
-
-// SECURITY: .strict() rejects unexpected fields to prevent mass assignment
 const sendMessageSchema = z
   .object({
     desktopId: z.string().uuid(),
@@ -57,10 +32,6 @@ const historyQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
   before: z.string().optional(),
 });
-
-// =============================================================================
-// HELPER: Verify desktop ownership
-// =============================================================================
 
 async function verifyDesktopOwnership(desktopId: string, user: UserAuth): Promise<void> {
   if (!isValidUuid(desktopId)) {
@@ -83,20 +54,6 @@ async function verifyDesktopOwnership(desktopId: string, user: UserAuth): Promis
   }
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
-/**
- * Send a chat message from mobile to desktop
- * POST /chat/message
- *
- * Forwards the message to the paired desktop via WebSocket. The desktop
- * processes the message through its LLM and streams the response back
- * through the WebSocket connection.
- *
- * SECURITY: Rate limited to 30/min to prevent message flood
- */
 router.post(
   '/message',
   createRateLimiter('device-command'),
@@ -116,7 +73,6 @@ router.post(
     const timestamp = Date.now();
 
     const db = getUserScopedClient(user);
-    // Persist the message to Neon for history (best-effort)
     const { error: insertError } = await db.from('chat_messages').insert({
       id: messageId,
       user_id: user.userId,
@@ -129,11 +85,9 @@ router.post(
     });
 
     if (insertError) {
-      // Persistence is best-effort; realtime delivery can still succeed.
       logger.debug({ error: insertError }, 'Failed to persist chat message');
     }
 
-    // Forward to desktop via WebSocket
     const { delivered, queued } = sendCommandToDesktop(user.userId, desktopId, messageId, 'chat', {
       message,
       messageId,
@@ -170,15 +124,6 @@ router.post(
   },
 );
 
-/**
- * Get chat history
- * GET /chat/history?desktopId=<uuid>&conversationId=<uuid>&limit=50&before=<iso-date>
- *
- * Returns paginated chat messages for a conversation. Uses cursor-based
- * pagination (before parameter) for consistent results during active conversations.
- *
- * SECURITY: Rate limited to 60/min for responsive UX
- */
 router.get('/history', createRateLimiter('device-status'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -192,7 +137,6 @@ router.get('/history', createRateLimiter('device-status'), async (req: Request, 
   }
 
   const db = getUserScopedClient(user);
-  // Build Neon query
   let dbQuery = db
     .from('chat_messages')
     .select('*')
@@ -237,14 +181,6 @@ router.get('/history', createRateLimiter('device-status'), async (req: Request, 
   });
 });
 
-/**
- * List conversations
- * GET /chat/conversations?desktopId=<uuid>
- *
- * Returns a list of conversations for the user, optionally filtered by desktop.
- *
- * SECURITY: Rate limited to 30/min for list operations
- */
 router.get(
   '/conversations',
   createRateLimiter('device-list'),
@@ -262,7 +198,6 @@ router.get(
     }
 
     const db = getUserScopedClient(user);
-    // Fetch distinct conversations with their latest message
     let dbQuery = db
       .from('chat_messages')
       .select('conversation_id, desktop_id, content, role, created_at')
@@ -283,7 +218,6 @@ router.get(
       return;
     }
 
-    // Group by conversation_id and take the latest message
     const conversationMap = new Map<
       string,
       {

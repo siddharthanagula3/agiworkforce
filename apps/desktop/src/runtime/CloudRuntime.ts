@@ -118,11 +118,8 @@ interface ActiveCloudTurn {
   settled: boolean;
   runReference?: ManagedCloudAgentRunReference;
   replayPromise?: Promise<void>;
-  /** Public chunks rendered before their matching canonical event arrived. */
   unacknowledgedPublicText: string;
-  /** Canonical public text received before its matching SSE content chunk. */
   canonicalPublicTextAwaitingChunk: string;
-  /** Existing partial assistant text when Continue Generation appends in place. */
   persistedContentPrefix: string;
 }
 
@@ -130,10 +127,6 @@ function durableAssistantContent(turn: ActiveCloudTurn): string {
   return `${turn.persistedContentPrefix}${turn.sink.getAccumulatedContent()}`;
 }
 
-/**
- * Run states worth rejoining. A terminal run has nothing left to stream, and
- * its stored message is already the whole answer.
- */
 const REATTACHABLE_RUN_STATES = new Set<CloudAgentRun['state']>([
   'queued',
   'running',
@@ -141,15 +134,6 @@ const REATTACHABLE_RUN_STATES = new Set<CloudAgentRun['state']>([
   'awaiting_input',
 ]);
 
-/**
- * Rebuild displayable tool arguments from the server's truncated preview.
- *
- * The preview is a JSON prefix cut at a fixed length, so it usually will not
- * parse. That is fine for a card whose job is to tell the user WHAT is being
- * asked: an unparseable preview is shown as-is rather than dropped, because
- * "fs_write {…" tells the user more than an empty argument list does. The real
- * arguments live in the server's checkpoint and execute from there.
- */
 function parsePendingApprovalArgs(preview: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(preview);
@@ -173,16 +157,6 @@ function failedMessageProjection(
   };
 }
 
-/**
- * Project a transport failure into the shared error event, preserving the
- * server's classification when there is one.
- *
- * A managed quota / rate-limit refusal must reach the UI as a CODE, not just a
- * sentence: the shared layer classifies it (`classifyManagedQuotaErrorCode`)
- * into an in-transcript card with the reason, the reset time the server
- * actually reported, and any upgrade path. Network throws carry neither field
- * and degrade to the plain failure they are.
- */
 function cloudErrorEvent(err: Error): {
   type: 'error';
   error: string;
@@ -224,10 +198,6 @@ function managedImageSelection(): {
   return { model: metadata.id, provider };
 }
 
-// ---------------------------------------------------------------------------
-// Mapping helpers — the DCL-1/DCL-2 client's normalized DTOs -> ChatRuntime DTOs
-// ---------------------------------------------------------------------------
-
 function mapConversation(cloud: ManagedCloudConversation): Conversation {
   return {
     id: cloud.id,
@@ -241,7 +211,6 @@ function mapConversation(cloud: ManagedCloudConversation): Conversation {
   };
 }
 
-/** The persistence client passes messages through un-normalized (surface-specific). */
 function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessage {
   return mapPersistedCloudMessage(
     {
@@ -258,17 +227,6 @@ function mapMessage(conversationId: string, raw: ManagedCloudMessage): ChatMessa
   );
 }
 
-// ---------------------------------------------------------------------------
-// CloudRuntime implementation
-// ---------------------------------------------------------------------------
-
-/**
- * Read the temporary-chat preference without importing the settings store at
- * module scope. A static import pulls the whole settings dependency graph into
- * this runtime, which breaks consumers that mock only the runtime's own
- * collaborators. Defaults to `false` — a chat must never become temporary (and
- * therefore auto-deleted) because a lookup failed.
- */
 async function readTemporaryChatPreference(): Promise<boolean> {
   try {
     const { useSettingsStore } = await import('../stores/settingsStore');
@@ -300,30 +258,19 @@ export class CloudRuntime implements ChatRuntime {
     this.supportsResearch = supportsResearch;
   }
 
-  /** The cloud SSE wire forwards `code_execution` — see `SendMessageOptions.codeExecution`. */
   readonly supportsCodeExecution = true;
 
-  /** Managed Cloud has a dedicated durable image-generation dispatch. */
   readonly supportsImageGeneration = true;
 
-  /** Desktop Cloud does not yet implement the managed async video endpoint. */
   readonly supportsVideoGeneration = false;
 
-  /** Desktop Cloud does not expose the native Local computer-use boundary. */
   readonly supportsComputerUse = false;
 
-  /** Independent Cloud requests are keyed and cancellable per conversation. */
   readonly supportsConcurrentTurns = true;
 
-  /** Managed search uses the Cloud route's native-or-generic capability gate. */
   readonly supportsManagedWebSearch = true;
 
-  /** Managed Cloud enforces approvals server-side; local Ask/Auto controls do not apply. */
   readonly supportsAgentControl = false;
-  // Effort is a model parameter, not a permission control, so it is safe here
-  // even though agent-mode enforcement (Ask/Auto/Plan/Bypass) is not. Desktop
-  // previously had NO reasoning-effort control purely because both lived
-  // behind the single flag above.
   readonly supportsReasoningEffort = true;
 
   readonly attachmentPolicy = {
@@ -336,9 +283,6 @@ export class CloudRuntime implements ChatRuntime {
         : `${file.name} is not supported. Attach an image, PDF, or text/code file instead.`,
   };
 
-  /**
-   * Cloud SSE path supports Continue Generation (same wire as `WebRuntime`).
-   */
   readonly supportsContinueGeneration = true;
 
   private emit(event: StreamEvent): void {
@@ -379,31 +323,11 @@ export class CloudRuntime implements ChatRuntime {
   }
 
   private clearAbortController(conversationId: string, controller: AbortController): void {
-    // A stopped turn can finish after a newer turn has installed its own
-    // controller for the same conversation. The old cleanup must never make
-    // that newer turn impossible to stop.
     if (this._abortControllers.get(conversationId) === controller) {
       this._abortControllers.delete(conversationId);
     }
   }
 
-  /**
-   * Detaches this client from its runs. It does NOT stop them.
-   *
-   * DURABLE SESSIONS: dispose used to fan out `cancelRun` to every in-flight
-   * run, which made the runtime's own teardown — a window closing, a React
-   * remount, a sign-out — indistinguishable from the user pressing Stop. A run
-   * the user paid for and walked away from was killed by walking away, which is
-   * the exact failure durable sessions exist to remove. The server does not need
-   * this client to keep executing; the run continues, journals its events, and
-   * is picked back up by `reattachConversation` or from Tasks on any surface.
-   *
-   * Stopping is now only ever explicit: `stopGeneration` and the Tasks page Stop
-   * button both still call `cancelRun`. NOTE that this includes sign-out —
-   * signing out of Desktop detaches, it does not cancel, and the run stays
-   * billable to that account until it finishes or is stopped from another
-   * surface.
-   */
   async dispose(): Promise<void> {
     if (this._disposed) return;
     this._disposed = true;
@@ -421,7 +345,6 @@ export class CloudRuntime implements ChatRuntime {
     this._streamCallbacks.clear();
   }
 
-  /** Persists a completed assistant turn, surfacing a save failure as a follow-up 'error' event without hiding 'done'. */
   private async persistAssistantTurn(
     conversationId: string,
     assistantMessageId: string,
@@ -448,12 +371,6 @@ export class CloudRuntime implements ChatRuntime {
       ...(cloudApproval !== undefined ? { cloudApproval } : {}),
       ...(messageProjection ?? {}),
     };
-    // DES-C06: the server hard-caps serialized metadata at 32 000 chars and
-    // 400s the WHOLE message on overflow — which used to lose the entire
-    // assistant turn because one artifact's content did not fit. Drop the
-    // re-derivable artifact bytes (DES-C05 rebuilds them from `content` with
-    // the same deterministic id) and, if still over, sacrifice optional
-    // projections with a persisted note rather than the answer itself.
     const bounded = buildBoundedCloudMessageMetadata(rawMetadata, content);
     const metadata = bounded.metadata;
     try {
@@ -526,12 +443,6 @@ export class CloudRuntime implements ChatRuntime {
     if (envelope) this.updateRunReference(turn, { lastSequence: envelope.sequence });
   }
 
-  /**
-   * Media models use `/api/media/image/generate`, not a text-chat adapter.
-   * Web intercepts the same natural-language intent before chat completion;
-   * Desktop does it here at the runtime boundary so quick actions and typed
-   * prompts cannot fall into the chat route's intentional media-dispatch 422.
-   */
   private async sendManagedImageTurn(
     conversationId: string,
     prompt: string,
@@ -604,8 +515,6 @@ export class CloudRuntime implements ChatRuntime {
       fileName: `generated-image-${generated.id.slice(0, 8)}.png`,
       mimeType: 'image/png',
       uri: generated.uri,
-      // The media endpoint does not expose byte size. Zero means unknown here;
-      // the authenticated file response remains authoritative at preview time.
       byteCount: 0,
       kind: 'image',
       surface: 'file',
@@ -643,8 +552,6 @@ export class CloudRuntime implements ChatRuntime {
         },
       );
     } catch {
-      // The persistence helper emitted an actionable error and the UI must not
-      // receive `done`, which could imply this result is durable.
       return;
     }
     this.emitForConversation(conversationId, { type: 'done', finishReason: 'stop' });
@@ -654,8 +561,6 @@ export class CloudRuntime implements ChatRuntime {
     const runReference = turn.runReference;
     if (!runReference) throw new Error('Managed Cloud run handle is unavailable');
 
-    // If the canonical text event arrived immediately before the transport
-    // failed but its ordinary SSE content projection did not, render it now.
     if (turn.canonicalPublicTextAwaitingChunk) {
       turn.sink.onChunk(turn.canonicalPublicTextAwaitingChunk);
       turn.canonicalPublicTextAwaitingChunk = '';
@@ -803,28 +708,11 @@ export class CloudRuntime implements ChatRuntime {
     });
   }
 
-  // -------------------------------------------------------------------------
-  // reattachConversation — rejoin a run this client did not stream
-  // -------------------------------------------------------------------------
-
-  /**
-   * Pick a durable run back up when its conversation is reopened.
-   *
-   * The turn may have been started on this machine before it slept, or on a
-   * different device entirely; either way the server kept executing and kept
-   * journaling. What makes reattachment safe is `persisted.lastSequence`: it is
-   * the exact cursor already reflected in the stored message, so the replay asks
-   * only for what came after it and no sentence is rendered twice. Nothing is
-   * re-seeded into the sink — the prose already on screen enters as the turn's
-   * `persistedContentPrefix`, which is what the eventual save concatenates.
-   */
   async reattachConversation(
     conversationId: string,
     persisted: CloudRunReattachment,
   ): Promise<void> {
     if (this._disposed) return;
-    // A live turn in this session is authoritative; reattaching over it would
-    // fork one conversation into two writers of the same message.
     if (this._activeTurns.has(conversationId)) return;
 
     const boundary = this.requireBoundary();
@@ -879,19 +767,6 @@ export class CloudRuntime implements ChatRuntime {
     await turn.replayPromise;
   }
 
-  /**
-   * Rebuild a live approval card for a run that is blocked on a decision.
-   *
-   * This is the case the old client could not represent at all. When the server
-   * persisted the turn (because nobody was connected to persist it), the stored
-   * message carries the run reference but no `cloudApproval` projection, so the
-   * ordinary reload hydration finds nothing to render and the user sees a turn
-   * that simply stopped mid-sentence. The pending-approval summary on the run is
-   * the server's own account of what it is waiting for, so the card is rebuilt
-   * from that. Arguments shown here are a truncated preview; the authoritative
-   * arguments never leave the server's checkpoint and are not resubmitted by the
-   * client on resume.
-   */
   private reattachPendingApproval(
     conversationId: string,
     persisted: CloudRunReattachment,
@@ -925,11 +800,6 @@ export class CloudRuntime implements ChatRuntime {
       });
     }
   }
-
-  // -------------------------------------------------------------------------
-  // sendMessage — persists the user turn, streams the reply, persists the
-  // assistant turn. Mirrors useChatStream.ts's save-before/save-after pattern.
-  // -------------------------------------------------------------------------
 
   async sendMessage(
     conversationId: string,
@@ -967,18 +837,12 @@ export class CloudRuntime implements ChatRuntime {
     let uploadedAttachments: Awaited<ReturnType<typeof uploadDesktopCloudAttachments>> = [];
 
     try {
-      // The host creates optimistically with this exact UUID. Joining the
-      // coordinator here guarantees the server row exists before the first
-      // message is written, even when the user sends immediately.
       await ensureCloudConversation(
         conversationId,
         'New chat',
         model,
         options?.projectId,
         controller.signal,
-        // Read at creation time: temporary is a property of THIS conversation,
-        // fixed when the row is written. Toggling the chip later must not
-        // retroactively change an existing conversation's retention.
         await readTemporaryChatPreference(),
       );
       if (shouldStopBeforeDispatch()) return;
@@ -1007,12 +871,6 @@ export class CloudRuntime implements ChatRuntime {
         if (uploaded) this._attachmentAssetIds.set(attachment.id, uploaded.id);
       }
 
-      // Persist ordinary user turns before streaming. Continue Generation's
-      // instruction is request-only and must never appear in conversation
-      // history as a user message.
-      // Same identity rule as the assistant row below: persist under the id the
-      // transcript already renders so Regenerate can delete the exact server rows
-      // it just removed from the view.
       if (!isContinuation) {
         await client.saveMessage(
           conversationId,
@@ -1058,11 +916,6 @@ export class CloudRuntime implements ChatRuntime {
       (event) => this.emitForConversation(conversationId, event),
       CLOUD_API_BASE_URL,
     );
-    // Prefer the caller's minted id so the RENDERED assistant row, our durable
-    // row, and the server's own `assistant_message_id` persistence are all one
-    // identity — otherwise nothing in the UI (regenerate, delete) can address
-    // the server row it is looking at. Falls back to a runtime-minted uuid for
-    // callers that do not supply one.
     const assistantMessageId =
       options?.continuationMessageId ?? options?.assistantMessageId ?? uuidv7();
     const continuationPrefix =
@@ -1115,7 +968,6 @@ export class CloudRuntime implements ChatRuntime {
         content,
         model,
         (text) => this.onLiveChunk(activeTurn, text),
-        // onDone
         async () => {
           if (activeTurn.settled || activeTurn.replayPromise) return;
           activeTurn.settled = true;
@@ -1132,9 +984,6 @@ export class CloudRuntime implements ChatRuntime {
             this._approvals.getTurnProjection(conversationId),
           );
           if (sink.isSuspended()) {
-            // Persist the durable run reference at the approval boundary so a
-            // fresh app instance can restore the small client projection. The
-            // server checkpoint remains authoritative for transcript/policy.
             await this.persistAssistantTurn(
               conversationId,
               assistantMessageId,
@@ -1177,8 +1026,6 @@ export class CloudRuntime implements ChatRuntime {
               });
               return;
             }
-            // Make the reply durable before the UI receives `done`, so an
-            // immediate navigation or reload cannot lose the completed turn.
             await this.persistAssistantTurn(
               conversationId,
               assistantMessageId,
@@ -1198,7 +1045,6 @@ export class CloudRuntime implements ChatRuntime {
             ...(streamError ? { streamError } : {}),
           });
         },
-        // onError
         (err: Error) => {
           if (activeTurn.settled) return;
           if (!controller.signal.aborted && activeTurn.runReference) {
@@ -1286,9 +1132,6 @@ export class CloudRuntime implements ChatRuntime {
           ...(options?.workMode ? { workMode: options.workMode } : {}),
           ...(options?.skillName ? { skillName: options.skillName } : {}),
           ...(options?.effort ? { effort: options.effort } : {}),
-          // Always sent: the server persists the assistant turn under THIS id,
-          // collapsing its write and our own `saveMessage` into one row and
-          // covering a crash/quit after generation (which is already billed).
           assistantMessageId,
         },
         (handle: ManagedCloudAgentRunHandle | null) => {
@@ -1338,10 +1181,6 @@ export class CloudRuntime implements ChatRuntime {
       clearController();
     }
   }
-
-  // -------------------------------------------------------------------------
-  // resolveToolApproval — resume a turn suspended on x_tool_approval_request
-  // -------------------------------------------------------------------------
 
   async resolveToolApproval(
     conversationId: string,
@@ -1398,8 +1237,6 @@ export class CloudRuntime implements ChatRuntime {
           );
         }
       } else if (outcome.assistantMessageId) {
-        // Update the SAME assistant message after a partial decision, a
-        // repeated approval suspension, or the terminal continuation.
         const emptyTerminal =
           !outcome.suspended &&
           !hasRenderableCloudMessageOutput(outcome.content, outcome.messageProjection) &&
@@ -1450,10 +1287,6 @@ export class CloudRuntime implements ChatRuntime {
   hasLiveApprovalTurn(conversationId: string, projection?: CloudApprovalTurnProjection): boolean {
     return this._approvals.hasLiveTurn(conversationId, projection);
   }
-
-  // -------------------------------------------------------------------------
-  // stopGeneration
-  // -------------------------------------------------------------------------
 
   stopGeneration(conversationId: string): void {
     const resolvingApproval = this._resolvingApprovals.get(conversationId);
@@ -1526,33 +1359,17 @@ export class CloudRuntime implements ChatRuntime {
     }
   }
 
-  // -------------------------------------------------------------------------
-  // onStream
-  // -------------------------------------------------------------------------
-
   onStream(callback: StreamCallback): () => void {
     if (this._disposed) return () => undefined;
     this._streamCallbacks.add(callback);
     return () => this._streamCallbacks.delete(callback);
   }
 
-  // -------------------------------------------------------------------------
-  // Conversation CRUD — via the DCL-1/DCL-2 shared persistence client
-  // -------------------------------------------------------------------------
-
   async createConversation(title?: string): Promise<Conversation> {
     const boundary = this.requireBoundary();
-    // Client-supplied UUIDv7 so desktop knows the cloud id before the
-    // round-trip completes (needed for the DCL-4 continuity proof).
     const cloud = await ensureCloudConversation(uuidv7(), title ?? 'New Conversation');
     this.assertBoundary(boundary);
     if (import.meta.env.DEV) {
-      // W5 stage-2 session labeling — additive, dev/test-only (see
-      // ./sessionLabeling.ts module doc). Does not change what gets persisted
-      // or returned; only asserts the new conversation's AppSession/
-      // ExecutionProfile are internally consistent. CloudRuntime has no
-      // local auth-store dependency today, so ownerUserId is resolved lazily
-      // here rather than added as a new top-level import.
       const { desktopExecutionProfileFor, labelDesktopSession } = await import('./sessionLabeling');
       const { useUnifiedAuthStore } = await import('../stores/auth');
       labelDesktopSession({
@@ -1599,10 +1416,6 @@ export class CloudRuntime implements ChatRuntime {
     this.assertBoundary(boundary);
   }
 
-  // -------------------------------------------------------------------------
-  // Conversation listing
-  // -------------------------------------------------------------------------
-
   private async loadAllCloudConversations(): Promise<ManagedCloudConversation[]> {
     const boundary = this.requireBoundary();
     const client = getDesktopCloudChatPersistenceClient();
@@ -1646,10 +1459,6 @@ export class CloudRuntime implements ChatRuntime {
     return conversations.map(mapConversation);
   }
 
-  // -------------------------------------------------------------------------
-  // Message loading
-  // -------------------------------------------------------------------------
-
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
     const boundary = this.requireBoundary();
     await waitForCloudConversationReady(conversationId, boundary);
@@ -1685,15 +1494,6 @@ export class CloudRuntime implements ChatRuntime {
     return this.getMessages(conversationId);
   }
 
-  /**
-   * Drop durable rows a replacement turn superseded (Regenerate).
-   *
-   * Ids are the transcript's own ids — `sendMessage` persists the user and
-   * assistant rows under the caller-minted ids for exactly this reason. Rows
-   * are deleted oldest-first and one at a time so a partial failure still
-   * leaves a consistent prefix; the boundary is asserted between calls so a
-   * sign-out mid-delete cannot keep issuing authenticated writes.
-   */
   async deleteMessages(conversationId: string, messageIds: string[]): Promise<void> {
     if (messageIds.length === 0) return;
     const boundary = this.requireBoundary();
@@ -1703,10 +1503,6 @@ export class CloudRuntime implements ChatRuntime {
       this.assertBoundary(boundary);
     }
   }
-
-  // -------------------------------------------------------------------------
-  // Platform identifier
-  // -------------------------------------------------------------------------
 
   getPlatform(): 'desktop' | 'web' | 'mobile' {
     return 'desktop';

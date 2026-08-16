@@ -1,8 +1,3 @@
-/**
- * InlinePanelList Component
- *
- * Renders a list of inline panels for a message.
- */
 
 import React, { memo } from 'react';
 import { InlinePanel } from '../../../stores/unifiedChatStore';

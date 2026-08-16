@@ -1,32 +1,4 @@
-/**
- * @agiworkforce/data-layer — cloud-provider-portable persistence/auth/storage/realtime.
- *
- * # Quick start
- *
- * ```ts
- * import { createDatabaseClient } from '@agiworkforce/data-layer';
- *
- * const db = createDatabaseClient(); // reads AGI_DATABASE_PROVIDER (default: neon)
- * const userDb = db.withUser(jwtFromRequest);
- * const rows = await userDb.query<{ id: string }>(
- *   'select id from conversations where user_id = $1',
- *   [userId],
- * );
- * ```
- *
- * # Why this package exists
- *
- * The hosted product runs on Neon for database and Clerk for auth. This package
- * keeps provider seams explicit so migration and compatibility code cannot
- * silently select a legacy backend.
- *
- * - Read `docs/current/technical-architecture.md` for the system map.
- * - Read `docs/archive/2026-05-21-docs-consolidation/SCALING.md`
- *   for legacy migration playbooks.
- * - Read `docs/current/commercial-and-launch.md` for managed-compute gates.
- */
 
-// Interfaces — the contract feature code depends on.
 export type {
   AuthAdapter,
   AuthProvider,
@@ -43,10 +15,8 @@ export type {
   VerifiedJwt,
 } from './types';
 
-// Errors.
 export { DataLayerConfigError, NotImplementedError } from './types';
 
-// Factory functions — the public entry points.
 export {
   createAuthClient,
   createDatabaseClient,
@@ -62,7 +32,6 @@ export type {
 } from './factory';
 
 // Concrete adapter classes — exported for advanced users (testing,
-// embedding) but feature code should prefer the factory functions.
 export { ClerkAuthAdapter, type ClerkAuthConfig } from './adapters/clerk';
 
 export { NeonDatabaseAdapter } from './adapters/neon';

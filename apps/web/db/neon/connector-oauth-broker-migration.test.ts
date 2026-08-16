@@ -7,7 +7,6 @@ const migration = fs.readFileSync(
   'utf8',
 );
 
-/** The migration with `--` comment lines stripped, so prose cannot satisfy an assertion. */
 const sql = migration
   .split('\n')
   .filter((line) => !line.trimStart().startsWith('--'))
@@ -21,7 +20,6 @@ describe('connector OAuth broker migration', () => {
 
   it('stores the state as a hash, never the state itself', () => {
     expect(sql).toContain("state_hash text not null check (state_hash ~ '^[0-9a-f]{64}$')");
-    // A column that could hold the raw state would make the table replayable.
     expect(sql).not.toMatch(/^\s*state text/m);
   });
 
@@ -56,7 +54,6 @@ describe('connector OAuth broker migration', () => {
     ]) {
       expect(sql).toContain(column);
     }
-    // Plaintext token columns must not exist under any name.
     expect(sql).not.toMatch(/^\s*(access_token|refresh_token) text/m);
   });
 
@@ -91,8 +88,6 @@ describe('connector OAuth broker migration', () => {
   });
 
   it('keeps grants personal — an org admin must not inherit a member OAuth token', () => {
-    // 0073 attaches organization_id to CONTENT tables. A grant is a personal
-    // consent, so the tenancy predicate must not appear here.
     expect(sql).not.toContain('organization_id');
     expect(sql).not.toContain('app_row_is_visible');
     expect(sql).not.toContain('app_row_is_writable');

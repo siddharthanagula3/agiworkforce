@@ -41,7 +41,6 @@ describe('Shared Links capability honesty', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockGet.mockResolvedValue({ shares: [] });
-    // Shared links are Managed Cloud data; Local Mode is covered separately.
     useChatAppModeStore.setState({ appMode: 'cloud' });
   });
 
@@ -54,8 +53,6 @@ describe('Shared Links capability honesty', () => {
   });
 
   it('no longer claims the feature is unavailable on mobile', async () => {
-    // It was never unavailable — web has shipped /share/[token] and /api/share
-    // for some time. Only the list endpoint was missing.
     render(<SharedLinksScreen />);
     await waitFor(() => expect(mockGet).toHaveBeenCalled());
 
@@ -109,9 +106,7 @@ describe('Shared Links capability honesty', () => {
     render(<SharedLinksScreen />);
 
     expect(await screen.findByText('Old session')).toBeTruthy();
-    // Sharing it again would hand someone a URL that no longer opens.
     expect(screen.queryByLabelText('Share link to Old session')).toBeNull();
-    // But it must still be revocable, so the user can clean it up.
     expect(screen.getByLabelText('Revoke link to Old session')).toBeTruthy();
   });
 
@@ -120,15 +115,11 @@ describe('Shared Links capability honesty', () => {
 
     render(<SharedLinksScreen />);
 
-    // An empty state here would read as "you have never shared anything",
-    // which is a different and wrong statement.
     expect(await screen.findByText(/Could not load shared links/i)).toBeTruthy();
     expect(screen.queryByText('No shared links yet')).toBeNull();
   });
 
   it('never renders the failure message it was handed', async () => {
-    // The egress guard's refusal and any HTTP/transport text are developer
-    // strings; the screen must render its own sentence instead.
     mockGet.mockRejectedValue(new Error('Request failed with status 503 at https://api.example'));
 
     render(<SharedLinksScreen />);
@@ -155,8 +146,6 @@ describe('Shared Links in Local Mode', () => {
   });
 
   it('maps a refused request to the banner instead of the guard message', async () => {
-    // Entering the screen in Cloud mode and having the guard refuse mid-flight
-    // is the same user-facing situation as starting in Local mode.
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const blocked = Object.assign(
       new Error(

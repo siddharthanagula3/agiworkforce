@@ -4,12 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { SupportTranscript } from '../components/SupportTranscript';
 import { useSupportSession } from '../hooks/useSupportSession';
 
-/**
- * These run the REAL flow: session hook → support-client → fetch. The point is
- * to prove that nothing mutating happens without a second, explicit click, and
- * that the execution request carries no target the client could have chosen.
- */
-
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: (headers: HeadersInit = {}) => Promise.resolve(headers),
   getCsrfToken: () => Promise.resolve('test-csrf'),
@@ -115,24 +109,20 @@ describe('an action never runs without an explicit confirmation click', () => {
     await user.click(screen.getByRole('button', { name: 'ask' }));
     await screen.findByText('I can revoke that connector for you.');
 
-    // The model proposed an action. Nothing has been proposed to the server.
     expect(screen.getByText(/I can do this for you/i)).toBeInTheDocument();
     expect(callsTo('/api/support/actions/propose')).toHaveLength(0);
     expect(callsTo('/api/support/actions/confirm')).toHaveLength(0);
     expect(screen.queryByRole('button', { name: /yes, do it/i })).not.toBeInTheDocument();
 
-    // Click 1 — ask the server what it would do.
     await user.click(screen.getByRole('button', { name: /show me what this does/i }));
     await screen.findByText('This disconnects GitHub from your account.');
 
-    // Every effect is shown verbatim, and still nothing has executed.
     expect(screen.getByText(/GitHub stops being available to your agents\./)).toBeInTheDocument();
     expect(
       screen.getByText(/Saved "always allow" permissions for it are cleared\./),
     ).toBeInTheDocument();
     expect(callsTo('/api/support/actions/confirm')).toHaveLength(0);
 
-    // Click 2 — and only now does it run.
     await user.click(screen.getByRole('button', { name: /yes, do it/i }));
     await screen.findByText('GitHub disconnected.');
 
@@ -141,8 +131,6 @@ describe('an action never runs without an explicit confirmation click', () => {
 
     const init = confirmCalls[0]?.[1] as RequestInit;
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
-    // Exactly the proposal id and its single-use token. No target, no action id,
-    // no user id — the server re-reads what to do from its own row.
     expect(Object.keys(body).sort()).toEqual(['confirmationToken', 'proposalId']);
     expect(body['proposalId']).toBe('prop_123');
     expect(body['confirmationToken']).toBe('tok_abc');

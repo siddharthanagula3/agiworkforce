@@ -1,9 +1,3 @@
-/**
- * BackgroundTaskIndicator Component
- *
- * A small badge/indicator showing the count of active background tasks.
- * Click to expand and show the BackgroundTasksPanel.
- */
 import { useState, useCallback } from 'react';
 import { Loader2, Activity } from 'lucide-react';
 import { cn } from '../../lib/utils';
@@ -15,25 +9,10 @@ import { BackgroundTasksPanel } from './BackgroundTasksPanel';
 
 interface BackgroundTaskIndicatorProps {
   className?: string;
-  /**
-   * Position of the popover panel
-   */
   popoverSide?: 'top' | 'right' | 'bottom' | 'left';
-  /**
-   * Alignment of the popover panel
-   */
   popoverAlign?: 'start' | 'center' | 'end';
-  /**
-   * Maximum height of the tasks panel
-   */
   panelMaxHeight?: string;
-  /**
-   * Whether to show the indicator even when no tasks are active
-   */
   showWhenEmpty?: boolean;
-  /**
-   * Compact mode - just show the count badge
-   */
   compact?: boolean;
 }
 
@@ -52,12 +31,10 @@ export function BackgroundTaskIndicator({
     setIsOpen(false);
   }, []);
 
-  // Don't render if no active tasks and showWhenEmpty is false
   if (activeCount === 0 && !showWhenEmpty) {
     return null;
   }
 
-  // Check if any task is actually running (vs queued)
   const hasRunningTask = activeTasks.some((t) => t.status === 'running');
 
   return (

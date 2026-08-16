@@ -1,26 +1,3 @@
-/**
- * Custom remote MCP connectors API
- *
- * GET    /api/connectors/custom       - list the signed-in user's custom connectors
- * POST   /api/connectors/custom       - add + persist a new custom connector
- * DELETE /api/connectors/custom?id=   - remove one of the user's custom connectors
- *
- * Claude.ai parity: unlike `/api/connectors` (an enablement gate over
- * operator-configured or first-party connectors — see lib/user-connector-tools.ts),
- * these rows ARE the credential store. Each row belongs to exactly one user
- * (RLS-enforced) and is never shared cross-user. POST performs a live
- * connect-and-list (via @agiworkforce/mcp) before persisting, so a saved row
- * is known-good at save time; the chat tool loop re-validates at use time
- * (lib/user-connector-tools.ts) since servers can go away later.
- *
- * SECURITY:
- *   - https-only, DNS-resolved public hostname (assertResolvedPublicHostname
- *     via lib/mcp-url-validation.ts), no embedded credentials — same rule as
- *     /api/mcp.
- *   - Optional bearer token is encrypted at rest (lib/custom-connector-crypto.ts)
- *     and never returned by GET.
- *   - Auth + CSRF + rate-limit on every state-changing request.
- */
 
 import { randomBytes } from 'crypto';
 
@@ -75,10 +52,6 @@ function isUniqueViolation(error: unknown): boolean {
   );
 }
 
-/** Distinguishes the short_id backstop constraint from the (user_id, url) one,
- *  when the driver surfaces a `constraint` name — degrades to "unknown" (and
- *  thus the url-conflict message) if it doesn't, which is the overwhelmingly
- *  more likely case in practice given allocateShortId's pre-check. */
 function isShortIdViolation(error: unknown): boolean {
   const constraint = (error as Record<string, unknown> | null)?.['constraint'];
   return typeof constraint === 'string' && constraint.includes('short_id');
@@ -96,15 +69,6 @@ interface CustomConnectorRow {
 
 const SHORT_ID_MAX_ATTEMPTS = 5;
 
-/**
- * Allocate a short_id unused by this user. Needed because the chat tool loop
- * embeds it in a provider-facing function name (`mcp__custom-<short_id>__<tool>`,
- * see lib/user-connector-tools.ts) that OpenAI-family providers cap at 64
- * chars — the full 36-char row `id` would alone consume 50 of those. 10 hex
- * chars (40 bits) makes a same-user collision practically impossible; this
- * loop is a courtesy check, and the DB's `user_custom_connectors_short_id_unique`
- * constraint is the hard backstop if it ever fires anyway.
- */
 async function allocateShortId(db: ReturnType<typeof getNeonDb>, userId: string): Promise<string> {
   for (let attempt = 0; attempt < SHORT_ID_MAX_ATTEMPTS; attempt++) {
     const candidate = randomBytes(5).toString('hex');
@@ -115,17 +79,14 @@ async function allocateShortId(db: ReturnType<typeof getNeonDb>, userId: string)
       );
       if (!rows[0]?.exists) return candidate;
     } catch (error) {
-      if (isUndefinedTable(error)) return candidate; // table doesn't exist yet — insert will surface the real error
+      if (isUndefinedTable(error)) return candidate;
       throw error;
     }
   }
   throw createError.internal('Could not allocate a connector identifier. Try again.');
 }
 
-// ─── GET: list the user's custom connectors ────────────────────────────────
-
 async function handleGet(request: NextRequest) {
-  // GOV-16: authenticate before bucketing so the limit is per user, not per IP.
   const { userId } = await getClerkAuthUser(request);
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
@@ -135,8 +96,6 @@ async function handleGet(request: NextRequest) {
 
   return NextResponse.json({ connectors });
 }
-
-// ─── POST: add a new custom connector ───────────────────────────────────────
 
 interface CreateBody {
   name?: string;
@@ -151,7 +110,6 @@ async function handlePost(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // GOV-16: user-keyed rate limit.
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -189,7 +147,6 @@ async function handlePost(request: NextRequest) {
     throw createError.validation('authToken is too long');
   }
 
-  // Enforce the per-user cap before doing any network work.
   let existingCount: { count: string }[];
   try {
     existingCount = await db.query<{ count: string }>(
@@ -209,9 +166,6 @@ async function handlePost(request: NextRequest) {
 
   const shortId = await allocateShortId(db, userId);
 
-  // Live connect-and-list: a saved connector must actually work at save time.
-  // SSRF re-validated implicitly — validateHttpsMcpUrl already resolved the
-  // hostname above, and connectMcpServer only ever dials `parsedUrl` itself.
   let toolCount = 0;
   try {
     const handle = await connectMcpServer({
@@ -231,11 +185,6 @@ async function handlePost(request: NextRequest) {
     throw createError.serviceUnavailable(`Failed to connect to MCP server: ${message}`);
   }
 
-  // GOV-7: bound the connector TOOL surface, not just the connector count.
-  // `BILLING_PLAN_PRODUCT_LIMITS.maxConnectorTools` is a plan dimension because
-  // every tool definition is prompt weight and tool-loop fan-out on every turn;
-  // one 400-tool MCP server costs far more than four 5-tool ones. A tier that
-  // declares itself uncapped (negotiated Enterprise) resolves to null.
   const connectorToolLimit = getPlanMaxConnectorTools(planTier);
   if (connectorToolLimit !== null && toolCount > connectorToolLimit) {
     const label = getBillingPlanPricing(planTier).label;
@@ -289,10 +238,6 @@ async function handlePost(request: NextRequest) {
     throw createError.internal('Failed to save connector');
   }
 
-  // Audit: custom remote MCP server added. The plaintext bearer token is in
-  // scope in this handler (`authHeaderEnc`'s source) and is deliberately NOT
-  // recorded — nor is the server URL, which can itself carry a credential in
-  // its query string. Only the row id, the user's label and the transport go in.
   await recordAuditEvent({
     userId,
     eventType: 'connector_added',
@@ -311,8 +256,6 @@ async function handlePost(request: NextRequest) {
     {
       connector: {
         id: saved.id,
-        // Chat-facing id: this connector's tools appear as
-        // mcp__custom-<shortId>__<tool> in conversations.
         shortId: saved.short_id,
         name: saved.name,
         url: saved.url,
@@ -326,15 +269,12 @@ async function handlePost(request: NextRequest) {
   );
 }
 
-// ─── DELETE: remove a custom connector ──────────────────────────────────────
-
 async function handleDelete(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
 
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // GOV-16: user-keyed rate limit.
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -360,19 +300,10 @@ async function handleDelete(request: NextRequest) {
     throw error;
   }
 
-  // Release the cached catalog + open MCP handle now rather than leaking the
-  // connection until process restart.
   for (const row of deleted) {
     await evictCustomConnectorCaches(userId, row.id);
   }
 
-  // AUDIT-FIX CON-6: drop the saved per-tool verdicts too. The connector's MCP
-  // serverId is `custom-<short_id>`, which is what the permission rows are
-  // keyed on. Leaving them behind meant a user who deleted a custom connector
-  // and later re-added the SAME server (short_id is stable per user+row, but a
-  // re-added row reuses the connector id namespace) could have an old
-  // "Always allow" silently re-arm. Best-effort: the rows are already
-  // unreachable at this point, so a cleanup failure must not fail the delete.
   for (const row of deleted) {
     try {
       await db.execute(

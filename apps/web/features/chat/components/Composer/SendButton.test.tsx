@@ -1,26 +1,15 @@
-/**
- * SendButton Tests
- *
- * Covers all 3 states: send, stop, queue.
- * Validates colors, icons, aria-labels, disabled logic, and click handlers.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { SendButton } from './SendButton';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
 function renderButton(props: Parameters<typeof SendButton>[0]) {
   return render(<SendButton {...props} />);
 }
 
-// ── Send state ────────────────────────────────────────────────────────────────
-
 describe('SendButton · send mode', () => {
   it('renders the ArrowUp icon', () => {
     renderButton({ mode: 'send', onClick: vi.fn() });
-    // lucide renders SVG; check aria-label
     expect(screen.getByRole('button', { name: 'Send message' })).toBeInTheDocument();
   });
 
@@ -73,8 +62,6 @@ describe('SendButton · send mode', () => {
   });
 });
 
-// ── Stop state ────────────────────────────────────────────────────────────────
-
 describe('SendButton · stop mode', () => {
   it('renders with stop aria-label', () => {
     renderButton({ mode: 'stop', onClick: vi.fn() });
@@ -112,8 +99,6 @@ describe('SendButton · stop mode', () => {
   });
 });
 
-// ── Queue state ───────────────────────────────────────────────────────────────
-
 describe('SendButton · queue mode', () => {
   it('renders with queue aria-label', () => {
     renderButton({ mode: 'queue', onClick: vi.fn() });
@@ -138,10 +123,6 @@ describe('SendButton · queue mode', () => {
   });
 
   it('uses the same brand fill as Send, not a second primary colour', () => {
-    // Queue is Send, deferred — the same primary action in a later state. It
-    // used amber while Send used terra-cotta one row away, which put two
-    // different colours on one role in a single composer and borrowed the
-    // product's warning hue for a non-warning.
     const { container } = renderButton({ mode: 'queue', onClick: vi.fn() });
     const btn = container.querySelector('button');
     expect(btn?.className).toContain('bg-terra-cotta-500');
@@ -157,8 +138,6 @@ describe('SendButton · queue mode', () => {
     );
   });
 });
-
-// ── type="button" on all states ───────────────────────────────────────────────
 
 describe('SendButton · button type', () => {
   it.each(['send', 'stop', 'queue'] as const)(

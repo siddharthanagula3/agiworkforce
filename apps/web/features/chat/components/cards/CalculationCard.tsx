@@ -1,12 +1,3 @@
-/**
- * CalculationCard - Math expression and result display
- *
- * Renders structured calculation content with:
- * - Formula rendering via KaTeX (when available)
- * - Clear result display with copy button
- * - Breakdown of intermediate steps
- * - Fallback to styled monospace when KaTeX unavailable
- */
 
 'use client';
 
@@ -40,14 +31,12 @@ function parseCalculation(content: string): ParsedCalculation {
   const steps: ParsedCalculation['steps'] = [];
   const descLines: string[] = [];
 
-  // Extract LaTeX blocks
   const latexBlocks = content.match(/\$\$([\s\S]+?)\$\$/g) || [];
   for (const block of latexBlocks) {
     const expr = block.replace(/^\$\$/, '').replace(/\$\$$/, '').trim();
     formulas.push({ label: '', expression: expr, isLatex: true });
   }
 
-  // Extract display math \[ ... \]
   const displayMathBlocks = content.match(/\\\[([\s\S]+?)\\\]/g) || [];
   for (const block of displayMathBlocks) {
     const expr = block.replace(/^\\\[/, '').replace(/\\\]$/, '').trim();
@@ -58,13 +47,11 @@ function parseCalculation(content: string): ParsedCalculation {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
-    // Title
     if (!title && /^#{1,2}\s+/.test(trimmed)) {
       title = trimmed.replace(/^#{1,2}\s+/, '').replace(/\*\*/g, '');
       continue;
     }
 
-    // Result extraction: "Result: 42", "Answer = 42", "Total: $1,234.56"
     const resultMatch = trimmed.match(
       /\*?\*?(result|answer|total|sum|difference|product|quotient|output|value)\*?\*?\s*[:=]\s*(.+)/i,
     );
@@ -73,7 +60,6 @@ function parseCalculation(content: string): ParsedCalculation {
         (resultMatch[1] ?? '').charAt(0).toUpperCase() + (resultMatch[1] ?? '').slice(1);
       result = (resultMatch[2] ?? '').replace(/\*\*/g, '').trim();
 
-      // Try to extract unit
       const unitMatch = result.match(/^([-\d.,]+)\s*(.+)$/);
       if (unitMatch && unitMatch[2] && !/^\d/.test(unitMatch[2])) {
         unit = unitMatch[2];
@@ -81,7 +67,6 @@ function parseCalculation(content: string): ParsedCalculation {
       continue;
     }
 
-    // Step extraction: "Step N: label = value" or "1. label = value"
     const stepMatch = trimmed.match(
       /^(?:(?:#{2,4}\s+)?step\s+\d+[.:]\s*|^\d+\.\s+)\*?\*?(.+?)\*?\*?\s*[:=]\s*(.+)/i,
     );
@@ -93,14 +78,12 @@ function parseCalculation(content: string): ParsedCalculation {
       continue;
     }
 
-    // Inline code formulas: `expression = result`
     const inlineCodeMatch = trimmed.match(/`([^`]+[=+\-*/^][^`]+)`/);
     if (inlineCodeMatch && !formulas.some((f) => f.expression === inlineCodeMatch[1])) {
       formulas.push({ label: '', expression: inlineCodeMatch[1] ?? '', isLatex: false });
       continue;
     }
 
-    // Description (preamble before formulas/results)
     if (!result && formulas.length === 0 && steps.length === 0 && !trimmed.startsWith('#')) {
       descLines.push(trimmed);
     }
@@ -112,7 +95,6 @@ function parseCalculation(content: string): ParsedCalculation {
     .replace(/\*\*/g, '')
     .trim();
 
-  // If no explicit result found, try to find one from the last formula
   if (!result && formulas.length > 0) {
     const lastFormula = formulas[formulas.length - 1];
     if (lastFormula) {
@@ -134,15 +116,10 @@ function parseCalculation(content: string): ParsedCalculation {
   };
 }
 
-/**
- * Renders a LaTeX expression using KaTeX.
- * Falls back to styled monospace code if KaTeX is not loaded.
- */
 function FormulaDisplay({ expression, isLatex }: { expression: string; isLatex: boolean }) {
   const rendered = useMemo(() => {
     if (!isLatex) return null;
     try {
-      // Dynamic import to avoid SSR issues -- katex is available in the project
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const katex = require('katex');
       return katex.renderToString(expression, {
@@ -159,7 +136,7 @@ function FormulaDisplay({ expression, isLatex }: { expression: string; isLatex: 
       <div
         className="formula-katex overflow-x-auto py-2 text-center"
         dangerouslySetInnerHTML={
-          /* llm-guardrail-allow: sanitized by DOMPurify (USE_PROFILES html) */ {
+{
             __html: DOMPurify.sanitize(rendered, { USE_PROFILES: { html: true } }),
           }
         }
@@ -169,7 +146,6 @@ function FormulaDisplay({ expression, isLatex }: { expression: string; isLatex: 
     );
   }
 
-  // Fallback: styled monospace
   return (
     <div className="overflow-x-auto rounded-md bg-muted/50 px-4 py-3 text-center">
       <code className="text-sm font-mono whitespace-pre-wrap">{expression}</code>

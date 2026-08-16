@@ -9,7 +9,6 @@
 
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
-// Mock the logger so warn/error calls don't pollute test output
 vi.mock('../src/utils', () => ({
   logger: {
     debug: vi.fn(),
@@ -19,7 +18,6 @@ vi.mock('../src/utils', () => ({
   },
 }));
 
-// Polyfill CSS.escape for jsdom (not natively supported)
 if (typeof CSS === 'undefined' || !CSS.escape) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).CSS = {
@@ -29,9 +27,6 @@ if (typeof CSS === 'undefined' || !CSS.escape) {
 
 import { extractPageMetadata, type PageMetadata } from '../src/page-metadata';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Reset the document to a clean state between tests. */
 function resetDocument(): void {
   document.head.innerHTML = '';
   document.body.innerHTML = '';
@@ -69,14 +64,11 @@ function addJsonLdRaw(text: string): void {
   document.head.appendChild(script);
 }
 
-// ─── Tests ──────────────────────────────────────────────────────────────────
-
 describe('extractPageMetadata', () => {
   beforeEach(() => {
     resetDocument();
   });
 
-  // 1. Basic page with title and description meta tag
   describe('basic page with title and description', () => {
     it('extracts title and description', () => {
       document.title = 'My Test Page';
@@ -91,7 +83,6 @@ describe('extractPageMetadata', () => {
     it('returns the current page URL', () => {
       const result = extractPageMetadata();
 
-      // jsdom url is configured in vitest.config.ts
       expect(result.url).toBe(window.location.href);
       expect(result.url).toContain('https://');
     });
@@ -113,7 +104,6 @@ describe('extractPageMetadata', () => {
     });
   });
 
-  // 2. Open Graph tags extraction
   describe('Open Graph tags', () => {
     it('extracts og: meta tags and strips prefix', () => {
       addMeta({ property: 'og:title', content: 'OG Title' });
@@ -144,12 +134,10 @@ describe('extractPageMetadata', () => {
 
       const result = extractPageMetadata();
 
-      // Empty content is falsy, so the implementation skips it
       expect(result.openGraph).toEqual({});
     });
   });
 
-  // 3. Twitter Card tags extraction
   describe('Twitter Card tags', () => {
     it('extracts twitter: meta tags and strips prefix', () => {
       addMeta({ name: 'twitter:card', content: 'summary_large_image' });
@@ -176,7 +164,6 @@ describe('extractPageMetadata', () => {
     });
   });
 
-  // 4. JSON-LD structured data parsing
   describe('JSON-LD structured data', () => {
     it('parses a single JSON-LD block', () => {
       const data = {
@@ -234,18 +221,7 @@ describe('extractPageMetadata', () => {
       expect(result.schemaTypes).toContain('BlogPosting');
     });
 
-    // SECURITY (audit batch-221 [MEDIUM] resource exhaustion, 2026-06-13):
-    // collectJsonLdTypes must cap recursion depth to match collectSchemaTypes
-    // in nlweb.ts, so a hostile page's deeply-nested JSON-LD can't stack-
-    // overflow / burn CPU inside extractSchemaTypes(). Regression coverage
-    // against the LIVE module (not a mirror) — the recursion-depth fix
-    // previously existed only in an orphaned, unimported duplicate at
-    // src/features/content/page-metadata.ts. Asserts the cap's discrete,
     // deterministic effect (a @type past the cap is excluded, one within
-    // the cap is kept) rather than "does not throw", since
-    // extractPageMetadata's own try/catch would swallow a stack overflow
-    // regardless of whether the cap exists — a non-throwing assertion alone
-    // would pass identically with the cap removed.
     it('excludes a @type nested beyond the recursion-depth cap, keeps one within it', () => {
       let deep: Record<string, unknown> = { '@type': 'DeepTypeBeyondCap' };
       for (let i = 0; i < 12; i++) {
@@ -260,7 +236,6 @@ describe('extractPageMetadata', () => {
     });
   });
 
-  // 5. Multiple JSON-LD blocks
   describe('multiple JSON-LD blocks', () => {
     it('collects all JSON-LD blocks into the array', () => {
       addJsonLd({ '@type': 'Organization', name: 'Acme Corp' });
@@ -296,7 +271,6 @@ describe('extractPageMetadata', () => {
     });
   });
 
-  // 6. Invalid JSON-LD (should not throw)
   describe('invalid JSON-LD', () => {
     it('does not throw on malformed JSON', () => {
       addJsonLdRaw('{ this is not valid json }}}');
@@ -328,7 +302,6 @@ describe('extractPageMetadata', () => {
     it('handles empty script tags gracefully', () => {
       const script = document.createElement('script');
       script.type = 'application/ld+json';
-      // No textContent set
       document.head.appendChild(script);
 
       expect(() => extractPageMetadata()).not.toThrow();
@@ -337,7 +310,6 @@ describe('extractPageMetadata', () => {
     });
   });
 
-  // 7. Canonical URL extraction
   describe('canonical URL', () => {
     it('extracts canonical link', () => {
       addLink({ rel: 'canonical', href: 'https://example.com/canonical-page' });
@@ -354,7 +326,6 @@ describe('extractPageMetadata', () => {
     });
   });
 
-  // 8. Author, keywords, language extraction
   describe('author, keywords, and language', () => {
     it('extracts author meta tag', () => {
       addMeta({ name: 'author', content: 'John Smith' });
@@ -397,7 +368,6 @@ describe('extractPageMetadata', () => {
 
       const result = extractPageMetadata();
 
-      // Empty strings and whitespace-only entries should be filtered
       expect(result.keywords).toEqual(['a', 'b', 'c']);
     });
 
@@ -418,7 +388,6 @@ describe('extractPageMetadata', () => {
     });
   });
 
-  // 9. Empty page (graceful defaults)
   describe('empty page (graceful defaults)', () => {
     it('returns valid PageMetadata with sensible defaults', () => {
       const result = extractPageMetadata();
@@ -436,16 +405,13 @@ describe('extractPageMetadata', () => {
         jsonLd: [],
         schemaTypes: [],
       });
-      // url and favicon will have values from jsdom defaults
       expect(typeof result.url).toBe('string');
       expect(result.url.length).toBeGreaterThan(0);
     });
 
     it('favicon falls back to /favicon.ico', () => {
-      // No link[rel="icon"] tags in head
       const result = extractPageMetadata();
 
-      // The implementation falls back to origin + /favicon.ico
       expect(result.favicon).toContain('/favicon.ico');
     });
 
@@ -474,7 +440,6 @@ describe('extractPageMetadata', () => {
     });
   });
 
-  // Additional edge cases
   describe('favicon extraction', () => {
     it('prefers link[rel="icon"] over shortcut icon', () => {
       addLink({ rel: 'icon', href: '/icon.png' });
@@ -490,7 +455,6 @@ describe('extractPageMetadata', () => {
 
       const result = extractPageMetadata();
 
-      // Should be an absolute URL
       expect(result.favicon).toMatch(/^https?:\/\//);
       expect(result.favicon).toContain('/assets/icon.svg');
     });

@@ -52,42 +52,20 @@ import { getRoutingSlotModel } from '@agiworkforce/types';
 import type { TaskFamily, TaskFamilySignals } from '../../task-family';
 import type { RoutingTaskType } from '../../types';
 
-/** Baseline route pin: `modelKey@effectiveProfile`, or `unavailable:<code>`. */
 export type BaselineRoutePin = string;
 
-/** One labelled corpus row. */
 export interface TaskFamilyCorpusCase {
-  /** Stable id, `<family>/<nn>`. Never renumber a shipped row. */
   id: string;
-  /** The family the deterministic fast path must return. `null` = ambiguous. */
   expectedFamily: TaskFamily | null;
-  /** The structural signals — the entire input to the fast path. */
   signals: TaskFamilySignals;
-  /**
-   * The canonical `RoutingTaskType` the EXISTING pipeline produces for this
-   * request. Labelled by hand, because reproducing `classifyTaskLocally` +
-   * `applyConversationContext` + `resolveToolAwareTaskType` here would just be
-   * a second copy of them.
-   */
   taskType: RoutingTaskType;
-  /** Plan tier for the route pin. */
   subscriptionTier: 'free' | 'pro' | 'max';
-  /** Current-policy route with the stage OFF. Recomputed by the corpus test. */
   expectedBaselineRoute: BaselineRoutePin;
-  /** One line on what this row is exercising. */
   note: string;
 }
 
-/** Runtime profile every row resolves against — the managed-cloud web surface. */
 export const CORPUS_RUNTIME_PROFILE_ID = 'web/cloud-chat';
 
-/**
- * `computer-use` has no live route on `web/cloud-chat`: the task requires the
- * `computerUse` harness feature and that feature is not `implemented` on this
- * runtime profile. The corpus records the refusal rather than pretending a
- * route exists — a fake availability pin would be exactly the "fake
- * availability badge" failure the repo rules call out.
- */
 const COMPUTER_USE_UNAVAILABLE: BaselineRoutePin = 'unavailable:no_eligible_route';
 
 const BASELINE_ROUTES = {
@@ -105,7 +83,6 @@ const BASELINE_ROUTES = {
 } as const satisfies Record<string, BaselineRoutePin>;
 
 export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
-  // ── deep_research ───────────────────────────────────────────────────────
   {
     id: 'deep_research/01',
     expectedFamily: 'deep_research',
@@ -169,7 +146,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Research outranks attachments.',
   },
 
-  // ── agentic_work ────────────────────────────────────────────────────────
   {
     id: 'agentic_work/01',
     expectedFamily: 'agentic_work',
@@ -229,7 +205,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Work mode outranks attachments.',
   },
 
-  // ── document_authoring ──────────────────────────────────────────────────
   {
     id: 'document_authoring/01',
     expectedFamily: 'document_authoring',
@@ -285,7 +260,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Office creation outranks extended thinking.',
   },
 
-  // ── code_execution ──────────────────────────────────────────────────────
   {
     id: 'code_execution/01',
     expectedFamily: 'code_execution',
@@ -341,7 +315,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Code execution outranks extended thinking.',
   },
 
-  // ── web_grounded_answer ─────────────────────────────────────────────────
   {
     id: 'web_grounded_answer/01',
     expectedFamily: 'web_grounded_answer',
@@ -397,7 +370,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Server-owned grounding outranks a caller tool surface.',
   },
 
-  // ── screen_automation ───────────────────────────────────────────────────
   {
     id: 'screen_automation/01',
     expectedFamily: 'screen_automation',
@@ -477,7 +449,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Extended thinking does not displace screen automation.',
   },
 
-  // ── vision ──────────────────────────────────────────────────────────────
   {
     id: 'vision/01',
     expectedFamily: 'vision',
@@ -545,7 +516,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Attachments outrank extended thinking.',
   },
 
-  // ── long_context ────────────────────────────────────────────────────────
   {
     id: 'long_context/01',
     expectedFamily: 'long_context',
@@ -601,7 +571,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'The token budget outranks both the tool surface and extended thinking.',
   },
 
-  // ── caller_tool_loop ────────────────────────────────────────────────────
   {
     id: 'caller_tool_loop/01',
     expectedFamily: 'caller_tool_loop',
@@ -657,7 +626,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'A tool surface outranks extended thinking.',
   },
 
-  // ── extended_thinking ───────────────────────────────────────────────────
   {
     id: 'extended_thinking/01',
     expectedFamily: 'extended_thinking',
@@ -713,7 +681,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Explicitly false toggles are signals that were considered and rejected.',
   },
 
-  // ── simple_chat ─────────────────────────────────────────────────────────
   {
     id: 'simple_chat/01',
     expectedFamily: 'simple_chat',
@@ -769,7 +736,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Exactly at the long-context threshold, which is strict — not over it.',
   },
 
-  // ── general_chat ────────────────────────────────────────────────────────
   {
     id: 'general_chat/01',
     expectedFamily: 'general_chat',
@@ -825,7 +791,6 @@ export const TASK_FAMILY_CORPUS: readonly TaskFamilyCorpusCase[] = [
     note: 'Every toggle explicitly off.',
   },
 
-  // ── ambiguous — the fast path must decline and leave Auto unchanged ─────
   {
     id: 'ambiguous/01',
     expectedFamily: null,

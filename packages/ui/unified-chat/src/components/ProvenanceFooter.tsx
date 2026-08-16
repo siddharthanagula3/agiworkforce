@@ -7,11 +7,6 @@ export interface ProvenanceFooterProps {
     ChatMessage,
     'model' | 'provider' | 'toolCalls' | 'citations' | 'createdAt' | 'routing'
   >;
-  /**
-   * Invoked when the user clicks "Pin to <model>" on an auto-routed message.
-   * Receives the routing metadata so the host can decide which conversation
-   * setting to update.
-   */
   onPinModel?: (routing: MessageRouting) => void;
 }
 
@@ -29,15 +24,6 @@ function formatRelativeTime(iso: string): string | null {
   return `${days}d ago`;
 }
 
-/**
- * Compact metadata row rendered below assistant messages: catalog model name, provider,
- * tool-call count, citation count, relative timestamp.
- *
- * When `message.routing.source === 'auto'`, an additional trace row renders
- * (`Auto routed: <task> -> <model> · Why? "<reason>"`) followed by a
- * "Pin to <pinModel>" button that invokes `onPinModel`. Model identity is
- * catalog-derived from the router payload on the message.
- */
 export function ProvenanceFooter({ message, onPinModel }: ProvenanceFooterProps) {
   const parts = useMemo(() => {
     const out: string[] = [];

@@ -1,23 +1,6 @@
-/**
- * Lever-specific form field selectors and helpers.
- *
- * Lever uses a standardised form structure across all job postings at
- * jobs.lever.co/<company>/<job-id>/apply (or /apply?lever-source=…).
- *
- * Field IDs are mostly stable:
- *   #name, #email, #phone, #org (current company)
- * Custom questions use generic IDs like #field0, #field1, etc.
- * Resume upload uses <input type="file"> inside a `.upload-btn-wrap` div.
- */
 
 import type { DetectedField } from './detector';
 
-// ─── Selector constants ───────────────────────────────────────────────────────
-
-/**
- * Prioritised selector list per profile key.
- * Order: stable ID > name attribute > aria-label > placeholder.
- */
 export const LEVER_SELECTORS: Record<string, string[]> = {
   fullName: [
     '#name',
@@ -103,9 +86,7 @@ export const LEVER_SELECTORS: Record<string, string[]> = {
     'textarea[aria-label*="Cover letter" i]',
     'textarea[placeholder*="cover letter" i]',
   ],
-  // File uploads
   'files.resume': [
-    // Lever wraps the file input inside a styled button; we target the actual <input>
     '.upload-btn-wrap input[type="file"]',
     '#resume-upload-input',
     'input[type="file"][name*="resume"]',
@@ -118,17 +99,8 @@ export const LEVER_SELECTORS: Record<string, string[]> = {
   ],
 };
 
-// ─── Custom question detection ────────────────────────────────────────────────
-
-/**
- * Lever custom questions (from the job posting) use IDs like
- * `#field0`, `#field1`, etc. or sometimes `textarea[name^="cards["]`.
- *
- * This function returns those fields with the best label we can derive,
- * mapping them to customAnswers.<label> in the profile.
- */
 export interface LeverCustomField {
-  key: string; // "customAnswers.<sanitisedLabel>"
+  key: string;
   selector: string;
   label: string;
   fieldType: DetectedField['fieldType'];
@@ -138,7 +110,6 @@ export function detectLeverCustomFields(container: Element): LeverCustomField[] 
   const results: LeverCustomField[] = [];
   const seen = new Set<string>();
 
-  // Generic numbered field inputs
   const fieldEls = Array.from(
     container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
       'input[id^="field"], textarea[id^="field"], select[id^="field"],' +
@@ -153,7 +124,6 @@ export function detectLeverCustomFields(container: Element): LeverCustomField[] 
     if (!sel || seen.has(sel)) continue;
     seen.add(sel);
 
-    // Find label
     let label = '';
     if (el.id) {
       const labelEl = container.querySelector<HTMLLabelElement>(
@@ -183,13 +153,6 @@ export function detectLeverCustomFields(container: Element): LeverCustomField[] 
   return results;
 }
 
-// ─── EEO / diversity section ──────────────────────────────────────────────────
-
-/**
- * Lever's EEO (Equal Employment Opportunity) section uses <select> dropdowns
- * with IDs like `#eeo_gender`, `#eeo_race`, etc.
- * We surface these so the filler can skip them by default (opt-in only).
- */
 export const LEVER_EEO_SELECTORS: Record<string, string> = {
   eeoGender: '#eeo_gender',
   eeoRace: '#eeo_race',
@@ -197,11 +160,6 @@ export const LEVER_EEO_SELECTORS: Record<string, string> = {
   eeoDisability: '#eeo_disability',
 };
 
-// ─── Selector resolution ──────────────────────────────────────────────────────
-
-/**
- * Resolves the first matching element for a given profile key in the Lever form.
- */
 export function resolveLeverSelector(
   key: string,
 ): { element: HTMLElement; selector: string } | null {
@@ -213,10 +171,6 @@ export function resolveLeverSelector(
   return null;
 }
 
-/**
- * Returns all currently resolvable Lever fields for the active page.
- * Used for preview before the user confirms autofill.
- */
 export function collectResolvableLeverFields(): DetectedField[] {
   const result: DetectedField[] = [];
   for (const [key, selectors] of Object.entries(LEVER_SELECTORS)) {

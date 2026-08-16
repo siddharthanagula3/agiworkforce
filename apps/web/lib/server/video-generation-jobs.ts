@@ -208,12 +208,6 @@ async function queryJob(
   return rows[0] ? mapVideoGenerationJob(rows[0]) : null;
 }
 
-/**
- * Serialize the credit reservation -> durable job boundary with both account
- * and data-only erasure. The token expires so a crashed request cannot disable
- * video indefinitely; stale managed-usage recovery remains the reservation
- * owner after expiry.
- */
 export async function acquireVideoGenerationAdmission(input: {
   db: DatabaseAdapter;
   userId: string;
@@ -282,9 +276,6 @@ export async function createVideoGenerationJob(input: {
   workflowRunId: string;
 }): Promise<VideoGenerationJob> {
   const job = await input.db.transaction(async (tx) => {
-    // Serialize with account erasure's profile deletion fence. If generation
-    // wins this row lock, erasure waits and then observes the active job; if
-    // erasure wins, its durable deletion flags make this insert fail closed.
     const profiles = await tx.query<{
       id: string;
     }>(
@@ -421,7 +412,6 @@ export async function createVideoGenerationJob(input: {
   return job;
 }
 
-/** Bind the Vercel Workflow owner before any non-idempotent provider egress. */
 export async function attachVideoGenerationWorkflow(input: {
   db: DatabaseAdapter;
   jobId: string;
@@ -456,7 +446,6 @@ export async function attachVideoGenerationWorkflow(input: {
   throw new Error('Video workflow could not be attached before provider submission.');
 }
 
-/** Record a pre-provider workflow-start failure after managed usage was settled. */
 export async function failVideoGenerationBeforeProviderStart(input: {
   db: DatabaseAdapter;
   jobId: string;
@@ -524,9 +513,6 @@ export async function recordVideoProviderTask(input: {
   );
   if (job) return job;
 
-  // The update may have committed while its response was lost. Re-read the
-  // exact identity without mutating an active reconciliation claim; returning
-  // the same attachment is idempotent, a different attachment fails closed.
   const existing = await queryJob(
     input.db,
     `select ${JOB_COLUMNS}
@@ -542,12 +528,6 @@ export async function recordVideoProviderTask(input: {
   throw new Error('Video provider task could not be attached to its durable job.');
 }
 
-/**
- * Durable recovery path whose Workflow input already contains the accepted
- * provider identity. It may outlive the short request claim, but it can attach
- * only to the exact owner/job that crossed the provider-start boundary and has
- * an attached primary workflow.
- */
 export async function recoverVideoProviderTaskAttachment(input: {
   db: DatabaseAdapter;
   jobId: string;
@@ -694,11 +674,6 @@ export async function recordVideoProviderCancellationAttempt(input: {
   return job;
 }
 
-/**
- * Persist the one-shot Runway cancellation boundary before DELETE egress. The
- * endpoint cancels active tasks but deletes terminal ones, so an ambiguous
- * response must never be replayed automatically.
- */
 export async function beginVideoProviderCancellationAttempt(input: {
   db: DatabaseAdapter;
   jobId: string;
@@ -776,7 +751,6 @@ export async function deferVideoGenerationJob(input: {
   status: 'submitting' | 'queued' | 'processing';
   progress?: number;
   retryAfterSeconds: number;
-  /** Escalate a still-live provider task without falsely terminalizing it. */
   raiseIncident?: boolean;
 }): Promise<VideoGenerationJob> {
   const job = await queryJob(
@@ -868,11 +842,6 @@ export function finalizeVideoGenerationJob(input: {
   );
 }
 
-/**
- * Deduplicate one signed terminal provider event and make the durable Workflow
- * poll immediately. The webhook never downloads, settles, or trusts payload
- * output; those mechanics stay in the claimed reconciler.
- */
 export async function nudgeVideoGenerationJobFromProviderEvent(input: {
   db: DatabaseAdapter;
   provider: VideoJobProvider;
@@ -932,7 +901,6 @@ export function markVideoGenerationOutcomeUnknown(input: {
   );
 }
 
-/** Drain and mirror a terminal job's durable managed-credit settlement. */
 export function reconcileVideoGenerationBillingSettlement(
   db: DatabaseAdapter,
   jobId: string,

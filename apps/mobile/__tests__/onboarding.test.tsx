@@ -1,22 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Onboarding Screen — component tests
- *
- * PRD-MOBILE §11 3-screen flow:
- *   Screen 1 (Hero) → disclosure modal → Screen 2 (Device tier) → Screen 3 (Download)
- *
- * Current lock:
- *   - Local demo path first
- *   - Cloud branch remains invite-gated behind its own UI
- *   - Footer: "Made by AGI Automation LLC, USA"
- *   - Compliance disclosure fires before screen 2 (Article 50(1) + Apple 5.1.2(i))
- */
 
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Mocks — must be before component import
-// ---------------------------------------------------------------------------
 
 const mockReplace = jest.fn();
 jest.mock('expo-router', () => ({
@@ -78,8 +62,6 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// ModelPickerSheet pulls in @gorhom/bottom-sheet which requires native modules.
-// Stub both so onboarding tests don't crash on the model-picker import.
 jest.mock('@gorhom/bottom-sheet', () => {
   const mockBottomSheet = jest.fn().mockImplementation(({ children }) => children);
   return {
@@ -96,7 +78,6 @@ jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => ({
   }),
 }));
 
-// Compliance package — control disclosure satisfied / not satisfied
 const mockIsDisclosureSatisfied = jest.fn().mockReturnValue(false);
 const mockComposeFirstRunDisclosure = jest.fn().mockReturnValue({
   title: 'Before you continue',
@@ -126,7 +107,6 @@ jest.mock('../storage/installedModels', () => ({
   recordInstalledModel: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Local LLM catalog stub
 const mockDefaultLocalModel = {
   id: DEFAULT_LOCAL_MODEL_ID,
   displayName: 'Fixture Standard',
@@ -164,7 +144,6 @@ jest.mock('@agiworkforce/local-llm', () => ({
   getShippableModels: jest.fn(() => [mockDefaultLocalModel, mockLiteLocalModel]),
 }));
 
-// expo-constants
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: {
@@ -175,19 +154,11 @@ jest.mock('expo-constants', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import OnboardingScreen from '../app/(public)/onboarding';
 import {
   CLOUD_CHAT_POST_AUTH_INTENT,
   POST_AUTH_INTENT_PARAM,
 } from '../src/features/auth/services/postAuthIntent';
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('Onboarding', () => {
   beforeEach(() => {
@@ -197,10 +168,6 @@ describe('Onboarding', () => {
     mockIsDisclosureSatisfied.mockReturnValue(false);
     mockGetInstalledModel.mockResolvedValue(null);
   });
-
-  // -------------------------------------------------------------------------
-  // Hero screen
-  // -------------------------------------------------------------------------
 
   describe('Hero screen (initial)', () => {
     it('renders with testID onboarding-root', () => {
@@ -279,10 +246,6 @@ describe('Onboarding', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Disclosure modal gate (Apple 5.1.2(i) + Article 50(1))
-  // -------------------------------------------------------------------------
-
   describe('Disclosure modal gate', () => {
     it('tapping "Start chatting" shows disclosure modal when not previously satisfied', async () => {
       mockIsDisclosureSatisfied.mockReturnValue(false);
@@ -350,10 +313,6 @@ describe('Onboarding', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Device-tier screen (Screen 2)
-  // -------------------------------------------------------------------------
-
   describe('Device-tier screen', () => {
     async function renderAtDeviceTier() {
       mockIsDisclosureSatisfied.mockReturnValue(true);
@@ -420,10 +379,6 @@ describe('Onboarding', () => {
       expect(getByText('Download AGI Lite')).toBeTruthy();
     });
   });
-
-  // -------------------------------------------------------------------------
-  // testID coverage (Detox acceptance gates)
-  // -------------------------------------------------------------------------
 
   describe('testID coverage (Detox acceptance gates)', () => {
     const heroIds = [

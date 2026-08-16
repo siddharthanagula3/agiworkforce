@@ -572,10 +572,6 @@ export const useEditingStore = create<EditingState>()(
   })),
 );
 
-// ============================================================================
-// Document Store (absorbed from documentStore.ts — task-w58)
-// ============================================================================
-
 import { toast as docToast } from 'sonner';
 import { invoke as docInvoke } from '../lib/tauri-mock';
 import {
@@ -873,10 +869,6 @@ export const useDocumentStore = create<DocumentState>((set) => ({
     }),
 }));
 
-// =============================================================================
-// Media Generation Store (absorbed from mediaGenerationStore.ts — task-w58)
-// =============================================================================
-
 export type GenerationStatus = 'idle' | 'running' | 'completed' | 'failed';
 
 export interface ImageJob {
@@ -1089,20 +1081,12 @@ export const useImageGalleryStore = create<ImageGalleryState>()(
       {
         name: 'image-gallery-store',
         version: 1,
-        // `selectedStyle` is no longer written to disk: no style picker mounts
-        // this store, so a persisted value was a preference no screen could ever
-        // show back. A legacy payload still merges its old value in once on
-        // hydration; nothing reads it, and the next write drops it for good.
         partialize: (state) => ({ images: state.images }),
       },
     ),
     { name: 'ImageGalleryStore', enabled: import.meta.env.DEV },
   ),
 );
-
-// =============================================================================
-// Absorbed from canvasStore.ts
-// =============================================================================
 
 export type CanvasArtifactType = 'code' | 'html' | 'markdown' | 'document';
 

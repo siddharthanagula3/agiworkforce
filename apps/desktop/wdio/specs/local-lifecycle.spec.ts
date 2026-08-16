@@ -34,10 +34,6 @@ describe('AGI Desktop Local lifecycle', () => {
     const modelOption = await $(`button*=${expectedModel}`);
     try {
       await modelOption.waitForExist({ timeout: 45_000 });
-      // WebKit's visibility check reports scroll-container rows as hidden
-      // until they are brought into view. Scroll first, then require a real
-      // hit-testable row; waiting for display before scrolling deadlocks on
-      // perfectly usable models below the initial menu viewport.
       await modelOption.scrollIntoView({ block: 'center' });
       await browser.saveScreenshot(`${SCREEN_DIR}/00-local-model-menu.png`);
       await modelOption.waitForDisplayed({ timeout: 15_000 });

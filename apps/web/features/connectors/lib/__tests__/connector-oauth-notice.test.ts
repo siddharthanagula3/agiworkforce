@@ -1,9 +1,3 @@
-/**
- * The connector OAuth broker redirects the user back to the connectors surface
- * with `?connector=&status=`, and the directory keeps its own filter in
- * `?status=`. These tests pin both halves: every status the broker actually
- * emits maps to a banner, and a bare filter value never gets mistaken for one.
- */
 
 import { describe, it, expect } from 'vitest';
 
@@ -39,16 +33,11 @@ describe('getConnectorOAuthNotice', () => {
   });
 
   it('handles a failure the broker could not attribute to a connector', () => {
-    // /api/connectors/oauth/callback omits `connector` when the pending row
-    // could not be read at all — the banner must still fire.
     const notice = getConnectorOAuthNotice('invalid_state', null);
     expect(notice?.kind).toBe('error');
     expect(notice?.message).toContain('This connector');
   });
 
-  // Regression guard: `status` is shared with the directory's own filter.
-  // Treating `?status=connected` (no connector named) as a callback outcome
-  // would toast a connection that never happened and reset the user's filter.
   it('ignores the directory status filter values when no connector is named', () => {
     expect(getConnectorOAuthNotice('connected', null)).toBeNull();
     expect(getConnectorOAuthNotice('ready', null)).toBeNull();

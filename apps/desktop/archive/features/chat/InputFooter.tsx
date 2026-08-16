@@ -1,26 +1,14 @@
-/**
- * InputFooter Component
- *
- * Minimal footer with keyboard hints and usage meters (shown only when usage > 80%).
- */
 
 import React from 'react';
 import { cn } from '../../lib/utils';
 
 export interface InputFooterProps {
-  /** Whether in simple mode */
   isSimpleMode?: boolean;
-  /** Whether there's an inline suggestion */
   hasInlineSuggestion: boolean;
-  /** Whether to show credit usage */
   showCreditUsage: boolean;
-  /** Credit usage percentage (0-100) */
   creditPercentage: number;
-  /** Whether balance is low */
   isLowBalance: boolean;
-  /** Token usage current value */
   tokenCurrent?: number;
-  /** Token usage max value */
   tokenMax?: number;
 }
 
@@ -40,7 +28,6 @@ export const InputFooter: React.FC<InputFooterProps> = ({
 
   const hasTokenUsage = tokenCurrent != null && tokenMax != null && tokenMax > 0;
 
-  // Only show usage meters when usage exceeds 80%
   const showCreditMeter = !isSimpleMode && showCreditUsage && creditPercentage > 80;
   const showTokenMeter = !isSimpleMode && !showCreditMeter && hasTokenUsage && tokenPercentage > 80;
 

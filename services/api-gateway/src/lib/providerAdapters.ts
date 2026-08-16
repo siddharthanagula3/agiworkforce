@@ -1,17 +1,3 @@
-/**
- * Provider adapter factory wired to server-held API keys.
- *
- * Each provider's adapter is constructed lazily on first request, with
- * credentials sourced from env vars (server-side only — never echoed back
- * to the client).
- *
- * Restructure Wave 2: this factory is the ONLY provider-calling seam in the
- * gateway. Every current factory adapter except LM Studio is wired here; a
- * provider is "available" only when its server env key is present
- * (buildProviderAdapter returns null otherwise and routes respond 502/503).
- * LM Studio is deliberately absent — it is a local-device provider and has no
- * meaning behind the managed gateway.
- */
 
 import {
   createProviderAdapter,
@@ -37,7 +23,6 @@ export const SUPPORTED_PROVIDER_IDS = [
   'open_router',
 ] as const satisfies readonly ProviderId[];
 
-/** Simple env-keyed providers: one API key env var, no extra config. */
 const ENV_KEYED_PROVIDERS: Partial<Record<ProviderId, { envVars: string[]; baseUrlEnv?: string }>> =
   {
     deepseek: { envVars: ['DEEPSEEK_API_KEY'] },
@@ -46,12 +31,8 @@ const ENV_KEYED_PROVIDERS: Partial<Record<ProviderId, { envVars: string[]; baseU
     minimax: { envVars: ['MINIMAX_API_KEY'] },
     moonshot: {
       envVars: ['MOONSHOT_API_KEY'],
-      // Honor MOONSHOT_BASE_URL so international keys can target api.moonshot.ai
-      // (the adapter default is api.moonshot.cn). The adapter re-validates the
-      // host against its allowlist, which already permits both.
       baseUrlEnv: 'MOONSHOT_BASE_URL',
     },
-    // DASHSCOPE_API_KEY is Alibaba's own env-var convention — honored as a fallback.
     qwen: { envVars: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'] },
     zhipu: { envVars: ['ZHIPU_API_KEY'] },
     open_router: { envVars: ['OPENROUTER_API_KEY'] },
@@ -68,7 +49,6 @@ function firstEnv(names: string[]): string | undefined {
 interface ProviderAvailability {
   id: ProviderId;
   available: boolean;
-  /** Human-readable reason when unavailable. */
   unavailableReason?: string;
 }
 
@@ -84,8 +64,6 @@ export function listProviderAvailability(): ProviderAvailability[] {
           ? { id, available: true }
           : { id, available: false, unavailableReason: 'OPENAI_API_KEY not set' };
       case 'ollama':
-        // Ollama is "available" if the env points at one — the daemon
-        // probe lives on the catalog endpoint, not here.
         return { id, available: true };
       case 'google':
         return process.env['GOOGLE_API_KEY'] ||
@@ -110,13 +88,6 @@ export function listProviderAvailability(): ProviderAvailability[] {
   });
 }
 
-/**
- * Build an adapter for the given provider id.
- *
- * Returns null when credentials are missing — the caller should respond
- * with a 503 for unavailable providers rather than silently spawning a
- * misconfigured adapter.
- */
 export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
   switch (id) {
     case 'anthropic': {
@@ -155,9 +126,6 @@ export function buildProviderAdapter(id: ProviderId): ProviderAdapter | null {
       return createProviderAdapter('ollama', config);
     }
     case 'google': {
-      // GOOGLE_AI_API_KEY is the legacy cloud-chat env name; GEMINI_API_KEY is
-      // Google's own current preferred name — both honored as fallbacks so
-      // existing deployments and users naming it either way keep working.
       const apiKey =
         process.env['GOOGLE_API_KEY'] ??
         process.env['GOOGLE_AI_API_KEY'] ??

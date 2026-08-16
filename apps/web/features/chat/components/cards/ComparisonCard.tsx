@@ -1,12 +1,3 @@
-/**
- * ComparisonCard - Side-by-side comparison display
- *
- * Detects "vs" or comparison patterns and renders:
- * - Side-by-side comparison with headers
- * - Pros (green) / Cons (red) highlights
- * - Feature comparison rows
- * - Winner highlight badge
- */
 
 'use client';
 
@@ -41,7 +32,6 @@ function parseComparison(content: string): ParsedComparison {
     { name: '', pros: [], cons: [], features: {} },
   ];
 
-  // Extract title (first heading)
   for (const line of lines) {
     const trimmed = line.trim();
     if (/^#{1,2}\s+/.test(trimmed)) {
@@ -50,14 +40,12 @@ function parseComparison(content: string): ParsedComparison {
     }
   }
 
-  // Try to extract item names from "A vs B" in title
   const vsMatch = title.match(/^(.+?)\s+vs\.?\s+(.+?)$/i);
   if (vsMatch) {
     items[0].name = (vsMatch[1] ?? '').trim();
     items[1].name = (vsMatch[2] ?? '').trim();
   }
 
-  // Parse sections
   type Section =
     | 'none'
     | 'item0'
@@ -79,7 +67,6 @@ function parseComparison(content: string): ParsedComparison {
       .replace(/\*\*/g, '')
       .replace(/^#+\s*/, '');
 
-    // Detect item-specific sections
     if (items[0].name && lower.startsWith(items[0].name.toLowerCase())) {
       currentSection = 'item0';
       continue;
@@ -89,7 +76,6 @@ function parseComparison(content: string): ParsedComparison {
       continue;
     }
 
-    // Detect pros/cons sections
     if (/^#{2,4}\s*\*?\*?(pros|advantages|strengths)\*?\*?/i.test(trimmed)) {
       if (currentSection === 'item0' || currentSection === 'pros0' || currentSection === 'cons0') {
         currentSection = 'pros0';
@@ -107,13 +93,11 @@ function parseComparison(content: string): ParsedComparison {
       continue;
     }
 
-    // Winner detection
     if (/^#{2,4}\s*\*?\*?(winner|verdict|recommendation|conclusion)\*?\*?/i.test(trimmed)) {
       currentSection = 'winner';
       continue;
     }
     if (currentSection === 'winner') {
-      // Try to detect which item is the winner
       if (!winner) {
         if (items[0].name && lower.includes(items[0].name.toLowerCase())) {
           winner = items[0].name;
@@ -128,7 +112,6 @@ function parseComparison(content: string): ParsedComparison {
       continue;
     }
 
-    // Collect pros/cons
     const isList = /^[-*]\s+/.test(trimmed);
     if (isList) {
       const text = trimmed.replace(/^[-*]\s+/, '').replace(/\*\*/g, '');
@@ -138,14 +121,12 @@ function parseComparison(content: string): ParsedComparison {
       else if (currentSection === 'cons1') items[1].cons.push(text);
     }
 
-    // Parse table rows for feature comparison
     if (trimmed.startsWith('|') && !trimmed.match(/^\|[-\s|]+\|$/)) {
       const cells = trimmed
         .split('|')
         .map((c) => c.trim())
         .filter(Boolean);
       if (cells.length >= 3) {
-        // First row might be headers
         if (!items[0].name && cells[1]) {
           items[0].name = cells[1].replace(/\*\*/g, '');
           items[1].name = cells[2]?.replace(/\*\*/g, '') || 'Option B';
@@ -158,12 +139,9 @@ function parseComparison(content: string): ParsedComparison {
     }
   }
 
-  // If names still not set, try to find them from subsection headings
   if (!items[0].name) items[0].name = 'Option A';
   if (!items[1].name) items[1].name = 'Option B';
 
-  // If we detected pros/cons but assigned them all to item0, distribute
-  // This handles cases where prose format puts both items' pros/cons under generic headers
   if (
     items[0].pros.length > 0 &&
     items[1].pros.length === 0 &&

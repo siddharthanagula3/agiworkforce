@@ -1,11 +1,3 @@
-/**
- * Contract test for GET/POST /api/projects/sync.
- *
- * Asserts the live route handlers' JSON output parses against the shared
- * `ProjectsSyncPullResponseSchema` / `ProjectsSyncPushResponseSchema` from
- * @agiworkforce/cloud-contracts — the schemas mobile's cloudSyncEngine validates
- * pulled project pages with.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
@@ -20,8 +12,6 @@ const { mockQuery, mockGetSubscription } = vi.hoisted(() => ({
   mockGetSubscription: vi.fn(),
 }));
 
-// vi.fn(impl) creation-time implementations survive the config-level
-// `mockReset: true` (which wipes .mockResolvedValue set in factories).
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
 }));

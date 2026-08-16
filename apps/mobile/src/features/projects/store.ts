@@ -6,16 +6,11 @@ import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { markProjectForSync } from '@/services/cloudSyncEngine';
 
-/** A knowledge file attached to a project as context source. */
 export interface ProjectSource {
   id: string;
-  /** Original file name shown in the UI */
   name: string;
-  /** MIME type returned by the document picker */
   mimeType: string;
-  /** File size in bytes */
   size: number;
-  /** Local file URI from expo-document-picker / expo-file-system */
   uri: string;
   addedAt: string;
 }
@@ -25,17 +20,13 @@ export interface Project {
   name: string;
   description: string;
   instructions: string;
-  /** Attached knowledge files. Optional for backward-compat with persisted
-   *  projects that predate this field; always coerce via `?? []` at read sites. */
   sources?: ProjectSource[];
   createdAt: string;
   updatedAt: string;
 }
 
 interface ProjectState {
-  /** All user projects (LOCAL mode only — cloud projects live in cloudProjectStore). */
   projects: Project[];
-  /** Currently active project ID (applies context to chat) */
   activeProjectId: string | null;
 
   createProject: (name: string, description: string, instructions: string) => string;
@@ -60,10 +51,6 @@ export const useProjectStore = create<ProjectState>()(
         const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
 
         if (isCloud) {
-          // ── Cloud path: write to cloud project store + queue for push ──────────
-          // TRUST BOUNDARY: local MMKV project-store is NOT written. Cloud project
-          // IDs are UUIDv7 (collision-free, time-ordered) as required by the server
-          // contract (z.string().uuid() validation on push).
           const id = uuidv7();
           const now = new Date().toISOString();
           useCloudProjectStore.getState().upsertCloudProject({
@@ -84,7 +71,6 @@ export const useProjectStore = create<ProjectState>()(
           return id;
         }
 
-        // ── Local path: write to persisted MMKV store ───────────────────────────
         const id = generateLocalId();
         const now = new Date().toISOString();
         const project: Project = {
@@ -106,7 +92,6 @@ export const useProjectStore = create<ProjectState>()(
         const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
 
         if (isCloud) {
-          // ── Cloud path ────────────────────────────────────────────────────────
           const existing = useCloudProjectStore.getState().projects.find((p) => p.id === id);
           if (existing) {
             useCloudProjectStore.getState().upsertCloudProject({
@@ -127,7 +112,6 @@ export const useProjectStore = create<ProjectState>()(
           return;
         }
 
-        // ── Local path ────────────────────────────────────────────────────────
         set((state) => ({
           projects: state.projects.map((p) =>
             p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p,
@@ -139,10 +123,6 @@ export const useProjectStore = create<ProjectState>()(
         const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
 
         if (isCloud) {
-          // ── Cloud path: mark as tombstone, keep in cloud store until server acks ──
-          // CRITICAL: must NOT hard-delete locally before the server receives the
-          // tombstone, otherwise the delete is silently lost. The sync engine's
-          // pushProjects() will hard-delete after receiving the server ack.
           const existing = useCloudProjectStore.getState().projects.find((p) => p.id === id);
           if (existing) {
             useCloudProjectStore.getState().upsertCloudProject({
@@ -155,7 +135,6 @@ export const useProjectStore = create<ProjectState>()(
           return;
         }
 
-        // ── Local path ────────────────────────────────────────────────────────
         set((state) => ({
           projects: state.projects.filter((p) => p.id !== id),
           activeProjectId: state.activeProjectId === id ? null : state.activeProjectId,
@@ -163,7 +142,6 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       setActiveProject: (id) => {
-        // Validate that the project exists (or allow null to clear)
         const isCloud = useChatAppModeStore.getState().appMode === 'cloud';
         if (id !== null) {
           if (isCloud) {
@@ -171,7 +149,6 @@ export const useProjectStore = create<ProjectState>()(
               .getState()
               .projects.some((p) => p.id === id && p.deletedAt === null);
             if (!exists) return;
-            // In cloud mode, use the cloud store's setter
             useCloudProjectStore.getState().setActiveCloudProject(id);
             return;
           } else {
@@ -179,7 +156,6 @@ export const useProjectStore = create<ProjectState>()(
             if (!exists) return;
           }
         }
-        // Local mode: write to local store (or clear project when id is null)
         if (isCloud) {
           useCloudProjectStore.getState().setActiveCloudProject(null);
         } else {
@@ -188,8 +164,6 @@ export const useProjectStore = create<ProjectState>()(
       },
 
       addSource: (projectId, source) => {
-        // Sources are local-only (knowledge-file bytes excluded from cloud sync
-        // per the web contract). No cloud branch needed.
         const sourceId = `src_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
         const addedAt = new Date().toISOString();
         set((state) => ({
@@ -222,7 +196,6 @@ export const useProjectStore = create<ProjectState>()(
     {
       name: 'project-store',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[projectStore] Hydration failed:', error);
@@ -231,5 +204,4 @@ export const useProjectStore = create<ProjectState>()(
   ),
 );
 
-// FIX (audit 2026-05-20, §17): use the shared rehydrate helper.
 rehydrateWhenMmkvReady(useProjectStore, 'projectStore');

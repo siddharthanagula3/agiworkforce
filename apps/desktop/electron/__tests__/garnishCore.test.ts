@@ -1,8 +1,3 @@
-/**
- * Unit tests for the pure garnish helpers. These deliberately import only
- * `garnishCore` — the sibling modules pull in `electron`, which has no
- * runtime under vitest.
- */
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SHORTCUTS,
@@ -39,7 +34,6 @@ describe('parseSettingsFile', () => {
 
 describe('normalizeShortcuts', () => {
   it('rejects values that would make globalShortcut throw', () => {
-    // Whitespace and empty strings are the shapes Electron refuses to parse.
     for (const bad of ['', '   ', 'Alt + Space', 42, null, undefined, {}]) {
       expect(normalizeShortcuts({ quickAskShortcut: bad }).quickAskShortcut).toBe(
         DEFAULT_SHORTCUTS.quickAskShortcut,

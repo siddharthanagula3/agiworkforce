@@ -10,7 +10,6 @@ export interface AgentEventStreamEmitterOptions {
   sessionId: string;
   turnId: string;
   responseModel: string;
-  /** First sequence to emit when continuing a durable run. */
   initialSequence?: number;
   now?: () => number;
 }
@@ -18,7 +17,6 @@ export interface AgentEventStreamEmitterOptions {
 export interface AgentEventStreamEmitter {
   emit(event: AgentEvent): string;
   emitWithEnvelope(event: AgentEvent): { envelope: AgentEventEnvelope; sse: string };
-  /** Cursor that must be persisted for the next continuation. */
   nextSequence(): number;
 }
 
@@ -38,12 +36,6 @@ function longestTrailingTagPrefix(value: string, tag: string): number {
   return 0;
 }
 
-/**
- * Project the legacy Web wire's mixed `<thinking>` + answer stream onto the
- * public answer only. Partial tag prefixes are retained across provider
- * chunks, while private reasoning is discarded instead of entering the
- * durable managed-run journal.
- */
 export function createPublicTextDeltaProjector(): PublicTextDeltaProjector {
   let buffer = '';
   let inThinking = false;
@@ -86,13 +78,6 @@ export function createPublicTextDeltaProjector(): PublicTextDeltaProjector {
   };
 }
 
-/**
- * Convert runtime tool arguments/results into the JSON-only value accepted by
- * the cross-surface agent-event protocol. Provider and connector values are
- * untrusted at this boundary, so undefined/function fields are removed,
- * undefined array slots become null, and bigint values are represented as
- * decimal strings instead of crashing the stream serializer.
- */
 export function toAgentEventJson(value: unknown): AgentEventJson {
   const serialized = JSON.stringify(value, (_key, current: unknown) =>
     typeof current === 'bigint' ? current.toString() : current,
@@ -101,11 +86,6 @@ export function toAgentEventJson(value: unknown): AgentEventJson {
   return JSON.parse(serialized) as AgentEventJson;
 }
 
-/**
- * Build one ordered canonical activity stream for a managed-cloud turn. The
- * resulting line remains OpenAI-SSE compatible while carrying the shared
- * protocol in `delta.x_agent_event` for Web, Desktop Cloud, and Mobile Cloud.
- */
 export function createAgentEventStreamEmitter(
   options: AgentEventStreamEmitterOptions,
 ): AgentEventStreamEmitter {

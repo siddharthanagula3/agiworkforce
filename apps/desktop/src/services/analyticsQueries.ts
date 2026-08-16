@@ -72,8 +72,6 @@ export async function queryAvgSessionDuration(_dateRange?: {
 }
 
 export async function queryRetentionRate(cohortDate: Date): Promise<RetentionCohort> {
-  // No backend retention-cohort command exists (see analytics.rs). Return an honest
-  // empty cohort rather than fabricated retention curves.
   return {
     cohort_date: cohortDate.toISOString(),
     users_count: 0,
@@ -84,8 +82,6 @@ export async function queryRetentionRate(cohortDate: Date): Promise<RetentionCoh
 }
 
 export async function queryConversionFunnel(_funnelName: string): Promise<FunnelStep[]> {
-  // No backend funnel-analytics command exists. Return an honest empty funnel
-  // instead of a hardcoded 1000→800→600→400 demo curve.
   return [];
 }
 
@@ -93,8 +89,6 @@ export async function queryErrorStats(_dateRange?: {
   start: Date;
   end: Date;
 }): Promise<ErrorStats[]> {
-  // No backend error-aggregation command exists. Return an honest empty list
-  // instead of fabricated NetworkError/ValidationError rows.
   return [];
 }
 
@@ -137,8 +131,6 @@ export async function queryCategoryData(
   category: 'features' | 'errors' | 'pages',
 ): Promise<CategoryData[]> {
   if (category === 'features') {
-    // Derive the feature breakdown from REAL feature-usage telemetry
-    // (analytics_get_feature_usage) instead of hardcoded category percentages.
     const usage = await queryFeatureUsage();
     const total = usage.reduce((sum, f) => sum + f.usage_count, 0);
     if (total === 0) return [];
@@ -151,8 +143,6 @@ export async function queryCategoryData(
       .sort((a, b) => b.value - a.value);
   }
 
-  // 'errors' and 'pages' have no backend aggregation command (see analytics.rs);
-  // return an honest empty breakdown rather than fabricated category splits.
   return [];
 }
 
@@ -174,8 +164,6 @@ export async function queryPerformanceMetrics(_dateRange: { start: Date; end: Da
   avg_api_response_time: TimeSeriesData[];
   memory_usage: TimeSeriesData[];
 }> {
-  // No backend performance-metrics command exists (see analytics.rs). Return honest
-  // empty series instead of Math.random()-generated page-load/latency/memory curves.
   return {
     avg_page_load_time: [],
     avg_api_response_time: [],
@@ -204,17 +192,11 @@ export async function exportAnalyticsReport(
   }
 }
 
-// ============================================================================
-// Newly-wired Tauri analytics commands
-// ============================================================================
-
-/** A single data point in a trend series */
 export interface TrendPoint {
   date: string;
   value: number;
 }
 
-/** Process-level usage metrics */
 export interface ProcessMetrics {
   processName: string;
   totalDuration: number;
@@ -222,7 +204,6 @@ export interface ProcessMetrics {
   avgDuration: number;
 }
 
-/** Analytics snapshot metadata */
 export interface AnalyticsSnapshot {
   id: string;
   userId: string;
@@ -232,10 +213,6 @@ export interface AnalyticsSnapshot {
   createdAt: string;
 }
 
-/**
- * Generate a weekly analytics report.
- * Returns a formatted report string.
- */
 export async function generateWeeklyReport(): Promise<string> {
   if (!isTauri) return 'Weekly report unavailable in browser mode.';
   try {
@@ -247,10 +224,6 @@ export async function generateWeeklyReport(): Promise<string> {
   }
 }
 
-/**
- * Generate a monthly analytics report.
- * Returns a formatted report string.
- */
 export async function generateMonthlyReport(): Promise<string> {
   if (!isTauri) return 'Monthly report unavailable in browser mode.';
   try {
@@ -262,9 +235,6 @@ export async function generateMonthlyReport(): Promise<string> {
   }
 }
 
-/**
- * Get cost-saved trend data over a number of days.
- */
 export async function getCostSavedTrend(days: number = 30): Promise<TrendPoint[]> {
   if (!isTauri) return [];
   try {
@@ -276,9 +246,6 @@ export async function getCostSavedTrend(days: number = 30): Promise<TrendPoint[]
   }
 }
 
-/**
- * Get time-saved trend data over a number of days.
- */
 export async function getTimeSavedTrend(days: number = 30): Promise<TrendPoint[]> {
   if (!isTauri) return [];
   try {
@@ -290,9 +257,6 @@ export async function getTimeSavedTrend(days: number = 30): Promise<TrendPoint[]
   }
 }
 
-/**
- * Get top automated processes by usage.
- */
 export async function getTopProcesses(
   startDate: number,
   endDate: number,
@@ -312,9 +276,6 @@ export async function getTopProcesses(
   }
 }
 
-/**
- * Save an analytics snapshot for later comparison.
- */
 export async function saveAnalyticsSnapshot(
   startDate: number,
   endDate: number,

@@ -1,14 +1,8 @@
-/**
- * Drift resolution: classified 'identical' — web and desktop copies differed only
- * in the Next.js 'use client' directive and the local '@/lib/utils' vs '../lib/utils'
- * cn import. Ported as-is using the shared package's dependency-free `cn`.
- */
 import * as React from 'react';
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import { Check } from 'lucide-react';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface CheckboxProps extends React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root> {
   ref?: React.Ref<React.ElementRef<typeof CheckboxPrimitive.Root>>;
 }

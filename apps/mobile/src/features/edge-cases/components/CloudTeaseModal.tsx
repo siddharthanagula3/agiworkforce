@@ -1,14 +1,3 @@
-/**
- * CloudTeaseModal — shown when a user who has already joined the waitlist
- * taps a cloud-locked feature.
- *
- * Reads the user's rank and shows a personalized "#N in line" message.
- * If rank is unknown (0 = first position) the modal still renders.
- *
- * Props:
- *   rank — 1-indexed position (pass the 0-indexed value + 1 from the server,
- *           or the raw 1-indexed value from your waitlist store)
- */
 import { Modal, View, Pressable } from 'react-native';
 import { Cloud } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -18,10 +7,6 @@ import { spacing, radii } from '@/src/ui/theme';
 
 export interface CloudTeaseModalProps {
   visible: boolean;
-  /**
-   * User's 1-indexed waitlist position (display rank).
-   * Pass 0 if position is unknown — the number will be omitted from copy.
-   */
   rank: number;
   onDismiss: () => void;
 }
@@ -33,7 +18,6 @@ function formatRank(rank: number): string {
 export function CloudTeaseModal({ visible, rank, onDismiss }: CloudTeaseModalProps) {
   const colors = useThemeColors();
 
-  // Build the full body text from atomic copy pieces
   const bodyText =
     rank > 0
       ? `${EDGE_COPY.cloudTease.bodyPrefix}${formatRank(rank)}${EDGE_COPY.cloudTease.bodyInfix}${EDGE_COPY.cloudTease.bodySuffix}`

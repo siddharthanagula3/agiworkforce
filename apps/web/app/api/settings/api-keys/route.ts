@@ -35,10 +35,6 @@ function maskRow(row: ApiKeyRow) {
   };
 }
 
-/**
- * GET /api/settings/api-keys
- * List the current user's active API keys (masked · no hashes returned).
- */
 async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'api-keys-list');
   if (rateLimitResponse) return rateLimitResponse;
@@ -59,10 +55,6 @@ async function handleList(request: NextRequest) {
   return NextResponse.json({ api_keys: rows.map(maskRow) });
 }
 
-/**
- * POST /api/settings/api-keys
- * Create a new API key. Returns the full key once · it is never stored in plaintext.
- */
 async function handleCreate(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'api-keys-create');
   if (rateLimitResponse) return rateLimitResponse;
@@ -81,7 +73,6 @@ async function handleCreate(request: NextRequest) {
 
   const db = getNeonDb();
 
-  // Enforce a per-user key limit to prevent runaway creation.
   const [countRow] = await db.query<{ count: string }>(
     `select count(*) as count from public.api_keys where user_id = $1 and revoked_at is null`,
     [userId],
@@ -91,17 +82,10 @@ async function handleCreate(request: NextRequest) {
     throw createError.validation('You may not have more than 20 active API keys at once');
   }
 
-  // Argon2id-hashed sk_live_<keyId>_<secret> key, verified via ApiKeyService
-  // in lib/api-auth.ts's Bearer-token path.
   const { apiKey: row, rawKey } = await ApiKeyService.createApiKey(db, userId, name, scopes);
 
   logger.info({ userId, keyId: row.id }, 'API key created');
 
-  // Audit: key creation. `rawKey` is in scope here and MUST NOT be recorded —
-  // only the key id, its user-chosen label and its granted scopes are. The
-  // sanitizer in lib/security-audit.ts additionally redacts any sk_live_/
-  // sk_test_-shaped value that reaches it, so a mistake here cannot persist
-  // key material.
   await recordAuditEvent({
     userId,
     eventType: 'api_key_created',

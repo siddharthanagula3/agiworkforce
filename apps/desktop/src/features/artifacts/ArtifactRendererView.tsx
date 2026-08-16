@@ -1,8 +1,3 @@
-/**
- * ArtifactRendererView Component
- *
- * Renders different artifact types with appropriate viewers.
- */
 
 import React, { useMemo } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -44,12 +39,6 @@ interface ArtifactRendererViewProps {
   rendered: RenderedArtifact;
   isStreaming?: boolean;
   className?: string;
-  /**
-   * Called from the Diagram renderer's error state ("Fix Bug" button) with
-   * the render error and the offending source, so the caller can send both
-   * back to the model. Mirrors the onFixBug pattern from
-   * features/canvas/ArtifactPreview.tsx, ported to the live artifact path.
-   */
   onFixBug?: (errorMessage: string, source: string) => void;
 }
 
@@ -87,10 +76,6 @@ export function ArtifactRendererView({
     </div>
   );
 }
-
-// =============================================================================
-// Code Renderer
-// =============================================================================
 
 function CodeRenderer({ data }: { data: CodeRenderData }) {
   return (
@@ -140,10 +125,6 @@ function CodeRenderer({ data }: { data: CodeRenderData }) {
   );
 }
 
-// =============================================================================
-// Document Renderer
-// =============================================================================
-
 function DocumentRenderer({ data }: { data: DocumentRenderData }) {
   return (
     <div className="prose prose-sm dark:prose-invert max-w-none">
@@ -180,10 +161,6 @@ function DocumentRenderer({ data }: { data: DocumentRenderData }) {
     </div>
   );
 }
-
-// =============================================================================
-// Spreadsheet Renderer
-// =============================================================================
 
 function SpreadsheetRenderer({ data }: { data: SpreadsheetRenderData }) {
   return (
@@ -232,10 +209,6 @@ function SpreadsheetRenderer({ data }: { data: SpreadsheetRenderData }) {
     </div>
   );
 }
-
-// =============================================================================
-// Diagram Renderer (Mermaid)
-// =============================================================================
 
 function DiagramRenderer({
   data,
@@ -320,8 +293,6 @@ function DiagramRenderer({
       </div>
       {svg ? (
         <div
-          // AUDIT-NEW-001 fix: Sanitize SVG before rendering to prevent XSS attacks
-          // llm-guardrail-allow: svg is DOMPurify-sanitized via sanitizeSvg() above, not raw model/user output
           dangerouslySetInnerHTML={{ __html: sanitizeSvg(svg) }}
           className="flex justify-center [&_svg]:max-w-full [&_svg]:h-auto"
         />
@@ -333,10 +304,6 @@ function DiagramRenderer({
     </div>
   );
 }
-
-// =============================================================================
-// Web Renderer (Sandboxed HTML)
-// =============================================================================
 
 const SAFE_WEB_SANDBOX_PERMISSIONS = new Set(['allow-modals', 'allow-scripts']);
 
@@ -353,32 +320,6 @@ function getWebSandboxPermissions(data: WebRenderData): string {
 function WebRenderer({ data }: { data: WebRenderData }) {
   const sandboxPermissions = getWebSandboxPermissions(data);
   const srcDoc = useMemo(() => {
-    // Content Security Policy for the sandboxed HTML iframe.
-    //
-    // script-src 'unsafe-inline':
-    //   Required — this renderer wraps user-supplied HTML snippets in a full
-    //   document with an injected <style> block; the user's own HTML may also
-    //   contain inline <script> tags that need to execute.
-    //
-    // script-src 'unsafe-eval' is intentionally OMITTED here.
-    //   This renderer is a lightweight preview (ArtifactRendererView) and does
-    //   not inject any eval-dependent console-capture logic. Blocking eval()
-    // llm-guardrail-allow: "eval(" mentions here are prose describing the CSP, not executable code
-    //   raises the bar against prototype-pollution and code-injection attacks.
-    //   If a user artifact explicitly calls eval() it will be blocked by the CSP
-    //   and surface as a console error — the correct fail-safe.
-    //
-    // style-src 'unsafe-inline':
-    //   Required — the wrapper <style> block below is injected as inline CSS,
-    //   and user HTML fragments typically contain inline style attributes.
-    //
-    // All network-capable source directives are limited to inline, data:, or
-    // blob: content. connect-src alone does not block URL loads from CSS,
-    // images, or fonts, so those directives must be bounded independently.
-    //
-    // base-uri/form-action/frame-src/object-src 'none':
-    //   Prevents base URL rewriting, form submissions, nested frames, and
-    //   legacy plugin content.
     const scriptPolicy = data.scripts_enabled ? "'unsafe-inline'" : "'none'";
     const cspMeta = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src ${scriptPolicy}; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';">`;
 
@@ -388,8 +329,6 @@ function WebRenderer({ data }: { data: WebRenderData }) {
       if (headOpen.test(data.html)) {
         return data.html.replace(headOpen, `<head$1>\n${cspMeta}`);
       }
-      // Full document with NO <head>: synthesize one so the CSP is actually applied
-      // (the .replace above would otherwise no-op, leaving the doc with NO CSP).
       const headBlock = `<head>\n${cspMeta}\n</head>`;
       return /<html[^>]*>/i.test(data.html)
         ? data.html.replace(/(<html[^>]*>)/i, `$1\n${headBlock}`)
@@ -444,10 +383,6 @@ ${data.html}
     </div>
   );
 }
-
-// =============================================================================
-// Chart Renderer
-// =============================================================================
 
 function ChartRenderer({ data }: { data: ChartRenderData }) {
   const COLORS = data.colors;
@@ -521,10 +456,6 @@ function ChartRenderer({ data }: { data: ChartRenderData }) {
   );
 }
 
-// =============================================================================
-// Presentation Renderer
-// =============================================================================
-
 function PresentationRenderer({ data }: { data: PresentationRenderData }) {
   const [currentSlide, setCurrentSlide] = React.useState(0);
 
@@ -570,10 +501,6 @@ function PresentationRenderer({ data }: { data: PresentationRenderData }) {
     </div>
   );
 }
-
-// =============================================================================
-// Image Renderer
-// =============================================================================
 
 function ImageRenderer({ data }: { data: ImageRenderData }) {
   return (

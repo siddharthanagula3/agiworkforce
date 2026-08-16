@@ -1,9 +1,3 @@
-/**
- * AuditLog
- *
- * Displays a chronological audit log of approval events (approved/denied/timed out).
- * Sources data from the toolStore pendingApprovals history and actionLog.
- */
 import React, { useMemo, useState } from 'react';
 import { CheckCircle, Clock, Search, XCircle } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -48,7 +42,6 @@ export const AuditLog: React.FC<AuditLogProps> = ({ className }) => {
 
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Filter to approval-relevant entries
   const auditEntries = useMemo(() => {
     return actionLog
       .filter((e) => {
@@ -62,7 +55,7 @@ export const AuditLog: React.FC<AuditLogProps> = ({ className }) => {
         }
         return true;
       })
-      .slice(0, 200); // cap for performance
+      .slice(0, 200);
   }, [actionLog, searchTerm]);
 
   return (

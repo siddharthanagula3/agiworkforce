@@ -47,7 +47,6 @@ function harness() {
   return { db, query, execute, transaction };
 }
 
-/** Every SQL string the code sent, lowercased, in order. */
 function sqlCalls(query: ReturnType<typeof vi.fn>): string[] {
   return query.mock.calls.map(([sql]) => String(sql).toLowerCase());
 }
@@ -56,13 +55,11 @@ describe('invitation tokens', () => {
   it('mints a high-entropy token and stores only its sha256', () => {
     const credential = createInvitationCredential(Date.parse('2026-08-05T00:00:00.000Z'));
 
-    // 32 random bytes, base64url encoded.
     expect(credential.token.length).toBeGreaterThanOrEqual(43);
     expect(credential.token).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(credential.tokenHash).toMatch(/^[0-9a-f]{64}$/);
     expect(credential.tokenHash).not.toContain(credential.token);
     expect(hashInvitationToken(credential.token)).toBe(credential.tokenHash);
-    // Seven-day TTL.
     expect(credential.expiresAt).toBe('2026-08-12T00:00:00.000Z');
   });
 
@@ -94,11 +91,11 @@ describe('createInvitation', () => {
 
   it('takes the members lock, expires lapsed invitations, then inserts one pending row', async () => {
     h.query
-      .mockResolvedValueOnce([]) // advisory lock
-      .mockResolvedValueOnce([]) // already-member probe
-      .mockResolvedValueOnce([]) // pending probe
-      .mockResolvedValueOnce([invitationRow()]); // insert returning
-    h.execute.mockResolvedValueOnce(0); // expirePendingInvitations
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([invitationRow()]);
+    h.execute.mockResolvedValueOnce(0);
 
     const result = await createInvitation(h.db, {
       organizationId: ORG_A,
@@ -110,14 +107,12 @@ describe('createInvitation', () => {
     const calls = sqlCalls(h.query);
     expect(calls[0]).toContain('pg_advisory_xact_lock');
     expect(String(h.execute.mock.calls[0]?.[0]).toLowerCase()).toContain("status = 'expired'");
-    // The INSERT is what consumes the seat; there is deliberately no count read.
     expect(calls.some((sql) => sql.includes('select count'))).toBe(false);
     expect(calls.at(-1)).toContain('insert into public.organization_invitations');
 
     const insertParams = h.query.mock.calls.at(-1)?.[1] as unknown[];
     expect(insertParams[0]).toBe(ORG_A);
     expect(insertParams[1]).toBe('invitee@example.com');
-    // The hash is persisted; the raw token is not.
     expect(insertParams[3]).toBe(hashInvitationToken(result.token));
     expect(insertParams).not.toContain(result.token);
   });
@@ -134,7 +129,6 @@ describe('createInvitation', () => {
       }),
     ).rejects.toMatchObject({ statusCode: 409 });
 
-    // No INSERT ran, so no seat was burned on a no-op.
     expect(sqlCalls(h.query).some((sql) => sql.includes('insert into'))).toBe(false);
   });
 
@@ -204,7 +198,6 @@ describe('resendInvitation', () => {
     expect(calls.some((sql) => sql.includes('insert into'))).toBe(false);
     expect(calls.at(-1)).toContain('update public.organization_invitations');
     expect(calls.at(-1)).toContain('resend_count = resend_count + 1');
-    // Both predicates: an id from another org can never be resent.
     expect(calls.at(-1)).toContain('organization_id = $4');
     expect(h.query.mock.calls.at(-1)?.[1]).toEqual([
       hashInvitationToken(result.token),
@@ -235,7 +228,7 @@ describe('resendInvitation', () => {
 
   it('404s for an invitation belonging to another organization', async () => {
     h.execute.mockResolvedValueOnce(0);
-    h.query.mockResolvedValueOnce([]); // (id, ORG_B) matches nothing
+    h.query.mockResolvedValueOnce([]);
 
     await expect(resendInvitation(h.db, ORG_B, invitationRow().id)).rejects.toMatchObject({
       statusCode: 404,
@@ -287,10 +280,10 @@ describe('acceptInvitation', () => {
 
   it('looks the invitation up by token hash alone and never by a client-supplied org', async () => {
     h.query
-      .mockResolvedValueOnce([invitationRow()]) // token lookup
-      .mockResolvedValueOnce([]) // user advisory lock
-      .mockResolvedValueOnce([]) // organization advisory lock
-      .mockResolvedValueOnce([]) // existing membership probe
+      .mockResolvedValueOnce([invitationRow()])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         invitationRow({ status: 'accepted', accepted_by_user_id: 'new-user' }),
       ]);
@@ -326,16 +319,12 @@ describe('acceptInvitation', () => {
       userEmail: 'invitee@example.com',
     });
 
-    // The organizations_seats_within_license CHECK is IMMEDIATE and cannot be
-    // deferred, so inserting the member first would transiently reach
-    // seats_consumed + 1 and abort on a fully-licensed organization.
     const acceptSql = sqlCalls(h.query).findIndex((sql) => sql.includes("set status = 'accepted'"));
     expect(acceptSql).toBeGreaterThan(-1);
     expect(h.execute).toHaveBeenCalledTimes(2);
     expect(String(h.execute.mock.calls[0]?.[0]).toLowerCase()).toContain(
       'insert into public.organization_members',
     );
-    // The accepting UPDATE was issued before the membership INSERT.
     expect(h.query.mock.invocationCallOrder.at(-1)!).toBeLessThan(
       h.execute.mock.invocationCallOrder[0]!,
     );
@@ -422,7 +411,6 @@ describe('acceptInvitation', () => {
       userEmail: 'invitee@example.com',
     });
 
-    // Otherwise the accept would consume a second seat for one person.
     expect(
       h.execute.mock.calls.some(([sql]) =>
         String(sql).toLowerCase().includes('insert into public.organization_members'),
@@ -535,7 +523,6 @@ describe('expirePendingInvitations', () => {
     const sql = String(h.execute.mock.calls[0]?.[0]).toLowerCase();
     expect(sql).toContain("status = 'pending'");
     expect(sql).toContain('expires_at <= now()');
-    // Idempotent: a re-run releases nothing twice.
     expect(sql).toContain("set status = 'expired'");
   });
 });

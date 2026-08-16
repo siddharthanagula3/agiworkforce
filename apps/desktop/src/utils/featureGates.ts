@@ -114,7 +114,6 @@ export function checkUsageLimit(
       break;
     case 'tokenCredits':
       limit = plan.limits.tokenCredits;
-      // If limit is 0 (Free plan), it effectively means no credits.
       if (limit === 0 && plan.id === 'free') {
         // Free plan might imply "Local only", so strictly no cloud tokens.
         // But strict limit of 0.
@@ -132,7 +131,6 @@ export function checkUsageLimit(
   }
 
   const withinLimit = currentUsage < limit;
-  // Handle edge case where limit is 0 to avoid division by zero if needed, though JS handles it as Infinity
   const percentageUsed =
     limit === 0 ? (currentUsage > 0 ? 100 : 0) : Math.min(100, (currentUsage / limit) * 100);
 

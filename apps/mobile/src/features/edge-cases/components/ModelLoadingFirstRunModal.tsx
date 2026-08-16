@@ -1,15 +1,3 @@
-/**
- * ModelLoadingFirstRunModal — shown during the first inference after install
- * while the model is loading into memory.
- *
- * Shows a progress bar + ETA + reassurance copy.
- * Respects reduceMotion (no animated bar animation, just opacity transition).
- *
- * Props:
- *   visible    — whether to show the modal
- *   progress   — 0..1 (0 = just started, 1 = ready)
- *   etaSeconds — estimated seconds remaining (undefined = unknown)
- */
 import { useEffect, useRef } from 'react';
 import { Modal, View, Animated, AccessibilityInfo } from 'react-native';
 import { Cpu } from 'lucide-react-native';
@@ -19,17 +7,8 @@ import { EDGE_COPY } from './copy';
 import { spacing, radii } from '@/src/ui/theme';
 
 export interface ModelLoadingFirstRunModalProps {
-  /** Controls modal visibility. */
   visible: boolean;
-  /**
-   * Loading progress, 0–1.
-   * 0 = not started, 1 = fully loaded and modal should close.
-   */
   progress: number;
-  /**
-   * Estimated seconds remaining. Omit when unknown.
-   * Displayed as "About X remaining".
-   */
   etaSeconds?: number;
 }
 
@@ -59,7 +38,6 @@ export function ModelLoadingFirstRunModal({
       .catch(() => {});
   }, []);
 
-  // Animate the progress bar toward the new value
   useEffect(() => {
     const clampedProgress = Math.min(1, Math.max(0, progress));
     if (reduceMotionRef.current) {

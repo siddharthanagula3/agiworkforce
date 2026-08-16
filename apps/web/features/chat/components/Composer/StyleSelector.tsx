@@ -55,8 +55,6 @@ export function StyleSelector() {
   const [form, setForm] = React.useState<CreateFormState>(EMPTY_FORM);
   const ref = React.useRef<HTMLDivElement>(null);
   const triggerRef = React.useRef<HTMLButtonElement>(null);
-  // The panel is portaled to document.body (AnchoredComposerMenu), so it is not
-  // inside `ref` any more — "outside" has to mean outside BOTH.
   const panelRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -71,8 +69,6 @@ export function StyleSelector() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // AUDIT-FIX CMP-6/CMP-7: the pill is "active" when EITHER axis is off its
-  // default, so the length control is never an invisible setting.
   const isActive = style !== 'default' || length !== 'brief';
 
   const activeLabel = React.useMemo<string>(() => {
@@ -102,7 +98,6 @@ export function StyleSelector() {
 
   function handleSampleChange(value: string) {
     setForm((prev) => {
-      // Auto-populate instruction hint from sample length
       const hasInstruction = prev.instruction.trim().length > 0;
       const autoInstruction =
         !hasInstruction && value.trim().length > 20

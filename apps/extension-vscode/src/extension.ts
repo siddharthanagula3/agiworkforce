@@ -1,9 +1,3 @@
-/**
- * extension.ts — AGI Workforce VS Code Extension entry point
- *
- * Activated on startup (activationEvents: ["onStartupFinished"]).
- * Orchestrates lifecycle setup via the lifecycle/ modules.
- */
 
 import * as vscode from 'vscode';
 import { Config } from './platform/config';
@@ -33,36 +27,25 @@ import {
 
 let activeLocalRuntimes: LocalRuntimePool | undefined;
 
-/**
- * Record a boot failure in subsystem health *and* put it in front of the user.
- * The status-bar warning alone is too quiet for the subsystems whose failure
- * makes the extension look dead rather than degraded.
- */
 function reportBootFailure(subsystem: string, err: unknown, impact: string): void {
   recordFailure(subsystem, err);
   const message = err instanceof Error ? err.message : String(err);
   void vscode.window.showErrorMessage(`AGI Workforce: ${impact} — ${message}`);
 }
 
-// ─── Activation ───────────────────────────────────────────────────────────────
-
 export function activate(context: vscode.ExtensionContext): void {
   initializeAgentModeConsent(context);
 
-  // ── 0. Subsystem health (must be first) ─────────────────────────────────────
   initSubsystemHealth(context);
 
-  // ── 0a. Telemetry ────────────────────────────────────────────────────────────
   runBoot('telemetry', () => {
     context.subscriptions.push(telemetry.activate(context));
   });
 
-  // ── 0b. Model Metrics ────────────────────────────────────────────────────────
   runBoot('model-metrics', () => {
     initModelMetrics(context);
   });
 
-  // ── 0c. Desktop Bridge ───────────────────────────────────────────────────────
   try {
     context.subscriptions.push(activateDesktopBridge(context));
   } catch (err) {
@@ -74,13 +57,6 @@ export function activate(context: vscode.ExtensionContext): void {
     );
   }
 
-  // ── 1. Code intelligence + diff + inline completion providers ────────────────
-  // Runs before chat setup so diffDecorationProvider is available for the sidebar.
-  // Guarded because a throw here used to abort activate() before step 2 ever
-  // registered the sidebar webview view provider — VS Code then draws the AGI
-  // container as an empty "no data provider registered" placeholder, which reads
-  // to the user as "the chat panel will not open" rather than "one subsystem
-  // failed". The degraded state keeps chat and commands wired up.
   let providerState: ProviderState | undefined;
   try {
     providerState = setupProviders(context);
@@ -100,8 +76,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const syncCodeLensProvider = providerState?.syncCodeLensProvider;
   const syncInlineCompletionProvider = providerState?.syncInlineCompletionProvider;
 
-  // One Rust app-server per workspace root. The pool is lazy, so activation
-  // never launches a process until a workspace developer session is actually used.
   const localRuntimes = new LocalRuntimePool(
     (cwd) =>
       new LocalRuntimeClient({
@@ -113,10 +87,6 @@ export function activate(context: vscode.ExtensionContext): void {
   activeLocalRuntimes = localRuntimes;
   context.subscriptions.push(localRuntimes);
 
-  // ── 2. Chat participant + sidebar + conversation tree + context tree ─────────
-  // This is where registerWebviewViewProvider('agi-workforce.sidebar') happens.
-  // A silent throw here is the single worst activation failure in the extension,
-  // so it gets an explicit error toast rather than a console warning.
   let chatState: ChatState | undefined;
   try {
     chatState = setupChat(context, localRuntimes, diffDecorationProvider);
@@ -130,7 +100,6 @@ export function activate(context: vscode.ExtensionContext): void {
   const sidebarProvider = chatState?.sidebarProvider;
   const conversationTreeProvider = chatState?.conversationTreeProvider;
 
-  // ── 3. Commands ──────────────────────────────────────────────────────────────
   if (chatState !== undefined && providerState !== undefined) {
     try {
       setupCommands(context, {
@@ -148,7 +117,6 @@ export function activate(context: vscode.ExtensionContext): void {
     }
   }
 
-  // ── 4. Status bar ────────────────────────────────────────────────────────────
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = 'agi-workforce.selectModel';
   statusBar.tooltip = 'AGI Workforce — click to change model';
@@ -237,17 +205,13 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  // ── 5. First-run prompts ─────────────────────────────────────────────────────
   void checkInlineCompletionsFirstRun(context);
 
-  // ── 6. Fetch tier info on activation (fire-and-forget) ──────────────────────
   void refreshAccountTierCache(context).catch(() => {
     // Non-critical — model admission falls back to BYOK when the account tier
     // cannot be persisted (for example, a read-only editor profile).
   });
 }
-
-// ─── Deactivation ─────────────────────────────────────────────────────────────
 
 export async function deactivate(): Promise<void> {
   const localRuntimes = activeLocalRuntimes;
@@ -255,7 +219,6 @@ export async function deactivate(): Promise<void> {
   await localRuntimes?.shutdownAll();
 }
 
-// ─── Sessions history helper ───────────────────────────────────────────────────
 // Exported so tests can import it without activating the extension.
 export function sessionHistoryRelativeTime(timestamp: number): string {
   const diff = Date.now() - timestamp;
@@ -269,8 +232,6 @@ export function sessionHistoryRelativeTime(timestamp: number): string {
   if (days < 7) return `${days}d ago`;
   return new Date(timestamp).toLocaleDateString();
 }
-
-// ─── First-run helpers ────────────────────────────────────────────────────────
 
 async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext): Promise<void> {
   if (!Config.inlineCompletionsEnabled()) return;

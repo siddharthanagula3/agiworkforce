@@ -1,20 +1,3 @@
-/**
- * The shared UI packages must actually translate.
- *
- * `@agiworkforce/ui` and `@agiworkforce/unified-chat` render the chat surface
- * for web and desktop, and every string in them used to be a literal, so
- * switching language translated the host chrome and left the product itself in
- * English. These tests pin the two halves of the contract:
- *
- *   1. With the host i18next singleton initialized, shared components render the
- *      host's locale — not English.
- *   2. With no instance attached, they render the English source copy — never
- *      a raw key and never a raw `{{placeholder}}`.
- *
- * TOPOLOGY THIS EXERCISES. Every host initializes the workspace `i18next`
- * singleton. Shared UI binds to it explicitly because pnpm may install separate
- * React Native and DOM react-i18next peer variants whose contexts do not cross.
- */
 import { describe, it, expect, afterEach, beforeAll } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import i18next from 'i18next';
@@ -26,7 +9,6 @@ afterEach(() => {
   cleanup();
 });
 
-/** A locale whose values are unmistakably not the English source copy. */
 async function initializeFrenchHost() {
   await i18next.init({
     lng: 'fr',
@@ -96,7 +78,6 @@ describe('shared UI i18n', () => {
 
     expect(screen.getByRole('button', { name: 'New chat' })).toBeTruthy();
     expect(screen.getByText('No conversations yet')).toBeTruthy();
-    // A raw key leaking through is the failure mode this fallback exists for.
     expect(screen.queryByText('sidebar.noConversations')).toBeNull();
   });
 

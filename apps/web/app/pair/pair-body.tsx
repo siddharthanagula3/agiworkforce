@@ -1,23 +1,5 @@
 import Link from 'next/link';
 
-/**
- * Shared body for `/pair` and `/pair/<anything>`.
- *
- * Both patterns are claimed as app-owned URLs by two live production routes —
- * `app/.well-known/apple-app-site-association/route.ts` (`/pair`, `/pair/*`)
- * and the Android intent filter in `apps/mobile/app.config.js` — and
- * `apps/mobile/scripts/release/verify-production-associations.mjs` gates a
- * release on those claims. Both patterns 404'd on web, so the no-app branch of
- * a claimed URL was a dead end.
- *
- * WHY NO PAIRING CODE IS RENDERED. Nothing in the product mints a
- * `/pair?code=…` or `/pair/<code>` URL: the desktop QR carries the gateway
- * payload `agiw:<code>:<pairToken>` (`services/api-gateway/src/routes/pair.ts`)
- * and is parsed in-app by the scanner, and manual entry uses the companion
- * screen's own input. A code-bearing branch here would never run, so this page
- * does not pretend to have one — and the web browser holds no key material, so
- * it could not complete a pairing even if it did. It says where to go instead.
- */
 export function PairBody() {
   return (
     <section

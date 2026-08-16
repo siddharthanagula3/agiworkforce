@@ -1,9 +1,3 @@
-/**
- * Parity tests against `crates/agiworkforce-mcp/src/oauth/flow.rs`:
- * `parse_param`, `parse_resource_metadata_url`, and `parse_insufficient_scope`
- * are the reference semantics, and the web path must read a challenge the same
- * way the CLI does rather than inventing its own interpretation.
- */
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -54,7 +48,6 @@ describe('WWW-Authenticate parsing (RFC 6750 §3 / RFC 9728 §5.1)', () => {
 
 describe('detectConnectorAuthChallenge', () => {
   it('classifies the MCP SDK 401 transport error', () => {
-    // StreamableHTTPError shape: `code` + message, no headers.
     const error = Object.assign(new Error('Streamable HTTP error: Error POSTing to endpoint: {}'), {
       code: 401,
     });

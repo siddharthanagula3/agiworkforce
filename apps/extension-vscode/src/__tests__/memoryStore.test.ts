@@ -1,9 +1,3 @@
-/**
- * memoryStore.test.ts — Unit tests for the workspace-scoped developer memory store.
- *
- * Verifies CRUD operations, backward-compat schema, duplicate detection contract,
- * and the onMemoryDidChange event.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
@@ -18,8 +12,6 @@ import {
   buildMemoryContextInput,
   type MemoryFact,
 } from '../memory/memoryStore';
-
-// ---------- minimal workspaceState stub ----------
 
 function makeGlobalState(initial?: MemoryFact[]) {
   const _store = new Map<string, unknown>();
@@ -36,8 +28,6 @@ function makeGlobalState(initial?: MemoryFact[]) {
   };
 }
 
-// ---------- loadFacts ----------
-
 describe('loadFacts', () => {
   it('returns empty array when nothing stored', () => {
     const gs = makeGlobalState();
@@ -47,8 +37,6 @@ describe('loadFacts', () => {
   it('returns empty array for non-array stored value', () => {
     const gs = makeGlobalState();
     gs.update(MEMORY_STORE_KEY, 'bad-value');
-    // Flush the mock — update is async but makeGlobalState sets synchronously via Map
-    // Re-init with bad value:
     const gs2 = {
       get: () => 'bad-value' as unknown,
       update: vi.fn(),
@@ -77,8 +65,6 @@ describe('loadFacts', () => {
     expect(facts[0]!.updatedAt).toBeUndefined();
   });
 });
-
-// ---------- addFact ----------
 
 describe('addFact', () => {
   it('persists a new fact and returns it', async () => {
@@ -149,8 +135,6 @@ describe('buildMemoryContextInput', () => {
   });
 });
 
-// ---------- updateFact ----------
-
 describe('updateFact', () => {
   it('returns true and updates text for existing id', async () => {
     const gs = makeGlobalState();
@@ -164,7 +148,7 @@ describe('updateFact', () => {
   it('sets updatedAt to a later timestamp', async () => {
     const gs = makeGlobalState();
     const fact = await addFact(gs, 'hello');
-    await new Promise((r) => setTimeout(r, 2)); // tiny gap
+    await new Promise((r) => setTimeout(r, 2));
     await updateFact(gs, fact.id, 'hello updated');
     const facts = loadFacts(gs);
     expect(facts[0]!.updatedAt).not.toBe(facts[0]!.createdAt);
@@ -184,8 +168,6 @@ describe('updateFact', () => {
     expect(facts[0]!.text).toBe('trimmed');
   });
 });
-
-// ---------- deleteFact ----------
 
 describe('deleteFact', () => {
   it('removes the fact and returns true', async () => {
@@ -213,8 +195,6 @@ describe('deleteFact', () => {
   });
 });
 
-// ---------- clearFacts ----------
-
 describe('clearFacts', () => {
   it('removes all facts', async () => {
     const gs = makeGlobalState();
@@ -232,8 +212,6 @@ describe('clearFacts', () => {
     expect(gs.update).toHaveBeenCalledWith(MEMORY_STORE_KEY, []);
   });
 });
-
-// ---------- onMemoryDidChange ----------
 
 describe('onMemoryDidChange', () => {
   it('fires after addFact', async () => {

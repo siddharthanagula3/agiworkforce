@@ -1,18 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
-/**
- * Deleted conversations are SOFT-deleted (`deleted_at`) and nothing purges them
- * — there is no conversation equivalent of `cron/purge-deleted-media`. Before
- * the `deleted=only` filter they were simply unreachable: every read filtered
- * `deleted_at is null`, so a mis-click was permanent for the user while the
- * rows sat in the table indefinitely.
- *
- * The failure is silent and severe in both directions: a default that leaks
- * deleted conversations back into the sidebar, or an `only` filter that lists
- * live ones with a "Restore" button beside them.
- */
-
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   requireUser: vi.fn(async (..._args: unknown[]) => 'user-1'),
@@ -50,8 +38,6 @@ describe('GET /api/chat/conversations deleted filter', () => {
     await GET(new NextRequest(url()));
 
     const [sql] = mocks.query.mock.calls[0]!;
-    // Every existing caller omits the parameter; none may start seeing deleted
-    // conversations because this filter was added.
     expect(sql).toContain('deleted_at is null');
     expect(sql).not.toContain('deleted_at is not null');
   });
@@ -82,12 +68,9 @@ describe('GET /api/chat/conversations deleted filter', () => {
   });
 
   it('rejects an unknown filter value rather than defaulting silently', async () => {
-    // Falling back to the default here would make `?deleted=all` quietly return
-    // live conversations to a caller that asked for something else.
     const response = await GET(new NextRequest(url('?deleted=all')));
 
     expect(response.status).toBe(400);
-    // And it must not have run a query with a guessed filter.
     expect(mocks.query).not.toHaveBeenCalled();
   });
 

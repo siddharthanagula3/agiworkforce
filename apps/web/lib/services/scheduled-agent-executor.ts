@@ -41,11 +41,6 @@ function validateAgentTask(task: ScheduleTask): string {
   return prompt;
 }
 
-/**
- * Execute the managed-cloud mechanics for one already-owned durable run.
- * Claiming, retries, terminal status, and recurrence advancement remain in
- * schedule-service; this module owns only provider execution and billing.
- */
 export const executeScheduledAgent: ScheduledTaskExecutor = async function executeScheduledAgent(
   task: ScheduleTask,
   signal: AbortSignal,

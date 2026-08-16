@@ -30,16 +30,13 @@ export const UserProfile: React.FC<UserProfileProps> = ({ collapsed = false }) =
   const account = useAccountStore((state) => state.account);
   const isTierLoading = useAccountStore(selectIsTierLoading);
   const { theme, setTheme: setThemeContext } = useThemeContext();
-  useSettingsStore((state) => state.windowPreferences?.theme ?? 'system'); // keep store in sync
+  useSettingsStore((state) => state.windowPreferences?.theme ?? 'system');
   const language = useSettingsStore((state) => state.windowPreferences?.language ?? 'en');
   const openSettings = useSettingsDialogStore((state) => state.openSettings);
   const openShortcuts = useSettingsDialogStore((state) => state.openShortcuts);
 
   const { displayName, email, planDisplayName } = account;
   const displayedPlanName = isTierLoading ? 'Loading...' : planDisplayName;
-  // Shared with web/mobile (@agiworkforce/utils/display-name): an identity
-  // provider that stores "SIDDHARTHA NAGULA" must not make the account menu
-  // shout it.
   const name = resolveAccountDisplayName(displayName, email, 'Account');
 
   const initials = name

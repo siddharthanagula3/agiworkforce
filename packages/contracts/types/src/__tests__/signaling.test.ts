@@ -1,21 +1,7 @@
-/**
- * Signaling contract — the client-visible event vocabulary.
- *
- * `services/signaling-server` sends four message types that the contract used
- * to omit, so every client fell through to `default: break` and silently
- * discarded them. These tests lock the vocabulary against the server's emit
- * sites; the shapes are exercised in
- * `packages/platform/utils/src/__tests__/signaling.test.ts`.
- */
 
 import { describe, expect, it } from 'vitest';
 import { SIGNALING_EVENT_TYPES, type SignalingEvent } from '../signaling';
 
-/**
- * Every type the signaling server puts on the wire toward a client, with the
- * emit site that proves it. Anything here that the contract omits is a message
- * clients cannot see.
- */
 const SERVER_SENT_TYPES: ReadonlyArray<[SignalingEvent['type'], string]> = [
   ['registered', 'services/signaling-server/src/index.ts — handleRegister'],
   ['peer_ready', 'services/signaling-server/src/index.ts — handleRegister'],
@@ -40,7 +26,6 @@ describe('signaling contract — event vocabulary', () => {
   });
 
   it('covers the socket lifecycle events the client synthesises', () => {
-    // Not server-sent: the client raises these from the WebSocket itself.
     expect(SIGNALING_EVENT_TYPES).toContain('open');
     expect(SIGNALING_EVENT_TYPES).toContain('close');
   });
@@ -52,8 +37,6 @@ describe('signaling contract — event vocabulary', () => {
 
 describe('signaling contract — reconnect payload shapes', () => {
   it('carries the resync cause and server clock on `sync_request`', () => {
-    // Mobile reconnect state-sync: desktop needs both to decide whether the
-    // request is current before it republishes state.
     const event: SignalingEvent = {
       type: 'sync_request',
       reason: 'mobile_reconnected',

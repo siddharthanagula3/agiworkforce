@@ -91,8 +91,6 @@ export function MasterPasswordSettings() {
   );
 }
 
-// ── Status View ─────────────────────────────────────────────────────────────
-
 interface StatusViewProps {
   status: MasterPasswordStatus | null;
   onSetup: () => void;
@@ -185,8 +183,6 @@ function StatusView({ status, onSetup, onUnlock, onLock, onChange, onMigrate }: 
     </div>
   );
 }
-
-// ── Setup View ───────────────────────────────────────────────────────────────
 
 interface SetupViewProps {
   onDone: () => void;
@@ -293,8 +289,6 @@ function SetupView({ onDone, onCancel }: SetupViewProps) {
   );
 }
 
-// ── Unlock View ──────────────────────────────────────────────────────────────
-
 interface UnlockViewProps {
   onDone: () => void;
   onCancel: () => void;
@@ -372,8 +366,6 @@ function UnlockView({ onDone, onCancel }: UnlockViewProps) {
     </div>
   );
 }
-
-// ── Change View ──────────────────────────────────────────────────────────────
 
 interface ChangeViewProps {
   onDone: () => void;
@@ -490,8 +482,6 @@ function ChangeView({ onDone, onCancel }: ChangeViewProps) {
     </div>
   );
 }
-
-// ── Migration View ───────────────────────────────────────────────────────────
 
 interface MigrationViewProps {
   onDone: () => void;

@@ -1,20 +1,3 @@
-/**
- * SIX-24 guard: fabricated QA-harness content must be unreachable in production.
- *
- * The defect: `app/qa-artifacts/page.tsx` mounts the real `ChatMessageList` +
- * `ArtifactsPanel` around a hand-authored assistant message — invented
- * reasoning, four invented tool steps, two invented "web-search sources" — and
- * shipped with no `notFound()`, no `NODE_ENV` check and no robots entry. Its
- * sibling `app/dev/inline-toolcall-demo/page.tsx` only returned `null` in
- * production, which is still a 200 OK indexable response.
- *
- * Three things are asserted here:
- *  1. the `/dev` segment layout 404s under NODE_ENV=production and renders
- *     normally otherwise (behavioural);
- *  2. every harness-shaped route segment present in the tree carries a
- *     production guard (structural sweep, so a NEW harness cannot land ungated);
- *  3. robots.ts disallows the harness paths and sitemap.ts does not list them.
- */
 
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -35,13 +18,6 @@ vi.mock('next/navigation', () => ({
 
 const APP_DIR = resolve(__dirname, '..');
 
-/**
- * Route segments whose content is hand-authored rather than produced by the
- * product. `qa-artifacts` is gitignored local scratch (.gitignore:246), so the
- * sweep discovers segments from the tree instead of hard-coding them — it holds
- * on a fresh clone (where the directory is absent) and on a working tree that
- * has it.
- */
 const HARNESS_SEGMENT = /^(dev|debug|qa[-a-z0-9]*|.*-(demo|harness|preview))$/;
 
 function harnessSegments(): string[] {
@@ -61,7 +37,6 @@ describe('SIX-24 — /dev harness segment gate', () => {
     vi.stubEnv('NODE_ENV', 'production');
     const { default: DevHarnessLayout } = await import('../dev/layout');
 
-    // notFound() throws; a layout that merely returned null would serve 200 OK.
     expect(() => DevHarnessLayout({ children: <div>harness</div> })).toThrow(NOT_FOUND);
   });
 

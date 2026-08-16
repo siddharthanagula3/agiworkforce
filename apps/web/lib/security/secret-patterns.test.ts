@@ -4,7 +4,6 @@ import { ASSERTABLE_SECRET_PATTERNS, SECRET_PATTERN_REGISTRY, globalize } from '
 import { assertNoLeaks, LeakDetectedError, SECRET_PATTERNS } from '../leak-detector';
 import { containsSecrets, redactSecrets, scanForSecrets } from './secrets-audit';
 
-// Synthetic, structurally-valid but non-functional credentials.
 const FAKE_ANTHROPIC_KEY = `sk-${'a1B2c3D4e5F6g7H8'.repeat(3)}`;
 const FAKE_STRIPE_LIVE = `sk_live_${'0'.repeat(30)}`;
 const FAKE_JWT = `eyJ${'a'.repeat(24)}.${'b'.repeat(24)}`;
@@ -13,8 +12,6 @@ const FAKE_AWS_ACCESS_KEY = `AKIA${'A'.repeat(16)}`;
 
 describe('secret pattern registry', () => {
   it('is the single source both modules read', () => {
-    // Regression: leak-detector and secrets-audit each owned a divergent list
-    // (6 vs 19 patterns), so a pattern added to one silently missed the other.
     expect(SECRET_PATTERNS).toBe(ASSERTABLE_SECRET_PATTERNS);
     expect(SECRET_PATTERN_REGISTRY.length).toBeGreaterThan(ASSERTABLE_SECRET_PATTERNS.length);
   });
@@ -25,7 +22,6 @@ describe('secret pattern registry', () => {
     }
     expect(globalize(/abc/i).flags).toContain('g');
     expect(globalize(/abc/i).flags).toContain('i');
-    // Already-global patterns are returned with their flags intact.
     expect(globalize(/abc/g).flags).toBe('g');
   });
 });
@@ -46,8 +42,6 @@ describe('assertNoLeaks (throwing guard)', () => {
     );
   });
 
-  // The guard aborts a live request, so it must stay narrow. A support
-  // escalation that merely contains the word "password" must not be rejected.
   it.each([
     ['ordinary prose mentioning a password', 'I forgot my password and cannot sign in'],
     ['a secret-shaped but scan-only match', 'api_key=abcdefghijklmnopqrstuvwxyz'],
@@ -82,8 +76,6 @@ describe('scanning API (non-throwing)', () => {
   });
 
   it('finds a match regardless of position across repeated calls', () => {
-    // Guards the lastIndex hazard: a shared global regex would miss the second
-    // call because its lastIndex survived the first.
     const input = `lead ${FAKE_GITHUB_TOKEN}`;
     expect(containsSecrets(input)).toBe(true);
     expect(containsSecrets(input)).toBe(true);

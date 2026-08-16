@@ -20,7 +20,6 @@ function deployedSweepSchedule(): string {
   return entry.schedule;
 }
 
-/** Values a single cron field selects, for the wildcard, step, list, and range forms Vercel accepts. */
 function fieldValueCount(field: string, span: number): number {
   const selected = new Set<number>();
   for (const part of field.split(',')) {
@@ -38,7 +37,6 @@ function fieldValueCount(field: string, span: number): number {
   return selected.size;
 }
 
-/** Firings per day implied by a cron expression. Fields coarser than a day only make it rarer. */
 function firingsPerDay(expression: string): number {
   const [minute, hour] = expression.trim().split(/\s+/);
   return fieldValueCount(minute!, 60) * fieldValueCount(hour!, 24);
@@ -54,9 +52,6 @@ describe('Mobile schedule policy', () => {
   });
 
   it('states the sweep cadence actually deployed in vercel.json', () => {
-    // Mobile has no import path to the web's SWEEP_INTERVAL_MS, so the deployed
-    // cron is the pin. Hardcoding "once daily" here is exactly what let the copy
-    // keep promising a daily window after the sweep went hourly.
     const perDay = firingsPerDay(deployedSweepSchedule());
     expect(CLOUD_SCHEDULE_SWEEP_INTERVAL_MS).toBe(Math.floor((24 * 60 * 60 * 1000) / perDay));
     expect(MOBILE_SCHEDULE_CADENCE_NOTE).toContain(

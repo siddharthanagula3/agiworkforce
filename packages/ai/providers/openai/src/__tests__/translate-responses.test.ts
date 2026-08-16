@@ -118,8 +118,6 @@ describe('translateChatRequestToResponses', () => {
   });
 
   it('uses an explicit req.effort directly, bypassing the budgetTokens-derived heuristic', () => {
-    // thinkingBudgetToEffort would map a 32000-token budget to 'xhigh' (>= 30000) --
-    // req.effort:'medium' must win when both are present.
     const params = translateChatRequestToResponses(
       {
         ...request,
@@ -133,17 +131,6 @@ describe('translateChatRequestToResponses', () => {
     expect(params.reasoning?.effort).toBe('medium');
   });
 
-  // INTENTIONAL SHARED-PACKAGE BEHAVIOR CHANGE (task #34's OpenAI slice,
-  // team-lead-accepted): before this change, translateChatRequestToResponses
-  // only ever emitted `reasoning` when `req.thinking?.type === 'enabled'` --
-  // `req.effort` alone, with no `thinking` at all, produced no reasoning
-  // config. Now an explicit effort alone is sufficient. This is deliberate
-  // (honoring an explicit effort control is the field's whole purpose -- see
-  // ChatRequest.effort's docstring in packages/contracts/types/src/provider-adapter.ts)
-  // but it's a real behavior change for every OTHER caller of this shared
-  // function (services/api-gateway, CLI, desktop on the Responses path), not
-  // just the web v1 route -- pinned explicitly so a future change here can't
-  // silently regress it either direction without a test failing.
   it('emits reasoning.effort from req.effort ALONE, with no req.thinking present at all', () => {
     const params = translateChatRequestToResponses(
       {

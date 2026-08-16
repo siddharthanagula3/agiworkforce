@@ -50,7 +50,6 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
 
   const isEditing = editingTask != null;
 
-  // Populate form when editing
   useEffect(() => {
     if (editingTask) {
       setName(editingTask.name);
@@ -132,7 +131,6 @@ export function CreateTaskModal({ isOpen, editingTask, onClose }: CreateTaskModa
     onClose,
   ]);
 
-  // Keyboard shortcuts: Escape to close
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {

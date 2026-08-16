@@ -9,20 +9,6 @@ import { useNotificationCenter } from '@/services/notifications';
 
 const BUTTON_SIZE = 36;
 
-/**
- * The single drawer affordance for every top-level screen header.
- *
- * Chat, Chats, Library and Projects each hand-rolled a bare `Menu` glyph at a
- * slightly different size and radius, and none of them surfaced the
- * notification centre — `app/(app)/notifications` had zero inbound navigation
- * and `useNotificationCenter` had exactly one consumer, the orphaned screen
- * itself. Background producers (Tasks, Schedules) therefore finished silently.
- *
- * The unread pip is its own Pressable rendered as a sibling (not a child) of
- * the drawer button: nesting one Pressable inside another is unreliable on
- * Android, and the two targets mean different things — the glyph opens the
- * drawer, the badge opens the notifications it is counting.
- */
 export function DrawerButton({ onPress, testID }: { onPress: () => void; testID?: string }) {
   const colors = useThemeColors();
   const router = useRouter();

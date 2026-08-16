@@ -5,12 +5,6 @@ import { useRouter } from 'next/navigation';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 
-/**
- * /auth/update-password was the Supabase email-link callback for password
- * reset. The project migrated to Clerk, which uses a code-based reset flow
- * embedded in the <SignIn> component at /login. This page now redirects
- * there so no dead form is reachable.
- */
 export default function UpdatePasswordPage() {
   const router = useRouter();
 

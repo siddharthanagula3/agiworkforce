@@ -1,9 +1,3 @@
-/**
- * telemetryRedaction.test.ts — D3 fix coverage
- *
- * Locks in the secret-redaction patterns so a future regression that adds
- * a new error path won't leak credentials to the telemetry endpoint.
- */
 
 import { describe, expect, it } from 'vitest';
 import { redactSecrets } from '../core/telemetry';

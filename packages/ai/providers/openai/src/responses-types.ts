@@ -1,17 +1,4 @@
-/**
- * OpenAI Responses API wire types — the subset we use.
- *
- * Source of truth: https://platform.openai.com/docs/api-reference/responses
- *
- * Hand-typed instead of importing the SDK's Responses module so we stay
- * decoupled from minor SDK shape churn (the official `openai` types churn
- * every minor version). The SDK is still used for the actual HTTP/SSE
- * transport via `client.responses.create({ stream: true })`.
- */
 
-// ============================================================================
-// Input items
-// ============================================================================
 
 export interface ResponsesInputTextContent {
   type: 'input_text';
@@ -20,16 +7,13 @@ export interface ResponsesInputTextContent {
 
 export interface ResponsesInputImageContent {
   type: 'input_image';
-  /** Either an image URL or a data: URL with base64 content. */
   image_url: string;
-  /** "auto" | "low" | "high" — controls cost vs detail. */
   detail?: 'auto' | 'low' | 'high';
 }
 
 export interface ResponsesInputFileContent {
   type: 'input_file';
   filename: string;
-  /** A base64 data URL. Owner-scoped storage is hydrated before translation. */
   file_data: string;
 }
 
@@ -48,14 +32,12 @@ export interface ResponsesFunctionCallItem {
   type: 'function_call';
   call_id: string;
   name: string;
-  /** JSON-encoded arguments string (per OpenAI spec). */
   arguments: string;
 }
 
 export interface ResponsesFunctionCallOutputItem {
   type: 'function_call_output';
   call_id: string;
-  /** Tool result text (or JSON-stringified payload). */
   output: string;
 }
 
@@ -63,10 +45,6 @@ export type ResponsesInputItem =
   | ResponsesInputMessage
   | ResponsesFunctionCallItem
   | ResponsesFunctionCallOutputItem;
-
-// ============================================================================
-// Tools
-// ============================================================================
 
 export interface ResponsesFunctionTool {
   type: 'function';
@@ -76,11 +54,6 @@ export interface ResponsesFunctionTool {
   strict?: boolean;
 }
 
-/**
- * Provider-native Responses tools such as OpenAI web search. Unlike function
- * tools, these are executed by OpenAI and therefore intentionally retain the
- * provider's request shape after the required `type` discriminator.
- */
 export interface ResponsesNativeTool {
   type: string;
   [key: string]: unknown;
@@ -90,26 +63,14 @@ export type ResponsesTool = ResponsesFunctionTool | ResponsesNativeTool;
 
 export type ResponsesToolChoice = 'auto' | 'none' | 'required' | { type: 'function'; name: string };
 
-// ============================================================================
-// Reasoning
-// ============================================================================
-
 export interface ResponsesReasoningConfig {
-  /** OpenAI reasoning effort. Exact supported values are model-registry driven. */
   effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
-  /** Include reasoning summary text in stream events. */
   summary?: 'auto' | 'concise' | 'detailed';
 }
 
-// ============================================================================
-// Request
-// ============================================================================
-
 export interface ResponsesCreateParams {
   model: string;
-  /** Either a single text input or an array of input items. */
   input: string | ResponsesInputItem[];
-  /** System / developer prompt. Single string or block. */
   instructions?: string;
   tools?: ResponsesTool[];
   tool_choice?: ResponsesToolChoice;
@@ -118,26 +79,16 @@ export interface ResponsesCreateParams {
   top_p?: number;
   stop?: string | string[];
   reasoning?: ResponsesReasoningConfig;
-  /** Server-side conversation persistence + chaining. */
   store?: boolean;
   previous_response_id?: string;
-  /** Routing hint. */
   service_tier?: 'auto' | 'default' | 'flex';
-  /** Required for the streaming path we use. */
   stream: true;
-  /** Streaming-specific options. */
   stream_options?: { include_obfuscation?: boolean };
   metadata?: Record<string, string>;
-  /** Request complete URL source metadata for native web-search calls. */
   include?: Array<'web_search_call.action.sources'>;
 }
 
-// ============================================================================
-// Stream events (subset)
-// ============================================================================
-
 interface BaseEvent {
-  /** Sequence number — useful for ordering across reconnects. */
   sequence_number?: number;
 }
 
@@ -342,14 +293,12 @@ export interface ResponseErrorEvent extends BaseEvent {
   param?: string;
 }
 
-/** Kept for OpenAI-compatible endpoints that still prefix the error event. */
 export interface ResponseLegacyErrorEvent extends BaseEvent {
   type: 'response.error';
   code?: string;
   message?: string;
 }
 
-/** The minimal subset of stream event variants we care about. */
 export type ResponsesStreamEvent =
   | ResponseCreatedEvent
   | ResponseInProgressEvent

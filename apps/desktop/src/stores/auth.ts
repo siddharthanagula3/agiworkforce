@@ -1,25 +1,3 @@
-/**
- * Unified Auth Store
- *
- * Consolidates authentication, account, and billing state into a single store.
- *
- * Previously split across:
- * - authStore.ts - User login, session validation, auth methods
- * - accountStore.ts - User profile, subscription plan, tier, credits
- * - billingStore.ts - Stripe customer, subscription, credit balance
- *
- * This consolidation:
- * - Reduces state synchronization complexity
- * - Eliminates redundant auth state listeners
- * - Provides a single source of truth for user identity and subscription
- *
- * Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Persist middleware: Using createJSONStorage, partialize, version
- * - Better devtools integration with store name
- * - subscribeWithSelector for granular subscriptions
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { storageFallback } from '../lib/storageFallback';
@@ -33,21 +11,10 @@ import {
 } from '../lib/cloudAccountTypes';
 import { isFreePlan, normalizeUIPlanTier, PLAN_DESCRIPTION } from '@agiworkforce/types';
 
-// =============================================================================
-// Helpers
-// =============================================================================
-
 export function isPaidCloudPlan(plan: PlanTier | null): boolean {
   return plan !== null && !isFreePlan(normalizeUIPlanTier(plan));
 }
 
-// =============================================================================
-// Types
-// =============================================================================
-
-/**
- * Basic user identity - minimal info needed for auth checks
- */
 export interface User {
   id: string;
   email: string;
@@ -56,9 +23,6 @@ export interface User {
   role?: string;
 }
 
-/**
- * Subscription status from Stripe
- */
 export type SubscriptionStatus =
   | 'active'
   | 'trialing'
@@ -69,14 +33,8 @@ export type SubscriptionStatus =
   | 'incomplete_expired'
   | 'unpaid';
 
-/**
- * Fetch status for subscription data
- */
 export type SubscriptionFetchStatus = 'idle' | 'fetching' | 'succeeded' | 'failed';
 
-/**
- * Credit balance information
- */
 export interface CreditBalance {
   account_id?: string;
   period_start?: string;
@@ -91,17 +49,8 @@ export interface CreditBalance {
   daily_reset_at?: string;
 }
 
-// Re-export PlanTier for backwards compatibility
 export type { PlanTier } from '../lib/cloudAccountTypes';
 
-// =============================================================================
-// DesktopAccount Interface (for backwards compatibility)
-// =============================================================================
-
-/**
- * Desktop account shape for backwards compatibility with accountStore.
- * New code should use the individual properties on UnifiedAuthStore instead.
- */
 interface DesktopAccountShape {
   id: string | null;
   email: string | null;
@@ -125,46 +74,19 @@ interface DesktopAccountShape {
   lastSyncedAt: number | null;
 }
 
-// =============================================================================
-// State Interface
-// =============================================================================
-
 interface AuthState {
-  // ─────────────────────────────────────────────────────────────────────────
-  // User Identity (from authStore)
-  // ─────────────────────────────────────────────────────────────────────────
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
 
-  // Hydration tracking
   _hasHydrated: boolean;
-  // Session has been validated with the cloud auth boundary (not just rehydrated from cache)
   sessionValidated: boolean;
-  /**
-   * True only for the synthesized device-owned Local account (App.tsx's
-   * `applyLocalAccount`), which exists so Local chat stores have a stable owner
-   * id and is NEVER a Managed Cloud tenant. `selectHasCloudAccountSession`
-   * reads this instead of sniffing `plan === 'local-only'`: the plan field is
-   * resolved asynchronously (STEP 4 of the auth orchestrator, behind a hash +
-   * a network call) and `setAccount` preserves the previous value while it is
-   * undefined, so a freshly approved device was still reported as local-only
-   * for the whole entitlement window and bounced back to the sign-in screen.
-   */
   isLocalDeviceAccount: boolean;
 
-  /**
-   * Monotonic identity for the current Managed Cloud session incarnation.
-   * It changes when the account id changes or the session is torn down, but
-   * deliberately remains stable across bearer-token refreshes for one account.
-   */
   cloudSessionEpoch: number;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Subscription & Plan (merged from accountStore + billingStore)
-  // ─────────────────────────────────────────────────────────────────────────
-  plan: PlanTier | null; // null = unknown/loading
+  plan: PlanTier | null;
   planDisplayName: string;
   subscriptionStatus: SubscriptionStatus;
   subscriptionFetchStatus: SubscriptionFetchStatus;
@@ -172,52 +94,30 @@ interface AuthState {
   subscriptionCancelAtPeriodEnd: boolean;
   subscriptionSource: SubscriptionSource;
 
-  // Tier flags (derived from plan)
   isPro: boolean;
   isEnterprise: boolean;
 
-  // Feature flags from backend
   featureFlags: Record<string, boolean>;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Stripe Integration (from billingStore)
-  // ─────────────────────────────────────────────────────────────────────────
   stripeCustomerId: string | null;
   stripeCustomer: CustomerInfo | null;
   stripeSubscription: SubscriptionInfo | null;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Credits (merged from accountStore + billingStore)
-  // ─────────────────────────────────────────────────────────────────────────
   credits: CreditBalance | null;
-  // For pre-flight checks (from billingStore) - null = not loaded, 0 = confirmed zero
   creditBalance_cents: number | null;
   dailyUsage_cents: number | null;
   dailyLimit_cents: number | null;
   dailyResetAt: string | null;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Tokens (from accountStore)
-  // ─────────────────────────────────────────────────────────────────────────
   accessToken: string | null;
   refreshToken: string | null;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Device Linking (from accountStore)
-  // ─────────────────────────────────────────────────────────────────────────
   deviceLinkId: string | null;
   deviceLinkCode: string | null;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Metadata
-  // ─────────────────────────────────────────────────────────────────────────
   createdAt: number;
   lastSyncedAt: number | null;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Backwards Compatibility - Computed Properties
-  // These provide the same interface as the old separate stores
-  // ─────────────────────────────────────────────────────────────────────────
   /** @deprecated Use individual properties instead. Provided for backwards compatibility with accountStore. */
   account: DesktopAccountShape;
   /** @deprecated Use stripeSubscription instead. Provided for backwards compatibility with billingStore. */
@@ -227,9 +127,6 @@ interface AuthState {
 }
 
 interface AuthActions {
-  // ─────────────────────────────────────────────────────────────────────────
-  // Auth Methods (from authStore)
-  // ─────────────────────────────────────────────────────────────────────────
   setUser: (user: User | null) => void;
   getCurrentUserId: () => string;
   clearAuth: () => void;
@@ -237,28 +134,13 @@ interface AuthActions {
   setSessionValidated: (state: boolean) => void;
   isAuthReady: () => boolean;
 
-  /**
-   * Browser-approval (device authorization) sign-in.
-   *
-   * Retained as the explicit fallback for native sign-in and as the path the
-   * CLI-shaped grant still uses. Credentials are ignored: this opens the AGI
-   * approval surface and waits for a device credential.
-   */
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  /**
-   * Adopt a credential produced by NATIVE in-app sign-in (the default on
-   * Desktop). The credential is already the first-party device bearer, so it
-   * lands in the same vault and refresh schedule as the fallback path.
-   */
   completeNativeSignIn: (credential: {
     accessToken: string;
     refreshToken?: string;
   }) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Account Methods (from accountStore)
-  // ─────────────────────────────────────────────────────────────────────────
   setAccount: (updates: Partial<AccountUpdates>) => void;
   setPlan: (plan: PlanTier) => void;
   setDisplayName: (name: string) => void;
@@ -266,14 +148,6 @@ interface AuthActions {
   setAvatar: (avatarUrl: string | null) => void;
   logout: () => Promise<void>;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Billing Methods (from billingStore)
-  //
-  // Customer/subscription records are populated by the cloud auth
-  // orchestrator from the web `/api/me` response. Checkout, portal, and
-  // cancellation route through the web REST API (`lib/stripeCheckout.ts`).
-  // The desktop client never holds Stripe secrets or talks to Stripe directly.
-  // ─────────────────────────────────────────────────────────────────────────
   setStripeCustomer: (customer: CustomerInfo | null) => void;
   setStripeSubscription: (subscription: SubscriptionInfo | null) => void;
   getCurrentPlan: () => string;
@@ -284,21 +158,12 @@ interface AuthActions {
     daily_reset_at?: string;
   }) => void;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Error Handling
-  // ─────────────────────────────────────────────────────────────────────────
   setError: (error: string | null) => void;
   clearError: () => void;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Reset
-  // ─────────────────────────────────────────────────────────────────────────
   reset: () => void;
 }
 
-/**
- * Account update fields (subset of state that can be updated via setAccount)
- */
 interface AccountUpdates {
   id: string | null;
   email: string | null;
@@ -319,22 +184,13 @@ interface AccountUpdates {
   deviceLinkId: string | null;
   deviceLinkCode: string | null;
   lastSyncedAt: number | null;
-  /** Set true ONLY by the Local device-account synthesizer; false by cloud auth. */
   isLocalDeviceAccount: boolean;
 }
 
 type UnifiedAuthStore = AuthState & AuthActions;
 
-// =============================================================================
-// Storage & Caching
-// =============================================================================
-
-// storageFallback is imported from '../lib/storageFallback'
-
-// Version for storage migration
 const UNIFIED_AUTH_STORE_VERSION = 1;
 
-// Legacy cache key retained only so sign-out/reset can erase stale pre-v1 data.
 const SUBSCRIPTION_CACHE_KEY = 'agiworkforce_subscription_cache';
 
 function clearCachedSubscription(): void {
@@ -345,8 +201,6 @@ function clearCachedSubscription(): void {
   }
 }
 
-// Credits cache for deduplication
-// These are maintained for use by authOrchestrator which handles credit fetching
 interface CreditsCacheEntry {
   accessToken: string;
   credits: CreditBalance | null;
@@ -366,7 +220,6 @@ function clearCreditsCache(): void {
   credits401Cache = null;
 }
 
-// Retry mechanism for failed subscription fetches
 let retryTimeout: ReturnType<typeof setTimeout> | null = null;
 let retryCount = 0;
 let authAttemptGeneration = 0;
@@ -384,7 +237,6 @@ export function scheduleSubscriptionRetry(userId: string): void {
   const delay = Math.min(3000 * Math.pow(2, retryCount - 1), 30000);
 
   retryTimeout = setTimeout(async () => {
-    // [C2 fix] Guard: skip retry if the active session has changed since scheduling
     const currentUserId = useUnifiedAuthStore.getState().user?.id;
     if (currentUserId && currentUserId !== userId) {
       return;
@@ -418,20 +270,14 @@ async function closeAuthenticatedChildWindows(): Promise<void> {
   await closeOwnedCloudWebviewWindows();
 }
 
-// =============================================================================
-// Default State
-// =============================================================================
-
 function getDefaultState(): AuthState {
   const devPlan = import.meta.env.VITE_DEV_ACCOUNT_PLAN as PlanTier | undefined;
   const devName = import.meta.env.VITE_DEV_ACCOUNT_NAME as string | undefined;
   const devEmail = import.meta.env.VITE_DEV_ACCOUNT_EMAIL as string | undefined;
 
-  // In development, use dev plan. In production, start with null (unknown) until fetched.
   const plan: PlanTier | null = devPlan || null;
 
   return {
-    // User identity
     user: devEmail
       ? {
           id: 'dev-user',
@@ -447,7 +293,6 @@ function getDefaultState(): AuthState {
     isLocalDeviceAccount: false,
     cloudSessionEpoch: 0,
 
-    // Subscription & Plan
     plan,
     planDisplayName: plan ? PLAN_DISPLAY_NAMES[plan] : 'Loading...',
     subscriptionStatus: 'none',
@@ -459,32 +304,25 @@ function getDefaultState(): AuthState {
     isEnterprise: plan === 'enterprise',
     featureFlags: {},
 
-    // Stripe
     stripeCustomerId: null,
     stripeCustomer: null,
     stripeSubscription: null,
 
-    // Credits
     credits: null,
     creditBalance_cents: null,
     dailyUsage_cents: null,
     dailyLimit_cents: null,
     dailyResetAt: null,
 
-    // Tokens
     accessToken: null,
     refreshToken: null,
 
-    // Device linking
     deviceLinkId: null,
     deviceLinkCode: null,
 
-    // Metadata
     createdAt: Date.now(),
     lastSyncedAt: null,
 
-    // Backwards compatibility - these mirror other state properties
-    // They are computed in the store's subscribeWithSelector middleware
     account: {
       id: devEmail ? 'dev-user' : null,
       email: devEmail || null,
@@ -512,19 +350,11 @@ function getDefaultState(): AuthState {
   };
 }
 
-// =============================================================================
-// Store
-// =============================================================================
-
 export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
   devtools(
     persist(
       subscribeWithSelector((set, get) => ({
         ...getDefaultState(),
-
-        // ═══════════════════════════════════════════════════════════════════
-        // Auth Methods (from authStore)
-        // ═══════════════════════════════════════════════════════════════════
 
         setUser: (user: User | null) => {
           set(
@@ -543,10 +373,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 };
               }
 
-              // Identity and every account-scoped capability/billing field
-              // move in one Zustand transaction. A newly projected account
-              // must never inherit the previous tenant's plan, flags, Stripe
-              // records, or credit balance while its own refresh is pending.
               return {
                 user,
                 isAuthenticated: !!user,
@@ -757,19 +583,12 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           set(
             (state) => ({
               isLoading: true,
-              // Deny every new Managed Cloud operation at sign-out intent,
-              // before runtime teardown or remote revocation can wait. Keep
-              // the bearer in memory only long enough for those cleanup paths;
-              // the shared admission predicate is already false.
               isAuthenticated: false,
               cloudSessionEpoch: state.cloudSessionEpoch + 1,
             }),
             undefined,
             'auth/signOut/start',
           );
-          // CloudAccountAuth clears in-memory authority and cancels refreshes
-          // synchronously. It then lets the retiring runtime cancel its own
-          // durable runs before the server bearer is remotely revoked.
           const cloudSignOutPromise = cloudAccountAuth.signOut({
             beforeCredentialRevocation: async () => {
               await disposeAuthenticatedChatRuntime().catch((error: unknown) => {
@@ -790,11 +609,9 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
               console.warn('[UnifiedAuth] Could not close every Cloud child window:', error);
             });
             if (hasReplacementCloudSession()) return;
-            // Clean up all stores after successful sign out
             await runLogoutCleanup(isStillSignedOut);
           } catch (error) {
             console.error('[UnifiedAuth] Sign out error:', error);
-            // Still attempt cleanup even if sign out fails
             try {
               await runLogoutCleanup(isStillSignedOut);
             } catch (cleanupError) {
@@ -802,7 +619,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             }
           } finally {
             if (isStillSignedOut()) {
-              // Clear all caches
               clearCachedSubscription();
               clearCreditsCache();
               resetRetryCount();
@@ -812,11 +628,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                   ...getDefaultState(),
                   _hasHydrated: true,
                   sessionValidated: true,
-                  // cloudAccountAuth normally publishes its signed-out state
-                  // synchronously, which calls clearAuth above. Preserve that
-                  // bump; if a listener was unavailable, guarantee teardown
-                  // still advances the incarnation exactly enough to invalidate
-                  // every boundary captured before sign-out.
                   cloudSessionEpoch: Math.max(state.cloudSessionEpoch, sessionEpochAtStart + 1),
                 }),
                 undefined,
@@ -825,10 +636,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
             }
           }
         },
-
-        // ═══════════════════════════════════════════════════════════════════
-        // Account Methods (from accountStore)
-        // ═══════════════════════════════════════════════════════════════════
 
         setAccount: (updates: Partial<AccountUpdates>) => {
           set(
@@ -865,10 +672,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                   : identityChanged
                     ? 'idle'
                     : state.subscriptionFetchStatus;
-              // 'Loading...' is a transient sentinel, not a state the user may
-              // be left in. Once the tier fetch has failed there is nothing
-              // still loading, so the sidebar footer and account menu say so
-              // instead of spinning forever on a transient /api/me outage.
               const newPlanDisplayName =
                 updates.planDisplayName !== undefined
                   ? updates.planDisplayName
@@ -982,10 +785,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
                 deviceLinkId: newDeviceLinkId,
                 deviceLinkCode: newDeviceLinkCode,
                 lastSyncedAt: newLastSyncedAt,
-                // Derived tier flags
                 isPro: isPaidCloudPlan(newPlan),
                 isEnterprise: newPlan === 'enterprise',
-                // Backwards compatibility - update account object
                 account: {
                   id: newUser?.id || null,
                   email: newUser?.email || null,
@@ -1063,15 +864,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           await get().signOut();
         },
 
-        // ═══════════════════════════════════════════════════════════════════
-        // Billing Methods (from billingStore)
-        //
-        // Subscription/customer records are set by the cloud auth orchestrator
-        // from the web `/api/me` response — the desktop never queries
-        // Stripe directly. Checkout/portal/cancel go through the web REST API
-        // (`lib/stripeCheckout.ts`). No Stripe secrets live on the client.
-        // ═══════════════════════════════════════════════════════════════════
-
         setStripeCustomer: (customer) =>
           set({ stripeCustomer: customer, customer }, undefined, 'auth/setStripeCustomer'),
 
@@ -1107,16 +899,8 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           );
         },
 
-        // ═══════════════════════════════════════════════════════════════════
-        // Error Handling
-        // ═══════════════════════════════════════════════════════════════════
-
         setError: (error) => set({ error }, undefined, 'auth/setError'),
         clearError: () => set({ error: null }, undefined, 'auth/clearError'),
-
-        // ═══════════════════════════════════════════════════════════════════
-        // Reset
-        // ═══════════════════════════════════════════════════════════════════
 
         reset: () => {
           clearCachedSubscription();
@@ -1141,9 +925,6 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
         partialize: (state) => ({
-          // Persist only non-secret identity hints. Authentication, billing,
-          // entitlements, and credits are account-scoped server state and must
-          // be revalidated from the native credential vault on every launch.
           user: state.user
             ? {
                 id: state.user.id,
@@ -1171,39 +952,11 @@ export const useUnifiedAuthStore = create<UnifiedAuthStore>()(
   ),
 );
 
-// =============================================================================
-// Selectors
-// =============================================================================
-
-// Auth selectors (from authStore)
 export const selectIsAuthReady = (state: UnifiedAuthStore): boolean =>
   state._hasHydrated && state.sessionValidated;
 
 export const selectUser = (state: UnifiedAuthStore) => state.user;
 export const selectIsAuthenticated = (state: UnifiedAuthStore) => state.isAuthenticated;
-/**
- * THE single desktop answer to "does this install have a usable Managed Cloud
- * session?". Every cloud-gated surface (sidebar account row, Tasks, Library,
- * Settings > Account/Privacy/Billing/General, the app shell, cloud chat/project
- * loading, sync, and the managed egress boundary) must derive from this and
- * nothing else — four hand-rolled variants are what let the same session render
- * as signed-in and signed-out at once.
- *
- * Identity is `user.id`, NOT `user.email`: the desktop bearer is minted by
- * /api/auth/device/token with `email: ''` when the browser approval had no
- * email claim, so an email conjunct silently signs valid paying sessions out.
- * The credential is the token; the tenant is the id. `isLocalDeviceAccount`
- * keeps the synthesized Local account out of the Managed Cloud boundary.
- *
- * This conjunct used to be `plan !== 'local-only'`, which was a *sniff*, not a
- * fact: the real tier is written asynchronously (auth orchestrator STEP 4,
- * behind `hashUserId` + an untimed credits fetch) and `setAccount` preserves
- * the previous plan while `updates.plan` is undefined. A user who had just
- * approved the device therefore still read as local-only for the whole
- * entitlement window and the shell re-rendered `AuthPage` on top of a
- * successful sign-in. The flag is written only by the Local synthesizer and
- * cleared by cloud auth, so it can never lag the credential.
- */
 export const selectHasCloudAccountSession = (state: UnifiedAuthStore): boolean =>
   state.isAuthenticated &&
   !state.isLocalDeviceAccount &&
@@ -1212,7 +965,6 @@ export const selectHasCloudAccountSession = (state: UnifiedAuthStore): boolean =
 export const selectIsLoading = (state: UnifiedAuthStore) => state.isLoading;
 export const selectAuthError = (state: UnifiedAuthStore) => state.error;
 
-// Account selectors (from accountStore)
 export const selectAccount = (state: UnifiedAuthStore) => ({
   id: state.user?.id || null,
   email: state.user?.email || null,
@@ -1248,19 +1000,11 @@ export const selectFeatureFlags = (state: UnifiedAuthStore) => state.featureFlag
 export const selectIsTierLoading = (state: UnifiedAuthStore) =>
   state.plan === null || state.subscriptionFetchStatus === 'fetching';
 
-// Billing selectors (from billingStore)
 export const selectStripeCustomer = (state: UnifiedAuthStore) => state.stripeCustomer;
 export const selectStripeSubscription = (state: UnifiedAuthStore) => state.stripeSubscription;
 export const selectCreditBalance = (state: UnifiedAuthStore) => state.creditBalance_cents;
 export const selectIsHydrated = (state: UnifiedAuthStore) => state._hasHydrated;
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-/**
- * Wait for auth state to be fully ready (hydrated + session validated).
- */
 export function waitForAuthReady(): Promise<void> {
   return new Promise((resolve) => {
     const state = useUnifiedAuthStore.getState();
@@ -1277,9 +1021,6 @@ export function waitForAuthReady(): Promise<void> {
   });
 }
 
-/**
- * Wait for store hydration from localStorage
- */
 export function waitForHydration(): Promise<void> {
   return new Promise((resolve) => {
     if (useUnifiedAuthStore.getState()._hasHydrated) {
@@ -1295,14 +1036,8 @@ export function waitForHydration(): Promise<void> {
   });
 }
 
-/**
- * Wait for billing store hydration (alias for waitForHydration for backwards compatibility)
- */
 export const waitForBillingHydration = waitForHydration;
 
-/**
- * Check if user has a specific feature
- */
 export function hasFeature(featureKey: string): boolean {
   const { featureFlags, plan } = useUnifiedAuthStore.getState();
 
@@ -1335,42 +1070,27 @@ export function hasFeature(featureKey: string): boolean {
   return true;
 }
 
-/**
- * Get description for a plan tier
- */
 export function getPlanDescription(plan: PlanTier): string {
   return PLAN_DESCRIPTION[normalizeUIPlanTier(plan)];
 }
 
-/**
- * Cleanup function for the unified auth store.
- */
 export function cleanupUnifiedAuthStore(): void {
   resetRetryCount();
   clearCachedSubscription();
   clearCreditsCache();
 }
 
-// =============================================================================
-// Backwards Compatibility - Re-exports
-// =============================================================================
-
-// Re-export the unified store with old names for backwards compatibility
 export const useAuthStore = useUnifiedAuthStore;
 export const useAccountStore = useUnifiedAuthStore;
 export const useBillingStore = useUnifiedAuthStore;
 
-// Re-export cleanup function with old name
 export const cleanupAccountStore = cleanupUnifiedAuthStore;
 
-// Billing-specific selectors mapped to unified store
 export const selectCustomer = selectStripeCustomer;
 export const selectSubscription = selectStripeSubscription;
 
-// Type exports for backwards compatibility
 export type { CustomerInfo, SubscriptionInfo } from '../types/billing';
 
-// DesktopAccount type for backwards compatibility
 export interface DesktopAccount {
   id: string | null;
   email: string | null;

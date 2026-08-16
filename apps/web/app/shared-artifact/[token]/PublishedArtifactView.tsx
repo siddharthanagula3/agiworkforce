@@ -42,10 +42,6 @@ export function PublishedArtifactView({
   content,
   publishedAt,
 }: PublishedArtifactViewProps) {
-  // Public pages are read by people who never signed in, so the chrome around
-  // the artifact is translated like the rest of the product. Every call carries
-  // an English default, so a missing key degrades to readable copy, never to a
-  // raw `artifactPublish.*` identifier.
   const { t } = useTranslation('chat');
   const sandboxed = isSandboxedPublishedKind(kind);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -55,8 +51,6 @@ export function PublishedArtifactView({
     () => buildPublishedFallbackSrcDoc(kind, content),
     [kind, content],
   );
-  // Only computed for kind==='svg'; sanitizeSVG needs a DOM, and this component
-  // is client-only, so the call is safe here.
   const svgSrc = useMemo(
     () => (kind === 'svg' ? buildPublishedSvgImageSrc(content) : null),
     [kind, content],
@@ -78,7 +72,6 @@ export function PublishedArtifactView({
       </header>
 
       {renderError ? (
-        // Never a blank frame with no explanation (AUDIT-FIX ART-5 parity).
         <div
           role="alert"
           className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive"
@@ -99,9 +92,6 @@ export function PublishedArtifactView({
         />
       ) : kind === 'svg' ? (
         svgSrc ? (
-          // Inert by construction: an <img> executes no script and issues no
-          // request for the data: payload. next/image is deliberately NOT used
-          // — it would route a data: URL through the optimizer.
           <img
             src={svgSrc}
             alt={heading}

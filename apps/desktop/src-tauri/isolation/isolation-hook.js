@@ -1,6 +1,3 @@
-// This script runs only inside Tauri's hidden isolation iframe. The renderer
-// cannot replace it: Tauri embeds it at compile time and encrypts each accepted
-// IPC payload before forwarding the request to Rust.
 (function installIsolationHook() {
   const isolationHook = (message) => {
     if (

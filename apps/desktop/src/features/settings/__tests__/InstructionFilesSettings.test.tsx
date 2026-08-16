@@ -1,15 +1,8 @@
-/**
- * H45 — InstructionFilesSettings tests
- *
- * Covers: non-Tauri preview mode, file-existence display, edit dialog,
- * create dialog, and save flow.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { InstructionFilesSettings } from '../InstructionFilesSettings';
 
-// ── Radix UI / jsdom compat polyfills ────────────────────────────────────────
 if (typeof Element.prototype.hasPointerCapture === 'undefined') {
   Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
 }
@@ -27,8 +20,6 @@ class MockResizeObserver {
 }
 global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
-// ── Module mocks ──────────────────────────────────────────────────────────────
-
 const mockInvoke = vi.fn();
 const mockIsTauriContext = vi.fn(() => true);
 
@@ -42,9 +33,6 @@ vi.mock('../../../lib/tauri-mock', () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
 }));
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-/** Sets up invoke to: return home dir, report CLAUDE.md as found, others not. */
 function setupSuccessfulScan({ claudeMdFound = true }: { claudeMdFound?: boolean } = {}) {
   mockInvoke.mockImplementation((cmd: string, args?: Record<string, unknown>) => {
     if (cmd === 'get_home_directory') return Promise.resolve('/home/user');
@@ -65,8 +53,6 @@ async function renderAndWaitForScan() {
     expect(mockInvoke).toHaveBeenCalledWith('file_exists', expect.any(Object));
   });
 }
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('InstructionFilesSettings', () => {
   beforeEach(() => {
@@ -97,8 +83,6 @@ describe('InstructionFilesSettings', () => {
     it('shows the "Instruction Files" section heading', () => {
       mockIsTauriContext.mockReturnValue(false);
       render(<InstructionFilesSettings />);
-      // Multiple elements may contain "instruction files" (heading + description);
-      // confirm at least one is present.
       const matches = screen.getAllByText(/instruction files/i);
       expect(matches.length).toBeGreaterThan(0);
     });
@@ -106,7 +90,6 @@ describe('InstructionFilesSettings', () => {
     it('shows known instruction file patterns in the table', () => {
       mockIsTauriContext.mockReturnValue(false);
       render(<InstructionFilesSettings />);
-      // All patterns from INSTRUCTION_FILE_PATTERNS should be visible
       expect(screen.getByText('CLAUDE.md')).toBeInTheDocument();
       expect(screen.getByText('AGENTS.md')).toBeInTheDocument();
       expect(screen.getByText('.cursorrules')).toBeInTheDocument();
@@ -117,7 +100,6 @@ describe('InstructionFilesSettings', () => {
     it('shows source labels for files', () => {
       mockIsTauriContext.mockReturnValue(false);
       render(<InstructionFilesSettings />);
-      // Multiple files may share the same compatibility source label.
       const compatibilityLabels = screen.getAllByText('Compatibility');
       expect(compatibilityLabels.length).toBeGreaterThan(0);
       expect(screen.getByText('Cursor')).toBeInTheDocument();
@@ -130,7 +112,6 @@ describe('InstructionFilesSettings', () => {
       setupSuccessfulScan({ claudeMdFound: true });
       await renderAndWaitForScan();
       await waitFor(() => {
-        // At least one "Found" status must be visible
         expect(screen.getAllByText(/^found$/i).length).toBeGreaterThan(0);
       });
     });
@@ -192,7 +173,6 @@ describe('InstructionFilesSettings', () => {
       await userEvent.click(createBtn);
 
       await waitFor(() => {
-        // Dialog textarea appears
         expect(screen.getByPlaceholderText(/add your instructions here/i)).toBeInTheDocument();
       });
     });
@@ -250,7 +230,6 @@ describe('InstructionFilesSettings', () => {
       await renderAndWaitForScan();
 
       await waitFor(() => {
-        // Component should settle without crashing — file list is still displayed
         expect(screen.getByText('CLAUDE.md')).toBeInTheDocument();
       });
     });
@@ -273,7 +252,6 @@ describe('InstructionFilesSettings', () => {
       await userEvent.click(screen.getAllByRole('button', { name: /view.*edit/i })[0]!);
 
       await waitFor(() => {
-        // Error message shown in dialog
         expect(screen.getByText(/permission denied/i)).toBeInTheDocument();
       });
     });

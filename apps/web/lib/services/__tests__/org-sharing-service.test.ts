@@ -1,12 +1,3 @@
-/**
- * org-sharing-service contract tests.
- *
- * The invariants here are the ones that cannot be re-derived by reading the
- * route: ownership of the shared row, the org-wide ceiling being enforced by
- * the DATABASE rather than by a count-then-insert, and the fail-closed
- * behaviour of the shared-scope resolver that the privileged project routes
- * depend on for their tenant boundary.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -93,17 +84,11 @@ describe('resolveOrgMembership', () => {
     const membership = await resolveOrgMembership(db, 'user-1');
     expect(membership).toEqual({ organizationId: ORG, role: 'admin' });
 
-    // Two statements, and the split is the security property worth pinning.
-    // First the ACTIVE organization is derived server-side from the caller's own
-    // user_settings row, joined against organization_members so an id the user
-    // is not a member of cannot be selected...
     expect(issued[0]!.sql).toMatch(/from public\.user_settings/i);
     expect(issued[0]!.sql).toMatch(/join public\.organization_members/i);
     expect(issued[0]!.sql).toMatch(/where s\.user_id = \$1/i);
     expect(issued[0]!.params).toEqual(['user-1']);
 
-    // ...then the role is read for exactly that server-derived pair. Both are
-    // bound parameters; neither can come from a request.
     expect(issued[1]!.sql).toMatch(/from public\.organization_members/i);
     expect(issued[1]!.sql).toMatch(/where organization_id = \$1 and user_id = \$2/i);
     expect(issued[1]!.params).toEqual([ORG, 'user-1']);
@@ -168,8 +153,6 @@ describe('listReadableSharedProjectIds', () => {
     const { db, issued } = makeDb(() => [{ project_id: PROJECT }]);
     const ids = await listReadableSharedProjectIds(db, ORG, 'member-1');
     expect(ids).toEqual([PROJECT]);
-    // The denial is expressed in SQL, so it holds for every caller of this
-    // function rather than depending on each route to remember it.
     expect(issued[0]!.sql).toMatch(/organization_project_access/);
     expect(issued[0]!.sql).toMatch(/a\.access = 'none'/);
     expect(issued[0]!.params).toEqual([ORG, 'member-1']);
@@ -204,8 +187,6 @@ describe('resolveSharedProjectScope', () => {
         throw error;
       }),
     } as never;
-    // An un-migrated environment must keep exactly today's personal behaviour
-    // rather than failing every project list.
     expect(await resolveSharedProjectScope(db, 'user-1')).toBeNull();
   });
 
@@ -242,11 +223,7 @@ describe('shareProject', () => {
 
     expect(shared.projectId).toBe(PROJECT);
     const { sql, params } = issued[0]!;
-    // Ownership: an admin cannot conscript another member's personal project.
     expect(sql).toMatch(/from public\.user_projects\s+where id = \$2\s+and user_id = \$3/i);
-    // The ceiling is a DB function inside the same statement as the insert, so
-    // two concurrent admins serialize on its advisory lock. A TypeScript
-    // count-then-insert here would be a revenue defect.
     expect(sql).toMatch(/public\.assert_org_resource_limit\('org_shared_projects', \$1, \$5\)/i);
     expect(params).toEqual([ORG, PROJECT, 'admin-1', 'read', 25]);
   });

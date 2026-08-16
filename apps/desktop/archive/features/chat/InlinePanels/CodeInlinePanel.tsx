@@ -1,9 +1,3 @@
-/**
- * CodeInlinePanel Component
- *
- * Displays code files inline with syntax highlighting, diff viewer,
- * and file information.
- */
 
 import React, { memo } from 'react';
 import { Copy, FileText } from 'lucide-react';
@@ -30,7 +24,6 @@ const CodeInlinePanelComponent: React.FC<CodeInlinePanelProps> = memo(
       toast.success('Code copied to clipboard');
     };
 
-    // Determine language from extension or metadata
     const getLanguageDisplay = () => {
       if (codeContent.language) {
         return codeContent.language.toUpperCase();
@@ -39,7 +32,6 @@ const CodeInlinePanelComponent: React.FC<CodeInlinePanelProps> = memo(
       return ext;
     };
 
-    // Highlight lines for diff if available
     const lines = codeContent.content.split('\n');
 
     return (

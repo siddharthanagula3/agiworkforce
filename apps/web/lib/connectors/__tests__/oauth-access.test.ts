@@ -1,9 +1,3 @@
-/**
- * Token lifecycle: refresh-on-expiry, and the decision to stop claiming a
- * connector is usable. A grant that cannot produce a working token must never
- * keep reading as connected — that is exactly the "fake availability" failure
- * this whole broker exists to avoid.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -96,9 +90,6 @@ beforeEach(() => {
 describe('resolveConnectorAccessToken', () => {
   it('reports not-configured when there is neither an OAuth app nor an MCP endpoint', async () => {
     mocks.getProvider.mockReturnValue(null);
-    // `salesforce` has no operator OAuth app AND no verified MCP endpoint in
-    // `mcp-endpoints.ts`, so nothing can authorize it — the only case that is
-    // still genuinely unconfigured.
     await expect(resolveConnectorAccessToken('u1', 'salesforce')).resolves.toEqual({
       status: 'not-configured',
     });
@@ -106,11 +97,6 @@ describe('resolveConnectorAccessToken', () => {
   });
 
   it('looks for a grant when the connector has a discoverable MCP endpoint', async () => {
-    // Regression guard for the discovery path (0115). `linear` publishes an MCP
-    // endpoint whose authorization server accepts a client metadata document,
-    // so it is connectable with no operator OAuth app. Reporting it as
-    // `not-configured` would tell the user to set up something that needs no
-    // setup — and would hide a grant they may already hold.
     mocks.getProvider.mockReturnValue(null);
     mocks.getGrant.mockResolvedValue(null);
     await expect(resolveConnectorAccessToken('u1', 'linear')).resolves.toEqual({

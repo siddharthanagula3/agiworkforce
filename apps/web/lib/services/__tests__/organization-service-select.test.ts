@@ -3,17 +3,6 @@ import { describe, it, expect, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { OrganizationService } from '../organization-service';
 
-/**
- * WEB-31 / SEV-WEB-08 regression. Verifies that `getOrganizationMembers`
- * uses an explicit column list rather than `select *`, so any future
- * column added to `organization_members` with sensitive semantics
- * (invitation tokens, mfa state, etc.) is NOT silently exposed to
- * viewer-role callers.
- *
- * The implementation uses a Neon DatabaseAdapter (`db.query(sql, params)`),
- * not a cloud database builder. Mocks reflect that contract.
- */
-
 function mockDb() {
   const queryMock = vi.fn().mockResolvedValue([]);
   const db = { query: queryMock } as unknown as DatabaseAdapter;
@@ -32,8 +21,6 @@ describe('OrganizationService.getOrganizationMembers (WEB-31)', () => {
     const { db, queryMock } = mockDb();
     await OrganizationService.getOrganizationMembers(db, 'org-123');
     const sql: string = queryMock.mock.calls[0]?.[0];
-    // The pre-fix code used `select *` or `select om.*`.
-    // After the fix, the SQL must not contain a bare `*` in the select list.
     expect(sql).toBeTruthy();
     expect(sql).not.toMatch(/select\s+\*/i);
     expect(sql).not.toMatch(/\.\*/);
@@ -43,17 +30,14 @@ describe('OrganizationService.getOrganizationMembers (WEB-31)', () => {
     const { db, queryMock } = mockDb();
     await OrganizationService.getOrganizationMembers(db, 'org-123');
     const sql: string = queryMock.mock.calls[0]?.[0];
-    // Required columns from organization_members
     expect(sql).toMatch(/\borganization_id\b/);
     expect(sql).toMatch(/\buser_id\b/);
     expect(sql).toMatch(/\brole\b/);
     expect(sql).toMatch(/\bjoined_at\b/);
-    // Profile join with explicit column aliases (no inner wildcard)
     expect(sql).toMatch(/\bjoin\s+profiles\b/i);
     expect(sql).toMatch(/\bemail\b/);
     expect(sql).toMatch(/\bdisplay_name\b/);
     expect(sql).toMatch(/\bavatar_url\b/);
-    // Sensitive-class columns that should NOT appear in the select
     expect(sql).not.toMatch(/\binvitation_token\b/);
     expect(sql).not.toMatch(/\bmfa_secret\b/);
   });
@@ -73,13 +57,6 @@ describe('OrganizationService.getOrganizationMembers (WEB-31)', () => {
   // __tests__/api/.
 });
 
-/**
- * Before 0085 this was a bare DELETE with no guard, so a sole owner could be
- * removed through this path and the organization left ownerless — unbillable
- * and unadministrable. The database now refuses that at COMMIT via the deferred
- * at-least-one-owner constraint trigger; the predicate below makes this path
- * report the reason instead of surfacing a raw constraint error.
- */
 describe('OrganizationService.removeMember owner protection', () => {
   it('never issues an unguarded delete that could orphan the organization', async () => {
     const execute = vi.fn().mockResolvedValue(1);

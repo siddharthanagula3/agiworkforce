@@ -1,12 +1,3 @@
-/**
- * Ollama catalog discovery via `/api/tags`.
- *
- * Ollama doesn't ship a static model catalog — local model availability is
- * dynamic per host. We hit the running daemon's `/api/tags` endpoint and
- * surface what's installed. If the daemon isn't reachable, we surface an
- * empty list rather than throw, so the UI can still render a "configure
- * Ollama" state.
- */
 
 import type { ModelInfo } from '@agiworkforce/types';
 
@@ -27,7 +18,6 @@ export async function fetchOllamaCatalog(params: {
   fetch?: typeof fetch;
   signal?: AbortSignal;
 }): Promise<ModelInfo[]> {
-  // AUDIT-FIX: alert-398 — bound trailing-slash stripping to avoid polynomial-redos.
   const baseUrl = params.baseUrl?.replace(/\/{1,32}$/, '') ?? DEFAULT_BASE_URL;
   const fetchFn = params.fetch ?? fetch;
   let res: Response;

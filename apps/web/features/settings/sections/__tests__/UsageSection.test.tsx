@@ -1,4 +1,3 @@
-/** UsageSection must present subscription usage without exposing internal economics. */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
@@ -10,7 +9,6 @@ vi.mock('@agiworkforce/ui', () => ({
     React.createElement('div', { 'data-testid': 'progress', 'data-value': value }),
 }));
 
-// Billing store not hydrated → tier comes from /api/usage.plan_tier.
 vi.mock('@shared/stores/web-auth-store', () => ({
   useBillingStore: (selector: (s: unknown) => unknown) => selector({ subscription: undefined }),
 }));
@@ -42,17 +40,11 @@ beforeEach(() => {
         }),
       } as Response;
     }
-    // /api/usage — public percentage/reset contract only.
     return {
       ok: true,
       json: async () => ({
         plan_tier: 'free',
         usage_percentage: 50,
-        // Reset instants are RELATIVE to now. They used to be fixed 2026-07
-        // literals, which quietly became past timestamps as real time passed —
-        // and a past reset renders no countdown at all (formatUsageResetIn
-        // returns null rather than a negative one), so the assertions below were
-        // date-dependent. Relative offsets keep the four windows live forever.
         usage_reset_at: new Date(Date.now() + 5 * 24 * 60 * 60_000).toISOString(),
         has_usage_remaining: true,
         period_start: new Date(Date.now() - 25 * 24 * 60 * 60_000).toISOString(),
@@ -71,12 +63,7 @@ beforeEach(() => {
 
 describe('UsageSection', () => {
   it('shows all four usage windows using the shared vocabulary', async () => {
-    // Labels and the remaining-phrasing come from @agiworkforce/types so this
-    // surface cannot drift from mobile, desktop and the Chrome panel again —
-    // the same four server buckets were previously named four different ways.
     render(React.createElement(UsageSection));
-    // The fixture is percent USED; the meters state percent LEFT.
-    // session 60->40, weekly 40->60, flagship 95->5, period 50->50.
     expect(await screen.findByText(managedUsageBucketLabel('session'))).toBeTruthy();
     expect(screen.getByText(managedUsageBucketLabel('weekly'))).toBeTruthy();
     expect(screen.getByText(managedUsageBucketLabel('weeklyFlagship'))).toBeTruthy();
@@ -84,8 +71,6 @@ describe('UsageSection', () => {
     expect(screen.getAllByText('40% left').length).toBeGreaterThan(0);
     expect(screen.getAllByText('60% left').length).toBeGreaterThan(0);
     expect(screen.getAllByText('50% left').length).toBeGreaterThan(0);
-    // PAR-1: the flagship window is a fourth bar. A user at 95% on the expensive
-    // model family used to see only the 50% aggregate and hit a wall with no warning.
     expect(screen.getAllByText(/resets in/i)).toHaveLength(4);
   });
 
@@ -95,17 +80,12 @@ describe('UsageSection', () => {
     expect(screen.getAllByText('5% left').length).toBeGreaterThan(0);
   });
 
-  // PAR-3: the reset detail must give a relative countdown, not only a machine
-  // timestamp the user has to subtract from the current time themselves.
   it('shows a relative countdown alongside the absolute reset instant', async () => {
     render(React.createElement(UsageSection));
     await screen.findByText(managedUsageBucketLabel('session'));
-    // Relative countdown from the shared formatter, PLUS the absolute instant
-    // this surface keeps so a user can verify as well as plan.
     expect(screen.getAllByText(/resets in .*\(.*\)/i).length).toBeGreaterThan(0);
   });
 
-  // PAR-4: 'Not loaded' was a literal that also survived a failed refresh.
   it('reports never-loaded and stale states honestly', async () => {
     global.fetch = vi.fn(
       async () => ({ ok: false, json: async () => ({}) }) as Response,

@@ -1,23 +1,4 @@
 #!/usr/bin/env node
-/**
- * CRIT-007 release gate: the release-state registry must agree with the live
- * stores before any store name or store link is allowed to reach a user.
- *
- * `src/features/release-state/mobileReleaseState.json` decides whether
- * `src/features/release-state/index.ts` hands out
- * a store name, a listing URL, or a subscription-management URL. This script is
- * the automated verification that lets that record be trusted:
- *
- *   registry says published, store has no live listing  -> fail (false claim)
- *   registry says unpublished, store HAS a live listing -> fail (stale record;
- *       enabling the links is a deliberate edit, not a silent drift)
- *   registry says published and the live listing id differs -> fail
- *   lookup cannot be completed                          -> fail (fail closed)
- *
- * Apple is resolved through the public iTunes lookup endpoint by bundle id;
- * Google Play through the public listing page by package name. Neither needs a
- * credential, so this runs in preflight without secrets.
- */
 
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
@@ -129,7 +110,6 @@ export async function lookupGoogleListing(packageName, fetchImpl) {
   });
   if (response.status === 404) return { live: false, listingId: null, listingUrl: null };
   if (response.status !== 200) {
-    // 3xx (consent/interstitial), 429, 5xx: unresolved, so unverifiable.
     throw new Error(`${url} returned HTTP ${response.status}; listing state is unverified`);
   }
   return {

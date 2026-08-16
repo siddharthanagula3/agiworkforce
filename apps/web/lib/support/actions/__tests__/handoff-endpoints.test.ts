@@ -1,15 +1,3 @@
-/**
- * The hand-off descriptors must keep matching the routes that own the effect.
- *
- * `export_account_data` and `open_billing_portal` do not perform their effect
- * here — they return a server-defined `{ method, path }` that the client
- * invokes under the same session. Those two routes are owned by other
- * workflows, so if one changes its verb or path this layer would hand the
- * widget a dead control and the user would confirm something that then 404s.
- *
- * This reads the route files and asserts the verb we advertise is actually
- * exported. It is a coupling alarm, not a proof of the response body.
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -45,7 +33,6 @@ describe('support actions — hand-off endpoint descriptors', () => {
     expect(source).toMatch(
       new RegExp(`export\\s+(const|async function)\\s+${endpoint.method}\\b`, 'u'),
     );
-    // The path we advertise must be the route's own path, not a guess.
     const routePath = `/${routeFile.replace(/\/route\.ts$/u, '')}`;
     expect(endpoint.path.split('?')[0]).toBe(routePath);
   });

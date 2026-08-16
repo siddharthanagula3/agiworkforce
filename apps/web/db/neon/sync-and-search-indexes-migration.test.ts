@@ -2,38 +2,17 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * 0101 re-shapes the cloud-sync indexes around the row owner. The regressions it
- * guards are quiet — nothing fails, the pull just gets slower as the platform
- * grows — so the end state of the whole migration chain is asserted here rather
- * than one file's text. Two directions are guarded:
- *
- *  - a later migration adds another `server_version`-only index on a table that
- *    has user_id (the obvious thing to write when reading the 0038–0042
- *    comments) and the delta pull goes back to walking every other tenant's rows
- *    above the cursor;
- *  - a later migration "finishes the job" by dropping
- *    idx_web_messages_server_version. web_messages has no user_id, its pull
- *    orders by server_version with no equality on conversation_id, and that
- *    index is its only sort-free, early-terminating path.
- *
- * SQL text is whitespace-collapsed before matching so a reformatted migration
- * (`on public.web_messages (server_version)`) is still seen.
- */
 describe('cloud sync and search index migrations', () => {
   const dir = join(process.cwd(), 'db/neon');
 
-  /** The whole chain, lowercased with runs of whitespace collapsed to one space. */
   async function chainSql(): Promise<string> {
     const files = (await readdir(dir)).filter((name) => name.endsWith('.sql')).sort();
     const sources = await Promise.all(files.map((name) => readFile(join(dir, name), 'utf8')));
     return sources.join('\n').toLowerCase().replace(/\s+/g, ' ');
   }
 
-  /** Tables whose delta pull filters on their own user_id column. */
   const ownerScoped = ['web_conversations', 'web_artifacts', 'user_projects', 'user_memories'];
 
-  /** web_messages keeps its single-column index; see the file docstring. */
   const MESSAGES_VERSION_INDEX = 'idx_web_messages_server_version';
 
   it('indexes every owner-carrying delta pull by owner first, then version', async () => {

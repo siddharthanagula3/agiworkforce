@@ -1,15 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Voice conversation push-to-talk + hands-free turn-taking tests.
- * Covers: PTT press-in/press-out capture lifecycle, the persisted mode toggle,
- * recognizer auto-final processing without a tap, and the double-processing guard.
- *
- * Hosted on the /voice companion route because it is now the only surface that
- * offers push-to-talk: PAR-M01 collapsed the full-screen VoiceConversationScreen
- * overlay these tests used to mount into the single inline presentation, which
- * is hands-free only. The subject was always `useVoiceConversation`, and driving
- * it through a real screen rather than a bespoke test host is the point.
- */
 import React from 'react';
 import { AppState } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -103,9 +92,6 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({}),
 }));
 
-// The companion route owns its own conversation, so the store IS the send path
-// under test here. Kept as one mutable state object so `useChatStore(selector)`
-// and `useChatStore.getState()` — the screen uses both — see the same values.
 jest.mock('@/stores/chatStore', () => {
   const state = {
     createConversation: jest.fn(async () => 'voice-conv-1'),
@@ -118,8 +104,6 @@ jest.mock('@/stores/chatStore', () => {
   return { __esModule: true, useChatStore };
 });
 
-// Proxy, not a hand-listed map: swapping one lucide icon in the screen should not
-// blow up every assertion with "Cannot read properties of undefined".
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return new Proxy(
@@ -167,11 +151,6 @@ function chatState(): MockChatState {
   return mod.useChatStore.getState();
 }
 
-/**
- * `onSendMessage` stands in for the chat dispatch: the screen calls
- * `sendMessage(conversationId, text, model)`, so the spy is handed the
- * transcript alone and the store contract (truthy = accepted) is kept here.
- */
 function renderScreen(onSendMessage: jest.Mock) {
   const state = chatState();
   state.createConversation.mockResolvedValue('voice-conv-1');
@@ -184,7 +163,6 @@ function renderScreen(onSendMessage: jest.Mock) {
 
 describe('Voice conversation PTT + hands-free', () => {
   beforeEach(async () => {
-    // Reset the module-level recognizer state a previous test may have left active.
     await VoiceInput.cancelCapture();
     speechRecognitionMock.__clearListeners();
     jest.clearAllMocks();
@@ -231,7 +209,6 @@ describe('Voice conversation PTT + hands-free', () => {
     });
     await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
 
-    // OS recognizer finalizes on end-of-utterance silence — no stop tap.
     await act(async () => {
       speechRecognitionMock.__fireResult({
         results: [{ transcript: 'what time is it', confidence: 1 }],
@@ -241,7 +218,6 @@ describe('Voice conversation PTT + hands-free', () => {
 
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledWith('what time is it'));
     expect(ExpoSpeechRecognitionModule.stop).not.toHaveBeenCalled();
-    // UI must not stick in 'listening' — the turn completed and returned to idle.
     await waitFor(() => expect(getByText('Sent to chat.')).toBeTruthy());
   });
 
@@ -256,7 +232,6 @@ describe('Voice conversation PTT + hands-free', () => {
     });
     await waitFor(() => expect(ExpoSpeechRecognitionModule.start).toHaveBeenCalledTimes(1));
 
-    // Recognizer finalizes while the orb is still held.
     await act(async () => {
       speechRecognitionMock.__fireResult({
         results: [{ transcript: 'race test', confidence: 1 }],
@@ -265,7 +240,6 @@ describe('Voice conversation PTT + hands-free', () => {
     });
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
 
-    // Releasing after the auto-final must not process a second turn.
     await act(async () => {
       fireEvent(orb, 'pressOut');
     });
@@ -288,7 +262,6 @@ describe('Voice conversation PTT + hands-free', () => {
     expect(getByLabelText('Switch to hands-free mode')).toBeTruthy();
     expect(queryByText('Hold to talk')).toBeTruthy();
 
-    // Persisted through the settings store's mmkv-backed persist middleware.
     const { mmkvStorage } = jest.requireMock('../lib/mmkv') as {
       mmkvStorage: { setItem: jest.Mock };
     };

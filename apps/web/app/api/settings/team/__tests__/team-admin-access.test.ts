@@ -65,7 +65,6 @@ describe('team administration billing capability', () => {
 
     const access = await getTeamAdminAccess(db, 'user-1');
 
-    // Reporting a seat number for "some organization" would be a fabrication.
     expect(access.maxMembers).toBeNull();
     expect(access.seatSource).toBe('unknown');
     expect(mockQuery).not.toHaveBeenCalled();
@@ -110,8 +109,6 @@ describe('team administration billing capability', () => {
 
     const access = await getTeamAdminAccess(db, 'user-1', ORG_A);
 
-    // The ceiling is real and enforced; the PROVENANCE is honest about the
-    // fact that nothing has purchased these seats yet.
     expect(access.maxMembers).toBe(4);
     expect(access.seatsAvailable).toBe(0);
     expect(access.seatSource).toBe('unprovisioned');
@@ -138,8 +135,6 @@ describe('team administration billing capability', () => {
       },
     ]);
 
-    // A large licensed_seats must never imply the capability: the gate is
-    // canUseBillingPlanCapability, never a tier comparison or a seat count.
     await expect(requireTeamAdminAccess(db, 'user-1', ORG_A)).rejects.toMatchObject({
       code: 'SUBSCRIPTION_REQUIRED',
       statusCode: 403,

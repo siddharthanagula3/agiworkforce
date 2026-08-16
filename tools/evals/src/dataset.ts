@@ -138,7 +138,6 @@ function parseCase(raw: unknown, suite: SuiteName, index: number): EvalCase {
   return notes === undefined ? evalCase : { ...evalCase, notes };
 }
 
-/** Validate a parsed corpus file. Throws on the first structural problem. */
 export function parseDataset(raw: unknown): EvalDataset {
   if (!isRecord(raw)) fail('dataset', 'dataset must be an object');
 
@@ -171,7 +170,6 @@ export function parseDataset(raw: unknown): EvalDataset {
   return { suite: suiteName, version, passThreshold, cases };
 }
 
-/** Read and validate one committed corpus file. */
 export function loadDataset(suite: SuiteName): EvalDataset {
   const path = fileURLToPath(new URL(`../datasets/${suite}.json`, import.meta.url));
   const dataset = parseDataset(JSON.parse(readFileSync(path, 'utf8')));
@@ -181,7 +179,6 @@ export function loadDataset(suite: SuiteName): EvalDataset {
   return dataset;
 }
 
-/** Read and validate every committed corpus, in a stable order. */
 export function loadAllDatasets(): readonly EvalDataset[] {
   return SUITES.map((suite) => loadDataset(suite));
 }

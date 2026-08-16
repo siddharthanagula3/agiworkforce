@@ -1,12 +1,3 @@
-/**
- * SCALE-VER-006 — the request-level half, exercised through the real wrapper
- * that 150+ route files export their handlers through.
- *
- * The logger here is the real `lib/logger.ts` pino instance, not a stub: the
- * point of these assertions is that an ordinary `logger.info` written years
- * before tracing existed now carries the request's `trace_id`. Swapping the
- * pino destination is the only way to read what it actually wrote.
- */
 
 import { NextResponse } from 'next/server';
 import pino from 'pino';
@@ -58,7 +49,6 @@ describe('withErrorHandler tracing', () => {
     expect(response.headers.get('x-request-id')).toBe(INBOUND_TRACE_ID);
     const outbound = parseTraceparent(response.headers.get('traceparent'));
     expect(outbound?.traceId).toBe(INBOUND_TRACE_ID);
-    // A fresh child span id, not the caller's.
     expect(outbound?.spanId).not.toBe('00f067aa0ba902b7');
   });
 
@@ -123,7 +113,6 @@ describe('withErrorHandler tracing', () => {
     expect(span!['http.request.method']).toBe('POST');
     expect(span!['http.response.status_code']).toBe(200);
     expect(span!['url.path']).toBe('/api/things');
-    // The query string is never recorded: it routinely carries search terms.
     expect(JSON.stringify(span)).not.toContain('secret-search-term');
   });
 
@@ -140,7 +129,6 @@ describe('withErrorHandler tracing', () => {
     expect(span!['status']).toBe('error');
     expect(span!['http.response.status_code']).toBe(404);
 
-    // The error log the handler already produced is correlated with the span.
     const errorLine = records.find((r) => r['span_name'] === undefined && r['level'] === 50);
     expect(errorLine?.['trace_id']).toBe(INBOUND_TRACE_ID);
   });

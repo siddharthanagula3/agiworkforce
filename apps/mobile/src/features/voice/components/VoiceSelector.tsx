@@ -35,7 +35,6 @@ export const VoiceSelector = forwardRef<
 
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
 
-  // Device-global voice hardware settings (same across modes)
   const selectedVoiceId = useSettingsStore((s) => s.selectedVoiceId);
   const setSelectedVoiceId = useSettingsStore((s) => s.setSelectedVoiceId);
   const speechRate = useSettingsStore((s) => s.speechRate);
@@ -44,7 +43,6 @@ export const VoiceSelector = forwardRef<
   const selectedPresetId = useSettingsStore((s) => s.selectedPresetId);
   const setSelectedPresetId = useSettingsStore((s) => s.setSelectedPresetId);
 
-  // Mode-specific: speech language is a cloud-synced preference
   const localSpeechLanguage = useLocalSettingsStore((s) => s.speechLanguage);
   const localSetSpeechLanguage = useLocalSettingsStore((s) => s.setSpeechLanguage);
   const cloudSpeechLanguage = useCloudSettingsStore((s) => s.speechLanguage);
@@ -77,7 +75,6 @@ export const VoiceSelector = forwardRef<
   const handleSelectLanguage = useCallback(
     (code: string) => {
       setSpeechLanguage(code);
-      // Clear voice selection when language changes — old voice likely incompatible
       setSelectedVoiceId(null);
       setSelectedPresetId(null);
     },
@@ -93,13 +90,11 @@ export const VoiceSelector = forwardRef<
       setSpeechRate(preset.rate);
       setSpeechPitch(preset.pitch);
 
-      // Find matching system voice
       const matchedVoiceId = findVoiceForPreset(preset, voices);
       if (matchedVoiceId) {
         setSelectedVoiceId(matchedVoiceId);
       }
 
-      // Play a sample with the preset settings
       TTS.speak('Hello! This is a sample of my voice.', {
         voice: matchedVoiceId ?? undefined,
         rate: preset.rate,
@@ -123,7 +118,6 @@ export const VoiceSelector = forwardRef<
 
   const handleSelectSystemVoice = useCallback(
     (voice: VoiceInfo) => {
-      // Selecting a raw system voice clears the preset
       setSelectedPresetId(null);
       setSelectedVoiceId(voice.identifier);
     },
@@ -204,8 +198,6 @@ export const VoiceSelector = forwardRef<
     <BottomSheet
       ref={ref}
       index={index}
-      // Preserve the adjustable drag handle, but let assistive technology
-      // reach the language and voice rows inside the sheet.
       accessible={false}
       onChange={onChange}
       snapPoints={['50%', '85%']}

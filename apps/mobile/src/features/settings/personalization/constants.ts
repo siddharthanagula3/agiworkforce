@@ -1,8 +1,3 @@
-/**
- * Shared source of truth for Personalization screen options. Read by the
- * screen component and by the system-prompt renderer
- * (src/features/memory/services/personalization.ts) so the two never drift.
- */
 import type { PersonalizationStyle } from '@/stores/settingsStore';
 
 export interface StyleOption {
@@ -11,7 +6,6 @@ export interface StyleOption {
   description: string;
 }
 
-/** Base response style/tone presets, applied before the granular dials below. */
 export const PERSONALIZATION_STYLES: StyleOption[] = [
   { value: 'default', label: 'Default', description: 'Balanced, adaptive tone' },
   { value: 'concise', label: 'Concise', description: 'Short, to the point' },
@@ -26,7 +20,6 @@ export interface StyleSliderConfig {
   rightLabel: string;
 }
 
-/** Granular response-style dials, each 0-100 with Less/Default/More semantics. */
 export const PERSONALIZATION_SLIDERS: StyleSliderConfig[] = [
   { key: 'warmth', label: 'Warmth', leftLabel: 'Cold', rightLabel: 'Warm' },
   { key: 'enthusiasm', label: 'Enthusiasm', leftLabel: 'Neutral', rightLabel: 'Enthusiastic' },

@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// Replay v3: full op-sequence replay for specific batches, including Bash
-// commands that touch the part file (heredoc appends etc.). Write/Edit ops
-// are applied to disk with prettier simulated after each (the hook), Bash
-// ops are executed verbatim from the repo root with the file present on disk.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';

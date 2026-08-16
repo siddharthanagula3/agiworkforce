@@ -1,9 +1,3 @@
-/**
- * ToolResultCard Component
- *
- * Display tool execution results with intelligent visualization based on output type.
- * Supports JSON, tables, images, diffs, code, and more.
- */
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -66,7 +60,6 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
     copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
-  // Determine icon based on output type
   const getTypeIcon = () => {
     switch (result.output_type) {
       case 'json':
@@ -86,7 +79,6 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
     }
   };
 
-  // Render the appropriate visualization based on output_type
   const renderResult = () => {
     if (!result.success && result.error) {
       return (
@@ -102,7 +94,6 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
       );
     }
 
-    // Success cases - visualize based on type
     switch (result.output_type) {
       case 'json':
         return <JsonViewer data={result.data} maxHeight="400px" />;
@@ -156,7 +147,6 @@ export function ToolResultCard({ result, className, defaultExpanded = true }: To
       }
 
       case 'markdown': {
-        // Updated Nov 16, 2025: Added XSS protection with DOMPurify sanitization
         const markdown = typeof result.data === 'string' ? result.data : String(result.data);
         const sanitizedMarkdown = sanitizeMarkdownHtml(markdown);
         return (

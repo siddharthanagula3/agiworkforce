@@ -7,7 +7,6 @@ import type {
   McpToolExecutionStats,
 } from '../../types/mcp';
 
-// Mock isTauri to true so store methods don't bail out
 vi.mock('../../lib/tauri-mock', async () => {
   const actual =
     await vi.importActual<typeof import('../../lib/tauri-mock')>('../../lib/tauri-mock');
@@ -17,7 +16,6 @@ vi.mock('../../lib/tauri-mock', async () => {
   };
 });
 
-// AUDIT-P3-TEST-TYPE: Properly typed mock functions for MCP API
 vi.mock('../../api/mcp', () => ({
   McpClient: {
     initialize: vi.fn(),
@@ -40,7 +38,6 @@ vi.mock('../../api/mcp', () => ({
   },
 }));
 
-// AUDIT-P3-TEST-TYPE: Partial mock types for test data (allow testing with minimal required fields)
 interface MockServerInfo {
   name: string;
   status?: string;
@@ -56,7 +53,6 @@ interface MockToolInfo {
   server?: string;
 }
 
-// AUDIT-P3-TEST-TYPE: Type-safe mock accessor for MCP client methods with flexible return types
 interface McpClientMocks {
   initialize: Mock<() => Promise<string>>;
   listServers: Mock<() => Promise<MockServerInfo[]>>;
@@ -79,7 +75,6 @@ interface McpClientMocks {
 
 async function getMcpClientMock(): Promise<McpClientMocks> {
   const { McpClient } = await import('../../api/mcp');
-  // AUDIT-P3-TEST-TYPE: Cast is necessary here as the mock module returns vi.fn() implementations
   return McpClient as unknown as McpClientMocks;
 }
 
@@ -87,7 +82,6 @@ describe('mcpStore', () => {
   let mcpMock: Awaited<ReturnType<typeof getMcpClientMock>>;
 
   beforeEach(async () => {
-    // Reset store state
     useMcpStore.setState({
       servers: [],
       tools: [],

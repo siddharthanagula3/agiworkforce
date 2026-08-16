@@ -1,4 +1,3 @@
-/** Electron replacement for `@tauri-apps/plugin-updater`. */
 import { getElectronHostBridge } from './bridgeContract';
 
 export interface ElectronManualUpdate {
@@ -7,15 +6,9 @@ export interface ElectronManualUpdate {
   version: string;
   body: string;
   date?: string;
-  /** Opens the signed installer in the OS browser; it does not install in place. */
   downloadAndInstall?: () => Promise<void>;
 }
 
-/**
- * The Electron shell has a manual signed-installer flow. Keep the updater-like
- * shape so the existing settings UI can share its state machine with Tauri,
- * while the Electron-specific copy remains explicit about opening a DMG.
- */
 export async function check(): Promise<ElectronManualUpdate> {
   const host = getElectronHostBridge();
   const currentVersion = host?.appVersion.trim() ?? '';

@@ -1,14 +1,3 @@
-/**
- * MemoryImport Component
- *
- * Modal dialog that lets users import memories from other AI platforms:
- * - ChatGPT: upload memories.json export
- * - Claude: upload memory export
- * - Custom: paste plain text (one memory per line)
- *
- * Parses incoming data, shows a preview table, then bulk-imports via
- * the memory store's importJsonString / storeMemory actions.
- */
 import { useCallback, useRef, useState } from 'react';
 import { AlertCircle, Check, ChevronDown, FileJson, Import, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -27,10 +16,6 @@ import { cn } from '@/lib/utils';
 import { useShallow } from 'zustand/react/shallow';
 import type { MemoryCategory, MemoryEntry } from '@/stores/memoryStore';
 import { useMemoryStore } from '@/stores/memoryStore';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export type ImportSource = 'chatgpt' | 'claude' | 'custom';
 
@@ -51,19 +36,9 @@ export interface MemoryImportProps {
   onOpenChange: (open: boolean) => void;
 }
 
-// ---------------------------------------------------------------------------
-// ChatGPT export format parsers
-// ---------------------------------------------------------------------------
-
-/**
- * ChatGPT memory export produces a JSON array like:
- * [{ "title": "...", "content": "..." }, ...]
- * or the full conversations export with a "memories" key.
- */
 function parseChatGptJson(raw: string): ParsedMemory[] {
   const parsed: unknown = JSON.parse(raw);
 
-  // Direct array of memory objects
   if (Array.isArray(parsed)) {
     return parsed
       .filter(
@@ -84,7 +59,6 @@ function parseChatGptJson(raw: string): ParsedMemory[] {
       .filter((m) => m.content.length > 0);
   }
 
-  // Object with a "memories" key (newer ChatGPT export format)
   if (typeof parsed === 'object' && parsed !== null) {
     const obj = parsed as Record<string, unknown>;
     const items = obj['memories'] ?? obj['data'] ?? obj['items'];
@@ -107,14 +81,9 @@ function parseChatGptJson(raw: string): ParsedMemory[] {
   return [];
 }
 
-/**
- * Claude memory export: tries the same AGI Workforce JSON shape first,
- * then falls back to a common memory export shape.
- */
 function parseClaudeJson(raw: string): ParsedMemory[] {
   const parsed: unknown = JSON.parse(raw);
 
-  // AGI Workforce own export shape: { memories: MemoryEntry[] }
   if (typeof parsed === 'object' && parsed !== null) {
     const obj = parsed as Record<string, unknown>;
     const items = obj['memories'];
@@ -131,20 +100,15 @@ function parseClaudeJson(raw: string): ParsedMemory[] {
     }
   }
 
-  // Fallback — treat like ChatGPT
   return parseChatGptJson(raw).map((m) => ({ ...m, source: 'Claude' }));
 }
 
-/**
- * Plain-text format: one memory per non-empty line.
- */
 function parsePlainText(text: string): ParsedMemory[] {
   return text
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
     .map((line) => {
-      // Support "Topic: content" format if the line contains ": "
       const colonIdx = line.indexOf(': ');
       if (colonIdx > 0 && colonIdx < 60) {
         return {
@@ -155,7 +119,6 @@ function parsePlainText(text: string): ParsedMemory[] {
           source: 'Custom',
         };
       }
-      // Fallback: whole line is the content, generate a short topic
       const words = line.split(' ').slice(0, 5).join(' ');
       return {
         topic: words.slice(0, 80),
@@ -166,10 +129,6 @@ function parsePlainText(text: string): ParsedMemory[] {
       };
     });
 }
-
-// ---------------------------------------------------------------------------
-// Source selection card
-// ---------------------------------------------------------------------------
 
 interface SourceCardProps {
   icon: React.ReactNode;
@@ -202,10 +161,6 @@ function SourceCard({ icon, label, description, selected, onClick }: SourceCardP
     </button>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Preview table row
-// ---------------------------------------------------------------------------
 
 interface PreviewRowProps {
   memory: ParsedMemory;
@@ -258,10 +213,6 @@ function PreviewRow({ memory, index, onRemove }: PreviewRowProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
-
 export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
   const [currentStep, setCurrentStep] = useState<ImportStep['step']>('select-source');
   const [selectedSource, setSelectedSource] = useState<ImportSource>('chatgpt');
@@ -270,7 +221,6 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
   const [parseError, setParseError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  // Import dialog can close mid-import; guard post-await setState.
   const isMounted = useIsMounted();
   const [pasteText, setPasteText] = useState('');
 
@@ -283,13 +233,9 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
     })),
   );
 
-  // ------------------------------------------------------------------
-  // Reset when dialog closes
-  // ------------------------------------------------------------------
   const handleOpenChange = useCallback(
     (value: boolean) => {
       if (!value) {
-        // Reset state on close
         setCurrentStep('select-source');
         setSelectedSource('chatgpt');
         setParsedMemories([]);
@@ -304,9 +250,6 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
     [onOpenChange],
   );
 
-  // ------------------------------------------------------------------
-  // Parse file / text content
-  // ------------------------------------------------------------------
   const processContent = useCallback(
     (content: string, isJson: boolean) => {
       setParseError(null);
@@ -357,9 +300,6 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
     [processContent],
   );
 
-  // ------------------------------------------------------------------
-  // Drag and drop handlers
-  // ------------------------------------------------------------------
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(true);
@@ -388,7 +328,6 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
       if (file) {
         readFile(file);
       }
-      // Reset input so same file can be re-selected
       e.target.value = '';
     },
     [readFile],
@@ -399,29 +338,21 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
       setParseError('Please paste some text to import.');
       return;
     }
-    // Try JSON first, fall back to plain text
     const trimmed = pasteText.trim();
     const looksLikeJson = trimmed.startsWith('[') || trimmed.startsWith('{');
     processContent(trimmed, looksLikeJson);
   }, [pasteText, processContent]);
 
-  // ------------------------------------------------------------------
-  // Remove a single preview entry
-  // ------------------------------------------------------------------
   const handleRemovePreview = useCallback((index: number) => {
     setParsedMemories((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
-  // ------------------------------------------------------------------
-  // Perform the actual import
-  // ------------------------------------------------------------------
   const handleImport = useCallback(async () => {
     if (parsedMemories.length === 0) return;
     setIsImporting(true);
 
     try {
       if (selectedSource === 'chatgpt' || selectedSource === 'claude') {
-        // Use importJsonString which calls the Rust backend to bulk-import
         const jsonPayload = JSON.stringify({
           memories: parsedMemories.map((m) => ({
             category: m.category,
@@ -435,7 +366,6 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
         if (!isMounted.current) return;
         setImportedCount(result.memories_imported);
       } else {
-        // Custom plain-text: store one at a time
         let count = 0;
         for (const m of parsedMemories) {
           await storeMemory(m.category, m.topic, m.content, m.importance, m.source);
@@ -457,10 +387,6 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
       }
     }
   }, [parsedMemories, selectedSource, importJsonString, storeMemory, isMounted]);
-
-  // ------------------------------------------------------------------
-  // Render helpers
-  // ------------------------------------------------------------------
 
   const renderSelectSource = () => (
     <div className="space-y-4">
@@ -673,9 +599,6 @@ export function MemoryImport({ open, onOpenChange }: MemoryImportProps) {
     </div>
   );
 
-  // ------------------------------------------------------------------
-  // Step title helpers
-  // ------------------------------------------------------------------
   const STEP_TITLES: Record<ImportStep['step'], string> = {
     'select-source': 'Import memories from another AI',
     upload: 'Upload your memory export',

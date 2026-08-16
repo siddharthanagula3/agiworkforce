@@ -1,11 +1,3 @@
-/**
- * Cross-deployable composition point for TypeScript provider adapters.
- *
- * This package maps canonical provider IDs to leaf adapter constructors. It
- * deliberately accepts explicit configuration: environment lookup, secret
- * ownership, endpoint policy, routing, and product-mode decisions belong to
- * the calling application or deployable service.
- */
 
 import {
   createAnthropicAdapter,

@@ -1,10 +1,5 @@
-/**
- * Custom Agents API — typed wrappers for custom agent Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types (matches Rust serde(rename_all = "camelCase")) ----
 
 export interface CustomAgentConfig {
   name: string;
@@ -14,8 +9,6 @@ export interface CustomAgentConfig {
   allowedTools?: string[];
   scope: string;
 }
-
-// ---- Commands ----
 
 export async function listCustomAgents(): Promise<CustomAgentConfig[]> {
   return command<CustomAgentConfig[]>('list_custom_agents');

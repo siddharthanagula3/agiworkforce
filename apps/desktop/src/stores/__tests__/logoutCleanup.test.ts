@@ -2,11 +2,6 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { clearPersistedUserData } from '../logoutCleanup';
 
-/**
- * Persist keys owned by stores this module does not import, so nothing else in
- * the sign-out path ever rewrites or drops their payload. Before the fix they
- * outlived sign-out and the next account on the machine inherited them.
- */
 const USER_DATA_KEYS = [
   'agiworkforce-memory',
   'agiworkforce-custom-instructions',
@@ -20,7 +15,6 @@ const USER_DATA_KEYS = [
   'tool-storage',
 ];
 
-/** Device/app preferences that must survive sign-out. */
 const PREFERENCE_KEYS = [
   'agiworkforce-settings',
   'agiworkforce-models',

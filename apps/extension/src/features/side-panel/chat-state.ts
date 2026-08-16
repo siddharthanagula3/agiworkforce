@@ -13,40 +13,20 @@ export interface SidePanelChatMessage {
   streaming?: boolean;
   error?: boolean;
   agentActivity?: AgentActivityState;
-  /** Display-safe canonical events used to rebuild activity after a browser restart. */
   agentEvents?: AgentEventEnvelope[];
   cloudAgentRun?: ManagedCloudAgentRunReference;
-  /** Explicit per-tool choices retained while a multi-tool approval batch is incomplete. */
   cloudApprovalDecisions?: Record<string, 'approved' | 'rejected'>;
-  /** Retryable, display-only failure from the most recent approval continuation. */
   cloudApprovalError?: string;
-  /** True when the turn used the request-only Quick overlay. */
   managedQuickMode?: boolean;
-  /** Exact concrete route that produced this assistant turn. */
   model?: string;
   provider?: string;
-  /** Durable rich-result descriptors; request-scoped attachment bytes are never stored here. */
   generatedFiles?: GeneratedFileWire[];
   interactiveCards?: InteractiveCard[];
-  /**
-   * Runtime that produced this turn, stamped at dispatch. Drives the visible
-   * "saved to your account" vs "saved on this device" label, and gates
-   * account-backed persistence. Absent = unknown = never mirrored.
-   */
   runtime?: 'managed-cloud' | 'local';
-  /**
-   * Why the stream failed, kept out of `content`.
-   *
-   * The failure used to be concatenated into `content` as "Error: <text>", so a
-   * provider string was rendered as markdown assistant prose with no way to
-   * distinguish it from a real answer and no way to act on it. Keeping it
-   * separate lets the bubble present it as a failure and offer a retry.
-   */
   errorText?: string;
   timestamp: number;
 }
 
-/** Persisted subset accepted by the side-panel history hydrator. */
 export interface StoredSidePanelChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -102,11 +82,6 @@ export function projectCanonicalAgentActivity(
   return activity;
 }
 
-/**
- * Hydrate one validated browser-history message into the richer renderer
- * shape. Boot restore and History restore intentionally share this function so
- * durable agent activity, run cursors, and approval state cannot drift.
- */
 export function hydrateStoredChatMessage(
   message: StoredSidePanelChatMessage,
   id: string,
@@ -141,16 +116,10 @@ export function hydrateStoredChatMessage(
     ...(message.interactiveCards
       ? { interactiveCards: message.interactiveCards.map((card) => ({ ...card })) }
       : {}),
-    // Carried through so a restored conversation keeps its provenance badge
-    // instead of silently reading as unknown.
     ...(message.runtime ? { runtime: message.runtime } : {}),
   };
 }
 
-/**
- * Fold one runtime-validated engine event into the assistant turn. Private
- * reasoning and answer text are deliberately excluded by the shared reducer.
- */
 export function applyCanonicalAgentEvent(
   messages: SidePanelChatMessage[],
   streamId: string,
@@ -179,12 +148,6 @@ export function applyCanonicalAgentEvent(
   return assistant;
 }
 
-/**
- * Resolve the visible user turn before it is admitted to Managed Cloud chat.
- * Attachment-only turns must never leave an enabled Send control as a silent
- * no-op. Keep filenames out of this trusted instruction channel because they
- * are user-controlled metadata.
- */
 export function resolveComposerPrompt(text: string, attachmentCount: number): string | null {
   const trimmed = text.trim();
   if (trimmed) return trimmed;
@@ -194,14 +157,12 @@ export function resolveComposerPrompt(text: string, attachmentCount: number): st
     : 'Please analyze the attached images.';
 }
 
-/** Mutates the active view in place and returns the number of discarded messages. */
 export function trimChatMessages(messages: SidePanelChatMessage[], maximum: number): number {
   const overflow = Math.max(0, messages.length - Math.max(1, maximum));
   if (overflow > 0) messages.splice(0, overflow);
   return overflow;
 }
 
-/** Preserve partial output and terminate the same assistant record on stream failure. */
 export function applyStreamFailure(
   messages: SidePanelChatMessage[],
   streamId: string,
@@ -210,8 +171,6 @@ export function applyStreamFailure(
 ): void {
   const existing = messages.find((message) => message.id === streamId);
   if (existing) {
-    // Any partial answer already streamed stays as content; the failure is
-    // recorded alongside it rather than appended to it.
     existing.streaming = false;
     existing.error = true;
     existing.errorText = errorText;

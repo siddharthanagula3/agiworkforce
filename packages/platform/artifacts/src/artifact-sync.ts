@@ -15,28 +15,14 @@
 import type { SharedArtifact } from '@agiworkforce/types';
 import type { ArtifactWireDelta } from '@agiworkforce/cloud-contracts';
 
-/**
- * A pulled cloud artifact: the canonical `SharedArtifact` plus the sync tombstone. Surfaces map
- * the wire delta (`deleted_at`) onto `deletedAt` when ingesting; locally-derived artifacts have
- * no tombstone.
- */
 export type CloudArtifact = SharedArtifact & { deletedAt?: string | null };
 
-/**
- * The render set on EVERY surface = (locally derived) ⊕ (pulled cloud), merged by id, with the
- * CLOUD row winning (it is the edited/authoritative copy). A cloud tombstone (`deletedAt`)
- * removes the artifact from the render set entirely (even if a local derived copy exists).
- *
- * Because derived ids are deterministic (`uuidv5(conversationId:messageId:ordinal)`), an edited
- * cloud artifact overlays exactly the derived artifact it came from.
- */
 export function mergeCloudArtifacts(
   local: ReadonlyArray<SharedArtifact>,
   cloud: ReadonlyArray<CloudArtifact>,
 ): SharedArtifact[] {
   const byId = new Map<string, SharedArtifact>();
   for (const a of local) byId.set(a.id, a);
-  // Cloud wins. A tombstoned cloud row deletes the id from the merged set.
   for (const c of cloud) {
     if (c.deletedAt) {
       byId.delete(c.id);
@@ -48,30 +34,17 @@ export function mergeCloudArtifacts(
   return [...byId.values()];
 }
 
-/** True when an artifact is a deterministic projection of message content (re-derivable). */
 export function isDerivedArtifact(a: SharedArtifact): boolean {
   return a.metadata?.['derived'] === true;
 }
 
-/**
- * The artifacts a surface should PUSH to the cloud: ONLY non-re-derivable ones — edited
- * artifacts (whose content diverged from the message) and desktop-authored-from-scratch
- * artifacts. Un-edited derived artifacts are NEVER pushed: every surface re-derives them
- * identically from the already-synced message, so pushing them would duplicate state.
- *
- * (Today only desktop has edit-in-place, so in practice only desktop produces a non-empty push
- * set; web/mobile are pull-only. This keeps the cloud table minimal.)
- */
 export function selectArtifactsToPush(artifacts: ReadonlyArray<SharedArtifact>): SharedArtifact[] {
   return artifacts.filter((a) => !isDerivedArtifact(a));
 }
 
-// The snake_case artifact delta returned by `GET /api/chat/sync` (migration 0039)
 // is now defined once as a Zod schema in @agiworkforce/cloud-contracts; re-exported here
-// so existing `ArtifactWireDelta` importers keep working.
 export type { ArtifactWireDelta };
 
-/** Map a sync wire delta to the client-domain `CloudArtifact` (SharedArtifact + tombstone). */
 export function wireToCloudArtifact(d: ArtifactWireDelta): CloudArtifact {
   return {
     id: d.id,
@@ -89,16 +62,6 @@ export function wireToCloudArtifact(d: ArtifactWireDelta): CloudArtifact {
   };
 }
 
-/**
- * Apply pulled artifact deltas to a surface's CURRENT cloud-artifact overlay. Upsert by id,
- * INCLUDING tombstones: the tombstone must remain in the overlay so
- * `mergeCloudArtifacts(localDerived, returnedSet)` cannot resurrect the locally derived copy.
- * Each surface's sync engine calls this (web/desktop/mobile) so the apply logic lives in ONE
- * place.
- *
- * Deltas arrive ordered by `server_version asc` (server contract), so a later delta for the
- * same id naturally wins.
- */
 export function applyArtifactDeltas(
   current: ReadonlyArray<CloudArtifact>,
   deltas: ReadonlyArray<ArtifactWireDelta>,

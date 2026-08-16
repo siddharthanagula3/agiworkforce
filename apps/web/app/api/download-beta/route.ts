@@ -34,24 +34,6 @@ const FILE_PATHS: Record<string, string> = {
   linux: 'agi-workforce-linux.AppImage',
 };
 
-/**
- * FIX (audit 2026-05-20, §3 · open-redirect): externalUrl flows from
- * `process.env[info.envVar]` straight into `NextResponse.redirect`. The
- * pre-fix code's only check was `!externalUrl.startsWith('/')`, which is a
- * loose "not a same-site relative path" test · any absolute URL would be
- * accepted as a 307 redirect target, including attacker-controlled hosts
- * if env-var control were ever achievable (CI compromise, supply-chain,
- * misconfigured staging).
- *
- * Lock externalUrl down to our own download host + the GitHub releases
- * CDN. Any other host returns 400 so the operator can see the misconfig
- * immediately rather than discover it from a phishing report.
- *
- * FIX (Codex P2, 2026-05-20): pin GitHub redirects to the trusted owner+
- * repo pair, not just the path *shape*. Without this, an env-var
- * compromise could point at github.com/<attacker>/<fork>/releases/...
- * and still pass the gate.
- */
 const EXTERNAL_URL_ALLOWED_HOSTS = new Set<string>([
   'downloads.agiworkforce.com',
   'cdn.agiworkforce.com',
@@ -70,12 +52,8 @@ function isExternalRedirectAllowed(rawUrl: string): boolean {
   } catch {
     return false;
   }
-  // Reject anything that isn't HTTPS. Plaintext download links downgrade
-  // installer integrity even if they hit a known host.
   if (parsed.protocol !== 'https:') return false;
   if (!EXTERNAL_URL_ALLOWED_HOSTS.has(parsed.hostname)) return false;
-  // For github.com, only allow /<trusted-owner>/<trusted-repo>/releases/*
-  // · not a generic GitHub redirect.
   if (parsed.hostname === 'github.com') {
     const segments = parsed.pathname.split('/').filter(Boolean);
     if (segments.length < 4) return false;
@@ -92,7 +70,6 @@ function isExternalRedirectAllowed(rawUrl: string): boolean {
 }
 
 async function handleDownloadBeta(request: NextRequest) {
-  // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'download-beta');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -105,10 +82,6 @@ async function handleDownloadBeta(request: NextRequest) {
     throw createError.validation('Invalid platform. Must be mac, windows, or linux.');
   }
 
-  // FIX (audit 2026-05-20, §13): assert the FILE_PATHS row exists right
-  // after platform validation so a silently-drifted DOWNLOAD_INFO /
-  // FILE_PATHS pair fails closed as 404 instead of `undefined`-pathing
-  // through `path.join(...)` and returning a confusing 500.
   const info = DOWNLOAD_INFO[platform];
   const filePlatformPath = FILE_PATHS[platform];
   if (!info || !filePlatformPath) {
@@ -133,10 +106,6 @@ async function handleDownloadBeta(request: NextRequest) {
   const externalUrl = process.env[info.envVar];
 
   if (externalUrl && !externalUrl.startsWith('/')) {
-    // FIX (audit 2026-05-20, §3): domain-pin the externalUrl before
-    // handing it to NextResponse.redirect. Anything off-allowlist returns
-    // a 400 so the operator sees the misconfig rather than the user
-    // landing on a phishing page.
     if (!isExternalRedirectAllowed(externalUrl)) {
       throw createError.validation(
         'Download redirect target is not on the allowlist. ' +

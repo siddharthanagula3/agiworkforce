@@ -56,7 +56,6 @@ test('declared debt passes, and stops passing once the module is wired up', () =
   assert.deepEqual(clean.undeclared, []);
   assert.deepEqual(clean.staleDebt, []);
 
-  // The debt entry became reachable: the ratchet must force its removal.
   const wired = analyzeSurface({
     unreachable: ['apps/desktop/src/lib/tauri-web/core.ts'],
     productFiles: ['apps/desktop/src/api/index.ts', 'apps/desktop/src/lib/tauri-web/core.ts'],
@@ -66,7 +65,6 @@ test('declared debt passes, and stops passing once the module is wired up', () =
     { path: 'apps/desktop/src/api/index.ts', why: 'now reachable' },
   ]);
 
-  // The debt entry was deleted outright: also stale, with a different reason.
   const deleted = analyzeSurface({
     unreachable: ['apps/desktop/src/lib/tauri-web/core.ts'],
     productFiles: ['apps/desktop/src/lib/tauri-web/core.ts'],

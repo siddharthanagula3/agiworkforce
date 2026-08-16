@@ -1,10 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Mobile SendPreview tests.
- *
- * Pin the RN-native mirror's contract: destination labelling per provider
- * mode, banner copy, model label, expand/collapse details block.
- */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';

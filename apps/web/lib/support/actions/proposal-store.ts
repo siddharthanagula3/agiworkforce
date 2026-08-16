@@ -1,20 +1,3 @@
-/**
- * @file Persistence for support action proposals (migration 0089).
- *
- * The security-relevant part of this file is `claimProposal`. It is a SINGLE
- * conditional UPDATE:
- *
- *   ... where id = $1 and user_id = $2 and token_hash = $3
- *       and consumed_at is null and expires_at > now()
- *
- * so caller binding, token validity, single use and expiry are all decided by
- * the database in one atomic step. Two concurrent confirms cannot both win, and
- * there is no read-then-write window in which a token can be replayed.
- *
- * The stored row is also the ONLY source of `action_id` and `params` at
- * execution time. The confirm request body carries no action and no params, so
- * a proposal cannot be retargeted at a different effect.
- */
 
 import 'server-only';
 
@@ -62,12 +45,6 @@ export async function insertProposal(input: InsertProposalInput): Promise<{ id: 
   return { id: row.id };
 }
 
-/**
- * Claim-before-execute. Returns null when the proposal does not exist, belongs
- * to someone else, was already consumed, or has expired — deliberately WITHOUT
- * distinguishing between those, so a caller cannot probe for the existence of
- * another user's proposal id.
- */
 export async function claimProposal(args: {
   proposalId: string;
   userId: string;
@@ -88,10 +65,6 @@ export async function claimProposal(args: {
   return rows[0] ?? null;
 }
 
-/**
- * Record the terminal outcome. A DENIED claim is never rolled back to
- * `proposed`: a spent token stays spent even when execution refused.
- */
 export async function finalizeProposal(args: {
   proposalId: string;
   userId: string;
@@ -106,11 +79,6 @@ export async function finalizeProposal(args: {
   );
 }
 
-/**
- * Per-action daily ceiling, counted over this user's OWN rows. Sharper than the
- * shared IP/user rate-limit keys and needs no additional entries in the shared
- * `rateLimitConfigs` table.
- */
 export async function countRecentProposals(args: {
   userId: string;
   actionId: SupportActionId;

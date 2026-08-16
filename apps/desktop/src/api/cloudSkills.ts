@@ -7,7 +7,6 @@ import {
 
 export type { CloudSkillEntry };
 
-/** List the authenticated Managed Cloud skill catalog used by chat admission. */
 export async function listCloudSkills(): Promise<CloudSkillEntry[]> {
   const request = createManagedCloudRequestContext('Cloud skill catalog');
   const response = await request.fetch(`${CLOUD_API_BASE_URL}/api/skills`, {

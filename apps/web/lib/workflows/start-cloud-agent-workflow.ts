@@ -24,10 +24,6 @@ export interface StartCloudAgentWorkflowExecutionInput {
   predecessorApproval?: CloudAgentWorkflowInput['predecessorApproval'];
 }
 
-/**
- * Launch a durable run and bind its runtime id to the tenant-owned Cloud task
- * before exposing the replayable stream to any client.
- */
 export async function startCloudAgentWorkflowExecution(
   input: StartCloudAgentWorkflowExecutionInput,
 ): Promise<{ workflowRunId: string; readable: WorkflowReadableStream<Uint8Array> }> {

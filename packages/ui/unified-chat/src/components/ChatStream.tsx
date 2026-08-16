@@ -1,19 +1,3 @@
-/**
- * ChatStream — Phase A Slice 5 (ported from UAC)
- *
- * Wrapping component for the message list with:
- *   - Auto-scroll to bottom on new messages / streaming
- *   - Cmd+F in-conversation search bar
- *   - j/k keyboard navigation between messages
- *   - Scroll-to-bottom FAB
- *   - Loading / streaming indicators
- *
- * Desktop-specific dependencies removed:
- *   - useUnifiedChatStore → useChatStore (package store)
- *   - useSimpleModeStore  → isSimpleMode prop
- *   - IterationProgressPanel, ActiveToolStreams, Cards/*, InlineToolResults → deferred (Slice 6)
- *   - Approval cards → deferred (Slice 6)
- */
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowDown, Search, ChevronDown, ChevronUp, X, Sparkles, Activity } from 'lucide-react';
@@ -25,22 +9,12 @@ import { useChatStore } from '../stores/chatStore';
 import type { ChatMessage } from '../lib/types';
 
 export interface ChatStreamProps {
-  /** Whether to show simplified (non-agentic) indicators. */
   isSimpleMode?: boolean;
-  /** Whether the agent is currently running. */
   isAgentRunning?: boolean;
-  /** Current agent goal description (shown in running indicator). */
   agentGoal?: string | null;
-  /** Called when user clicks a suggestion chip (passed through to host's emptyState). */
   onSuggestionClick?: (prompt: string) => void;
-  /** Custom empty state to render when no messages. */
   emptyState?: React.ReactNode;
-  /** Custom message renderer; when omitted, messages are rendered as plain text. */
   renderMessage?: (message: ChatMessage, index: number, isLast: boolean) => React.ReactNode;
-  /**
-   * When provided, overrides the store-sourced message list.
-   * Useful for web surfaces and tests that manage messages externally.
-   */
   messages?: ChatMessage[];
   className?: string;
 }
@@ -66,28 +40,22 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
     [activeConversationId, messagesByConversation],
   );
 
-  // Prop overrides store — useful for web surfaces and tests
   const messages = messagesProp ?? storeMessages;
 
-  // Auto-scroll to bottom on new messages or streaming content
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScroll = useRef(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  // Message search state
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearchQuery = useDeferredValue(searchQuery);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Keyboard navigation state
   const [focusedMessageIndex, setFocusedMessageIndex] = useState<number | null>(null);
 
-  // AUDIT fix: Ref to track focus timeout for cleanup
   const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Keyboard navigation between messages
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (showSearch) return;
@@ -119,7 +87,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [showSearch, messages.length]);
 
-  // Filter messages based on search
   const searchMatches = useMemo(() => {
     if (!showSearch || !deferredSearchQuery.trim()) return [];
     const query = deferredSearchQuery.toLowerCase();
@@ -128,7 +95,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
       .filter(({ msg }) => msg.content.toLowerCase().includes(query));
   }, [messages, showSearch, deferredSearchQuery]);
 
-  // Handle Cmd/Ctrl+F to open search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
@@ -158,7 +124,6 @@ export const ChatStream: React.FC<ChatStreamProps> = ({
     };
   }, [showSearch]);
 
-  // Scroll to current match
   useEffect(() => {
     if (searchMatches.length > 0 && scrollContainerRef.current) {
       const matchIndex = searchMatches[currentMatchIndex]?.index;

@@ -85,12 +85,6 @@ function pgError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
 }
 
-/**
- * CRIT-011: a backend or schema failure during domain verification must surface
- * as a typed operational failure with telemetry. It must never be swallowed
- * into a benign "domain not verified" answer, and it must never escape as an
- * unhandled rejection that leaves the operator with no log line.
- */
 describe('SSO domain verification under backend failure', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -107,7 +101,6 @@ describe('SSO domain verification under backend failure', () => {
     expect(response.status).toBe(503);
     const body = (await response.json()) as { error: string; verified?: boolean };
     expect(body.error).toBe('Database temporarily unavailable');
-    // The caller must not be told the domain simply is not verified yet.
     expect(body.verified).toBeUndefined();
     expect(mockLoggerError).toHaveBeenCalled();
   });
@@ -130,7 +123,6 @@ describe('SSO domain verification under backend failure', () => {
 
     const response = await VERIFY(req('POST'));
 
-    // A database outage is not evidence that the caller lacks the owner role.
     expect(response.status).toBe(503);
     expect(mockLoggerError).toHaveBeenCalled();
   });
@@ -145,8 +137,6 @@ describe('SSO domain verification under backend failure', () => {
   });
 
   it('returns 409, not 500, when another organization wins the verification race', async () => {
-    // 0092 moved domain exclusivity onto verified rows only, so the uniqueness
-    // collision now surfaces at this write instead of at draft creation.
     mockQuery.mockImplementation(async (sql: string) => {
       const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
       if (text.startsWith('select role from organization_members')) return [{ role: 'owner' }];

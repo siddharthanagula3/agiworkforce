@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { describeComputerUseAction } from '../src/features/computer-use/describeAction';
 
-/**
- * The ask-before-acting gate is the user's only chance to stop an agent from
- * acting on their browser. It used to render a stringified function call
- * (`click(selector="#submit-order")`), which is not something a non-developer
- * can consent to.
- */
 describe('describeComputerUseAction', () => {
   it('never renders a function-call signature', () => {
     const cases: [string, Record<string, unknown>][] = [

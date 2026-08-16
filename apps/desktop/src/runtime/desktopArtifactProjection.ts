@@ -35,22 +35,8 @@ import type {
   MessageArtifactProjection,
 } from '@agiworkforce/unified-chat';
 
-/**
- * Stable fallback timestamp for messages with neither `createdAt` nor
- * `timestamp` (the optimistic assistant row mid-stream). Any fixed value works
- * — it only lands in `createdAt`/`updatedAt` on the derived artifact, which the
- * panel does not display — and a fixed one keeps the projection memo stable.
- */
 const EPOCH_ISO = '1970-01-01T00:00:00.000Z';
 
-/**
- * Derive renderable artifacts for one assistant message and strip their fenced
- * blocks from the body.
- *
- * Returns `null` when the message yields no derived artifact, which tells the
- * shared transcript to render the message exactly as stored — including any
- * artifacts a runtime pre-attached.
- */
 export const deriveDesktopMessageArtifacts: DeriveMessageArtifacts = (
   message: ChatMessage,
   context: MessageArtifactDerivationContext,
@@ -61,24 +47,12 @@ export const deriveDesktopMessageArtifacts: DeriveMessageArtifacts = (
   const derived = deriveArtifacts(message.content, {
     conversationId: context.conversationId,
     messageId: message.id,
-    // Web's inclusion policy: only artifacts that actually render (html /
-    // react / svg / mermaid / html-like / explicit @artifact marker). An
-    // ordinary python snippet stays an ordinary code block, as on web.
     include: 'renderable',
-    // `deriveArtifacts` defaults `now` to `new Date().toISOString()`, which
-    // would hand a new object identity to React on every single render and
-    // make the memoized projection useless. The message's own timestamp is
-    // both stable and more truthful.
     now: message.createdAt ?? message.timestamp ?? EPOCH_ISO,
   }) as Artifact[];
 
   if (derived.length === 0) return null;
 
-  // A persisted/edited artifact with the same deterministic id is the newer
-  // truth (the user may have saved an edit through `ArtifactPanel`), so it
-  // overlays its derived counterpart rather than duplicating it. Pre-attached
-  // artifacts with no derived counterpart (e.g. a generated-file projection)
-  // are appended.
   const byId = new Map<string, Artifact>();
   for (const artifact of derived) byId.set(artifact.id, artifact);
   const extras: Artifact[] = [];
@@ -94,9 +68,6 @@ export const deriveDesktopMessageArtifacts: DeriveMessageArtifacts = (
 
   return {
     artifacts,
-    // Strip only what we actually surfaced as a card. `removeArtifactBlocks`
-    // matches on the CURRENT markdown's block ranges, so a mid-stream capture
-    // whose content later drifted cannot leave a duplicate raw block behind.
     displayContent: removeArtifactBlocks(message.content, derived),
   };
 };

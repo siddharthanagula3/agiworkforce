@@ -1,20 +1,7 @@
 #!/usr/bin/env node
-/**
- * check-i18n-parity: every supported locale must carry every bundle file and
- * every key path that the reference locale (en) carries — a language switch
- * must translate the whole surface, not a subset (founder requirement,
- * 2026-08-05; see docs/current/parity-implementation-matrix.md).
- *
- * Exits non-zero listing missing bundle files, missing keys, and orphan keys
- * (present in a locale but absent from the reference — usually a stale leftover
- * that will never render).
- */
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Single live root since the 2026-08-05 consolidation: packages/ui/i18n is the
-// only locale tree the runtime loads (packages/ui/i18n/src/resources.ts); the
-// legacy apps/web/app/i18n/locales copy was dead at runtime and was deleted.
 const LOCALE_ROOTS = ['packages/ui/i18n/locales'];
 const REFERENCE_LOCALE = 'en';
 

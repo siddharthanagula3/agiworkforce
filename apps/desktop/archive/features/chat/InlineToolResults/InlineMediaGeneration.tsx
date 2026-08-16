@@ -38,8 +38,6 @@ export interface VideoGenerationData {
 export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as ImageGenerationData | undefined;
 
-  // Show running state first - this needs to be checked before the null check
-  // because data might not be available yet during the running state
   if (status === 'running') {
     const prompt = data?.prompt ?? '';
     const provider = data?.provider as string | undefined;
@@ -59,7 +57,6 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
     );
   }
 
-  // Show error state if status indicates failure, even if data is null
   if (status === 'failed' || status === 'error') {
     const errorData = data as ImageGenerationData | undefined;
     return (
@@ -80,7 +77,6 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
     );
   }
 
-  // If no data available and not running or failed, return null
   if (!data) return null;
 
   const { prompt = '', images = [], success = true, error } = data;
@@ -162,8 +158,6 @@ export const InlineImageGeneration: React.FC<ToolResultProps> = ({ result, statu
 export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, status }) => {
   const data = result?.data as VideoGenerationData | undefined;
 
-  // Show running state first - this needs to be checked before the null check
-  // because data might not be available yet during the running state
   if (status === 'running') {
     const prompt = data?.prompt ?? '';
     const provider = data?.provider as string | undefined;
@@ -181,7 +175,6 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
     );
   }
 
-  // Show error state if status indicates failure, even if data is null
   if (status === 'failed' || status === 'error') {
     const errorData = data as VideoGenerationData | undefined;
     return (
@@ -202,7 +195,6 @@ export const InlineVideoGeneration: React.FC<ToolResultProps> = ({ result, statu
     );
   }
 
-  // If no data available and not running or failed, return null
   if (!data) return null;
 
   const { prompt = '', resolution, success = true, error } = data;

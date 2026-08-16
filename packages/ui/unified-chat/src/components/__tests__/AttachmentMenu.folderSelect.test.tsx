@@ -1,11 +1,3 @@
-/**
- * Task #10 (desktop QA): "Select folder" reachability in the live composer's
- * attachment menu — capability-gated via `canUseWorkingDirectory`.
- *
- * The Popover is externally controlled (`open` prop), so rendering with
- * `open={true}` exercises `Popover.Content` directly without needing to
- * simulate the trigger click (avoids jsdom gaps around pointer-capture APIs).
- */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { AttachmentMenu } from '../AttachmentMenu';
@@ -104,7 +96,6 @@ describe('AttachmentMenu — Select folder', () => {
       </CapabilityProvider>,
     );
 
-    // No handler → no row (never a dead control), even with a stale label.
     expect(screen.queryByText(/Folder:/)).toBeNull();
     expect(screen.queryByText('Select folder')).toBeNull();
   });

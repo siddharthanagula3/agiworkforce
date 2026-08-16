@@ -3,15 +3,6 @@ import { AgiMark } from '@shared/components/agi/AgiMark';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from './MarketingFooter';
 
-/**
- * AuthShell · shared chrome for /login and /signup.
- *
- * Split layout: the Clerk card first in the DOM (auth is the page's job, so
- * it leads focus order and stacks first on small screens), the brand panel
- * carrying the trust-mode story placed in the left column on desktop via
- * grid. Styled by the `agi-auth-*` classes in globals.css (token-driven,
- * follows the light/dark marketing theme).
- */
 export function AuthShell({
   title,
   lede,

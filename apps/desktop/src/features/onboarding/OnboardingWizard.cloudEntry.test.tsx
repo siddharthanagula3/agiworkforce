@@ -1,13 +1,3 @@
-/**
- * DES-C02 — the first-run onboarding "Cloud Mode" card never entered Cloud.
- *
- * `handleCloudMode` completed onboarding and called the OPTIONAL
- * `onCloudModeSelected` callback, which the only production mount
- * (`App.tsx` -> `OnboardingWelcome`) did not pass — a repo-wide grep found no
- * caller at all. The card's primary button was even labelled "Continue with
- * Local for now", so the very first screen of a Cloud demo silently chose the
- * Local trust boundary.
- */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -71,8 +61,6 @@ describe('DES-C02: the first-run Cloud Mode card', () => {
     expect(onComplete).toHaveBeenCalledTimes(1);
     expect(useAppModeStore.getState().hasSelectedMode).toBe(true);
     expect(useSimpleModeStore.getState().onboardingCompleted).toBe(true);
-    // The card must not quietly pick Local for the user — that decision belongs
-    // to the Local card and the "Skip for now" link.
     expect(useAppModeStore.getState().mode).toBe('local');
   });
 
@@ -89,8 +77,6 @@ describe('DES-C02: the first-run Cloud Mode card', () => {
   });
 
   it('is wired at the only production mount', () => {
-    // The callback existing is worthless if nothing passes it; that omission is
-    // exactly what made the card a no-op.
     const app = readFileSync(path.join(SRC, 'App.tsx'), 'utf8');
     expect(app).toMatch(/<OnboardingWelcome[\s\S]*?onCloudModeSelected=\{/);
     expect(app).toMatch(

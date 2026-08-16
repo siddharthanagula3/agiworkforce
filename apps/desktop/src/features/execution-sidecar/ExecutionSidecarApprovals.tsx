@@ -93,29 +93,11 @@ export function ExecutionSidecarApprovals() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [errorById, setErrorById] = useState<Record<string, string>>({});
 
-  // Ownership split: `features/chat/McpToolConfirmationPrompt` renders
-  // `mcp_tool` approvals inline in the transcript, where the tool call the user
-  // is judging is visible. This sidecar owns everything else — `tool_execution`
-  // (dangerous tools in manual mode), terminal, filesystem, browser, and UI
-  // automation — which previously had no renderer at all.
-  //
-  // Without this filter both surfaces render the same MCP approval and the user
-  // sees two Approve buttons for one decision.
   const pendingApprovals = useMemo(
     () => allPendingApprovals.filter((approval) => approval.type !== 'mcp_tool'),
     [allPendingApprovals],
   );
 
-  // Decisions go through `resolveApprovalRequest`, not straight to
-  // `toolStore.approveOperation`. The approvals this panel owns are produced by
-  // the Rust `ApprovalController`, which parks the suspended step on a oneshot
-  // channel and only wakes it from `agent_resolve_approval`. Clearing the queue
-  // entry locally would hide the card while the run stayed blocked until the
-  // backend's own timeout rejected it.
-  //
-  // `resolveApprovalRequest` removes the entry from `toolStore` itself once the
-  // native call succeeds, so a failure leaves the card on screen to retry
-  // instead of silently dropping a decision the agent never received.
   const handleResolve = useCallback(
     async (approval: ApprovalRequest, decision: 'approve' | 'reject') => {
       setBusyId(approval.id);

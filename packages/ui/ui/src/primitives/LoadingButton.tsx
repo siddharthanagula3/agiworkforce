@@ -5,36 +5,12 @@ import { cn } from '../cn';
 import { Button, type ButtonProps } from './Button';
 
 export interface LoadingButtonProps extends ButtonProps {
-  /** Whether the button is in a loading state */
   loading?: boolean;
-  /** Text to show when loading (defaults to children) */
   loadingText?: string;
-  /** Custom loading spinner class */
   spinnerClassName?: string;
-  /** Position of the spinner relative to text */
   spinnerPosition?: 'left' | 'right';
 }
 
-/**
- * A button component with built-in loading state support.
- *
- * Features:
- * - Loading spinner with smooth transition
- * - Prevents double-clicks while loading
- * - Accessible loading state announcement
- * - Optional loading text
- *
- * Usage:
- * ```tsx
- * <LoadingButton
- *   loading={isSubmitting}
- *   loadingText="Saving..."
- *   onClick={handleSubmit}
- * >
- *   Save Changes
- * </LoadingButton>
- * ```
- */
 function LoadingButton({
   children,
   loading = false,

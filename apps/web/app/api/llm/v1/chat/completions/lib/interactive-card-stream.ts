@@ -1,7 +1,6 @@
 import { parseInteractiveCardDelta } from '@agiworkforce/cloud-contracts';
 import type { InteractiveCard } from '@agiworkforce/types';
 
-/** Parse only canonical card deltas from one OpenAI-compatible SSE chunk. */
 export function extractAssistantInteractiveCardDeltas(value: Uint8Array): InteractiveCard[] {
   const text = new TextDecoder().decode(value);
   const cards: InteractiveCard[] = [];

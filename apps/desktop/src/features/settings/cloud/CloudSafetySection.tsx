@@ -59,8 +59,6 @@ export function CloudSafetySection() {
   }, [load]);
 
   const handleChange = async (next: boolean) => {
-    // Optimistic, then reverted on failure — never left showing a value the
-    // account does not have.
     setEnabled(next);
     setSaving(true);
     setError(null);

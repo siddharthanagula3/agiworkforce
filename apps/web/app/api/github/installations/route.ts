@@ -20,9 +20,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Rows created by the legacy setup callback were never backed by a GitHub
-  // user-access-token ownership check. Keep them removable through DELETE, but
-  // do not present them as connected until secure installation linking exists.
   if (!isGitHubInstallationLinkingAvailable()) {
     return NextResponse.json({ installations: [] });
   }
@@ -51,7 +48,6 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // AUDIT-008-006: Enforce CSRF protection for DELETE endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 

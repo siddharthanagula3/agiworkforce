@@ -201,8 +201,6 @@ describe('handoff target', () => {
   });
 
   it('carries the target into the hashed payload, so consent attests to the destination', async () => {
-    // The preview hash is what the user approves. If the target were only a
-    // display string, the same hash would cover two different destinations.
     const byok = await buildLocalToByokHandoffDraft(baseParams);
     const managed = await buildLocalToByokHandoffDraft({ ...baseParams, target: 'managed' });
 

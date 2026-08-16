@@ -10,38 +10,20 @@
  * main process is its own egress chokepoint.
  */
 
-/** Our cloud app + API origin (same-origin API, like the web app). */
 export const CLOUD_APP_ORIGIN = 'https://agiworkforce.com';
 
-/**
- * Which renderer this process drives: the hosted cloud app (default) or the
- * bundled Vite build served over `agi://cloud`. Read once here so every
- * main-process module agrees; see main.ts's header for the tradeoff.
- */
 export type RendererMode = 'remote' | 'bundled';
 export const RENDERER_MODE: RendererMode =
   process.env['AGI_CLOUD_RENDERER'] === 'bundled' ? 'bundled' : 'remote';
 
-/**
- * Session partition for the remote renderer. Cookies/localStorage (i.e. the
- * signed-in Clerk session) live here, and every remote window — main window
- * and quick-ask panel alike — must use it so they share one login. Changing
- * this string signs every existing install out.
- */
 export const REMOTE_SESSION_PARTITION = 'persist:agi-cloud';
 
-/** Renderer custom scheme. Registered standard+secure so fetches carry a real Origin. */
 export const RENDERER_SCHEME = 'agi';
 export const RENDERER_HOST = 'cloud';
 export const RENDERER_ORIGIN = `${RENDERER_SCHEME}://${RENDERER_HOST}`;
 
-/**
- * Deep-link scheme for SSO callbacks. Distinct from the Tauri shell's
- * `agiworkforce://` so both apps can be installed side by side.
- */
 export const DEEP_LINK_SCHEME = 'agiworkforce-cloud';
 
-/** Hosts the account bridge may store as an API base (mirrors the Rust allowlist). */
 export function isAllowedApiBaseUrl(rawUrl: string): boolean {
   let parsed: URL;
   try {
@@ -59,7 +41,6 @@ export function isAllowedApiBaseUrl(rawUrl: string): boolean {
   return isLocalhost || host === 'agiworkforce.com' || host.endsWith('.agiworkforce.com');
 }
 
-/** Content-Security-Policy served with every renderer document. */
 export const RENDERER_CSP = [
   "default-src 'self'",
   "script-src 'self'",

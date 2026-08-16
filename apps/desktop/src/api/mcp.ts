@@ -135,9 +135,6 @@ export async function mcpListServers(): Promise<McpServerInfo[]> {
 export async function mcpConnectServer(name: string): Promise<string> {
   try {
     validateNonEmpty(name, 'server name');
-    // Connection owns an explicit native approval. Retrying the IPC command
-    // would re-prompt after a denial and could start a server more than once
-    // after an ambiguous timeout.
     return await invokeWithTimeout<string>('mcp_connect_server', { name }, MCP_INIT_TIMEOUT_MS);
   } catch (error) {
     throw new Error(`Failed to connect to MCP server '${name}': ${error}`);
@@ -197,8 +194,6 @@ export async function mcpCallTool(
     if (!arguments_ || typeof arguments_ !== 'object') {
       throw new Error('arguments must be a valid object');
     }
-    // MCP tools can be destructive or externally visible. Retry belongs in a
-    // tool-specific idempotency contract, never in this generic IPC wrapper.
     return await invokeWithTimeout<unknown>(
       'mcp_call_tool',
       { toolId, arguments: arguments_ },
@@ -337,13 +332,6 @@ export async function mcpGetToolSchemas(): Promise<unknown[]> {
   }
 }
 
-// ============================================================================
-// MCP OAuth Functions
-// ============================================================================
-
-/**
- * Available OAuth providers with their display configuration
- */
 export const MCP_OAUTH_PROVIDERS: McpOAuthProviderConfig[] = [
   {
     id: 'github',
@@ -618,15 +606,6 @@ export async function mcpListConnectedProviders(): Promise<string[]> {
   }
 }
 
-/**
- * Returns every connector id that has a real, working MCP server mapping on
- * the backend (`get_connector_mcp_mapping` in `mcp_oauth.rs`). This is the
- * single source of truth the "Available to connect" grid filters against —
- * fixes DESKTOP-CONNECTOR-MAPPING-DRIFT-FAKE-CONNECTED-01, where the
- * frontend catalog could advertise a connector (atlassian, google_sheets,
- * context7, ...) that had no backend mapping, producing a permanent
- * fake-"Connected" badge with zero backing tools.
- */
 export async function mcpGetSupportedConnectorIds(): Promise<string[]> {
   try {
     return await invokeWithTimeout<string[]>('mcp_get_supported_connector_ids');
@@ -746,10 +725,6 @@ export async function mcpServerListTools(): Promise<{ tools: unknown[] }> {
     throw new Error(`Failed to list MCP server tools: ${error}`);
   }
 }
-
-// ============================================================================
-// MCP Extension Functions
-// ============================================================================
 
 export async function mcpExtensionList(): Promise<McpExtensionInfo[]> {
   try {
@@ -897,7 +872,6 @@ export async function mcpOAuthGetAllStatuses(): Promise<
       try {
         statuses[provider] = await mcpOAuthStatus(provider);
       } catch {
-        // If status check fails, mark as disconnected
         statuses[provider] = {
           connected: false,
           userInfo: null,
@@ -922,7 +896,6 @@ export async function mcpOAuthNeedsRefresh(provider: McpOAuthProvider): Promise<
     if (!status.connected || !status.expiresAt) {
       return false;
     }
-    // Check if token expires within 5 minutes
     const fiveMinutesFromNow = Date.now() / 1000 + 300;
     return status.expiresAt < fiveMinutesFromNow;
   } catch {
@@ -1019,27 +992,14 @@ export class McpClient {
     return mcpGetToolSchemas();
   }
 
-  // ============================================================================
-  // OAuth Methods
-  // ============================================================================
-
-  /**
-   * Get available OAuth providers configuration
-   */
   static getOAuthProviders(): McpOAuthProviderConfig[] {
     return MCP_OAUTH_PROVIDERS;
   }
 
-  /**
-   * Start an OAuth flow for a provider
-   */
   static async oauthStart(provider: McpOAuthProvider): Promise<McpOAuthStartResponse> {
     return mcpOAuthStart(provider);
   }
 
-  /**
-   * Handle OAuth callback with authorization code
-   */
   static async oauthCallback(
     provider: McpOAuthProvider,
     code: string,
@@ -1056,30 +1016,18 @@ export class McpClient {
     return mcpOAuthCallbackRaw(provider, code, callbackState);
   }
 
-  /**
-   * Check connection status for a provider
-   */
   static async oauthStatus(provider: McpOAuthProvider): Promise<McpOAuthConnectionStatus> {
     return mcpOAuthStatus(provider);
   }
 
-  /**
-   * Disconnect a provider
-   */
   static async oauthDisconnect(provider: McpOAuthProvider): Promise<void> {
     return mcpOAuthDisconnect(provider);
   }
 
-  /**
-   * Refresh tokens for a provider
-   */
   static async oauthRefresh(provider: McpOAuthProvider): Promise<McpOAuthTokenResponse> {
     return mcpOAuthRefresh(provider);
   }
 
-  /**
-   * Set OAuth client credentials for a provider
-   */
   static async oauthSetCredentials(
     provider: McpOAuthProvider,
     clientId: string,
@@ -1160,10 +1108,6 @@ export class McpClient {
     return mcpServerListTools();
   }
 
-  // ============================================================================
-  // Extension Methods
-  // ============================================================================
-
   static async listExtensions(): Promise<McpExtensionInfo[]> {
     return mcpExtensionList();
   }
@@ -1223,16 +1167,10 @@ export class McpClient {
     return mcpExtensionSetConfig(extensionId, config);
   }
 
-  /**
-   * Get status of all OAuth providers
-   */
   static async oauthGetAllStatuses(): Promise<Record<McpOAuthProvider, McpOAuthConnectionStatus>> {
     return mcpOAuthGetAllStatuses();
   }
 
-  /**
-   * Check if a provider needs token refresh
-   */
   static async oauthNeedsRefresh(provider: McpOAuthProvider): Promise<boolean> {
     return mcpOAuthNeedsRefresh(provider);
   }

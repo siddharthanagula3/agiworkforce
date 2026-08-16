@@ -1,22 +1,3 @@
-/**
- * renderHook integration tests for the four settings hooks that have
- * inline fetch logic (not routed through settingsService).
- *
- * Each test:
- *   - Renders the actual hook inside a QueryClientProvider
- *   - Asserts fetchMock was called with the CORRECT URL + method + auth header
- *   - Asserts the hook data reflects the SERVER result (not a stub)
- *   - Has a negative case confirming the hook surfaces an error on non-ok response
- *
- * The four hooks under test:
- *   useOrganizationSettings  → GET /api/settings/organization
- *   useTeamMembers           → GET /api/settings/team?organizationId=
- *   useUserActivity          → GET /api/settings/activity
- *   useAuditLogActions       → GET /api/settings/audit-logs/actions
- *
- * NOTE: vitest.config.ts sets mockReset: true · each beforeEach restores
- *       mock implementations.
- */
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -37,16 +18,10 @@ vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-// Also mock the logger so we don't get noise in test output
 vi.mock('@shared/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() },
 }));
 
-// Stub requireProviderDefaultModel so the hooks module loads without full
-// package resolution, but keep every other real export (via importOriginal):
-// use-settings-queries.ts now also pulls in useAuthStore for useDeleteAccount,
-// which transitively needs @agiworkforce/types' CAPABILITY_LAYERS through
-// @agiworkforce/cloud-contracts — a full replacement mock here breaks that.
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
   return {
@@ -55,9 +30,6 @@ vi.mock('@agiworkforce/types', async (importOriginal) => {
   };
 });
 
-// Stub settingsService (the inline fetch hooks call fetch directly, but
-// useUserSettings/useUserProfile/useAPIKeys use the service · stub it so
-// the QueryClient doesn't try to fetch unrelated endpoints).
 vi.mock('../services/user-preferences', () => ({
   default: {
     getProfile: vi.fn().mockResolvedValue({ data: null }),
@@ -103,7 +75,6 @@ async function setupMocks() {
   vi.mocked(getCsrfToken).mockResolvedValue('test-csrf-token');
 }
 
-/** Create a fresh QueryClient with retries disabled for predictable tests. */
 function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
@@ -113,7 +84,6 @@ function makeQueryClient() {
   });
 }
 
-/** Wrapper component that provides a fresh QueryClient to each renderHook call. */
 function makeWrapper() {
   const client = makeQueryClient();
   const Wrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -123,10 +93,6 @@ function makeWrapper() {
   return Wrapper;
 }
 
-// ============================================================================
-// useOrganizationSettings
-// ============================================================================
-
 describe('useOrganizationSettings · renderHook (GET /api/settings/organization)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
@@ -134,12 +100,6 @@ describe('useOrganizationSettings · renderHook (GET /api/settings/organization)
   });
 
   it('calls GET /api/settings/organization with auth header and populates hook data', async () => {
-    // The route's response is validated by OrganizationOverviewSchema, so the
-    // fixture has to be a whole overview envelope, not just an organization.
-    // The previous fixture predated that contract: it used a non-UUID id,
-    // omitted `currentUserRole`, and carried none of `activeOrganizationId`,
-    // `workspaces` or `access` — so safeParse failed, the query threw "The
-    // workspace response was invalid", and `isSuccess` never became true.
     const ORG_ID = '11111111-1111-4111-8111-111111111111';
     const org = {
       id: ORG_ID,
@@ -188,8 +148,6 @@ describe('useOrganizationSettings · renderHook (GET /api/settings/organization)
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // `select` narrows the overview to its organization, so the hook's data is
-    // the organization — from the server, not from the old `return null` stub.
     expect(result.current.data).toEqual(org);
   });
 
@@ -276,10 +234,6 @@ describe('team administration mutations · renderHook', () => {
   });
 });
 
-// ============================================================================
-// useTeamMembers
-// ============================================================================
-
 describe('useTeamMembers · renderHook (GET /api/settings/team)', () => {
   beforeEach(async () => {
     fetchMock.mockReset();
@@ -318,7 +272,6 @@ describe('useTeamMembers · renderHook (GET /api/settings/team)', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Hook data comes from the server · old queryFn always returned [].
     expect(result.current.data).toEqual(members);
   });
 
@@ -342,16 +295,11 @@ describe('useTeamMembers · renderHook (GET /api/settings/team)', () => {
       wrapper: makeWrapper(),
     });
 
-    // Hook should stay in idle/pending state without fetching
     await new Promise((r) => setTimeout(r, 50));
     expect(result.current.isPending).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
-
-// ============================================================================
-// useUserActivity
-// ============================================================================
 
 describe('useUserActivity · renderHook (GET /api/settings/activity)', () => {
   beforeEach(async () => {
@@ -390,7 +338,6 @@ describe('useUserActivity · renderHook (GET /api/settings/activity)', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Hook data comes from the server · old queryFn always returned [].
     expect(result.current.data).toEqual(activities);
   });
 
@@ -408,10 +355,6 @@ describe('useUserActivity · renderHook (GET /api/settings/activity)', () => {
     expect(result.current.error).toBeTruthy();
   });
 });
-
-// ============================================================================
-// useAuditLogActions
-// ============================================================================
 
 describe('useAuditLogActions · renderHook (GET /api/settings/audit-logs/actions)', () => {
   beforeEach(async () => {
@@ -436,7 +379,6 @@ describe('useAuditLogActions · renderHook (GET /api/settings/audit-logs/actions
         headers: expect.objectContaining({ Authorization: 'Bearer test-auth-token' }),
       }),
     );
-    // Hook data comes from the server · old queryFn always returned [].
     expect(result.current.data).toEqual(actions);
   });
 
@@ -454,11 +396,6 @@ describe('useAuditLogActions · renderHook (GET /api/settings/audit-logs/actions
     expect(result.current.error).toBeTruthy();
   });
 });
-
-// ============================================================================
-// useToggle2FA · enable honesty (A9): enable2FA() is setup-only; the hook must
-// NOT claim "2FA enabled" when the server keeps it off until a code is verified.
-// ============================================================================
 
 describe('useToggle2FA · enable must not falsely report success (A9)', () => {
   beforeEach(async () => {

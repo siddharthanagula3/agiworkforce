@@ -11,26 +11,9 @@ export const metadata = buildMetadata({
   path: '/trust',
 });
 
-/**
- * The dated counterpart to /security.
- *
- * /security explains mechanisms. This page exists to answer two questions a
- * mechanism page cannot: "when was this last checked" and "what could I verify
- * without taking your word for it".
- *
- * The previous version of this page promised "claims with dates" and rendered
- * zero dates, and asserted an active SOC 2 evidence-collection programme that
- * does not exist anywhere in this repository. Both are fixed here. Every row
- * carries an as-of date and, where a claim would normally rest on a document,
- * an explicit statement of whether that document exists.
- *
- * Rule for editing: if you change a row, change its `asOf`. A stale date is a
- * defect, not cosmetics.
- */
 const LAST_REVIEWED = POLICY_LAST_UPDATED.trust;
 const NEXT_REVIEW = 'November 2026';
 
-/** Certification and regulatory posture. `artifact` says what would prove it. */
 const COMPLIANCE: {
   item: string;
   status: string;
@@ -93,11 +76,6 @@ const COMPLIANCE: {
       'A list of processors with purpose and region is published at /subprocessors, and processing terms are at /dpa. Stating the correction rather than quietly reissuing the list: a review on 14 August found six recipients missing, including a transactional email provider that had been delisted nine days earlier on the false reasoning that no email package appeared in our dependencies — it calls the provider’s HTTP API directly, so the check could not have found it. The list is now built from egress rather than from the manifest.',
     asOf: '2026-08-14',
   },
-  //
-  // India — DPDP Act, 2023. Added 14 August 2026. Applicability is not
-  // theoretical: the product prices in INR against India-specific Stripe
-  // prices, which is an offering of services to data principals in India.
-  //
   {
     item: 'DPDP (India) — notice under s.5',
     status: 'Published',
@@ -156,7 +134,6 @@ const COMPLIANCE: {
   },
 ];
 
-/** Security controls, stated as implemented or not, with an as-of date. */
 const POSTURE: { item: string; state: string; detail: string; asOf: string }[] = [
   {
     item: 'Local mode isolation',
@@ -272,7 +249,6 @@ const POSTURE: { item: string; state: string; detail: string; asOf: string }[] =
   },
 ];
 
-/** Things a reviewer can check without asking us anything. */
 const VERIFY: { title: string; body: string }[] = [
   {
     title: 'Check our response headers',

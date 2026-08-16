@@ -10,30 +10,9 @@ interface RouteConfig {
   changeFrequency: ChangeFrequency;
 }
 
-/**
- * Every indexable public route. Deliberately excludes:
- *  - authenticated app routes (/chat, /settings, /billing, /projects, /user,
- *    /customize, /admin) — disallowed in robots.ts
- *  - legal policy aliases, which are now 308 redirects declared in
- *    next.config.ts rather than stub pages (/privacy-policy, /terms-of-service,
- *    /cookie-policy, /aup, /acceptable-use-policy). Exactly one canonical page
- *    per policy is listed below; never add an alias here.
- *  - other redirect-only routes (/documentation, /downloads, /sign-in,
- *    /sign-up, /register, /marketplace, /ai-skills, /api-reference,
- *    /device-auth, /connectors/new, /connectors/permissions,
- *    /use-cases/consulting-businesses, /use-cases/it-service-providers, ...)
- *  - noindex utility routes (/signup, /login, /forgot-password, /verify, /auth/*)
- *  - dynamic detail routes without published content (/blog/[slug] currently
- *    404s, /plugins/[id], /skills/[name], /share/[token], /shared/[id])
- *
- * Keep this list in lockstep with robots.ts: nothing disallowed there may
- * appear here.
- */
 const routes: RouteConfig[] = [
-  // Primary
   { path: '', priority: 1.0, changeFrequency: 'weekly' },
 
-  // Key conversion
   { path: '/pricing', priority: 0.9, changeFrequency: 'monthly' },
   { path: '/get-started', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/download', priority: 0.9, changeFrequency: 'weekly' },
@@ -44,12 +23,10 @@ const routes: RouteConfig[] = [
   { path: '/contact', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/contact-sales', priority: 0.6, changeFrequency: 'monthly' },
 
-  // Differentiators
   { path: '/providers', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/byok', priority: 0.9, changeFrequency: 'monthly' },
   { path: '/local', priority: 0.9, changeFrequency: 'monthly' },
 
-  // Surfaces
   { path: '/desktop', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/mobile', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/mobile/legal', priority: 0.45, changeFrequency: 'monthly' },
@@ -59,7 +36,6 @@ const routes: RouteConfig[] = [
   { path: '/agi-code', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/agi-work', priority: 0.8, changeFrequency: 'weekly' },
 
-  // Product features
   { path: '/features', priority: 0.85, changeFrequency: 'weekly' },
   { path: '/features/agents', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/features/ai-chat', priority: 0.8, changeFrequency: 'weekly' },
@@ -70,7 +46,6 @@ const routes: RouteConfig[] = [
   { path: '/features/projects', priority: 0.85, changeFrequency: 'weekly' },
   { path: '/features/tools', priority: 0.8, changeFrequency: 'weekly' },
 
-  // Workspace surfaces
   { path: '/apps', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/skills', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/connectors', priority: 0.8, changeFrequency: 'weekly' },
@@ -79,15 +54,12 @@ const routes: RouteConfig[] = [
   { path: '/integrations', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/gallery', priority: 0.7, changeFrequency: 'weekly' },
 
-  // Documentation / developer
   { path: '/docs', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/docs/byok-env', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/api-docs', priority: 0.7, changeFrequency: 'weekly' },
 
-  // Cloud early access
   { path: '/waitlist', priority: 0.8, changeFrequency: 'weekly' },
 
-  // Company / content
   { path: '/about', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/blog', priority: 0.7, changeFrequency: 'daily' },
   { path: '/changelog', priority: 0.6, changeFrequency: 'weekly' },
@@ -99,20 +71,17 @@ const routes: RouteConfig[] = [
   { path: '/community', priority: 0.6, changeFrequency: 'weekly' },
   { path: '/buildathon', priority: 0.4, changeFrequency: 'monthly' },
 
-  // Use cases
   { path: '/use-cases', priority: 0.75, changeFrequency: 'weekly' },
   { path: '/use-cases/consulting', priority: 0.65, changeFrequency: 'monthly' },
   { path: '/use-cases/it-providers', priority: 0.65, changeFrequency: 'monthly' },
   { path: '/use-cases/sales-teams', priority: 0.65, changeFrequency: 'monthly' },
   { path: '/use-cases/startups', priority: 0.65, changeFrequency: 'monthly' },
 
-  // Support / help
   { path: '/help', priority: 0.7, changeFrequency: 'weekly' },
   { path: '/support', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/faq', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/status', priority: 0.7, changeFrequency: 'daily' },
 
-  // Trust / legal
   { path: '/trust', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/security', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/privacy', priority: 0.7, changeFrequency: 'yearly' },
@@ -129,17 +98,10 @@ const routes: RouteConfig[] = [
   { path: '/model-licenses', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/legal', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/legal/eu-representative', priority: 0.4, changeFrequency: 'monthly' },
-  // Plain-language companion to /privacy, indexed at a higher priority than the
-  // policy itself on purpose: it is the page someone searching "does AGI train
-  // on my data" should land on.
   { path: '/data-use', priority: 0.7, changeFrequency: 'yearly' },
-  // India — the DPDP notice and the data-principal request route. Indexed
-  // rather than hidden: a data principal has to be able to find the grievance
-  // contact without already being a customer.
   { path: '/privacy/india', priority: 0.6, changeFrequency: 'yearly' },
   { path: '/privacy/requests', priority: 0.6, changeFrequency: 'yearly' },
 
-  // HTML sitemap
   { path: '/sitemap-page', priority: 0.4, changeFrequency: 'monthly' },
 ];
 

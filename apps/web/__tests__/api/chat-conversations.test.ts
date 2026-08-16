@@ -1,8 +1,3 @@
-/**
- * Chat Conversations API Tests
- *
- * Tests for /api/chat/conversations endpoints
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -10,7 +5,6 @@ import { requireProviderDefaultModel } from '@agiworkforce/types';
 
 const CHAT_MODEL = requireProviderDefaultModel('openai');
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -31,7 +25,6 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// Mock Neon DB and Clerk auth — routes use these instead of Neon after Wave 3.
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();
@@ -46,7 +39,6 @@ vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
 }));
 
-// Import after mocks
 import { GET, POST } from '@/app/api/chat/conversations/route';
 
 describe('Chat Conversations API', () => {
@@ -72,10 +64,8 @@ describe('Chat Conversations API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user
     mockRequireCurrentUserId.mockResolvedValue('user-123');
 
-    // Default: empty DB results
     mockQuery.mockResolvedValue([]);
     mockExecute.mockResolvedValue(undefined);
   });
@@ -211,7 +201,6 @@ describe('Chat Conversations API', () => {
         const response = await GET(request);
 
         expect(response.status).toBe(200);
-        // Verify the SQL query filters deleted_at is null
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('deleted_at is null'),
           expect.any(Array),
@@ -370,8 +359,6 @@ describe('Chat Conversations API', () => {
         expect(response.status).toBe(201);
         const data = await response.json();
         expect(data.conversation.id).toBe(clientId);
-        // The client id is forwarded into the insert (coalesced over the DB default),
-        // and the create is idempotent/owner-guarded via ON CONFLICT.
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('on conflict (id)'),
           expect.arrayContaining([clientId]),

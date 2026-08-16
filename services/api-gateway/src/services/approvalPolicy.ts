@@ -14,10 +14,6 @@
 
 import { logger } from '../lib/logger';
 
-// ---------------------------------------------------------------------------
-// Audit types (mirrors AuditEvent from packages/contracts/types/src/audit.ts)
-// ---------------------------------------------------------------------------
-
 type AuditSurface = 'desktop' | 'mobile' | 'web' | 'cli' | 'vscode';
 type AuditAction =
   | 'auth_login'
@@ -81,58 +77,37 @@ function createAuditEvent(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Risk level assigned to a tool by ToolGuard or the caller. */
 export type RiskLevel = 'safe' | 'unknown' | 'dangerous';
 
-/** The three possible policy decisions. */
 export type PolicyDecision = 'approve' | 'require_approval' | 'deny';
 
-/** Where the policy decision originated. */
 export type PolicySource = 'user' | 'team' | 'default';
 
-/** Result of evaluating a tool's approval policy. */
 export interface ApprovalPolicyResult {
-  /** The decision: auto-approve, require human approval, or deny outright. */
   decision: PolicyDecision;
-  /** Human-readable explanation of why this decision was made. */
   reason: string;
-  /** Which policy layer produced this decision. */
   policySource: PolicySource;
 }
 
-/** A single per-tool policy entry. */
 export interface ToolPolicy {
   toolName: string;
   decision: PolicyDecision;
 }
 
-/** Team-level policy overrides set by an admin. */
 export interface TeamPolicy {
   teamId: string;
-  /** Per-tool overrides. Keyed by tool name for fast lookup. */
   toolOverrides: Record<string, PolicyDecision>;
-  /** If true, team policy takes absolute precedence (user cannot override). */
   enforced: boolean;
 }
 
-/** User-level per-tool policies. */
 export interface UserPolicy {
   userId: string;
   toolOverrides: Record<string, PolicyDecision>;
 }
 
-// ---------------------------------------------------------------------------
-// In-memory policy store (replace with DB-backed store in production)
-// ---------------------------------------------------------------------------
-
 const teamPolicies = new Map<string, TeamPolicy>();
 const userPolicies = new Map<string, UserPolicy>();
 
-/** Register or update a team policy. Intended for team admin endpoints. */
 export function setTeamPolicy(policy: TeamPolicy): void {
   teamPolicies.set(policy.teamId, policy);
   logger.info(
@@ -141,30 +116,21 @@ export function setTeamPolicy(policy: TeamPolicy): void {
   );
 }
 
-/** Register or update a user policy. */
 export function setUserPolicy(policy: UserPolicy): void {
   userPolicies.set(policy.userId, policy);
 }
 
-/** Retrieve the current team policy, if any. */
 export function getTeamPolicy(teamId: string): TeamPolicy | undefined {
   return teamPolicies.get(teamId);
 }
 
-/** Retrieve the current user policy, if any. */
 export function getUserPolicy(userId: string): UserPolicy | undefined {
   return userPolicies.get(userId);
 }
 
-// ---------------------------------------------------------------------------
-// Audit emission
-// ---------------------------------------------------------------------------
-
-/** Listeners that receive every audit event emitted by this module. */
 type AuditListener = (event: AuditEvent) => void;
 const auditListeners: AuditListener[] = [];
 
-/** Register a listener that will be called for every policy evaluation audit event. */
 export function onAuditEvent(listener: AuditListener): void {
   auditListeners.push(listener);
 }
@@ -179,18 +145,6 @@ function emitAudit(event: AuditEvent): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Default risk-based policy
-// ---------------------------------------------------------------------------
-
-/**
- * Map a risk level to a default policy decision.
- *
- * - `safe`      -> `approve`           (trusted, no approval needed)
- * - `unknown`   -> `require_approval`  (needs human review)
- * - `dangerous` -> `require_approval`  (needs human review; not denied by default
- *                                        so users can still approve after review)
- */
 function defaultDecisionForRisk(riskLevel: RiskLevel): PolicyDecision {
   switch (riskLevel) {
     case 'safe':
@@ -201,10 +155,6 @@ function defaultDecisionForRisk(riskLevel: RiskLevel): PolicyDecision {
       return 'require_approval';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Core evaluation
-// ---------------------------------------------------------------------------
 
 /**
  * Evaluate the approval policy for a tool call.
@@ -229,7 +179,6 @@ export function evaluateApprovalPolicy(
 ): ApprovalPolicyResult {
   let result: ApprovalPolicyResult;
 
-  // 1. Check team policy
   if (teamId) {
     const team = teamPolicies.get(teamId);
     if (team) {
@@ -246,13 +195,10 @@ export function evaluateApprovalPolicy(
     }
   }
 
-  // 2. Check user policy
   const user = userPolicies.get(userId);
   if (user) {
     const userDecision = user.toolOverrides[toolName];
     if (userDecision !== undefined) {
-      // If team policy is enforced and exists (but didn't have this specific tool),
-      // user policy still applies for unlisted tools.
       result = {
         decision: userDecision,
         reason: `User policy sets "${toolName}" to "${userDecision}"`,
@@ -263,7 +209,6 @@ export function evaluateApprovalPolicy(
     }
   }
 
-  // 3. Fall back to risk-based default
   const defaultDecision = defaultDecisionForRisk(riskLevel);
   result = {
     decision: defaultDecision,
@@ -273,10 +218,6 @@ export function evaluateApprovalPolicy(
   emitPolicyAudit(userId, toolName, riskLevel, result, teamId);
   return result;
 }
-
-// ---------------------------------------------------------------------------
-// Audit event creation
-// ---------------------------------------------------------------------------
 
 function emitPolicyAudit(
   userId: string,

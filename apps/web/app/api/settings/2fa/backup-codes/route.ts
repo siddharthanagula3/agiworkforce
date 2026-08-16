@@ -1,15 +1,3 @@
-/**
- * POST /api/settings/2fa/backup-codes
- *
- * Regenerates backup codes for the authenticated user.
- * Requires a valid TOTP code to prevent session-hijack escalation.
- *
- * The existing backup codes are invalidated atomically.  New codes are
- * returned in plaintext exactly once · they are stored as SHA-256 hashes.
- *
- * Body: { code: string }  · current TOTP code to authorize regeneration
- * Returns: { backup_codes: string[] }
- */
 
 import 'server-only';
 
@@ -38,14 +26,6 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // AUDIT-FIX GOV-16: key the TOTP attempt limit on the authenticated user, not
-  // the source IP. rateLimitConfigs['2fa-verify'] documents itself as "5 attempts
-  // per 15 minutes per user", but withRateLimit falls back to an IP bucket when
-  // no identifier is passed — so the control failed in both directions: an
-  // attacker rotating source IPs got unlimited 6-digit guesses, while colleagues
-  // behind one corporate NAT locked each other out. The limit now runs after
-  // authentication; there is no pre-auth brute-force surface here because
-  // getClerkAuthUser rejects unauthenticated callers before any code is checked.
   const { userId } = await getClerkAuthUser(request);
 
   const rateLimitResponse = await withRateLimit(request, '2fa-verify', `user:${userId}`);
@@ -67,7 +47,6 @@ async function handleRegenerateBackupCodes(request: NextRequest) {
     throw createError.badRequest('2FA is not enabled on this account');
   }
 
-  // Require a valid TOTP code before regenerating
   const secret = await decryptTOTPSecret(row.totp_secret_enc);
   const valid = await verifyTOTPCode(secret, code);
   if (!valid) {

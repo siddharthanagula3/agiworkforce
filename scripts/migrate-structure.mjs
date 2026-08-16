@@ -1,29 +1,9 @@
 #!/usr/bin/env node
-// AGI structure migration — folder-per-tool, step 1 (import-transparent).
-//
-// Converts flat leaf modules into folders using the language's barrel
-// resolution, which is BEHAVIOR-PRESERVING and BUILD-GREEN:
-//   Rust:  `mod web;`        resolves `web.rs`  OR `web/mod.rs`  (identical)
-//   TS:    `import './web'`  resolves `web.ts`  OR `web/index.ts` (identical)
-// So callers never change. This only does the safe move; the higher-value
-// internal split (co-locating prompt/validation/UI inside each folder) is a
-// guided per-tool follow-up that rides the Tool-trait work (INC-1.2).
-//
-// SAFE BY DEFAULT: prints the plan and exits. Pass --apply to execute via
-// `git mv` (preserves history). Must run in a git + build capable environment
-// (this is intentionally NOT runnable from the Cowork sandbox, which blocks
-// git writes and file moves).
-//
-// Usage:
-//   node scripts/migrate-structure.mjs            # dry-run (default)
-//   node scripts/migrate-structure.mjs --apply    # execute git mv
-//   node scripts/migrate-structure.mjs --target apps/cli/src/features/exec/tools
 
 import { readdirSync, existsSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, extname, basename } from 'node:path';
 
-// Targets to migrate. Add more dirs over time (web/desktop tools, commands).
 const TARGETS = [
   {
     dir: 'apps/cli/src/features/exec/tools',
@@ -41,7 +21,7 @@ function planTarget(t) {
   if (!existsSync(t.dir)) return { moves, missing: true };
   for (const name of readdirSync(t.dir)) {
     const from = join(t.dir, name);
-    if (statSync(from).isDirectory()) continue; // already a folder
+    if (statSync(from).isDirectory()) continue;
     if (t.exclude.includes(name)) continue;
     if (!LEAF_EXT[t.lang].includes(extname(name))) continue;
     if (name === BARREL[t.lang]) continue;

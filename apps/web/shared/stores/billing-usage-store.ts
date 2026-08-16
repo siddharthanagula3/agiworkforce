@@ -1,31 +1,12 @@
 'use client';
 
-/**
- * Real billing usage store for the web app.
- *
- * Replaces the previous compilation stub. Provides token-budget tracking,
- * cost overview loading, and budget alerts consumed by the agentic chat UI.
- *
- * The server contributes percentage/reset status only. Token usage may still
- * be accumulated locally for session diagnostics, but private plan operands
- * never enter this browser store.
- */
-
 import { create } from 'zustand';
 import { normalizeUsagePercentage, type ManagedUsageSummaryResponse } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface BudgetState {
-  /** Whether budget tracking is enabled (true when on a paid plan with a limit) */
   enabled: boolean;
-  /** Daily token/credit limit in cents */
   dailyBudget: number;
-  /** Monthly token/credit limit in cents */
   monthlyBudget: number;
-  /** Amount spent this session (accumulated via addTokenUsage) */
   spent: number;
 }
 
@@ -40,39 +21,25 @@ export interface BudgetAlert {
 export type CostOverview = ManagedUsageSummaryResponse;
 
 export interface BillingUsageState {
-  /** Daily budget in cents (0 = no limit / free tier) */
   dailyBudget_cents: number;
-  /** Monthly budget in cents (0 = no limit / free tier) */
   monthlyBudget_cents: number;
-  /** Accumulated token cost for the current session in cents */
   sessionCost_cents: number;
-  /** Percentage-only usage overview loaded from /api/usage */
   costOverview: CostOverview | null;
-  /** Active budget alerts shown in BudgetAlertsPanel */
   budgetAlerts: BudgetAlert[];
-  /** Whether a cost overview fetch is in progress */
   isLoadingOverview: boolean;
 
-  // Actions
   addTokenUsage: (tokenCount: number) => void;
   loadCostOverview: () => Promise<void>;
   dismissAlert: (id: string) => void;
   getTokenCost: () => number;
-  /** Internal: push a new alert */
   _addAlert: (alert: Omit<BudgetAlert, 'id' | 'timestamp'>) => void;
   _clearAlerts: () => void;
 }
 
-// Rough approximation: 1 token ≈ 0.002 cents (used only for local budget metering)
 const APPROX_CENTS_PER_TOKEN = 0.002;
 
-// Thresholds as fractions of the active usage budget
 const WARNING_THRESHOLD = 0.8;
 const DANGER_THRESHOLD = 0.95;
-
-// ---------------------------------------------------------------------------
-// Store
-// ---------------------------------------------------------------------------
 
 export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
   dailyBudget_cents: 0,
@@ -88,8 +55,6 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
     const newSessionCost = state.sessionCost_cents + cost;
     set({ sessionCost_cents: newSessionCost });
 
-    // Generate budget alerts against the active budget. Daily is legacy-only;
-    // the current product model uses the billing-period budget when daily is unset.
     const { budgetAlerts, costOverview } = get();
     if (costOverview) {
       const ratio = normalizeUsagePercentage(costOverview.usage_percentage) / 100;
@@ -161,7 +126,6 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
           timestamp: Date.now(),
         },
       ];
-      // Cap budget alerts to prevent unbounded growth
       return {
         budgetAlerts: updated.length > 50 ? updated.slice(-50) : updated,
       };
@@ -173,14 +137,6 @@ export const useBillingUsageStore = create<BillingUsageState>()((set, get) => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Selectors
-// ---------------------------------------------------------------------------
-
-/**
- * selectBudget — consumed by BudgetTracker in UnifiedAgenticChat.
- * Returns a stable object describing whether budget tracking is active and the spend.
- */
 export function selectBudget(state: BillingUsageState): BudgetState {
   const enabled = state.dailyBudget_cents > 0 || state.monthlyBudget_cents > 0;
   return {
@@ -191,13 +147,3 @@ export function selectBudget(state: BillingUsageState): BudgetState {
   };
 }
 
-// ---------------------------------------------------------------------------
-// STB-25: the "legacy / compatibility exports kept from the old stub" block was
-// removed. It shadowed seven real desktop components with null-rendering
-// look-alikes (BrowserVisualization, MonacoEditor, TerminalPanel, MemoryPanel,
-// ScreenCaptureButton, TimeoutWarningDialog, DiffViewer) plus
-// `invoke = async () => ({})` and `countTokens = () => 0`. All type-checked at
-// any call or JSX site that reached them, so a mistaken import rendered nothing
-// and reported success — and `countTokens = () => 0` inside a *billing* store
-// silently zeroed metered usage. None had importers.
-// ---------------------------------------------------------------------------

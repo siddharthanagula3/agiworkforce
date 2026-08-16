@@ -1,32 +1,16 @@
-/**
- * RT-04: CSRF bypass via any Bearer header
- *
- * Tests that requireCsrfToken only bypasses CSRF for cryptographically valid
- * Bearer tokens, not for garbage/invalid Bearer strings.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
 
-// Override the global @/lib/csrf mock from test/setup.ts so this file tests the
-// real implementation. setup.ts mocks `requireCsrfToken` to always return null
-// for ALL tests; combined with vitest config `mockReset: true`, the mock loses
-// its implementation between tests and returns undefined — which breaks every
-// real-impl test in this file.
 vi.mock('@/lib/csrf', async (importOriginal) => importOriginal());
 
 vi.mock('server-only', () => ({}));
 
-// ─── Clerk backend mock — controls whether JWT is "valid" ─────────────────────
-// NOTE: `verifyToken` is a plain function (not vi.fn()) at the mock boundary so
-// that vitest's `mockReset: true` config doesn't clear its implementation
-// between tests. Only `mockVerifyToken` is reset between tests via beforeEach.
 const mockVerifyToken = vi.fn();
 vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-// Clerk auth() mock — returns no session (tests exercise the Bearer path)
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn().mockResolvedValue({ userId: null }),
 }));
@@ -69,7 +53,6 @@ function makeDeveloperToken(): string {
 describe('RT-04: CSRF Bearer bypass fix', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: verifyToken throws (invalid JWT)
     mockVerifyToken.mockRejectedValue(new Error('invalid token'));
   });
 
@@ -118,7 +101,7 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
         bearerToken: 'valid.jwt.token.with.sufficient.length.for.bearer.minimum',
       });
       const result = await requireCsrfToken(req);
-      expect(result).toBeNull(); // CSRF passes (valid Bearer)
+      expect(result).toBeNull();
     });
 
     it('POST with a valid developer device token bypasses CSRF safely', async () => {
@@ -129,14 +112,12 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
     });
 
     it('POST with invalid Bearer + session cookie + no CSRF → 403 (was previously 200)', async () => {
-      // RT-04 regression test: old code returned null for ANY Bearer header
       mockVerifyToken.mockRejectedValue(new Error('invalid'));
       const req = makeRequest('POST', {
         bearerToken: 'bogus_invalid_token',
         cookie: 'agi_access_token=some_cookie_session',
       });
       const result = await requireCsrfToken(req);
-      // Should be a 403 Response, not null
       expect(result).not.toBeNull();
       expect((result as Response).status).toBe(403);
       const body = await (result as Response).json();
@@ -145,15 +126,11 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
 
     it('POST with invalid Bearer + session cookie + valid CSRF → requireCsrfToken called without Bearer bypass', async () => {
       mockVerifyToken.mockRejectedValue(new Error('invalid'));
-      // The key assertion: bogus Bearer no longer grants automatic bypass.
-      // With a valid CSRF token the result depends on session binding (tested in unit),
-      // but with NO CSRF token the result must be 403 (bogus Bearer does not skip check).
       const req = makeRequest('POST', {
         bearerToken: 'bogus',
         cookie: 'agi_access_token=some_session',
       });
       const result = await requireCsrfToken(req);
-      // No valid CSRF token supplied — must be 403 (bogus Bearer did NOT bypass)
       expect(result).not.toBeNull();
       expect((result as Response).status).toBe(403);
     });
@@ -168,7 +145,7 @@ describe('RT-04: CSRF Bearer bypass fix', () => {
     it('GET with invalid Bearer → no CSRF check needed (GET is safe)', async () => {
       const req = makeRequest('GET', { bearerToken: 'bogus' });
       const result = await requireCsrfToken(req);
-      expect(result).toBeNull(); // GET never needs CSRF
+      expect(result).toBeNull();
     });
 
     it('DELETE with invalid Bearer + no CSRF → 403', async () => {

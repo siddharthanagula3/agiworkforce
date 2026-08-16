@@ -1,15 +1,3 @@
-/**
- * Regression tests for WEB-MULTIMODAL-IMAGE-SSRF (red-team finding 2026-05).
- *
- * Pre-fix bug: chat completions forwarded `image_url` payloads to upstream
- * providers without validating the URL. A request body with
- *     image_url.url = "http://169.254.169.254/latest/meta-data/"
- * had Anthropic / OpenAI / Google fetch the IMDS endpoint server-side and
- * surface it in the model output. SSRF amplification through the LLM.
- *
- * `validateUserImageUrl()` is the chokepoint that the route handler now
- * calls before any provider call. These tests pin its contract.
- */
 
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
@@ -49,7 +37,6 @@ describe('isDataUrl', () => {
 });
 
 describe('isInternalHostname', () => {
-  // Loopback / local
   it.each([
     'localhost',
     'localhost.localdomain',
@@ -62,7 +49,6 @@ describe('isInternalHostname', () => {
     expect(isInternalHostname(host)).toBe(true);
   });
 
-  // RFC1918 private ranges
   it.each([
     '10.0.0.1',
     '10.255.255.255',
@@ -74,7 +60,6 @@ describe('isInternalHostname', () => {
     expect(isInternalHostname(host)).toBe(true);
   });
 
-  // IMDS / link-local
   it.each(['169.254.169.254', '169.254.0.1', '169.254.255.255'])(
     'blocks link-local + IMDS: %s',
     (host) => {
@@ -82,12 +67,10 @@ describe('isInternalHostname', () => {
     },
   );
 
-  // CGNAT
   it.each(['100.64.0.1', '100.127.255.255'])('blocks CGNAT: %s', (host) => {
     expect(isInternalHostname(host)).toBe(true);
   });
 
-  // Multicast / reserved
   it.each(['224.0.0.1', '239.255.255.255', '255.255.255.255'])(
     'blocks multicast/reserved: %s',
     (host) => {
@@ -95,13 +78,10 @@ describe('isInternalHostname', () => {
     },
   );
 
-  // IPv6 link-local + ULA
   it.each(['fe80::1', 'fc00::1', 'fd12:3456:789a::1'])('blocks IPv6 ULA/link-local: %s', (host) => {
     expect(isInternalHostname(host)).toBe(true);
   });
 
-  // IPv4-mapped / IPv4-compatible / NAT64 IPv6 that embed an internal IPv4 —
-  // these previously bypassed the guard and could reach cloud metadata.
   it.each([
     '::ffff:169.254.169.254', // AWS/GCP metadata, mapped dotted
     '::ffff:a9fe:a9fe', // same, mapped hex
@@ -116,7 +96,6 @@ describe('isInternalHostname', () => {
     expect(isInternalHostname(host)).toBe(true);
   });
 
-  // Mapped forms that embed a PUBLIC IPv4 stay public (no over-block).
   it.each(['::ffff:8.8.8.8', '::ffff:0808:0808'])(
     'allows IPv4-mapped IPv6 to public target: %s',
     (host) => {
@@ -124,7 +103,6 @@ describe('isInternalHostname', () => {
     },
   );
 
-  // Public addresses pass
   it.each([
     'example.com',
     'cdn.example.com',
@@ -136,7 +114,6 @@ describe('isInternalHostname', () => {
     expect(isInternalHostname(host)).toBe(false);
   });
 
-  // Invalid IPv4 octets (>255) are blocked (defensive)
   it.each(['256.256.256.256', '999.0.0.1'])('blocks malformed IPv4: %s', (host) => {
     expect(isInternalHostname(host)).toBe(true);
   });
@@ -157,7 +134,6 @@ describe('validateUserImageUrl · accepts', () => {
 });
 
 describe('validateUserImageUrl · rejects', () => {
-  // The exact PoC from the red-team finding
   it('blocks AWS IMDS (the original PoC)', () => {
     expect(() => validateUserImageUrl('http://169.254.169.254/latest/meta-data/')).toThrow(
       EgressPolicyError,
@@ -180,7 +156,6 @@ describe('validateUserImageUrl · rejects', () => {
     expect(() => validateUserImageUrl(url)).toThrow(EgressPolicyError);
   });
 
-  // Internal hostnames in every IPv4 form
   it.each([
     'https://localhost/img.png',
     'https://127.0.0.1/img.png',
@@ -193,7 +168,6 @@ describe('validateUserImageUrl · rejects', () => {
     expect(() => validateUserImageUrl(url)).toThrow(EgressPolicyError);
   });
 
-  // Internal-service ports · even on otherwise-valid public hostnames
   it.each([
     'https://example.com:22/key.pub',
     'https://example.com:5432/x',
@@ -205,7 +179,6 @@ describe('validateUserImageUrl · rejects', () => {
     expect(() => validateUserImageUrl(url)).toThrow(EgressPolicyError);
   });
 
-  // Non-string / weird types
   it('blocks non-string', () => {
     expect(() => validateUserImageUrl(undefined as unknown as string)).toThrow(EgressPolicyError);
     expect(() => validateUserImageUrl(null as unknown as string)).toThrow(EgressPolicyError);
@@ -219,18 +192,11 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
   });
 
   it('allows both Moonshot endpoints (mainland .cn and international .ai)', () => {
-    // Bug 4: a plain Moonshot (Kimi) send 403'd with "Provider endpoint not in approved
-    // egress allowlist" because MOONSHOT_BASE_URL=https://api.moonshot.ai/v1 was not on
-    // the list. Both hosts must pass so the *_BASE_URL override validates.
     expect(() => validateEgressUrl('https://api.moonshot.ai/v1/chat/completions')).not.toThrow();
     expect(() => validateEgressUrl('https://api.moonshot.cn/v1/chat/completions')).not.toThrow();
   });
 
   it.each([
-    // Every one of these is the provider's own documented endpoint and the
-    // value its `*_BASE_URL` override carries. While the allowlist was a
-    // retyped copy they were all missing, so a plain send to any of them 403'd
-    // with "Provider endpoint not in approved egress allowlist".
     ['xAI', 'https://api.x.ai/v1/chat/completions'],
     ['DeepSeek', 'https://api.deepseek.com/v1/chat/completions'],
     ['Perplexity', 'https://api.perplexity.ai/chat/completions'],
@@ -245,16 +211,11 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
   it.each(['https://localhost/v1/messages', 'https://127.0.0.1/v1/messages'])(
     'still rejects the canonical list local-dev carve-out: %s',
     (url) => {
-      // `localhost` and `127.0.0.1` are on ALLOWED_MANAGED_PROVIDER_HOSTS for
-      // adapter base URLs, so deriving from it puts them on this allowlist too.
-      // The internal-host check runs first and must keep them unreachable.
       expect(() => validateEgressUrl(url)).toThrow(EgressPolicyError);
     },
   );
 
   it('no longer allows MuleRouter, dropped as a gateway 2026-07-27', () => {
-    // An allowlisted host for a service we no longer use is standing SSRF
-    // surface, so removal is asserted rather than left to inspection.
     expect(() => validateEgressUrl('https://api.mulerouter.ai/v1/chat/completions')).toThrow();
   });
 
@@ -265,7 +226,6 @@ describe('validateEgressUrl · service allowlist (unchanged behavior)', () => {
   });
 
   it('blocks IMDS even if hostname were somehow allowlisted (defense in depth)', () => {
-    // Direct IP → not in allowlist anyway, but the internal-host check fires first.
     expect(() => validateEgressUrl('https://169.254.169.254/v1/messages')).toThrow(
       EgressPolicyError,
     );

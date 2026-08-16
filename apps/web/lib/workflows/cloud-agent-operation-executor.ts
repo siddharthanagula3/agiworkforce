@@ -31,11 +31,6 @@ function recordedFailureMessage(error: Record<string, unknown> | null): string {
     : 'The durable external operation previously failed.';
 }
 
-/**
- * Execute one provider or tool call behind a durable receipt. A completed
- * receipt is replayed, while an expired unsafe call is never repeated because
- * its external side effect cannot be proven absent.
- */
 export async function executeCloudAgentOperation<TResult extends object>(
   db: DatabaseAdapter,
   input: {
@@ -95,9 +90,6 @@ export async function executeCloudAgentOperation<TResult extends object>(
     throw error;
   }
 
-  // Deliberately do not mark the operation failed when receipt persistence
-  // fails here. The external call already succeeded; leaving the lease active
-  // makes an unsafe retry become outcome_unknown instead of duplicating it.
   await completeCloudAgentExecutionOperation(db, {
     userId: input.userId,
     operationId: claim.operationId,

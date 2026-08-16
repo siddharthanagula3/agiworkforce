@@ -1,28 +1,3 @@
-/**
- * api-auth.ts · getClerkAuthUser contract
- *
- * W9 API-key issue/verify unification: before this fix, POST
- * /api/settings/api-keys issued `agi_<hex>` keys (unsalted SHA-256) while
- * ApiKeyService.verifyKey only accepted `sk_live_/sk_test_` keys (Argon2id)
- * and had zero production callers — an issued key could never authenticate
- * anywhere. This suite proves the fixed path end to end:
- *
- * 1. A key issued through the REAL POST route handler can authenticate
- *    through the REAL getClerkAuthUser Bearer path (round trip).
- * 2. A key revoked through the REAL DELETE route handler is rejected.
- * 3. A malformed/invalid-format key is rejected without a matching DB row.
- * 4. WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01: a present Bearer header
- *    is authoritative — it resolves identity or the request is rejected,
- *    and NEVER falls back to a cookie session, even a valid one. `auth()`
- *    is structurally uncalled whenever a Bearer header is present. Cookie-
- *    only requests (no Authorization header at all) are unaffected.
- *
- * Argon2 is NOT mocked — real generateKey()/argon2 round-trip so the fix
- * to the base64url→hex secret encoding (which could otherwise fail
- * ~40% of real keys against VALID_KEY_PATTERN) is actually exercised.
- * Only the DB is mocked, via a small stateful in-memory `api_keys` table
- * shared across the issue/revoke/verify calls in each test.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import jwt from 'jsonwebtoken';
@@ -38,29 +13,16 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-// @/lib/csrf's requireCsrfToken is already globally mocked to resolve null
-// in test/setup.ts — no per-file override needed.
-
-// ─── Clerk mocks ────────────────────────────────────────────────────────────
-// `auth()` (session/cookie path) is set per-call via mockResolvedValueOnce so
-// a single test can drive both "issue as user A" (Path 1) and "authenticate
-// via Bearer" (Path 2, auth() returns no session) steps.
 const mockAuth = vi.fn();
 vi.mock('@clerk/nextjs/server', () => ({
   auth: (...args: unknown[]) => mockAuth(...args),
 }));
 
-// `verifyToken` (Clerk Bearer-JWT path, Path 2b) — controlled per test.
 const mockVerifyToken = vi.fn();
 vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-// ─── Stateful fake `api_keys` + `profiles` tables ──────────────────────────
-// Real ApiKeyService (Argon2id) and real route handlers run against this;
-// only the DB adapter is faked. Shared mock fns (not the store) must be
-// module-scope for vi.mock hoisting; the store itself is created fresh per
-// test via makeFakeDb() so state never leaks between tests.
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
 const TEST_DEVELOPER_JWT_SECRET = 'test-developer-jwt-secret-at-least-32-bytes';
@@ -86,7 +48,6 @@ function makeFakeDb() {
   async function query(sql: string, params: unknown[] = []): Promise<FakeRow[]> {
     const s = sql.toLowerCase();
 
-    // assertAccountActive — no suspended-user fixtures in this suite.
     if (s.includes('from profiles')) {
       return [];
     }
@@ -96,7 +57,6 @@ function makeFakeDb() {
       return revokedJtis.has(jti) ? [{ jti }] : [];
     }
 
-    // POST route's per-user active-key count guard.
     if (s.includes('count(*)') && s.includes('api_keys')) {
       const userId = params[0] as string;
       const count = [...store.values()].filter(
@@ -105,7 +65,6 @@ function makeFakeDb() {
       return [{ count: String(count) }];
     }
 
-    // ApiKeyService.createApiKey's INSERT ... RETURNING *.
     if (s.startsWith('insert into api_keys')) {
       const [userId, name, keyHash, keyPrefix, scopes] = params as [
         string,
@@ -131,7 +90,6 @@ function makeFakeDb() {
       return [row];
     }
 
-    // ApiKeyService.verifyKey's fast-path lookup by key_prefix.
     if (s.includes('key_prefix = $1')) {
       const keyPrefix = params[0] as string;
       return [...store.values()].filter(
@@ -139,7 +97,6 @@ function makeFakeDb() {
       );
     }
 
-    // [keyId]/route.ts's ownership-check SELECT by id.
     if (s.includes('from api_keys') || s.includes('from public.api_keys')) {
       const id = params[0] as string;
       const row = store.get(id);
@@ -152,7 +109,6 @@ function makeFakeDb() {
   async function execute(sql: string, params: unknown[] = []): Promise<number> {
     const s = sql.toLowerCase();
 
-    // ApiKeyService.revokeApiKey's soft-delete.
     if (s.includes('set revoked_at')) {
       const [id, userId] = params as [string, string];
       const row = store.get(id);
@@ -163,7 +119,6 @@ function makeFakeDb() {
       return 0;
     }
 
-    // ApiKeyService.verifyKey's fire-and-forget last_used_at bump.
     if (s.includes('set last_used_at')) {
       const [lastUsedAt, id] = params as [string, string];
       const row = store.get(id);
@@ -179,7 +134,6 @@ function makeFakeDb() {
   return { store, revokedJtis };
 }
 
-// Imported AFTER the mocks above so the route handlers pick them up.
 import { POST as createApiKeyRoute } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -211,9 +165,6 @@ function makeBearerRequest(token: string): NextRequest {
   });
 }
 
-// assertAccountActive queries `profiles` on every successful auth path
-// (Clerk or API-key), so "untouched by the API-key branch" must check that
-// no call queried `api_keys` specifically, not that the DB was never called.
 function queriedApiKeysTable(): boolean {
   return mockNeonQuery.mock.calls.some(([sql]) => String(sql).toLowerCase().includes('api_keys'));
 }
@@ -226,7 +177,6 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   it('issue → authenticate round trip: a key from the real POST route authenticates via the real Bearer path', async () => {
     makeFakeDb();
 
-    // Step 1: issue the key as an authenticated Clerk session user.
     mockAuth.mockResolvedValueOnce({ userId: 'user-round-trip' });
     const createRes = await createApiKeyRoute(makeCreateRequest());
     expect(createRes.status).toBe(201);
@@ -237,14 +187,12 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     expect(created.full_key).toMatch(/^sk_live_[0-9a-f]{16}_[0-9a-f]{48}$/);
     expect(created.api_key.scopes).toEqual(['models:read', 'inference:write']);
 
-    // Step 2: authenticate with that key via Bearer, no Clerk session this time.
     mockAuth.mockResolvedValueOnce({ userId: null });
     const authResult = await getClerkAuthUser(makeBearerRequest(created.full_key), {
       apiKeyScope: 'inference:write',
     });
 
     expect(authResult).toEqual({ userId: 'user-round-trip' });
-    // Proves the Argon2id verify branch ran, not a rejection short-circuit.
     expect(mockVerifyToken).not.toHaveBeenCalled();
   });
 
@@ -310,13 +258,11 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     const createRes = await createApiKeyRoute(makeCreateRequest());
     const created = (await createRes.json()) as { api_key: { id: string }; full_key: string };
 
-    // Revoke it as the owning user through the real DELETE handler.
     mockAuth.mockResolvedValueOnce({ userId: 'user-revoke-me' });
     const { req, ctx } = makeRevokeRequest(created.api_key.id);
     const revokeRes = await revokeApiKeyRoute(req, ctx);
     expect(revokeRes.status).toBe(200);
 
-    // The now-revoked key must no longer authenticate.
     mockAuth.mockResolvedValueOnce({ userId: null });
     await expect(
       getClerkAuthUser(makeBearerRequest(created.full_key), {
@@ -335,8 +281,6 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       }),
     ).rejects.toMatchObject({ statusCode: 401 });
 
-    // Well-formed-looking but never issued — the key_prefix lookup found
-    // nothing, so no Argon2 hash comparison should ever run.
     expect(mockNeonQuery).toHaveBeenCalled();
   });
 
@@ -355,34 +299,17 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
   describe('WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01: bearer precedence over cookie', () => {
     it('a bearer that fails verification is rejected even with a valid session cookie riding along', async () => {
       makeFakeDb();
-      // Victim's browser auto-attaches a valid Clerk session cookie...
       mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
-      // ...but the request also carries a Bearer header that verifies as
-      // neither an API key nor a Clerk JWT. Before this fix, Path 1 ran
-      // first and this would have silently authenticated as the cookie
-      // user, ignoring the bearer entirely.
       mockVerifyToken.mockRejectedValueOnce(new Error('invalid token'));
 
       await expect(
         getClerkAuthUser(makeBearerRequest('irrelevant-because-session-wins')),
       ).rejects.toMatchObject({ statusCode: 401 });
 
-      // auth() must never even be consulted once a bearer is present —
-      // the guarantee holds structurally, not just by discarding its result.
       expect(mockAuth).not.toHaveBeenCalled();
     });
 
     it('an Authorization header of exactly "Bearer " (empty token) normalizes away and is treated as no bearer at all', async () => {
-      // Not a divergence risk: the Headers spec trims trailing HTTP
-      // whitespace from header values, so `authorization: 'Bearer '`
-      // (matches the dead components/settings/ChatSettings.tsx pattern —
-      // `Authorization: \`Bearer ${getToken()}\`` with getToken() === '')
-      // is stored and read back as the bare string 'Bearer', which does
-      // NOT match the `Bearer ` prefix check. This request is therefore
-      // indistinguishable from "no Authorization header at all" both
-      // before and after this fix — it correctly falls through to the
-      // cookie session, unchanged. Confirmed empirically (not asserted
-      // from spec-reading alone): see the length/prefix checks below.
       makeFakeDb();
       mockAuth.mockResolvedValueOnce({ userId: 'clerk-session-user' });
 
@@ -398,14 +325,12 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
 
     it('a verified bearer resolves a DIFFERENT user than the cookie would have — bearer wins, cookie principal is never returned', async () => {
       makeFakeDb();
-      // Issue a real key for user A directly via the service (setup only).
       const { ApiKeyService } = await import('@/lib/services/api-key-service');
       const { getNeonDb } = await import('@/lib/server/neon-db');
       const { rawKey } = await ApiKeyService.createApiKey(getNeonDb(), 'user-a-bearer', 'k', [
         'inference:write',
       ]);
 
-      // Cookie session belongs to a DIFFERENT user, B.
       mockAuth.mockResolvedValueOnce({ userId: 'user-b-cookie' });
 
       const result = await getClerkAuthUser(makeBearerRequest(rawKey), {
@@ -458,7 +383,6 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
       );
 
       expect(result).toEqual({ userId: 'clerk-jwt-user', email: 'user@example.com' });
-      // Never routed through the api-keys table.
       expect(queriedApiKeysTable()).toBe(false);
     });
 
@@ -480,10 +404,6 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
         },
       );
 
-      // WEB-AUTH-SURFACE-CLAIM-DISCARDED-01: the signed `surface: 'developer'`
-      // claim must survive onto the principal. It used to be verified and then
-      // dropped, which left downstream entitlement gates with nothing but the
-      // spoofable `x-agi-surface` header to reason about.
       await expect(getClerkAuthUser(makeBearerRequest(token))).resolves.toEqual({
         userId: 'device-user',
         email: 'device@example.com',

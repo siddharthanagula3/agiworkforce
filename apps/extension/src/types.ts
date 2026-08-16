@@ -88,12 +88,10 @@ export type NativeMessageType =
   | 'SYNC_CONVERSATION'
   | 'DELETE_CLOUD_CONVERSATION';
 
-/** Internal-only messages between extension contexts — NOT sent to native host. */
 export type InternalMessageType = 'CHAT_CHUNK';
 
 export type InternalMessage = ChatChunkMessage;
 
-// Base message structure
 export interface BaseMessage {
   type: NativeMessageType;
   timestamp?: number;
@@ -247,7 +245,6 @@ export interface GetPageInfoResponse {
   title?: string;
   html?: string;
   selectedText?: string;
-  /** Structured page metadata (JSON-LD, Open Graph, Twitter Card, etc.) — data, not instructions. */
   metadata?: import('./page-metadata').PageMetadata;
   error?: string;
 }
@@ -337,7 +334,6 @@ export interface JobApplicationProfile {
 
 export interface JobAutofillOptions {
   platform?: 'auto' | 'greenhouse' | 'workday' | 'generic';
-  /** When true, a browser confirm() dialog is shown before submitting. */
   autoSubmit?: boolean;
   allowSubmitWithMissingRequired?: boolean;
   includeOptionalFields?: boolean;
@@ -426,7 +422,6 @@ export interface SyncPageContextMessage extends BaseMessage {
     reason?: string;
     metadata?: import('./page-metadata').PageMetadata;
   };
-  /** Structured page metadata (JSON-LD, Open Graph, Twitter Card, etc.) */
   metadata?: import('./page-metadata').PageMetadata;
 }
 
@@ -485,7 +480,6 @@ export interface ElementInfoResponse {
   error?: string;
 }
 
-// Queue message — sent from side panel to background to forward text to the desktop app
 export interface QueueMessageMessage extends BaseMessage {
   type: 'QUEUE_MESSAGE';
   id: string;
@@ -494,41 +488,19 @@ export interface QueueMessageMessage extends BaseMessage {
   timestamp: number;
 }
 
-// Chat message — sent from side panel to background to stream an AI response
 export interface ChatMessageMessage extends BaseMessage {
   type: 'CHAT_MESSAGE';
-  /** Exact account/session that owns the history and resulting stream. */
   owner: ManagedCloudOwner;
-  /** Per-extension-view nonce used to prevent cross-panel stream delivery. */
   clientInstanceId: string;
   id: string;
   text: string;
   pageContext?: string;
   conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
-  /**
-   * Inline data-URL attachments collected from the side panel composer
-   * (paste-image, file picker). Round-2 audit P0 #3 (chrome-ext wire fix,
-   * 2026-05-21) — the side panel previously cleared `pendingAttachments`
-   * before constructing the CHAT_MESSAGE so the model never saw them.
-   * Managed cloud converts supported image data URLs into multimodal content
-   * blocks. The local desktop bridge does not yet expose a verified image
-   * contract, so that route fails visibly instead of discarding image bytes.
-   */
   attachments?: string[];
-  /**
-   * When true, the bridge should forward `thinking` to providers that
-   * support it (Anthropic thinking blocks, OpenAI reasoning effort,
-   * Gemini thinkingBudget). Side panel sets this from the user's
-   * Extended Thinking toggle.
-   */
   extendedThinking?: boolean;
-  /** User-visible model selection. `auto` is resolved to a concrete model. */
   modelSelection?: string;
-  /** Route this turn through Auto Economy without changing the saved picker selection. */
   quickMode?: boolean;
-  /** Catalog-supported reasoning effort; the routed model remains authoritative. */
   effort?: Effort;
-  /** Prior successful route for prompt-cache continuity in this conversation. */
   currentModelKey?: string;
   previousTaskType?: RoutingTaskType;
 }
@@ -545,7 +517,6 @@ export interface ChromeManagedRoutingMetadata {
   modelKey: string;
   taskType: RoutingTaskType;
   reason: string;
-  /** Effective catalog effort for the resolved concrete model, when supported. */
   effort?: Effort;
 }
 
@@ -556,7 +527,6 @@ export interface ResumeChatRunMessage extends BaseMessage {
   id: string;
   cloudRun: ManagedCloudAgentRunReference;
   alreadyVisibleText: string;
-  /** Persisted route for continuity while replaying a server-owned run. */
   routing?: ChromeManagedRoutingMetadata;
 }
 
@@ -569,7 +539,6 @@ export interface ResolveChatApprovalMessage extends BaseMessage {
   toolApprovals: ToolApprovalDecisionWire[];
 }
 
-// Chat chunk — sent from background to side panel as streaming response arrives
 export interface ChatChunkMessage {
   type: 'CHAT_CHUNK';
   owner: ManagedCloudOwner;
@@ -582,9 +551,7 @@ export interface ChatChunkMessage {
   durableReplay?: true;
   cloudRun?: ManagedCloudAgentRunReference;
   routing?: ChromeManagedRoutingMetadata;
-  /** Validated durable file descriptors emitted by x_generated_files. */
   generatedFiles?: GeneratedFileWire[];
-  /** Validated card envelope emitted by x_interactive_card. */
   interactiveCard?: InteractiveCard;
 }
 
@@ -603,15 +570,9 @@ export type InPagePromptOutcome =
   | 'request_rejected'
   | 'retryable_error';
 
-/**
- * Prompt sent by the optional in-page assistant on an explicitly approved
- * origin. The content script builds the prompt from redacted visible page text;
- * inference always uses the signed-in account's Managed Cloud entitlement.
- */
 export interface InPagePromptMessage extends BaseMessage {
   type: 'IN_PAGE_PROMPT';
   prompt: string;
-  /** Sanitized visible-page context, fenced as untrusted data by the background. */
   pageContext?: string;
 }
 
@@ -629,7 +590,6 @@ export type InPagePromptResponse =
       retryable: boolean;
     };
 
-// Open side panel — sent from content script FAB button to background (intra-extension only, not native messaging)
 export interface OpenSidePanelMessage extends BaseMessage {
   type: 'OPEN_SIDE_PANEL';
 }
@@ -792,7 +752,6 @@ export interface ClickAtCoordinatesMessage extends BaseMessage {
   button?: 'left' | 'middle' | 'right';
 }
 
-// Bridge URL changed (side panel → background)
 export interface BridgeUrlChangedMessage extends BaseMessage {
   type: 'BRIDGE_URL_CHANGED';
   url?: string;
@@ -807,7 +766,6 @@ export interface WebMCPToolInfo {
 
 export interface WebMCPDiscoverToolsMessage extends BaseMessage {
   type: 'WEBMCP_DISCOVER_TOOLS';
-  /** Side-panel-local navigation epoch echoed by the privileged background. */
   pageGeneration?: number;
 }
 
@@ -815,7 +773,6 @@ export interface WebMCPDiscoverToolsResponse {
   success: boolean;
   supported: boolean;
   tools: WebMCPToolInfo[];
-  /** Privileged target identity used by the side panel to reject cross-tab updates. */
   tabId?: number;
   pageGeneration?: number;
   url?: string;
@@ -869,13 +826,6 @@ export interface SavedShortcut {
   name: string;
   actions: RunPageAction[];
   createdAt: number;
-  /**
-   * SECURITY (C-03 audit 2026-05-19): origin that created this shortcut.
-   * Sentinel `__extension_page__` for shortcuts saved from the side-panel UI.
-   * Real URL origins (e.g. `https://example.com`) for any future
-   * content-script-callable variant. Fire-time replay re-checks this against
-   * the current `agi_site_allowlist` and auto-deletes stale records.
-   */
   createdByOrigin: string;
   url?: string;
   prompt?: string;
@@ -920,45 +870,28 @@ export interface ScheduledTask {
   name: string;
   enabled: boolean;
   scheduleType: ScheduleType;
-  /** Minutes for hourly, HH:MM for daily, day+HH:MM for weekly/monthly */
   scheduleValue: string;
-  /** Either a shortcutId to replay OR a prompt to send as chat */
   shortcutId?: string;
   prompt?: string;
   createdAt: number;
   lastRun?: number;
-  /**
-   * Account that explicitly authorized a prompt-backed Managed Cloud schedule.
-   * Session incarnations are intentionally not persisted here: a schedule is
-   * durable across normal re-authentication, but must never jump accounts.
-   */
   managedCloudAccountId?: string;
-  /**
-   * SECURITY (C-02 audit 2026-05-19): origin that created this task.
-   * Sentinel `__extension_page__` for tasks created from the side-panel
-   * Workflows tab. Real URL origins for any future content-script-callable
-   * variant. `executeScheduledTask` re-checks at alarm-fire time and
-   * auto-deletes tasks whose origin is no longer on `agi_site_allowlist`.
-   */
   createdByOrigin: string;
 }
 
 export interface CreateScheduledTaskMessage extends BaseMessage {
   type: 'CREATE_SCHEDULED_TASK';
-  /** Exact side-panel authority captured when a Managed Cloud mutation is sent. */
   owner?: ManagedCloudOwner;
   task: Omit<ScheduledTask, 'id' | 'createdAt' | 'lastRun' | 'managedCloudAccountId'>;
 }
 
 export interface ListScheduledTasksMessage extends BaseMessage {
   type: 'LIST_SCHEDULED_TASKS';
-  /** Exact side-panel authority captured when the account-scoped list is requested. */
   owner?: ManagedCloudOwner;
 }
 
 export interface UpdateScheduledTaskMessage extends BaseMessage {
   type: 'UPDATE_SCHEDULED_TASK';
-  /** Exact side-panel authority captured when a Managed Cloud mutation is sent. */
   owner?: ManagedCloudOwner;
   taskId: string;
   updates: Partial<
@@ -971,7 +904,6 @@ export interface UpdateScheduledTaskMessage extends BaseMessage {
 
 export interface DeleteScheduledTaskMessage extends BaseMessage {
   type: 'DELETE_SCHEDULED_TASK';
-  /** Exact side-panel authority captured when a Managed Cloud mutation is sent. */
   owner?: ManagedCloudOwner;
   taskId: string;
 }
@@ -982,7 +914,6 @@ export interface ScheduledTaskResponse {
   error?: string;
 }
 
-/** Quick mode: when true, the next turn uses the admitted Auto Economy routing profile. */
 export interface GetQuickModeMessage extends BaseMessage {
   type: 'GET_QUICK_MODE';
 }
@@ -998,72 +929,34 @@ export interface GetQuickModeResponse {
   error?: string;
 }
 
-/**
- * Account-backed conversation mirroring.
- *
- * Both messages carry the side panel's captured `owner` so the worker can fence the
- * request against the exact account/session incarnation that asked for it — a
- * message that arrives after a sign-out must not write under the new identity.
- * Both are `extension-page-only` in `background/policy.ts`: an allowlisted page
- * must never be able to trigger an authenticated write of the user's transcript.
- */
 export interface SyncConversationMessage extends BaseMessage {
   type: 'SYNC_CONVERSATION';
   owner: ManagedCloudOwner;
   conversationId: string;
-  /**
-   * True while a stream is still writing into this thread. The worker uses it
-   * to skip the trailing, still-growing message instead of writing a copy it
-   * knows will be superseded.
-   */
   streaming?: boolean;
 }
 
 export interface DeleteCloudConversationMessage extends BaseMessage {
   type: 'DELETE_CLOUD_CONVERSATION';
   owner: ManagedCloudOwner;
-  /** Server-side `web_conversations.id`, returned by `deleteConversation`. */
   cloudConversationId: string;
-  /** Server-confirmed stable scope for the delete; null means Personal. */
   organizationId: string | null;
 }
 
-/**
- * Sent from the side panel to the CONTENT SCRIPT to trigger the fast-path
- * autofill + escalation-decision sequence. Content script runs the autofill,
- * calls makeEscalationDecision, and returns the result as the sendResponse.
- *
- * SECURITY: gated by sender.id === chrome.runtime.id in the content-script
- * handleMessage guard (line ~191). Only the extension itself can send this.
- */
 export interface RunAutofillMessage {
   type: 'AGI_RUN_AUTOFILL';
-  /** Optional — preserved for compatibility with ExtensionMessage union members
-   *  that expect a tabId field on the shared message type. */
   tabId?: number;
 }
 
-/**
- * Sent from the SIDE PANEL (trusted extension UI) to the BACKGROUND service
- * worker to start the computer-use agent loop. The background re-validates the
- * tab's origin against siteAllowlistCache before invoking runAgentLoop().
- *
- * SECURITY: 'AGI_START_COMPUTER_USE' is added to EXTENSION_PAGE_ONLY_MESSAGE_TYPES
- * in policy.ts, so a content script on an allowlisted site cannot trigger the
- * CDP loop — only the extension UI can.
- */
 export interface StartComputerUseMessage {
   type: 'AGI_START_COMPUTER_USE';
-  /** Generated by the trusted panel before admission so teardown can cancel the pending start. */
   runId: string;
   goal: string;
   tabId: number;
 }
 
-/** Stop the active privileged loop. Only trusted extension pages may send it. */
 export interface CancelComputerUseMessage extends BaseMessage {
   type: 'CANCEL_COMPUTER_USE';
-  /** When supplied, a stale panel cannot cancel a newer replacement run. */
   runId?: string;
   reason?: 'account_changed' | 'panel_closed' | 'user_cleared' | 'user_stopped';
 }
@@ -1220,13 +1113,6 @@ export interface AutomationState {
   isRecording: boolean;
   recordedActions: RecordedAction[];
   connectionStatus: ConnectionStatus;
-  /**
-   * SECURITY (C-05 audit 2026-05-19): recorder defaults to selector-only.
-   * Set to true via SET_RECORDING_VALUE_CAPTURE (extension-page-only) when
-   * the user opts in. Even when true, password / cc-* / one-time-code
-   * fields are redacted, and `redactSecrets` runs over remaining values
-   * to catch API keys mid-stream.
-   */
   captureValues: boolean;
 }
 

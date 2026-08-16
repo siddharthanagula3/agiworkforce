@@ -3,11 +3,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useThemeColors } from '@/src/ui/theme';
 
-/**
- * Catch-all 404 screen for unknown routes.
- * Uses inline styles only (no NativeWind) for reliability.
- * Required for App Store review — prevents crashes on invalid deep links.
- */
 export default function NotFoundScreen() {
   const router = useRouter();
   const colors = useThemeColors();

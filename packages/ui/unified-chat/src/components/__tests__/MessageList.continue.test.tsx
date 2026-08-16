@@ -1,12 +1,3 @@
-/**
- * MessageList — Continue Generation control.
- *
- * Pins the affordance gate: the "Continue generating" button is offered ONLY
- * for a continuable last assistant message (truncated at the token cap or
- * user-stopped with partial content), only when nothing is streaming, and only
- * when the host wired a handler (unsupported runtimes pass none → no fake
- * affordance). Clicking it invokes the handler with the message id.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MessageList } from '../MessageList';
@@ -28,7 +19,6 @@ function seed(messages: ChatMessage[], isStreaming = false) {
 }
 
 beforeEach(() => {
-  // jsdom does not implement scrollIntoView; MessageList calls it on mount.
   Element.prototype.scrollIntoView = vi.fn();
   useChatStore.setState({ messagesByConversation: {}, isStreaming: false } as never);
 });

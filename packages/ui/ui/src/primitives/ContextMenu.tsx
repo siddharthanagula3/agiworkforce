@@ -1,12 +1,5 @@
 'use client';
 
-/**
- * Context Menu Component
- *
- * A right-click context menu built on Radix UI primitives.
- * Provides accessible, keyboard-navigable context menus.
- */
-
 import * as React from 'react';
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
 import { Check, ChevronRight, Circle } from 'lucide-react';
@@ -49,11 +42,6 @@ const ContextMenuSubTrigger = React.forwardRef<
 ));
 ContextMenuSubTrigger.displayName = ContextMenuPrimitive.SubTrigger.displayName;
 
-// Stacking: the portalled surface sits on `--z-popover` (350), above `--z-modal`
-// (300), so a menu opened from inside a Dialog is not painted behind it. Portalled
-// overlays are siblings on <body> and are compared against each other, so the
-// layer has to come from the shared scale rather than a per-file guess; the inline
-// fallback keeps the ordering in apps that have not defined the variable.
 const ContextMenuSubContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>

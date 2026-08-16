@@ -1,10 +1,3 @@
-/**
- * AGI Work (CAP-048) client-side stream handling:
- *   - the additive x_agiwork_plan delta populates message.metadata.agiWorkPlan
- *   - a stream WITHOUT the delta is unaffected (additive-SSE guard)
- *   - an AGI Work send carries the structured goal as agi_work_goal
- *   - the goal is dropped on a non-AGI-Work send and on empty content
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 
@@ -113,7 +106,6 @@ describe('useChatStream AGI Work plan handling', () => {
         { id: 'agiwork-plan-2', description: 'write', status: 'pending' },
       ]),
       contentDelta('Working on it'),
-      // A later frame replaces the whole plan (last-write-wins).
       agiWorkPlan([
         { id: 'agiwork-plan-1', description: 'gather', status: 'completed' },
         { id: 'agiwork-plan-2', description: 'write', status: 'completed' },

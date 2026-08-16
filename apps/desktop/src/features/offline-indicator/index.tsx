@@ -1,12 +1,3 @@
-/**
- * Offline Indicator Component (Desktop)
- *
- * Displays network status and offline queue information.
- * Shows banner when offline or when items are pending sync.
- * Auto-hides when online with no pending items.
- *
- * Ported from the Web offline indicator for desktop integration.
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, Check, Loader, Wifi, WifiOff } from 'lucide-react';
@@ -34,7 +25,6 @@ export function OfflineIndicator({
   const [state, setState] = useState<SyncManagerState | null>(null);
   const [isVisible, setIsVisible] = useState(false);
 
-  // Subscribe to state changes
   useEffect(() => {
     const initialState = getSyncState();
     setState(initialState);
@@ -46,7 +36,6 @@ export function OfflineIndicator({
     return unsubscribe;
   }, []);
 
-  // Determine visibility
   useEffect(() => {
     if (!state) {
       setIsVisible(false);
@@ -75,7 +64,6 @@ export function OfflineIndicator({
     return null;
   }
 
-  // Derive severity and message from local state to avoid mismatch with global state
   const severity = ((): 'success' | 'warning' | 'error' | 'info' => {
     switch (state.state) {
       case SyncState.ONLINE:

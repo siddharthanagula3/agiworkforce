@@ -1,26 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Tests for ChatInput component.
- *
- * Validates the restructured chat input bar:
- * - [+] button, model label, mic button, send button presence
- * - [+] calls onOpenAddToChat
- * - Streaming state: placeholder text, stop button
- * - Send triggers message send
- * - Disabled state shows "You're offline" placeholder
- * - PAR-M05: expand-to-full-screen editor on the stacked composer card
- * - PAR-M19: the model label on the composer's control row
- */
 
 import React from 'react';
 import { Keyboard, TextInput } from 'react-native';
 import { render, fireEvent, waitFor, act, within } from '@testing-library/react-native';
 import { getModelMetadataById } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
-
-// ---------------------------------------------------------------------------
-// Mocks — declared before imports
-// ---------------------------------------------------------------------------
 
 const mockCapabilityModelId = requireMobileCloudModel((model) => {
   const metadata = getModelMetadataById(model.id);
@@ -107,10 +91,6 @@ const mockDraftStore = require('../src/features/chat/draftStore') as {
 const mockGetDraft = mockDraftStore.getDraft;
 const mockSetDraft = mockDraftStore.setDraft;
 
-// ModelSelectorButton is deliberately NOT mocked: PAR-M19's whole point is that
-// the composer renders a real model label (display name, never a wire id) wired
-// to onOpenModelPicker, and a stub would assert nothing about that.
-
 let capturedAttachmentPreviewProps:
   | {
       attachments: Array<{ id: string; fileName: string; pastedText?: string }>;
@@ -174,9 +154,6 @@ jest.mock('../src/features/voice/components/VoiceInputButton', () => {
   return {
     VoiceInputButton: (props: { resetSignal?: number; onRecordingStart?: () => void }) => {
       lastVoiceResetSignal = props.resetSignal;
-      // Capture onRecordingStart so tests can drive the component into its
-      // recording state (which reveals the inline "Stop recording" button
-      // wired to handleOverlaySend — the RecordingOverlay component was removed).
       capturedRecordingStart = props.onRecordingStart;
       return (
         <Pressable testID="voice-input-button" accessibilityLabel="Voice input">
@@ -248,8 +225,6 @@ jest.mock('../stores/settingsStore', () => ({
 }));
 
 jest.mock('../src/ui/theme', () => {
-  // Declared inside the factory: the factory runs while ChatInput is being
-  // required, which is before any module-scope const in this file initialises.
   const themeColors = {
     background: '#0f0f0f',
     surfaceBase: '#171717',
@@ -287,15 +262,7 @@ jest.mock('../lib/constants', () => ({
   MAX_INPUT_LINES: 6,
 }));
 
-// ---------------------------------------------------------------------------
-// Imports (after mocks)
-// ---------------------------------------------------------------------------
-
 import { ChatInput, type ChatInputHandle } from '../src/features/chat/components/ChatInput';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 const defaultProps = {
   onSend: jest.fn(),
@@ -312,21 +279,11 @@ function renderInput(overrides: Partial<React.ComponentProps<typeof ChatInput>> 
   return render(<ChatInput {...defaultProps} {...overrides} />);
 }
 
-/**
- * Drive the composer into its stacked (card) layout the way the real one gets
- * there: the TextInput reports a rendered height taller than a single line.
- * Character count alone never restacks it — the layout is measured, not counted
- * — so a paste has to be followed by the content-size event it would fire.
- */
 function stackComposer(input: ReturnType<typeof renderInput>['getByLabelText']) {
   fireEvent(input('Message input'), 'contentSizeChange', {
     nativeEvent: { contentSize: { width: 280, height: 96 } },
   });
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('ChatInput', () => {
   beforeEach(() => {
@@ -420,19 +377,12 @@ describe('ChatInput', () => {
     });
   });
 
-  // ---- Button presence ----
-
   describe('button presence', () => {
     it('renders [+] button', () => {
       const { getByLabelText } = renderInput();
       expect(getByLabelText('Add to chat')).toBeTruthy();
     });
 
-    // No chip row ABOVE the composer (founder 2026-07-29 moved Model into the
-    // "+" sheet). PAR-M19 puts the label back INSIDE the composer, on the
-    // control row that only exists once the card stacks — never as a separate
-    // row above it, and never in the compact pill where it would eat the
-    // single-line input's width.
     it('keeps the model label out of the compact pill', () => {
       const { queryByTestId } = renderInput();
       expect(queryByTestId('chat.composer.model')).toBeNull();
@@ -444,9 +394,6 @@ describe('ChatInput', () => {
     });
 
     it('renders voice-mode button when composer is empty and onOpenVoiceMode is set', () => {
-      // The composer's right circle is a state slot (ChatGPT reference:
-      // empty -> voice-mode waveform, typing -> send, streaming -> stop).
-      // Send-with-content is covered separately in "sending messages" below.
       const { getByLabelText } = renderInput();
       expect(getByLabelText('Start voice mode')).toBeTruthy();
     });
@@ -457,8 +404,6 @@ describe('ChatInput', () => {
       expect(getByTestId('send-button')).toBeTruthy();
     });
   });
-
-  // ---- [+] button behaviour ----
 
   describe('[+] button', () => {
     it('calls onOpenAddToChat when pressed', () => {
@@ -472,9 +417,6 @@ describe('ChatInput', () => {
   });
 
   describe('active Cloud tools', () => {
-    // Web search has no user toggle -- it is on for every capable signed-in
-    // cloud model, so the composer never renders a "Search" status chip
-    // (founder 2026-07-29). Only user-toggled tools get a chip.
     it('never shows a Web Search chip, even for an eligible signed-in Cloud chat', () => {
       mockAppMode = 'cloud';
       mockIsClerkSignedIn = true;
@@ -524,8 +466,6 @@ describe('ChatInput', () => {
 
       expect(getByLabelText('Deep Research active')).toBeTruthy();
       expect(getByLabelText('Code execution active')).toBeTruthy();
-      // Image is a MODE now, not a toggle, so it has no status chip here — see
-      // the regression note below.
       expect(queryByLabelText('Image generation active')).toBeNull();
 
       mockChatFeatures = {
@@ -541,19 +481,6 @@ describe('ChatInput', () => {
       expect(queryByLabelText('Image generation active')).toBeNull();
     });
 
-    /**
-     * Regression guard. The "Image generation active" chip was driven by
-     * `features.imageGen`, which WAS a switch in the + sheet. That switch became
-     * the Image mode (2026-08-06), leaving the flag pinned at its `true` default
-     * with no way to turn it off — so the chip rendered on every signed-in Cloud
-     * chat and reported a choice the user had never made. It must stay gone even
-     * when every capability is granted and the flag is on.
-     */
-    /**
-     * The [+] tap must drop the keyboard first. Without it the sheet animated
-     * to its snap point BEHIND a raised keyboard: only the "Add to Chat" header
-     * cleared the keys, and every row inside was unreachable.
-     */
     it('dismisses the keyboard when opening the + sheet', () => {
       const dismiss = jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
       const onOpenAddToChat = jest.fn();
@@ -583,8 +510,6 @@ describe('ChatInput', () => {
     });
   });
 
-  // ---- Streaming state ----
-
   describe('streaming state', () => {
     it('shows "Reply to [model]..." placeholder during streaming', () => {
       const { getByLabelText } = renderInput({ isStreaming: true });
@@ -600,19 +525,14 @@ describe('ChatInput', () => {
     });
   });
 
-  // ---- Sending messages ----
-
   describe('sending messages', () => {
     it('send button triggers onSend with text', async () => {
       const onSend = jest.fn();
       const { getByLabelText, getByTestId } = renderInput({ onSend });
 
-      // Type text
       const input = getByLabelText('Message input');
       fireEvent.changeText(input, 'Hello world');
 
-      // Press send. Awaited: acceptance resolves on a microtask and clears the
-      // draft, so an un-awaited press leaves that update outside act().
       await act(async () => {
         fireEvent.press(getByTestId('send-button'));
       });
@@ -629,7 +549,6 @@ describe('ChatInput', () => {
       fireEvent.changeText(input, 'Draft-safe message');
       fireEvent.press(getByTestId('send-button'));
 
-      // Still pending — the draft must remain visible.
       expect(input.props.value).toBe('Draft-safe message');
 
       await act(async () => {
@@ -684,8 +603,6 @@ describe('ChatInput', () => {
     });
   });
 
-  // ---- Large paste -> attachment ----
-
   describe('large paste conversion', () => {
     it('converts a >10k-char paste into a "Pasted text" attachment and keeps prior text', () => {
       const { getByLabelText } = renderInput();
@@ -696,7 +613,6 @@ describe('ChatInput', () => {
       const bigBlock = 'x'.repeat(12_000);
       fireEvent.changeText(input, `Review this:${bigBlock}`);
 
-      // Input keeps only the pre-paste text; the block became an attachment.
       expect(getByLabelText('Message input').props.value).toBe('Review this:');
       const pasted = capturedAttachmentPreviewProps?.attachments.find((a) => a.pastedText);
       expect(pasted).toBeTruthy();
@@ -729,7 +645,6 @@ describe('ChatInput', () => {
       expect(onSend).toHaveBeenCalledTimes(1);
       const [sentText, sentAttachments] = onSend.mock.calls[0];
       expect(sentText).toBe(`${bigBlock}\n\nsummarize this`);
-      // The pasted-text pseudo-attachment is NOT sent as a file.
       expect(sentAttachments).toBeUndefined();
     });
 
@@ -752,8 +667,6 @@ describe('ChatInput', () => {
     });
   });
 
-  // ---- Disabled state ----
-
   describe('offline state', () => {
     it('shows offline placeholder when isOnline is false', () => {
       const { getByLabelText } = renderInput({ isOnline: false });
@@ -763,24 +676,13 @@ describe('ChatInput', () => {
     });
   });
 
-  // ---- Voice recording overlay "Send" reset signal ----
-
   describe('recording overlay send', () => {
     it('bumps voiceResetSignal even when the recording session already ended', async () => {
-      // Regression: on the iOS Simulator (no mic) — and in a real race on
-      // device — VoiceService.isRecording() can already be false by the time
-      // "Send recording" is tapped. The old handler returned early in that
-      // case WITHOUT bumping voiceResetSignal, so VoiceInputButton's internal
-      // state stayed stuck on "recording" (red mic, "Tap to stop recording"
-      // a11y label) with no way back short of triggering a second, unrelated
-      // error path.
 
       const VoiceService = require('../src/features/voice/services/voice');
       VoiceService.isRecording.mockReturnValue(false);
 
       const { getByLabelText } = renderInput();
-      // Drive the component into its recording state so the inline "Use
-      // recording" send button (wired to handleOverlaySend) renders.
       act(() => {
         capturedRecordingStart!();
       });
@@ -820,22 +722,7 @@ describe('ChatInput', () => {
     });
   });
 
-  /**
-   * The composer shook on screen: it flipped between the one-line pill and the
-   * stacked card several times a second while a message sat in it untouched.
-   *
-   * The layout was chosen from the input's measured height, but the input's
-   * WIDTH depends on that same choice — stacked hands the text ~26pt more room
-   * than compact, because [+] and the mic leave the row. So a message that
-   * wraps to two lines at the narrow width and fits on one at the wide width
-   * drove a closed loop: measure 38 -> stack -> measure 20 -> unstack -> repeat.
-   * The old 30/34 hysteresis band could not damp it; 4pt of slack cannot absorb
-   * a 26pt change in the measuring stick.
-   *
-   * The fix makes the latch one-way, so these pin BOTH directions of it.
-   */
   describe('stacked layout stability', () => {
-    /** A single-line height reading, as the wide stacked input would report. */
     function reportSingleLineHeight(input: ReturnType<typeof renderInput>['getByLabelText']) {
       fireEvent(input('Message input'), 'contentSizeChange', {
         nativeEvent: { contentSize: { width: 306, height: 20 } },
@@ -849,8 +736,6 @@ describe('ChatInput', () => {
       stackComposer(getByLabelText);
       expect(queryByTestId('chat.composer.expand')).not.toBeNull();
 
-      // The exact event that used to send it back to the compact row and start
-      // the cycle over again.
       reportSingleLineHeight(getByLabelText);
 
       expect(queryByTestId('chat.composer.expand')).not.toBeNull();
@@ -877,15 +762,11 @@ describe('ChatInput', () => {
       stackComposer(getByLabelText);
       expect(queryByTestId('chat.composer.expand')).not.toBeNull();
 
-      // Clearing is the release — send, slash-command clear and draft switch all
-      // land here too, since the effect watches the text rather than the caller.
       fireEvent.changeText(getByLabelText('Message input'), '');
 
       expect(queryByTestId('chat.composer.expand')).toBeNull();
     });
   });
-
-  // ---- PAR-M05: expand a long message into a full-screen editor ----
 
   describe('expand to full-screen editor', () => {
     const LONG_PASTE = 'a'.repeat(800);
@@ -899,8 +780,6 @@ describe('ChatInput', () => {
       const { getByLabelText, queryByTestId } = renderInput();
 
       fireEvent.changeText(getByLabelText('Message input'), LONG_PASTE);
-      // Below LARGE_PASTE_THRESHOLD, so it stays in the input rather than
-      // becoming a "Pasted text" attachment — this is the IMG_0672 case.
       expect(getByLabelText('Message input').props.value).toBe(LONG_PASTE);
       expect(queryByTestId('chat.composer.expand')).toBeNull();
 
@@ -916,11 +795,9 @@ describe('ChatInput', () => {
       stackComposer(getByLabelText);
       fireEvent.press(getByTestId('chat.composer.expand'));
 
-      // Opened with the composer's exact text — no fork, no truncation.
       const expanded = getByTestId('chat.composer.fullscreen.input');
       expect(expanded.props.value).toBe(LONG_PASTE);
 
-      // Edits made full screen land in the composer's own state.
       fireEvent.changeText(expanded, `${LONG_PASTE} edited`);
       expect(getByTestId('chat.composer.fullscreen.input').props.value).toBe(
         `${LONG_PASTE} edited`,
@@ -940,13 +817,9 @@ describe('ChatInput', () => {
       stackComposer(getByLabelText);
       fireEvent.press(getByTestId('chat.composer.expand'));
 
-      // Scoped: the inline composer's send button is still mounted behind the
-      // modal, so an unscoped testID query would match two nodes.
       const expandedSend = within(getByTestId('chat.composer.fullscreen.send')).getByTestId(
         'send-button',
       );
-      // Awaited: acceptance of the send resolves a promise that clears the
-      // draft, and that state update has to settle inside act().
       await act(async () => {
         fireEvent.press(expandedSend);
       });
@@ -968,8 +841,6 @@ describe('ChatInput', () => {
     });
   });
 
-  // ---- PAR-M19: the model answering the chat is readable and tappable ----
-
   describe('model label', () => {
     it('renders the display name on the control row and opens the picker', () => {
       const onOpenModelPicker = jest.fn();
@@ -978,7 +849,6 @@ describe('ChatInput', () => {
       stackComposer(getByLabelText);
 
       const label = getByTestId('chat.composer.model');
-      // The display name, never the wire id.
       expect(within(label).getByText('Fixture Model')).toBeTruthy();
       expect(queryByText('fixture-cloud-model')).toBeNull();
       expect(label.props.accessibilityLabel).toContain('Model: Fixture Model');
@@ -996,14 +866,8 @@ describe('ChatInput', () => {
     });
   });
 
-  // ---- Imperative handle ----
-
   describe('composer handle', () => {
     it('exposes focus() and drives the real text field with it', () => {
-      // VoiceInlineBar's "Ask AGI" pill has to land the user in a FOCUSED
-      // composer; without this the host can only re-render a blurred one.
-      // Spying on the TextInput instance method (rather than asserting the
-      // handle merely exists) is what proves the handle is wired to the field.
       const focusSpy = jest.spyOn(TextInput.prototype, 'focus');
       const ref = React.createRef<ChatInputHandle>();
 

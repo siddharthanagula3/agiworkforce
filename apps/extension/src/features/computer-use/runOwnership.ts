@@ -1,11 +1,3 @@
-/**
- * Ownership and cancellation primitives for one privileged computer-use run.
- *
- * Product policy (when a run may start, which tab is allowed, and which auth
- * change should stop it) remains in background.ts. This module owns the small,
- * reusable mechanics needed by message handlers and Chrome event listeners:
- * one active lease, a stable auth/session identity, and an AbortController.
- */
 
 import type { ManagedCloudOwner } from '../cloud-bridge/managedCloudAuthority';
 
@@ -46,7 +38,6 @@ export class ComputerUseRunCancelledError extends Error {
   }
 }
 
-/** Tracks the one start request that is still awaiting privileged admission. */
 export class ComputerUseStartCoordinator {
   private pending: ComputerUseStartIntent | null = null;
 
@@ -64,7 +55,6 @@ export class ComputerUseStartCoordinator {
     return this.pending?.runId === runId && this.pending.generation === generation;
   }
 
-  /** Clears only the expected intent; a stale panel cannot cancel its replacement. */
   cancel(expectedRunId?: string): ComputerUseStartIntent | null {
     const intent = this.pending;
     if (!intent || (expectedRunId !== undefined && intent.runId !== expectedRunId)) return null;
@@ -73,7 +63,6 @@ export class ComputerUseStartCoordinator {
   }
 }
 
-/** Holds at most one active privileged run in this MV3 worker incarnation. */
 export class ComputerUseRunCoordinator {
   private active: ComputerUseRunLease | null = null;
 

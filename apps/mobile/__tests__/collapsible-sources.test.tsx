@@ -1,23 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * CollapsibleSources — component tests
- *
- * Covers:
- *   - Renders "View N sources" when collapsed
- *   - Shows source list when expanded
- *   - Each source shows domain and title
- *   - Tapping source opens URL
- *   - Empty sources array renders nothing
- */
 
 import { render, fireEvent } from '@testing-library/react-native';
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
-// PAR-M39: citations present the in-app browser sheet instead of handing the
-// URL to Safari, so dismissing returns straight to the message.
 const mockOpenBrowserAsync = jest.fn();
 jest.mock('expo-web-browser', () => ({
   openBrowserAsync: (...args: unknown[]) => mockOpenBrowserAsync(...args),
@@ -71,15 +55,7 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import { CollapsibleSources } from '../src/features/chat/components/CollapsibleSources';
-
-// ---------------------------------------------------------------------------
-// Test data
-// ---------------------------------------------------------------------------
 
 const MOCK_SOURCES = [
   {
@@ -95,10 +71,6 @@ const MOCK_SOURCES = [
     title: 'Wikipedia Article',
   },
 ];
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('CollapsibleSources', () => {
   beforeEach(() => {
@@ -123,20 +95,16 @@ describe('CollapsibleSources', () => {
   it('toggles to show source list when header is pressed', () => {
     const { getByLabelText, getByText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
 
-    // Press the toggle
     fireEvent.press(getByLabelText('View 3 sources'));
 
-    // After expanding, the header changes to "Sources"
     expect(getByText('Sources')).toBeTruthy();
   });
 
   it('each source shows domain extracted from URL', () => {
     const { getByLabelText, getByText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
 
-    // Expand
     fireEvent.press(getByLabelText('View 3 sources'));
 
-    // Check domain text (www. should be stripped)
     expect(getByText('docs.example.com')).toBeTruthy();
     expect(getByText('blog.test.org')).toBeTruthy();
     expect(getByText('wikipedia.org')).toBeTruthy();
@@ -145,7 +113,6 @@ describe('CollapsibleSources', () => {
   it('each source shows its title', () => {
     const { getByLabelText, getByText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
 
-    // Expand
     fireEvent.press(getByLabelText('View 3 sources'));
 
     expect(getByText('Getting Started Guide')).toBeTruthy();
@@ -159,17 +126,14 @@ describe('CollapsibleSources', () => {
 
     const { getByLabelText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
 
-    // Expand first
     fireEvent.press(getByLabelText('View 3 sources'));
 
-    // Tap the first source
     fireEvent.press(getByLabelText('Source 1: Getting Started Guide'));
 
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
       'https://docs.example.com/guide',
       expect.objectContaining({ presentationStyle: 'pageSheet' }),
     );
-    // Backgrounding the app is the defect PAR-M39 removed.
     expect(mockLinkingOpenURL).not.toHaveBeenCalled();
   });
 
@@ -177,21 +141,17 @@ describe('CollapsibleSources', () => {
     const sourcesNoTitle = [{ url: 'https://example.com/page' }];
     const { getByLabelText } = render(<CollapsibleSources sources={sourcesNoTitle} />);
 
-    // Expand — accessibility label always uses "sources" (plural) per the source
     fireEvent.press(getByLabelText('View 1 source'));
 
-    // Accessibility label falls back to domain
     expect(getByLabelText('Source 1: example.com')).toBeTruthy();
   });
 
   it('can collapse after expanding', () => {
     const { getByLabelText, getByText } = render(<CollapsibleSources sources={MOCK_SOURCES} />);
 
-    // Expand
     fireEvent.press(getByLabelText('View 3 sources'));
     expect(getByText('Sources')).toBeTruthy();
 
-    // Collapse
     fireEvent.press(getByLabelText('Hide 3 sources'));
     expect(getByText('View 3 sources')).toBeTruthy();
   });

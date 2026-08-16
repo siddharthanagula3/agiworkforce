@@ -1,37 +1,15 @@
-/**
- * @file Admin Authentication Middleware
- * @description Provides API key authentication for admin endpoints.
- *
- * @security
- * - Validates API key from Authorization header or X-API-Key header
- * - Uses constant-time comparison to prevent timing attacks
- * - Logs authentication failures for monitoring
- * - Rate limits authentication attempts
- */
 
 import type { Request, Response, NextFunction } from 'express';
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { logger } from '../logger.js';
 
-// =============================================================================
-// Configuration
-// =============================================================================
-
-/** Admin API key from environment */
 const ADMIN_API_KEY = process.env['ADMIN_API_KEY'];
 
-/** Maximum failed auth attempts before temporary lockout */
 const MAX_AUTH_FAILURES = Number(process.env['MAX_AUTH_FAILURES'] ?? 10);
 
-/** Auth failure lockout duration in milliseconds (default: 15 minutes) */
 const AUTH_LOCKOUT_DURATION_MS = Number(process.env['AUTH_LOCKOUT_DURATION_MS'] ?? 900_000);
 
-/** Auth failure tracking window in milliseconds (default: 1 hour) */
 const AUTH_FAILURE_WINDOW_MS = Number(process.env['AUTH_FAILURE_WINDOW_MS'] ?? 3600_000);
-
-// =============================================================================
-// Types
-// =============================================================================
 
 interface AuthFailureEntry {
   failures: number;
@@ -39,20 +17,8 @@ interface AuthFailureEntry {
   lockedUntil: number | null;
 }
 
-// =============================================================================
-// State
-// =============================================================================
-
-/** Track auth failures per IP */
 const authFailures = new Map<string, AuthFailureEntry>();
 
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-/**
- * Extract client IP from request
- */
 function getClientIp(req: Request): string {
   const trustProxy =
     req.app.get('trust proxy') === true ||
@@ -76,27 +42,15 @@ function getClientIp(req: Request): string {
   return req.ip ?? req.socket.remoteAddress ?? 'unknown';
 }
 
-/**
- * Constant-time string comparison to prevent timing attacks.
- * Uses HMAC to normalize input lengths — both digests are always 32 bytes,
- * so timingSafeEqual never short-circuits and no length information leaks.
- */
 const COMPARE_KEY = randomBytes(32);
 
 function secureCompare(a: string, b: string): boolean {
   if (!a || !b) return false;
-  // SECURITY: HMAC-SHA256 is used here to normalize input lengths for timingSafeEqual,
-  // NOT for password hashing. This prevents timing side-channel attacks during token
-  // comparison. Password hashing (bcrypt/argon2) is handled in the auth layer.
-  // codeql[js/insufficient-password-hash]: intentional HMAC for constant-time comparison
   const ha = createHmac('sha256', COMPARE_KEY).update(a).digest();
   const hb = createHmac('sha256', COMPARE_KEY).update(b).digest();
   return timingSafeEqual(ha, hb);
 }
 
-/**
- * Record an authentication failure
- */
 function recordAuthFailure(ip: string): void {
   const now = Date.now();
   let entry = authFailures.get(ip);
@@ -119,9 +73,6 @@ function recordAuthFailure(ip: string): void {
   authFailures.set(ip, entry);
 }
 
-/**
- * Check if IP is locked out
- */
 function isLockedOut(ip: string): { locked: boolean; retryAfter?: number } {
   const entry = authFailures.get(ip);
   if (!entry || !entry.lockedUntil) {
@@ -130,7 +81,6 @@ function isLockedOut(ip: string): { locked: boolean; retryAfter?: number } {
 
   const now = Date.now();
   if (entry.lockedUntil <= now) {
-    // Lockout expired, reset
     authFailures.delete(ip);
     return { locked: false };
   }
@@ -141,30 +91,13 @@ function isLockedOut(ip: string): { locked: boolean; retryAfter?: number } {
   };
 }
 
-/**
- * Clear auth failure record on successful auth
- */
 function clearAuthFailure(ip: string): void {
   authFailures.delete(ip);
 }
 
-// =============================================================================
-// Middleware
-// =============================================================================
-
-/**
- * Admin authentication middleware
- *
- * Validates API key from:
- * 1. Authorization: Bearer <key>
- * 2. X-API-Key: <key>
- *
- * If ADMIN_API_KEY is not configured, all admin requests are denied.
- */
 export function adminAuthMiddleware(req: Request, res: Response, next: NextFunction): void {
   const ip = getClientIp(req);
 
-  // Check for lockout
   const lockoutStatus = isLockedOut(ip);
   if (lockoutStatus.locked) {
     res.setHeader('Retry-After', String(lockoutStatus.retryAfter));
@@ -176,7 +109,6 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
     return;
   }
 
-  // Check if admin API key is configured
   if (!ADMIN_API_KEY) {
     logger.warn({ ip }, 'Admin endpoint accessed but ADMIN_API_KEY not configured');
     res.status(503).json({
@@ -186,17 +118,13 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
     return;
   }
 
-  // Extract API key from headers
   let apiKey: string | undefined;
 
-  // Check Authorization header (Bearer token)
-  // Note: Using startsWith + slice instead of regex to avoid ReDoS vulnerability
   const authHeader = req.headers['authorization'];
   if (authHeader && authHeader.toLowerCase().startsWith('bearer ')) {
     apiKey = authHeader.slice(7).trim();
   }
 
-  // Fall back to X-API-Key header
   if (!apiKey) {
     const xApiKey = req.headers['x-api-key'];
     if (xApiKey) {
@@ -204,7 +132,6 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
     }
   }
 
-  // Validate API key
   if (!apiKey) {
     recordAuthFailure(ip);
     logger.warn({ ip }, 'Admin auth failed: no API key provided');
@@ -225,21 +152,14 @@ export function adminAuthMiddleware(req: Request, res: Response, next: NextFunct
     return;
   }
 
-  // Authentication successful
   clearAuthFailure(ip);
   next();
 }
 
-/**
- * Check if admin endpoints are enabled (API key configured)
- */
 export function isAdminEnabled(): boolean {
   return Boolean(ADMIN_API_KEY);
 }
 
-/**
- * Get auth failure stats for monitoring
- */
 export function getAuthStats(): {
   trackedIps: number;
   lockedOutIps: number;
@@ -259,9 +179,6 @@ export function getAuthStats(): {
   };
 }
 
-/**
- * Cleanup old auth failure entries
- */
 export function cleanupAuthFailures(): void {
   const now = Date.now();
   for (const [ip, entry] of authFailures.entries()) {
@@ -272,7 +189,6 @@ export function cleanupAuthFailures(): void {
     }
   }
 
-  // Size cap: evict oldest entries when map gets too large
   if (authFailures.size > 10_000) {
     const entries = [...authFailures.entries()].sort(
       (a, b) => a[1].firstFailure - b[1].firstFailure,

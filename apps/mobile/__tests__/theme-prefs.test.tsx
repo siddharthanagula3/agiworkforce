@@ -1,17 +1,4 @@
-/**
- * Theme preference tests — C10 (post mode-split)
- *
- * Covers:
- *   - localSettingsStore: themeMode defaults to 'system' and cycles correctly
- *   - lib/theme getColors: dark mode returns dark palette
- *   - lib/theme getColors: light mode returns light palette
- *   - lib/theme getColors: system follows systemScheme
- *   - lib/theme getColors: system falls back to dark when systemScheme is null
- */
 
-// ---------------------------------------------------------------------------
-// Mocks — must be before imports
-// ---------------------------------------------------------------------------
 
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
@@ -40,10 +27,6 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import { act } from '@testing-library/react-native';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import {
@@ -54,17 +37,9 @@ import {
   lightColors,
 } from '../src/ui/theme';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function resetStore() {
   useLocalSettingsStore.setState({ themeMode: 'system' });
 }
-
-// ---------------------------------------------------------------------------
-// localSettingsStore — themeMode
-// ---------------------------------------------------------------------------
 
 describe('settingsStore themeMode', () => {
   beforeEach(resetStore);
@@ -97,10 +72,6 @@ describe('settingsStore themeMode', () => {
     expect(useLocalSettingsStore.getState().themeMode).toBe('dark');
   });
 });
-
-// ---------------------------------------------------------------------------
-// lib/theme getColors — pure function, no hook needed
-// ---------------------------------------------------------------------------
 
 describe('getColors resolution', () => {
   it('dark mode returns the dark palette', () => {

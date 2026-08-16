@@ -17,23 +17,11 @@ import { colors } from '@/src/ui/theme';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { formatClock } from '@/src/lib/time';
 
-/**
- * Inline recording card shown IN PLACE of the composer rows while recording
- * from the chat input bar (ChatInput hides the rows with display:none).
- * Displays a pulsing red dot, duration timer, waveform preview,
- * and Cancel / Send action buttons.
- */
-
 interface RecordingOverlayProps {
-  /** Whether the overlay is visible */
   visible: boolean;
-  /** Current audio metering level (0-1) */
   audioLevel: number;
-  /** Duration of recording in milliseconds */
   durationMs: number;
-  /** Called when user taps cancel */
   onCancel: () => void;
-  /** Called when user taps send/confirm */
   onSend: () => void;
 }
 
@@ -99,9 +87,6 @@ export function RecordingOverlay({
       exiting={FadeOut.duration(150)}
       className="px-4 pt-3"
       style={{
-        // In-flow card that REPLACES the composer rows while recording (see
-        // ChatInput.tsx) — never an absolute overlay on top of them, which
-        // covered the attachment button and blocked the input.
         backgroundColor: 'rgba(15, 15, 15, 0.95)',
         borderRadius: 20,
         paddingBottom: 16,

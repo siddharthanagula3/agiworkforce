@@ -1,9 +1,3 @@
-/**
- * In-memory test doubles for the sync-apply port interfaces. Used by both the
- * per-module unit tests and the golden-fixture replay tests so every test
- * exercises the exact same port contract a real surface adapter implements
- * (mobile: Zustand-backed; here: Map-backed).
- */
 import type { ConversationStorePort, SyncConversationRecord } from '../conversations';
 import type { MessageStorePort, SyncMessageRecord } from '../messages';
 

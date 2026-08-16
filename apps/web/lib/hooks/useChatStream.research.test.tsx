@@ -1,11 +1,3 @@
-/**
- * Deep Research client-side stream handling tests:
- *   - x_research_status events populate message.metadata.research
- *   - cumulative x_search_results land in metadata.searchResults
- *   - the finished run persists research metadata with a FRESH auth token
- *     resolved at save time (long runs outlive the send-time JWT)
- *   - cancellation marks the run interrupted and persists partial content
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 
@@ -19,8 +11,6 @@ vi.mock('@/lib/client/csrf', () => ({
 
 import { useChatStream } from './useChatStream';
 import { useChatStore } from '@shared/stores/web-chat-store';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const encoder = new TextEncoder();
 
@@ -74,11 +64,6 @@ type FetchCall = { url: string; init: RequestInit };
 let fetchCalls: FetchCall[] = [];
 let saveBodies: Array<Record<string, unknown>> = [];
 
-/**
- * Install a fetch mock: the completions call streams `events` then [DONE]
- * (unless `hang` is set, in which case it stalls after the events until the
- * abort signal fires); message-save calls are recorded and succeed.
- */
 function installFetch(events: unknown[], opts: { hang?: boolean } = {}) {
   fetchCalls = [];
   saveBodies = [];
@@ -101,7 +86,6 @@ function installFetch(events: unknown[], opts: { hang?: boolean } = {}) {
               controller.close();
               return;
             }
-            // Stall until aborted, then reject like a real aborted fetch read.
             await new Promise((_, reject) => {
               const fail = () => reject(new DOMException('Aborted', 'AbortError'));
               if (signal?.aborted) fail();
@@ -117,7 +101,6 @@ function installFetch(events: unknown[], opts: { hang?: boolean } = {}) {
           json: async () => ({}),
         } as unknown as Response;
       }
-      // Message persistence endpoint.
       const parsed = init.body ? (JSON.parse(init.body as string) as Record<string, unknown>) : {};
       saveBodies.push({
         ...parsed,
@@ -162,8 +145,6 @@ beforeEach(() => {
   getTokenMock.mockImplementation(async () => `token-${++tokenCounter}`);
   seedConversation();
 });
-
-// ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('useChatStream deep research handling', () => {
   it('tracks research phases, sources, and report content from the stream', async () => {
@@ -217,8 +198,6 @@ describe('useChatStream deep research handling', () => {
     expect(assistantSave['content']).toBe('Report body');
     const metadata = assistantSave['metadata'] as Record<string, unknown>;
     expect(metadata['research']).toMatchObject({ phase: 'complete' });
-    // Token 1 was minted at send time; every save resolves a fresh token
-    // afterwards, so the persistence write must NOT reuse token-1.
     expect(assistantSave['__auth']).not.toBe('Bearer token-1');
   });
 
@@ -231,7 +210,6 @@ describe('useChatStream deep research handling', () => {
     let sendPromise: Promise<boolean>;
     await act(async () => {
       sendPromise = result.current.sendMessage('research the topic', { research: true });
-      // Let the stream deliver its events, then cancel mid-run.
       await waitFor(() => {
         expect(assistantMessage()?.metadata?.research?.phase).toBe('searching');
       });
@@ -254,8 +232,6 @@ describe('useChatStream deep research handling', () => {
     });
   });
 });
-
-// ─── CAP-045 slice 2/4: plan surface + retry ─────────────────────────────────
 
 function researchPlan(steps: Array<Record<string, unknown>>) {
   return { choices: [{ delta: { x_research_plan: { steps } }, index: 0 }] };
@@ -289,7 +265,6 @@ describe('useChatStream research plan reduction', () => {
       { id: 'plan-2', type: 'search', description: 'beta', status: 'completed' },
       { id: 'synthesize', type: 'synthesize', description: 'Write report', status: 'running' },
     ]);
-    // A later status event must not wipe the plan.
     expect(assistantMessage()?.metadata?.research?.phase).toBe('complete');
   });
 
@@ -393,8 +368,6 @@ describe('useChatStream research retry request', () => {
     const secondKey = fetchCalls.find((c) => c.url.includes('/api/llm/v1/chat/completions'))?.init
       .headers as Record<string, string> | undefined;
 
-    // A distinct Idempotency-Key means the server opens a NEW managed-usage
-    // reservation; it can neither settle nor re-charge the original one.
     expect(firstKey?.['Idempotency-Key']).toBeTruthy();
     expect(secondKey?.['Idempotency-Key']).toBeTruthy();
     expect(secondKey?.['Idempotency-Key']).not.toBe(firstKey?.['Idempotency-Key']);

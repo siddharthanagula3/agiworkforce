@@ -1,6 +1,3 @@
-/**
- * Spanish catalog. Key parity with `en` is enforced by l10n.test.ts.
- */
 const es = {
   'applyEdit.prompt': 'AGI Workforce: ¿Aplicar el resultado de {command}?',
   'applyEdit.applyInline': 'Aplicar en línea',

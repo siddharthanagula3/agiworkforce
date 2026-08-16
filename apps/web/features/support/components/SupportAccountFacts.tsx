@@ -1,17 +1,5 @@
 'use client';
 
-/**
- * "What I can see about your account", as a collapsed disclosure.
- *
- * It renders the SERVER's model-safe projection, filtered through a display
- * allowlist in `toDisplayFacts`. That is deliberate on two counts: the user can
- * see exactly what the agent was told about them, and a new key added to the
- * projection upstream cannot silently start appearing in the UI.
- *
- * Signed-out visitors never reach this component — the panel renders it only
- * when the server returned a context.
- */
-
 import type { SupportAccountFact } from '../lib/contract';
 import styles from './SupportWidget.module.css';
 

@@ -53,7 +53,6 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
   const reducedMotion = useReducedMotion();
   const [expanded, setExpanded] = useState(false);
 
-  // Animated opacity for expand/collapse
   const animOpacity = useSharedValue(0);
 
   const toggleExpand = useCallback(() => {
@@ -66,7 +65,6 @@ export function MemoryItem({ memory, onEdit, onDelete, onTogglePin }: MemoryItem
     opacity: animOpacity.value,
   }));
 
-  // Swipe-to-delete right action
   const renderRightActions = useCallback(
     () => (
       <Pressable

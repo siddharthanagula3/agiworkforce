@@ -1,12 +1,5 @@
 'use client';
 
-/**
- * Bridges web's billing query → unified-chat's tierStore.
- *
- * Mount once in the chat layout / shell. Whenever the user's billing tier
- * changes, the unified-chat tierStore is patched so ModelSelector can gate
- * the Max in-thread provider switch correctly.
- */
 import { useEffect } from 'react';
 import { useTierStore } from '@agiworkforce/unified-chat';
 import { normalizeUIPlanTier } from '@agiworkforce/types';

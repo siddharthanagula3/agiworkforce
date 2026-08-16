@@ -1,14 +1,10 @@
 #!/usr/bin/env node
-// Recover AUDIT_PARTS/batch-*.md and AUDIT_BATCHES/batch-*.txt after the
-// 2026-06-10 deletion of untracked audit artifacts, by replaying Write/Edit
-// tool calls recorded in the scan agents' transcripts.
 import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = '/Users/siddhartha/Desktop/agiworkforce';
 const WF_BASE =
   '/Users/siddhartha/.claude/projects/-Users-siddhartha-Desktop-agiworkforce/58e9021c-8771-46a7-a64a-5ee945ae5c99/subagents/workflows';
-// chronological order — later runs overwrite earlier partials (025, 032)
 const RUNS = [
   'wf_446fdafd-4dd', // chunk A first attempt (001-031 done, 025/032 partial)
   'wf_f0967038-3e6', // chunk A remainder (025, 032-063)
@@ -18,8 +14,8 @@ const RUNS = [
   'wf_dc996cce-d03', // 100-129
 ];
 
-const parts = new Map(); // batchId -> content
-const lists = new Map(); // batchId -> [file paths]
+const parts = new Map();
+const lists = new Map();
 const warnings = [];
 
 const partRe = /AUDIT_PARTS\/batch-(\d{3})\.md/;
@@ -33,7 +29,7 @@ for (const run of RUNS) {
     .sort();
   for (const f of files) {
     const lines = fs.readFileSync(path.join(dir, f), 'utf8').split('\n');
-    const pendingReads = new Map(); // tool_use_id -> batchId (for batch list reads)
+    const pendingReads = new Map();
     for (const line of lines) {
       if (!line.trim()) continue;
       let obj;

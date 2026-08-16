@@ -8,10 +8,6 @@ export interface DesktopSettingSearchEntry {
   keywords?: string[];
 }
 
-/**
- * Searchable controls in the mounted Desktop settings owner. Entries describe
- * real controls or destinations; they are not a feature catalogue.
- */
 export const DESKTOP_SETTINGS_SEARCH_INDEX: DesktopSettingSearchEntry[] = [
   {
     id: 'global-hotkey',

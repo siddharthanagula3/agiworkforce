@@ -1,17 +1,4 @@
-/**
- * api.ts — ApiPaywallError detection tests
- *
- * Verifies that:
- *  - HTTP 429 with { kind: 'paywall', feature, requiredTier, reason } throws ApiPaywallError
- *  - ApiPaywallError carries the correct fields
- *  - HTTP 429 without paywall body throws a generic Error
- *  - HTTP 429 with non-JSON body throws a generic Error
- *  - Non-429 errors pass through unchanged
- */
 
-// ---------------------------------------------------------------------------
-// Mocks — must be declared before imports
-// ---------------------------------------------------------------------------
 
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(),
@@ -64,10 +51,6 @@ jest.mock('expo-file-system/legacy', () => ({
   createUploadTask: (...args: unknown[]) => mockCreateUploadTask(...args),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports after mocks
-// ---------------------------------------------------------------------------
-
 import { api, ApiPaywallError, resetApiAccountState } from '../services/api';
 import {
   paywallActivityErrorFromApiError,
@@ -86,10 +69,6 @@ const mockGetAuthHeaders = getAuthHeaders as jest.Mock;
 const mockRefreshAuthSession = refreshAuthSession as jest.Mock;
 const mockClearAuthSession = clearAuthSession as jest.Mock;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeResponse(status: number, body: unknown, contentType = 'application/json'): Response {
   const bodyText = typeof body === 'string' ? body : JSON.stringify(body);
   return {
@@ -100,10 +79,6 @@ function makeResponse(status: number, body: unknown, contentType = 'application/
     json: jest.fn(async () => (typeof body === 'string' ? JSON.parse(body) : body)),
   } as unknown as Response;
 }
-
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -215,10 +190,6 @@ describe('Cloud account request isolation', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 1. Paywall 429 throws ApiPaywallError
-// ---------------------------------------------------------------------------
-
 describe('429 with paywall payload', () => {
   it('throws ApiPaywallError with correct fields', async () => {
     const paywallBody = {
@@ -291,10 +262,6 @@ describe('429 with paywall payload', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. 429 without paywall body — generic Error
-// ---------------------------------------------------------------------------
-
 describe('429 without paywall payload', () => {
   it('throws generic Error when body is rate-limit plain text', async () => {
     jest
@@ -317,10 +284,6 @@ describe('429 without paywall payload', () => {
     expect(caught).not.toBeInstanceOf(ApiPaywallError);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 3. Non-429 errors pass through unaffected
-// ---------------------------------------------------------------------------
 
 describe('non-429 errors pass through', () => {
   it('throws plain Error for 500', async () => {
@@ -427,10 +390,6 @@ describe('403 subscription feature classification', () => {
     expect(paywallActivityErrorFromApiError(error)).not.toMatch(/upgrade/i);
   });
 });
-
-// ---------------------------------------------------------------------------
-// 4. ApiPaywallError is instanceof Error
-// ---------------------------------------------------------------------------
 
 describe('ApiPaywallError class', () => {
   it('is an instance of Error', () => {

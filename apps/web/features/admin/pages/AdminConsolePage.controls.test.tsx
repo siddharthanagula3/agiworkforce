@@ -1,20 +1,3 @@
-/**
- * AdminConsolePage — control-plane reachability and status-tone tests (CRIT-014).
- *
- * Two defects are covered here.
- *
- * 1. `/admin/directory-sync` is a fully wired SCIM control plane — create a
- *    connection, mint and revoke bearer tokens, read the provisioning event log
- *    — and NOTHING in the product linked to it. `grep -rn "admin/directory-sync"
- *    apps/web` returned only the route file itself, so it was reachable solely
- *    by typing the URL. The "Admin controls" inventory is the fix; delete that
- *    section and the reachability tests below fail.
- *
- * 2. Every readiness status rendered in the same emerald success badge no matter
- *    what it said. With the incident kill-switch engaged the table showed
- *    "Temporarily disabled (incident kill-switch)" in green while the header
- *    correctly turned amber. Drop the tone lookup and the tone tests fail.
- */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import AdminConsolePage from './AdminConsolePage';

@@ -11,10 +11,6 @@ vi.mock('@/lib/server/neon-db', () => ({
 
 import { validateInviteCode, joinWaitlist } from '../waitlistService';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeDb(queryResult?: unknown, executeResult?: number): DatabaseAdapter {
   return {
     query: vi.fn().mockResolvedValue(queryResult ?? []),
@@ -25,14 +21,9 @@ function makeDb(queryResult?: unknown, executeResult?: number): DatabaseAdapter 
   } as unknown as DatabaseAdapter;
 }
 
-// The RPC returns an array with one row (RETURNS TABLE in SQL)
 function rpcRow(valid: boolean, invite_id: string | null, error: string | null) {
   return [{ valid, invite_id, error }];
 }
-
-// ---------------------------------------------------------------------------
-// validateInviteCode
-// ---------------------------------------------------------------------------
 
 describe('validateInviteCode', () => {
   beforeEach(() => {
@@ -111,10 +102,6 @@ describe('validateInviteCode', () => {
     expect(result.error).toBe('rpc_error');
   });
 });
-
-// ---------------------------------------------------------------------------
-// joinWaitlist
-// ---------------------------------------------------------------------------
 
 describe('joinWaitlist', () => {
   beforeEach(() => {

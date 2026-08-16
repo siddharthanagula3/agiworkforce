@@ -1,19 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Tests for ReportFlagButton — the per-turn "Report this response" flow
- * (Google Play GenAI policy requirement).
- *
- * Regression coverage, found via live simulator testing:
- *   1. The category Pressables had no accessibilityLabel — undiscoverable by
- *      accessibility-tree tooling despite having visible child text.
- *   2. They also used accessibilityRole="radio", which (confirmed live) does
- *      not map to a tappable iOS accessibility trait the way "button" does —
- *      the row existed in the accessibility tree but could not be activated.
- *      Every other single-select row already shipped in this codebase (e.g.
- *      the Accent Color picker) uses role="button" + accessibilityState.selected
- *      for exactly this reason; this component was the one inconsistent case.
- * Both are fixed: explicit accessibilityLabel + role="button".
- */
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
@@ -79,8 +64,6 @@ describe('ReportFlagButton', () => {
     const { getByLabelText, getByText } = renderButton();
     fireEvent.press(getByLabelText('Report this response'));
 
-    // Regression guard: each category must be discoverable by its own
-    // accessibilityLabel, not merely by rendered child text.
     for (const label of [
       'Harmful or dangerous',
       'Inaccurate or misleading',
@@ -140,7 +123,6 @@ describe('ReportFlagButton', () => {
 
     await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
     expect(getByText(/nothing was sent/i)).toBeTruthy();
-    // The old copy asserted an outcome the service never produced.
     expect(queryByText('Thank you for your report')).toBeNull();
     expect(queryByText(/we (will )?(review|received)/i)).toBeNull();
   });

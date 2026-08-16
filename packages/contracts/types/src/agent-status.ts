@@ -12,22 +12,8 @@
  * @packageDocumentation
  */
 
-// ============================================================================
-// Agent Session Status
-// ============================================================================
-
-/**
- * Execution status of an agent session.
- *
- * - `running` — agent is actively executing tasks
- * - `completed` — agent finished successfully
- * - `failed` — agent encountered an unrecoverable error
- * - `paused` — agent is paused (awaiting user confirmation or budget check)
- * - `cancelled` — agent was manually stopped by the user
- */
 export type AgentSessionStatus = 'running' | 'completed' | 'failed' | 'paused' | 'cancelled';
 
-/** Possible states of an agent */
 export type AgentStatus = 'idle' | 'thinking' | 'working' | 'error';
 
 /**
@@ -53,82 +39,43 @@ export type AgentStatus = 'idle' | 'thinking' | 'working' | 'error';
  * ```
  */
 export interface AgentSession {
-  /** Unique identifier for this agent session. */
   id: string;
 
-  /** Human-readable name of the agent or task. */
   name: string;
 
-  /** Current execution status. */
   status: AgentSessionStatus;
 
-  /**
-   * Description of what the agent is currently doing.
-   * Examples: "Reading src/main.rs", "Running cargo test", "Generating summary".
-   * `null` when the agent has completed or failed.
-   */
   currentAction: string | null;
 
-  /** ISO 8601 timestamp when the session started. */
   startedAt: string;
 
-  /**
-   * ISO 8601 timestamp when the session completed or failed.
-   * `null` while the agent is still running.
-   */
   completedAt: string | null;
 
-  /**
-   * Completion progress as a percentage (0-100).
-   * `null` when progress cannot be determined.
-   */
   progress: number | null;
 
-  /** The LLM model being used for this session, if known. */
   model?: string;
 
-  /** Current iteration count in the agentic loop. */
   iterationCount?: number;
 
-  /** Maximum iterations allowed for this session. */
   maxIterations?: number;
 
-  /** Error message when status is 'failed'. */
   error?: string;
 
-  /** Number of tool calls executed so far. */
   toolCallCount?: number;
 
-  /** User ID that owns this session (for multi-user filtering). */
   userId?: string;
 }
 
-// ============================================================================
-// Agent Status Summary (for badges and compact displays)
-// ============================================================================
-
-/**
- * Lightweight summary of agent activity, used for badges and status bar items.
- */
 export interface AgentStatusSummary {
-  /** Number of currently running agents. */
   running: number;
 
-  /** Number of completed agents in the current session. */
   completed: number;
 
-  /** Number of failed agents in the current session. */
   failed: number;
 
-  /** Total number of tracked agent sessions. */
   total: number;
 }
 
-// ============================================================================
-// Active Agent & Task Assignment
-// ============================================================================
-
-/** Represents an active agent with its current state */
 export interface ActiveAgent {
   id: string;
   name: string;
@@ -138,7 +85,6 @@ export interface ActiveAgent {
   lastActivity?: Date;
 }
 
-/** Task assigned to an agent */
 export interface TaskAssignment {
   taskId: string;
   agentId: string;

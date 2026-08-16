@@ -1,8 +1,3 @@
-/**
- * ToolErrorDisplay Component
- *
- * Beautiful error message display with retry functionality and troubleshooting tips.
- */
 
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -73,7 +68,6 @@ export function ToolErrorDisplay({
     copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
-  // Get error-specific details
   const getErrorDetails = () => {
     switch (errorType) {
       case 'timeout':

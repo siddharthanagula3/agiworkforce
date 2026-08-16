@@ -47,11 +47,6 @@ function formatDate(value: string): string {
   return date.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
 
-/**
- * The API reports `length(content)` — CHARACTERS, not bytes — so this label
- * says characters. Calling a character count "KB" would misstate the size of
- * any artifact containing non-ASCII text.
- */
 function formatSize(characters: number): string {
   if (characters < 1000) return `${characters} characters`;
   return `${Math.round(characters / 1000).toLocaleString()}k characters`;

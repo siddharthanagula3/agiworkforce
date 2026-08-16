@@ -109,12 +109,6 @@ interface PersistedVideoAsset {
   pathname: string;
 }
 
-/**
- * Remove the object first, then its catalog row. A row without bytes is not a
- * deliverable result and the stable job pathname lets the next retry restore
- * both. If either operation throws, the caller must keep the billing lease
- * active instead of refunding while a generated asset may still be reachable.
- */
 async function removePersistedVideo(job: VideoGenerationJob, pathname: string): Promise<void> {
   await deleteStoredMedia(pathname);
   await deleteVideoMediaAsset(job.id, job.userId);
@@ -185,11 +179,6 @@ async function persistCompletedVideo(
         storageId: job.id,
       });
     } catch (error) {
-      // PutObject can commit and then lose its response. Delete the known,
-      // deterministic object identity even when the storage helper never
-      // returned. Also remove any catalog row left by an earlier lost-response
-      // retry under the same stable job id. A failed compensation keeps the
-      // job/billing lease active.
       try {
         await deleteStoredMedia(plannedPathname);
         await deleteVideoMediaAsset(job.id, job.userId);
@@ -216,8 +205,6 @@ async function persistCompletedVideo(
         userId: job.userId,
         organizationId: job.organizationId,
         mimeType: downloaded.contentType,
-        // Keep provider/public bucket URLs out of the catalog. All consumers
-        // address this stable row through authenticated /api/files/{assetId}.
         storageUrl: stored.pathname,
         storagePathname: stored.pathname,
         byteSize: stored.byteSize,
@@ -275,12 +262,6 @@ async function handleReconciliationError(input: {
   const publicError = providerError?.message ?? 'Video processing is temporarily unavailable.';
 
   if (terminal) {
-    // The only proven provider failure enters through the explicit
-    // `provider.status === 'failed'` branch. Reaching this handler means an
-    // attached provider task could not be verified or its completed bytes
-    // could not be delivered safely. A 404, unsafe URL, invalid MIME/signature,
-    // oversize result, or exhausted DB/storage retry must not masquerade as a
-    // known provider failure: the provider may already have charged AGI.
     return markClaimedVideoGenerationOutcomeUnknown(
       input.db,
       input.job,
@@ -305,11 +286,6 @@ async function handleReconciliationError(input: {
   });
 }
 
-/**
- * Reconcile one job from either an authenticated status request or Workflow.
- * worker. The database claim is the concurrency boundary; losing it returns a
- * fresh snapshot and never repeats provider download/storage/settlement work.
- */
 async function reconcileVideoGenerationJobCore(
   db: DatabaseAdapter,
   snapshot: VideoGenerationJob,
@@ -321,8 +297,6 @@ async function reconcileVideoGenerationJobCore(
     db,
     jobId: snapshot.id,
     claimToken,
-    // Covers one bounded download/rehost step plus settlement headroom;
-    // a second worker must not redownload/reupload a large provider result.
     claimSeconds: 360,
   });
   if (!claimed) {
@@ -330,9 +304,6 @@ async function reconcileVideoGenerationJobCore(
   }
   if (isTerminal(claimed)) return claimed;
 
-  // The provider boundary was recorded transactionally before egress. If that
-  // marker exists but no task identity survived, replay could create a second
-  // billable provider job. Close explicitly as outcome_unknown instead.
   if (!claimed.providerTaskId) {
     if (claimed.providerStartedAt) {
       if (
@@ -389,9 +360,6 @@ async function reconcileVideoGenerationJobCore(
         claimToken,
       });
     } catch (error) {
-      // No DELETE is issued until its one-shot DB boundary returns. A lost
-      // boundary response is also safe: the persisted attempted_at prevents a
-      // later worker from replaying DELETE, while this retry only re-reads.
       logger.warn(
         { jobId: claimed.id, error },
         'Runway cancellation boundary could not be confirmed before egress',
@@ -429,8 +397,6 @@ async function reconcileVideoGenerationJobCore(
         claimToken,
         acknowledged: false,
         publicError: providerError?.message ?? 'Runway cancellation is temporarily unavailable.',
-        // DELETE cancels active tasks but deletes terminal ones. Never replay
-        // an ambiguous task-management request automatically.
         exhausted: true,
         retryAfterSeconds: retryDelaySeconds(claimed.cancelAttempts, claimed.id),
       });
@@ -493,9 +459,6 @@ async function reconcileVideoGenerationJobCore(
       beforePersistence.cancelRequestedAt &&
       !claimed.cancelRequestedAt
     ) {
-      // The cancel update and finalizer serialize on the same row in SQL. This
-      // early re-read avoids downloading/rehosting bytes when cancellation won
-      // the race after this worker acquired its reconciliation claim.
       return deferVideoGenerationJob({
         db,
         jobId: claimed.id,
@@ -517,8 +480,6 @@ async function reconcileVideoGenerationJobCore(
     if (!finalized) throw new Error('Video job disappeared during completion settlement.');
     return finalized;
   } catch (error) {
-    // A finalization can commit and still lose its response. Re-read before
-    // trying to schedule a retry with a claim the transaction already cleared.
     const current = await getVideoGenerationJobForSystem(db, claimed.id);
     if (current?.status === 'completed') return current;
 
@@ -562,11 +523,6 @@ async function reconcileVideoGenerationJobCore(
   }
 }
 
-/**
- * Reconcile the paid job, then idempotently project its latest state into the
- * Web assistant placeholder. Transcript projection failure must not roll back
- * an already-settled provider result; the next Workflow/status pass retries it.
- */
 async function projectVideoGenerationTranscript(
   db: DatabaseAdapter,
   job: VideoGenerationJob,
@@ -592,12 +548,6 @@ export async function reconcileVideoGenerationJob(
   return reconciled;
 }
 
-/**
- * Workflow variant whose transcript projection is part of step success. If a
- * terminal DB commit succeeds but projection fails, the step remains retryable;
- * its next invocation sees the terminal job, skips provider/billing mechanics,
- * and idempotently retries only the exact assistant-row projection.
- */
 export async function reconcileVideoGenerationJobWithRequiredTranscript(
   db: DatabaseAdapter,
   snapshot: VideoGenerationJob,
@@ -607,7 +557,6 @@ export async function reconcileVideoGenerationJobWithRequiredTranscript(
   return reconciled;
 }
 
-/** Settle a known submission failure while the pre-egress claim is held. */
 export async function failClaimedVideoGenerationJob(
   db: DatabaseAdapter,
   snapshot: VideoGenerationJob,
@@ -625,10 +574,6 @@ export async function failClaimedVideoGenerationJob(
   return failed;
 }
 
-/**
- * Close the non-transactional provider-start boundary without replaying work
- * or pretending a provider failure was observed.
- */
 export async function markClaimedVideoGenerationOutcomeUnknown(
   db: DatabaseAdapter,
   snapshot: VideoGenerationJob,
@@ -674,7 +619,6 @@ export async function markClaimedVideoGenerationOutcomeUnknown(
   return marked;
 }
 
-/** Settle a provider-submission failure through the same job/billing owner. */
 export async function failVideoGenerationJob(
   db: DatabaseAdapter,
   snapshot: VideoGenerationJob,
@@ -745,8 +689,6 @@ export async function reconcileDueVideoGenerationJobs(
     errors: 0,
   };
 
-  // Keep disk, network, and function concurrency bounded. Provider bytes are
-  // streamed through one capped temporary file at a time before the R2 upload.
   for (const jobId of jobIds) {
     try {
       const job = await getVideoGenerationJobForSystem(db, jobId);

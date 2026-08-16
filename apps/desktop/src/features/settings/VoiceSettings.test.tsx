@@ -1,11 +1,3 @@
-/**
- * Honest capability presentation for system-wide dictation
- * (DESKTOP-SYSTEM-DICTATION-UNWIRED-01, docs/plans/desktop-system-dictation.md
- * phase 1): while the backend probe `systemDictationAvailable` is false — the
- * shipped state until the plan's release gates pass — the settings UI must
- * not advertise, enable, or activate the global control, and no competitor
- * branding may present the feature.
- */
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -110,7 +102,6 @@ describe('VoiceSettings — honest system dictation presentation', () => {
     mocks.voiceInput.voiceProvider = 'local_whisper';
     mocks.api.voiceCheckLocalWhisper.mockResolvedValue(true);
     render(<VoiceSettings />);
-    // Let the availability probe resolve.
     await screen.findByText('Transcription Provider');
     await vi.waitFor(() => {
       expect(
@@ -125,7 +116,6 @@ describe('VoiceSettings — honest system dictation presentation', () => {
 
     expect(screen.getByText('System-wide Dictation')).toBeInTheDocument();
     expect(screen.getByText(/Not available in this build/i)).toBeInTheDocument();
-    // The old advertising claim must be gone.
     expect(screen.queryByText(/Hold the Fn key system-wide/i)).not.toBeInTheDocument();
 
     const button = screen.getByRole('button', { name: /Unavailable/i });
@@ -147,7 +137,6 @@ describe('VoiceSettings — honest system dictation presentation', () => {
     render(<VoiceSettings />);
 
     expect(screen.queryByText(/Not available in this build/i)).not.toBeInTheDocument();
-    // Other sections also render "Enable" buttons — scope to this section's row.
     const row = screen.getByText('System-wide Dictation').closest('.flex') as HTMLElement;
     const button = within(row).getByRole('button', { name: /Enable/i });
     expect(button).toBeEnabled();
@@ -162,9 +151,6 @@ describe('VoiceSettings — honest system dictation presentation', () => {
   });
 
   it('offers only the explicit fail-closed transcription modes', () => {
-    // No Deepgram: it is streaming-only, and the old option silently
-    // rerouted recorded dictation to managed cloud. The backend parser
-    // (features/speech/dictation/transcription.rs) accepts exactly these.
     expect(PROVIDER_OPTIONS.map((option) => option.value)).toEqual([
       'local_whisper',
       'openai_whisper',
@@ -184,9 +170,6 @@ describe('VoiceSettings — honest system dictation presentation', () => {
   });
 
   it('names the saved microphone when device enumeration cannot see it', () => {
-    // No `navigator.mediaDevices` here, which is exactly the shipped state
-    // before mic permission is granted: the saved id matches no enumerated
-    // device, so without an entry of its own the picker showed a blank value.
     mocks.voiceMode.capabilities = capabilitiesWith(false);
     mocks.voiceInput.inputDeviceId = 'mic-42';
     mocks.voiceInput.inputDeviceLabel = 'Blue Yeti';

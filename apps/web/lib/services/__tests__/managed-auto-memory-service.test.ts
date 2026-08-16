@@ -20,10 +20,6 @@ describe('recordManagedAutoMemoryTurn', () => {
       outcome: 'completed',
     });
 
-    // Asserted by INTENT, not by call count: the write path also reads the
-    // account's memory exclusions, and a bare `toHaveBeenCalledOnce()` broke
-    // the moment that read was added while the behaviour under test — "a
-    // completed turn persists" — was unchanged.
     const statements = query.mock.calls.map((call) => String(call[0]));
     expect(statements.some((sql) => sql.includes('insert into user_memories'))).toBe(true);
   });

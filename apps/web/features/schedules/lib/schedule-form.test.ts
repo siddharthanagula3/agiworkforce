@@ -193,9 +193,6 @@ describe('schedule form contract', () => {
     });
   });
 
-  // The sweep that runs due tasks currently fires daily, so anything finer is
-  // an availability the platform does not have. The client refuses it here so
-  // the user is not promised a cadence the deployed trigger cannot serve.
   it('refuses a cadence finer than the deployed sweep, on both interval and cron', () => {
     expect(
       validateAndBuildScheduleRequest(

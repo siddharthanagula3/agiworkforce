@@ -1,23 +1,3 @@
-/**
- * MCP transport resolver.
- *
- * Maps an `McpServerConfig` to one of the three SDK-provided transport
- * classes. Pure factory — no IO until the caller calls `client.connect()`.
- *
- * SDK v2 (2026-07-28)
- * -------------------
- * The monolithic `@modelcontextprotocol/sdk` package was split in v2: client
- * code now lives in `@modelcontextprotocol/client`, with the process-spawning
- * stdio transport behind the `/stdio` subpath so browser and worker bundles
- * never pull `cross-spawn` in. The three transport classes are the same
- * concepts, so this file's shape is unchanged — only the import sources and
- * the added `authProvider` seam are new.
- *
- * The `authProvider` seam is what lets a caller hand us an
- * `OAuthClientProvider`; the SDK then performs RFC 9728 / RFC 8414 discovery
- * and the full authorization-code + PKCE dance on 401, instead of the caller
- * having to pre-mint a bearer token and pass it as a header.
- */
 
 import { StdioClientTransport } from '@modelcontextprotocol/client/stdio';
 import {
@@ -28,7 +8,6 @@ import {
 
 import type { McpServerConfig } from './types';
 
-// AUDIT-FIX: H-5 — stdio transport spawn-guard error.
 export class MCPTransportError extends Error {
   constructor(message: string) {
     super(message);
@@ -119,11 +98,6 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
 
 export function resolveMcpTransport(config: McpServerConfig): Transport {
   if (config.command) {
-    // AUDIT-FIX: H-5 + FIX (audit 2026-05-20, §2): never spawn an arbitrary
-    // local command without a signed manifest. The userConsent fallback is
-    // ONLY honored when developerMode is on AND the consent matches BOTH
-    // the command and the args exactly (argv-level pin, not just executable
-    // name). The string-equality consent bypass is closed.
     const consent = config.userConsent;
     const expectedArgs = config.args ?? [];
     const consentMatchesCommand = !!consent && consent.for_command === config.command;
@@ -131,8 +105,7 @@ export function resolveMcpTransport(config: McpServerConfig): Transport {
       !!consent &&
       (consent.for_args !== undefined
         ? arraysEqual(consent.for_args, expectedArgs)
-        : // No for_args on the consent record means "command only" — that's
-          // the legacy string-equality consent shape; refuse it.
+        :
           false);
     const consentValid = !!config.developerMode && consentMatchesCommand && consentMatchesArgs;
     if (!config.signedManifest && !consentValid) {
@@ -156,9 +129,6 @@ export function resolveMcpTransport(config: McpServerConfig): Transport {
   const url = new URL(config.url);
   const headers = coerceHeaders(config.headers);
   const requestInit: RequestInit | undefined = headers ? { headers } : undefined;
-  // When the caller supplies an OAuth provider the SDK drives discovery and
-  // the authorization-code exchange itself on 401. A caller may still pass a
-  // pre-minted bearer token via `headers` instead; the two are independent.
   const authProvider = config.authProvider;
 
   if (config.transport === 'sse') {
@@ -167,14 +137,9 @@ export function resolveMcpTransport(config: McpServerConfig): Transport {
       ...(authProvider ? { authProvider } : {}),
     });
   }
-  // Default: streamable-http
   return new StreamableHTTPClientTransport(url, {
     ...(requestInit ? { requestInit } : {}),
     ...(authProvider ? { authProvider } : {}),
-    // A 403 carrying `WWW-Authenticate: ... scope="..."` means the token we
-    // hold is valid but too narrow. Re-running authorization for the wider
-    // scope is the spec's step-up path; the alternative ('throw') would
-    // surface an opaque 403 the user cannot act on.
     ...(authProvider ? { onInsufficientScope: 'reauthorize' as const } : {}),
   });
 }

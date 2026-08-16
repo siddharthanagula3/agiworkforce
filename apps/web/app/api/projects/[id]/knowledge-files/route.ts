@@ -1,13 +1,3 @@
-/**
- * Knowledge Files API · Cloud Managed feature, rolling out in public alpha.
- *
- * GET  /api/projects/[id]/knowledge-files · list active files for a project
- * POST /api/projects/[id]/knowledge-files · record an uploaded file
- *
- * Missing schema fails closed with 503. Returning a fabricated empty list
- * would make clients claim a project has no sources when the capability is
- * actually unavailable.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -49,14 +39,6 @@ function projectKnowledgeResponse(row: Record<string, unknown>, projectId: strin
   };
 }
 
-/**
- * A file rejected by content inspection is DELETED from storage, not merely
- * left unregistered. The presign step handed the browser a direct PUT URL, so
- * the bytes are already in the bucket by the time this handler runs; without
- * this they would sit there indefinitely, still readable through the storage
- * key and still counted by nothing. Deleting shrinks the exposure to the
- * seconds between the PUT and this rejection.
- */
 async function purgeRejectedKnowledgeUpload(
   userId: string,
   projectId: string,
@@ -67,7 +49,6 @@ async function purgeRejectedKnowledgeUpload(
   try {
     await deleteProjectKnowledgeObject(objectKey);
   } catch (deleteError) {
-    // Loud: the bytes stay in the bucket until somebody removes them by hand.
     logger.error(
       { err: deleteError, userId, projectId, objectKey },
       '[knowledge-files] CRITICAL: could not delete a rejected upload from storage',
@@ -90,7 +71,6 @@ async function handleListKnowledgeFiles(request: NextRequest, context: RouteCont
   const { id: projectId } = await context.params;
   const organizationId = await resolveActiveOrganizationId(db, userId);
 
-  // Verify project ownership before listing files
   const [project] = await db.query<{ id: string }>(
     `select id
        from user_projects
@@ -171,7 +151,6 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
   if (!attachmentValidation.ok) {
     throw createError.validation(attachmentValidation.message);
   }
-  // Verify project ownership
   const [project] = await db.query<{ id: string }>(
     `select id
        from user_projects
@@ -188,11 +167,6 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     throw createError.notFound('Project not found');
   }
 
-  // Enforce the knowledge-file cap at ingest (before the expensive extraction).
-  // Retrieval only ever reads the MAX_KNOWLEDGE_FILES most-recent files, so
-  // accepting more would silently drop the oldest from every project turn's
-  // context. Reject with a clear capacity error instead of a silent scope loss.
-  // A missing table maps to the same pre-migration 503 as the insert below.
   let activeCount = 0;
   try {
     const [countRow] = await db.query<{ count: number }>(
@@ -220,17 +194,6 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     );
   }
 
-  // Duplicate detection.
-  //
-  // `checksum_sha256` was computed by the client, stored on the row, and passed
-  // to the extractor — but never COMPARED against anything, so re-uploading the
-  // same file created a second unrelated row. That silently consumed one of the
-  // project's file slots, doubled the text stuffed into the model's context,
-  // and made the file list confusing.
-  //
-  // Checked BEFORE extraction so a duplicate does not pay for the extraction
-  // work, and scoped to non-deleted rows so re-adding a file the user
-  // deliberately removed still works.
   let duplicate: { id: string; file_name: string } | undefined;
   try {
     [duplicate] = await db.query<{ id: string; file_name: string }>(
@@ -242,23 +205,12 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
       [projectId, body.checksumSha256.trim()],
     );
   } catch (error) {
-    // A pre-migration table already produced a 503 from the count query above,
-    // so treat it as "cannot check" and fall through rather than failing the
-    // upload on a schema state the caller cannot fix.
     if (!isSchemaNotReady(error)) throw error;
   }
-  // Thrown OUTSIDE the try: a conflict must never be swallowed by the
-  // schema-not-ready branch above.
   if (duplicate) {
     throw createError.conflict(`This file is already in the project as "${duplicate.file_name}".`);
   }
 
-  // Aggregate storage quota.
-  //
-  // A per-file byte cap and a 20-files-per-project count cap already existed,
-  // but nothing bounded TOTAL bytes — so spreading large files across projects
-  // held unbounded storage. Summed across all of the user's projects, because
-  // a per-project quota has the same hole.
   const subscription = await SubscriptionService.getSubscription(db, userId);
   const storageLimitBytes = getKnowledgeStorageLimitBytes(subscription?.plan_tier);
   if (storageLimitBytes !== null) {
@@ -276,8 +228,6 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
       );
       usedBytes = Number(usage?.total ?? 0);
     } catch (error) {
-      // Pre-migration schema already 503s above; do not fail an upload on a
-      // state the caller cannot fix.
       if (!isSchemaNotReady(error)) throw error;
     }
     if (usedBytes + body.byteCount > storageLimitBytes) {
@@ -287,13 +237,6 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     }
   }
 
-  // Version history.
-  //
-  // Same file name + DIFFERENT checksum is an EDIT, not a new file. Without
-  // this the old row stayed active, so the model saw both the stale and the
-  // corrected text, the 20-file budget was consumed twice, and nothing said
-  // which row was current. (Same name + same checksum is the duplicate case
-  // rejected above; the two rules are complementary.)
   let supersedes: { id: string; version: number } | undefined;
   try {
     [supersedes] = await db.query<{ id: string; version: number }>(
@@ -324,10 +267,6 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     extractedText = extraction.extractedText;
   } catch (error) {
     if (error instanceof ProjectKnowledgeExtractionError) {
-      // Content inspection rejected the bytes (structural scan or the
-      // known-illegal-media denylist). Nothing is registered, the object is
-      // removed from storage, and the verdict is recorded — the uploader only
-      // ever sees the generic message the extractor already set.
       if (error.code === 'content_rejected' || error.code === 'known_illegal_media') {
         const storageUri = body.storageUri.trim();
         logger.warn(
@@ -388,20 +327,8 @@ async function handleCreateKnowledgeFile(request: NextRequest, context: RouteCon
     if (!inserted) throw new Error('No row returned');
     data = inserted;
 
-    // Retire the previous version only AFTER the replacement exists, so a
-    // failed insert can never leave the project with no active copy of the
-    // file. `superseded_at` is deliberately not `deleted_at`: the old row is
-    // retained as history, and conflating "replaced" with "user deleted it"
-    // would make restoring a version impossible.
     if (supersedes) {
       await db.query(
-        // Scoped by project_id as well as id. This runs on the Neon owner
-        // connection, which has BYPASSRLS, so no policy narrows it and `id`
-        // alone would be an unconstrained cross-tenant write — the row is
-        // addressed purely by a uuid whose correctness depends on the select
-        // above still being scoped the way it is today. Repeating the tenancy
-        // predicate on the write keeps the guarantee local to the statement
-        // instead of borrowing it from ten lines away.
         `update project_knowledge_files
             set superseded_at = now()
           where id = $1 and project_id = $2 and superseded_at is null`,

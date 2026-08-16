@@ -31,8 +31,6 @@ import {
   type ModelAvailability,
 } from '@agiworkforce/types';
 
-// ---- Types ----
-
 export interface ModelCapabilities {
   streaming: boolean;
   tools: boolean;
@@ -55,10 +53,6 @@ export interface ModelMetadata {
   name: string;
   provider: string;
   modelType: string;
-  /**
-   * Published token context limit for text/chat models. Media APIs can omit
-   * this when their provider contract uses other units.
-   */
   contextWindow?: number;
   inputCost: number;
   outputCost: number;
@@ -69,22 +63,12 @@ export interface ModelMetadata {
   qualityTier: string;
   bestFor: string[];
   released?: string;
-  /**
-   * Mirrors ModelMetadata.requiresEnvironment from @agiworkforce/types.
-   * Absent on all current models; set on future env-gated models (Phase B).
-   */
   requiresEnvironment?: 'e2b' | 'local-runtime';
-  /** Additive per-model reasoning capability metadata (drives the effort flyout). */
   reasoning?: ModelReasoning;
-  /** Selectability axis (separate from lifecycle status). Absent ⇒ "live". */
   availability?: ModelAvailability;
-  /** Reason shown on coming_soon/unavailable rows. */
   unavailableReason?: string;
-  /** Optional display-only expected-live date for coming_soon rows. */
   expectedLiveDate?: string;
 }
-
-// ---- Derived data from JSON ----
 
 const config = modelsJson;
 
@@ -123,23 +107,18 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = Object.fromEntries(
   }),
 );
 
-// ---- Helper functions ----
-
 export function getModelMetadata(modelId: string): ModelMetadata | null {
   return (getModelMetadataById(modelId) as ModelMetadata | null) ?? null;
 }
 
-/** Per-model reasoning capability block (absent ⇒ non-reasoning `none`). */
 export function getModelReasoning(modelId: string | null | undefined): ModelReasoning {
   return getCatalogModelReasoning(modelId);
 }
 
-/** DISPLAY models — includes coming_soon (drives the picker list). */
 export function getDisplayModels(): ModelMetadata[] {
   return getCatalogDisplayModels() as unknown as ModelMetadata[];
 }
 
-/** SELECTABLE models — live only (what can actually be picked/sent). */
 export function getSelectableModels(): ModelMetadata[] {
   return getCatalogSelectableModels() as unknown as ModelMetadata[];
 }
@@ -202,15 +181,10 @@ export function normalizeSubscriptionTier(tier: string | null | undefined): stri
 }
 
 export function getAllowedAutoModesForTier(_tier: string | null | undefined): string[] {
-  // One self-routing "Auto" for every tier. Tier no longer picks an Auto
-  // *profile* — the resolver derives the profile per task and clamps it to the
-  // plan's reachable slots, so every user sees a single "Auto" option.
   return ['auto'];
 }
 
 export function getBestAutoModeForTier(tier: string | null | undefined): string {
-  // Free users chat on the catalog-owned direct free-trial model (not the
-  // managed Auto preset). Keeping the default + reset on the same id avoids a flip.
   if (normalizeSubscriptionTier(tier) === 'free') return FREE_TRIAL_MODEL;
   return 'auto';
 }

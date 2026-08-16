@@ -1,8 +1,3 @@
-/**
- * Build-time flag injected by Vite (`define` in vite.config.ts) when the
- * bundle targets the Electron cloud shell. Undefined under plain tsc/tools
- * that do not run the Vite pipeline, hence the typeof guard.
- */
 declare const __ELECTRON_BUILD__: boolean | undefined;
 
 const runtimeGlobal =
@@ -16,12 +11,6 @@ export const isTauri = Boolean(
   browserWindow?.['__TAURI__'],
 );
 
-/**
- * True inside the cloud-only Electron shell (`VITE_BUILD_TARGET=electron`).
- * The Electron renderer behaves like the cloud-web build (`isCloudWeb` stays
- * true there) but is NOT same-origin with the API, so absolute API bases and
- * the preload host bridge apply.
- */
 export const isElectronHost =
   typeof __ELECTRON_BUILD__ !== 'undefined' && __ELECTRON_BUILD__ === true;
 

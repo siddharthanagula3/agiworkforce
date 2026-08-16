@@ -60,8 +60,6 @@ describe('PLAN_DISPLAY_NAMES', () => {
     expect(PLAN_DISPLAY_NAMES.team).toBe('Team');
   });
 
-  // A hand-kept copy is what dropped Max 15x and Team here once already, and a
-  // desktop label that disagrees with checkout misnames the plan the user buys.
   it('names every catalog tier exactly as the billing catalog does', () => {
     for (const [tier, pricing] of Object.entries(BILLING_PLAN_PRICING)) {
       expect(PLAN_DISPLAY_NAMES[tier as PlanTier]).toBe(pricing.label);
@@ -71,9 +69,6 @@ describe('PLAN_DISPLAY_NAMES', () => {
 });
 
 describe('asPlanTier vocabulary coverage', () => {
-  // Accepting a tier the catalog sells is the whole point: a short local copy
-  // coerced Max 15x and Team down to Free after a Cloud account sync, which
-  // silently downgraded auth and feature gating for paying users.
   it('accepts every tier the billing catalog sells', () => {
     for (const tier of Object.keys(BILLING_PLAN_PRICING)) {
       expect(asPlanTier(tier)).toBe(tier);

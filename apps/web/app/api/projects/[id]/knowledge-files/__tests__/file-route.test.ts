@@ -101,11 +101,6 @@ describe('project knowledge file bytes and deletion', () => {
     ]);
   });
 
-  // CRIT-005 — `.html`, `.xml` and `.svg` are accepted knowledge-file types and
-  // this route serves them from the app's own origin. Echoing the stored type
-  // with `inline` made an uploaded document execute as script against the
-  // uploader's session. Also the backstop for rows registered before ingest
-  // scanning existed, which cannot be rescanned.
   it.each([
     ['text/html', 'page.html'],
     ['image/svg+xml', 'logo.svg'],

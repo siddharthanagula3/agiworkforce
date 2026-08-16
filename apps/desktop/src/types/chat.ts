@@ -30,7 +30,6 @@ export interface Conversation {
   title: string;
   created_at: string;
   updated_at: string;
-  /** Per-conversation custom instructions that override global instructions */
   custom_instructions?: string;
 }
 
@@ -141,19 +140,12 @@ export interface ChatSendMessageRequest extends ChatRoutingPreferences {
   modelOverride?: string;
   enableTools?: boolean;
   conversationMode?: 'auto' | 'manual';
-  /** Custom instructions to include in the system prompt */
   customInstructions?: string;
-  /** Enable extended thinking/reasoning mode for supported models */
   enableThinking?: boolean;
-  /** Token budget for extended thinking (0 = off, >0 = enabled with that budget) */
   thinkingBudget?: number;
-  /** Exact catalog-supported provider reasoning effort. */
   reasoningEffort?: Effort;
-  /** Override model temperature (0.0–2.0) */
   temperature?: number;
-  /** Override max output tokens */
   maxOutputTokens?: number;
-  /** Whether the user explicitly selected a specific model (not an auto mode) */
   isExplicitModelSelection?: boolean;
 }
 
@@ -186,7 +178,6 @@ export interface ConversationUI extends Conversation {
   updatedAt: Date;
   pinned?: boolean;
   unreadCount?: number;
-  /** Per-conversation custom instructions */
   customInstructions?: string;
 }
 

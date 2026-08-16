@@ -30,20 +30,13 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { CloudSyncBlockedBanner } from '@/src/features/settings/common';
 import { EgressBlockedError } from '@/lib/egressGuard';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface CompareStreamState {
   content: string;
   isStreaming: boolean;
   isDone: boolean;
   errorMessage: string | null;
-  /** Approximate token count (chars / 4 as rough estimate until server sends usage) */
   tokenCount: number;
-  /** Time-to-first-token in ms */
   ttftMs: number | null;
-  /** Total response duration in ms */
   durationMs: number | null;
 }
 
@@ -61,47 +54,19 @@ const LOCAL_MODE_COMPARE_NOTICE =
   'Model comparison runs on AGI Cloud, so it is unavailable while chat is in Local Mode. ' +
   'Nothing was sent from this device. Switch to AGI Cloud to compare two models.';
 
-/**
- * The panes render this string verbatim, so it must never be a developer
- * message. `EgressBlockedError` (lib/egressGuard.ts) carries the internal
- * refusal text — "egressGuard refused: outbound request to our managed-cloud
- * host …" — which is correct fail-closed behaviour but is not user-facing
- * copy. Every other error keeps its own message, which the streaming service
- * already writes for humans; an empty one falls back to a neutral sentence
- * instead of rendering blank.
- */
 function compareErrorMessage(err: unknown): string {
   if (err instanceof EgressBlockedError) return LOCAL_MODE_COMPARE_NOTICE;
   const raw = err instanceof Error ? err.message.trim() : '';
   return raw || 'This model could not respond. Please try again.';
 }
 
-// ---------------------------------------------------------------------------
-// Defaults
-// ---------------------------------------------------------------------------
-
-// MOB-HARDCODED-MODELS fix: derive defaults from models.json via getProviderDefaultModel
-// so these survive era changes without a code edit.
 const DEFAULT_MODEL_A = getProviderDefaultModel('anthropic') ?? 'anthropic/default';
 const DEFAULT_MODEL_B = getProviderDefaultModel('openai') ?? 'openai/default';
 
-// ---------------------------------------------------------------------------
-// Main Screen
-// ---------------------------------------------------------------------------
-
-/**
- * CompareScreen — Send the same prompt to two models and stream
- * both responses side-by-side (stacked on narrow screens).
- */
 export default function CompareScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
-  // Compare is a Managed-Cloud-only surface: both panes stream through
-  // `streamChat` -> `guardedFetch`, which refuses every our-cloud request while
-  // chat is in Local Mode. Read the boundary here so the screen states that
-  // up front instead of letting two panes fill with the guard's internal
-  // refusal text after the user has already picked models and typed a prompt.
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
@@ -115,18 +80,15 @@ export default function CompareScreen() {
 
   const [lastPrompt, setLastPrompt] = useState<string | null>(null);
 
-  // Each model gets its own abort controller and sheet ref
   const controllerARef = useRef<AbortController | null>(null);
   const controllerBRef = useRef<AbortController | null>(null);
   const compareGenerationRef = useRef(0);
   const modelPickerARef = useRef<BottomSheet>(null);
   const modelPickerBRef = useRef<BottomSheet>(null);
 
-  // Which picker slot is currently active (used for the active-model pill highlight)
   const [activePickerSlot, setActivePickerSlot] = useState<'A' | 'B' | null>(null);
 
   const handleBack = useCallback(() => {
-    // Abort any running streams before leaving
     compareGenerationRef.current += 1;
     controllerARef.current?.abort();
     controllerBRef.current?.abort();
@@ -146,9 +108,6 @@ export default function CompareScreen() {
   }, []);
 
   useLayoutEffect(() => {
-    // Compare responses are intentionally ephemeral, but they are still Cloud
-    // account data. Clear them before paint whenever Clerk changes identity,
-    // and invalidate every buffered callback from the prior account.
     compareGenerationRef.current += 1;
     controllerARef.current?.abort();
     controllerBRef.current?.abort();
@@ -159,9 +118,6 @@ export default function CompareScreen() {
     setStateB(initialStreamState());
   }, [clerkUserId]);
 
-  // Switching boundary is the user's decision, never this screen's: mirror the
-  // chat screens' public-alpha gate — a signed-out user goes to Clerk sign-in
-  // (ClerkTokenBridge flips cloudUnlocked), a signed-in one flips the toggle.
   const handleSwitchToCloud = useCallback(() => {
     if (!cloudUnlocked) {
       router.push('/(auth)/login' as Parameters<typeof router.push>[0]);
@@ -174,11 +130,6 @@ export default function CompareScreen() {
     (text: string) => {
       if (!text.trim()) return false;
 
-      // Fail closed at the top: refuse the comparison with a visible
-      // explanation rather than firing two cloud streams that guardedFetch
-      // will refuse. Read the store at CALL time, not the render-time value —
-      // a boundary flip while a captured composer handler is still in hand
-      // must not slip a cloud send through a stale closure.
       if (useChatAppModeStore.getState().appMode !== 'cloud') {
         const localModeState: CompareStreamState = {
           ...initialStreamState(),
@@ -202,7 +153,6 @@ export default function CompareScreen() {
         return false;
       }
 
-      // Abort previous streams if any
       compareGenerationRef.current += 1;
       const generation = compareGenerationRef.current;
       controllerARef.current?.abort();
@@ -214,9 +164,6 @@ export default function CompareScreen() {
 
       const messages = [{ role: 'user', content: text.trim() }];
 
-      // ---------------------------------------------------------------------------
-      // Stream Model A
-      // ---------------------------------------------------------------------------
       const ctrlA = new AbortController();
       controllerARef.current = ctrlA;
       const isAActive = () =>
@@ -246,7 +193,6 @@ export default function CompareScreen() {
                   ...prev,
                   content: newContent,
                   ttftMs: ttft,
-                  // Rough token estimate: 1 token ≈ 4 chars
                   tokenCount: Math.round(newContent.length / 4),
                 };
               });
@@ -274,9 +220,6 @@ export default function CompareScreen() {
         ctrlA.signal,
       );
 
-      // ---------------------------------------------------------------------------
-      // Stream Model B
-      // ---------------------------------------------------------------------------
       const ctrlB = new AbortController();
       controllerBRef.current = ctrlB;
       const isBActive = () =>
@@ -340,7 +283,6 @@ export default function CompareScreen() {
   const isAnyStreaming = stateA.isStreaming || stateB.isStreaming;
   const bothDone = stateA.isDone && stateB.isDone;
 
-  // Determine winner once both are done
   const winner = bothDone ? determineWinner(stateA, stateB) : null;
 
   const handleOpenPickerA = useCallback(() => {
@@ -482,10 +424,6 @@ export default function CompareScreen() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Model Pill
-// ---------------------------------------------------------------------------
-
 interface ModelPillProps {
   slot: 'A' | 'B';
   modelId: string;
@@ -549,10 +487,6 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
     </Pressable>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Response Panel
-// ---------------------------------------------------------------------------
 
 interface ResponsePanelProps {
   slot: 'A' | 'B';
@@ -638,10 +572,6 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Stat Chip
-// ---------------------------------------------------------------------------
-
 interface StatChipProps {
   icon: React.ReactNode;
   label: string;
@@ -657,17 +587,8 @@ function StatChip({ icon, label, title }: StatChipProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 type Winner = 'A' | 'B' | 'tie' | null;
 
-/**
- * Determine which model "won" once both streams are complete.
- * Primary criterion: total duration. Secondary: token count.
- * Returns null if data is insufficient.
- */
 function determineWinner(a: CompareStreamState, b: CompareStreamState): Winner {
   if (!a.isDone || !b.isDone) return null;
   if (a.errorMessage && b.errorMessage) return null;

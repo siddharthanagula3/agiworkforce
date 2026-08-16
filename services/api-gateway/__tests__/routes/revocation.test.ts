@@ -1,26 +1,10 @@
-/**
- * P1-GW-REVOKE regression tests.
- *
- * Before the fix, gateway-minted tokens carried no `jti`, so the per-token
- * revocation check in middleware/auth.ts was always skipped and /auth/logout
- * bailed to `{ revoked: false }` — revocation was dead code.
- *
- * These tests encode the fix end-to-end:
- *  1. A token minted by the device-code flow carries a `jti` claim.
- *  2. POST /auth/logout records the revocation (insert into revoked_jwts) and
- *     returns `{ revoked: true }`.
- *  3. A subsequent request with the revoked token is rejected with 401.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 
-// Shared mutable state driving the Neon mock across the device-code, logout,
-// and revocation-check paths.
 const { state } = vi.hoisted(() => ({
   state: {
-    // device_authorization_codes row returned by the /token poll.
     deviceRecord: {
       device_id: '22222222-2222-4222-8222-222222222222',
       expires_at: new Date(Date.now() + 600_000).toISOString(),
@@ -28,15 +12,12 @@ const { state } = vi.hoisted(() => ({
       user_id: 'user-revoke-1',
       user_email: 'revoke@example.com',
     } as Record<string, unknown>,
-    // Set of jtis that revoked_jwts currently contains.
     revokedJtis: new Set<string>(),
-    // Captures the last insert payload into revoked_jwts.
     lastRevokeInsert: null as Record<string, unknown> | null,
   },
 }));
 
 vi.mock('../../src/lib/neonClients', () => {
-  // A single shared client object models every table the three routes touch.
   function from(table: string) {
     if (table === 'device_authorization_codes') {
       return {
@@ -45,7 +26,6 @@ vi.mock('../../src/lib/neonClients', () => {
             single: () => Promise.resolve({ data: state.deviceRecord, error: null }),
           }),
         }),
-        // /token marks the record consumed after minting.
         update: () => ({ eq: () => Promise.resolve({ error: null }) }),
       };
     }
@@ -53,13 +33,11 @@ vi.mock('../../src/lib/neonClients', () => {
       return {
         select: () => ({
           eq: () => ({
-            // device flow profile email enrichment
             maybeSingle: () =>
               Promise.resolve({
                 data: { id: 'user-revoke-1', email: 'revoke@example.com' },
                 error: null,
               }),
-            // kill-switch account_status lookup
             single: () => Promise.resolve({ data: { account_status: 'active' }, error: null }),
           }),
         }),
@@ -99,7 +77,6 @@ vi.mock('../../src/lib/neonClients', () => {
   };
 });
 
-// Imported AFTER the mock so the routers wire up the mocked client.
 const { deviceAuthRouter } = await import('../../src/routes/deviceAuth');
 const { authRouter } = await import('../../src/routes/auth');
 const { authenticateToken } = await import('../../src/middleware/auth');
@@ -111,7 +88,6 @@ function createApp() {
   app.use(express.json());
   app.use('/auth/device', deviceAuthRouter);
   app.use('/api/auth', authRouter);
-  // A protected probe route so we can assert a revoked token is rejected.
   app.get('/protected', createRateLimiter('default'), authenticateToken, (_req, res) => {
     res.json({ ok: true });
   });
@@ -171,17 +147,14 @@ describe('P1-GW-REVOKE: gateway tokens carry jti and can be revoked', () => {
     const app = createApp();
     const token = await mintGatewayToken(app);
 
-    // A request before logout passes the protected route.
     const before = await request(app).get('/protected').set('Authorization', `Bearer ${token}`);
     expect(before.status).toBe(200);
 
-    // Logout revokes the token (and evicts the positive cache entry).
     const logout = await request(app)
       .post('/api/auth/logout')
       .set('Authorization', `Bearer ${token}`);
     expect(logout.body.revoked).toBe(true);
 
-    // The same token is now rejected — revocation is live, not dead code.
     const after = await request(app).get('/protected').set('Authorization', `Bearer ${token}`);
     expect(after.status).toBe(401);
     expect(after.body).toMatchObject({ error: 'Token revoked', code: 'TOKEN_REVOKED' });

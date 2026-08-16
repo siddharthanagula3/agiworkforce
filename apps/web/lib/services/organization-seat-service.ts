@@ -1,35 +1,10 @@
-/**
- * @file organization-seat-service.ts
- *
- * Licensed-seat accounting for organizations.
- *
- * # Where the ceiling actually lives
- *
- * NOT here. `organizations.seats_consumed <= licensed_seats` is a table CHECK
- * (0085_organization_seats_lifecycle.sql) and `seats_consumed` is moved only by
- * AFTER triggers on `organization_members` and `organization_invitations`.
- * Every seat grant therefore serializes on the single organization row and the
- * loser aborts with SQLSTATE 23514.
- *
- * This module exists to (a) READ the seat state for display and (b) translate
- * that 23514 into an actionable 409 instead of a 500. It must never UPDATE
- * `seats_consumed` or `licensed_seats` — the database rejects that from the
- * application role outright.
- *
- * # Client injection contract
- *
- * All functions are USER-CONTEXT and accept `db: DatabaseAdapter`. They never
- * construct their own connection. See lib/services/README.md.
- */
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { createError } from '@/lib/errors';
 import type { OrganizationSeatColumns } from '@/lib/server/neon-types';
 
-/** PostgreSQL `check_violation`. */
 export const PG_CHECK_VIOLATION = '23514';
-/** PostgreSQL `unique_violation`. */
 export const PG_UNIQUE_VIOLATION = '23505';
 
 export interface OrganizationSeatState {
@@ -37,16 +12,6 @@ export interface OrganizationSeatState {
   licensedSeats: number;
   seatsConsumed: number;
   seatsAvailable: number;
-  /**
-   * Honest provenance of `licensedSeats`.
-   *
-   * `billing` — a Stripe subscription is linked to this organization and the
-   * seat quantity came from it.
-   * `unprovisioned` — no subscription is linked yet, so the number is the
-   * migration's behaviour-preserving floor (the member count at apply time,
-   * minimum 1). It can hold the line but cannot grow until the checkout /
-   * webhook path writes `organizations.licensed_seats`.
-   */
   seatSource: 'billing' | 'unprovisioned';
   ownerUserId: string | null;
 }
@@ -65,13 +30,6 @@ function toNumber(value: unknown, fallback: number): number {
   return fallback;
 }
 
-/**
- * Read the seat state for one organization.
- *
- * Returns null when the organization does not exist OR is not visible to the
- * caller's connection — callers must already have proved membership, so a null
- * here is a 404/403 decision for the route, never a reason to skip the check.
- */
 export async function getOrganizationSeatState(
   db: DatabaseAdapter,
   organizationId: string,
@@ -110,14 +68,6 @@ function errorText(error: unknown): string {
   return String(error);
 }
 
-/**
- * True when the failure is the seat ceiling firing.
- *
- * The Neon HTTP driver does not always surface `constraint` on the error, so
- * the constraint name is also matched textually. Both signals are specific to
- * `organizations_seats_within_license`; a generic 23514 from another table is
- * deliberately NOT treated as a seat error.
- */
 export function isSeatCeilingError(error: unknown): boolean {
   const constraintName = 'organizations_seats_within_license';
   if (!error || typeof error !== 'object') return false;
@@ -127,27 +77,15 @@ export function isSeatCeilingError(error: unknown): boolean {
   return errorText(error).includes(constraintName);
 }
 
-/** True when the last-owner constraint trigger rejected the transaction. */
 export function isOwnerlessOrganizationError(error: unknown): boolean {
   return errorText(error).includes('would be left without an owner');
 }
 
-/** True when the at-most-one-owner partial unique index rejected the write. */
 export function isDuplicateOwnerError(error: unknown): boolean {
   if (errorCode(error) !== PG_UNIQUE_VIOLATION) return false;
   return errorText(error).includes('idx_org_members_single_owner');
 }
 
-/**
- * Run a seat-consuming mutation and convert the database's verdicts into
- * actionable HTTP errors.
- *
- * Deliberately NOT a read-then-write: the caller's callback performs the
- * INSERT and the database decides. Two admins racing for the last seat both
- * reach the UPDATE inside the trigger, the second blocks on the organization
- * row lock, re-evaluates the CHECK against the committed value and lands here
- * as a 409.
- */
 export async function withSeatAccountingErrors<T>(operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
@@ -171,13 +109,6 @@ export async function withSeatAccountingErrors<T>(operation: () => Promise<T>): 
   }
 }
 
-/**
- * Explain a seat-reduction refusal.
- *
- * `licensed_seats` is written by billing provisioning, and the same CHECK that
- * blocks over-consumption blocks a downgrade below the occupied count. That
- * must read as an actionable 409, not a 500, wherever it surfaces.
- */
 export function describeSeatReduction(state: OrganizationSeatState, nextSeats: number): string {
   const excess = state.seatsConsumed - nextSeats;
   if (excess <= 0) return '';

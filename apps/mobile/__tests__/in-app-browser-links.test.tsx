@@ -1,18 +1,3 @@
-/**
- * PAR-M39 — every outbound link kicked the user out to Safari.
- *
- * `lib/safeOpenURL.ts` only ever called `Linking.openURL`, which backgrounds
- * the whole app: tapping Help Center, an account-security row, an About link,
- * an assistant markdown link, or a citation dropped the user out of whatever
- * they were reading and made them cold-start back into it.
- *
- * `expo-web-browser` (already a dependency for connector OAuth) presents
- * SFSafariViewController / Custom Tabs inside our process instead. These tests
- * pin the two new chokepoints and the callers that route through them:
- *
- *   - `openInAppBrowser`               — first-party URLs, host allowlist enforced
- *   - `openUntrustedUrlInAppBrowser`   — assistant links / citations, scheme allowlist only
- */
 import { Alert, View } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
@@ -110,8 +95,6 @@ describe('openUntrustedUrlInAppBrowser — assistant links and citations', () =>
     ['file', 'file:///etc/passwd'],
     ['intent', 'intent://attacker.example#Intent;scheme=https;end'],
     ['data', 'data:text/html,<script>alert(1)</script>'],
-    // System-intent handoffs keep their confirmation prompt elsewhere; the
-    // browser sheet must never be the thing that renders them.
     ['mailto', 'mailto:support@example.com'],
     ['tel', 'tel:+15551234567'],
     ['not a url', 'just some text'],

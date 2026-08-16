@@ -1,18 +1,10 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Snapshot test for ProjectHeader as rendered via the ProjectDetailScreen path.
- *
- * Mirrors the pattern in apps/mobile/__tests__/shared-primitives.snapshot.test.tsx.
- * Locks the rendered RN tree so layout drift fires a diff.
- */
 
 import React from 'react';
 import { View } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { summarizeProjectHeader } from '@agiworkforce/types';
 import type { ProjectRecord } from '@agiworkforce/types';
-
-// ── Module mocks ─────────────────────────────────────────────────────────────
 
 jest.mock('@/src/ui/theme', () => {
   const actual = jest.requireActual('@/src/ui/theme/tokens');
@@ -49,8 +41,6 @@ jest.mock('lucide-react-native', () => {
 import { ProjectHeader } from '@/src/features/projects/components/ProjectHeader';
 import { Text } from '@/components/ui/text';
 
-// ── Fixtures ──────────────────────────────────────────────────────────────────
-
 function buildProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
   return {
     id: 'proj_detail_test',
@@ -70,8 +60,6 @@ function buildProject(overrides: Partial<ProjectRecord> = {}): ProjectRecord {
     ...overrides,
   };
 }
-
-// ── Tests ──────────────────────────────────────────────────────────────────────
 
 describe('ProjectDetailScreen — unit snapshots', () => {
   it('locks ProjectHeader tree for a sky-accent local project with last-used label', () => {

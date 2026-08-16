@@ -2,16 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createHash } from 'node:crypto';
 import { NextRequest } from 'next/server';
 
-/**
- * EU AI Act Article 50(2) — synthetic image output must be "marked in a
- * machine-readable format and detectable as artificially generated".
- *
- * The mark has to be produced by the route, not by the client: the bytes leave
- * the product through the Library, a download or a share link, none of which
- * replays client-side React state. So these tests assert on the HTTP response
- * and on what is written to `media_assets`.
- */
-
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -20,8 +10,6 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn().mockReturnValue(null),
   getCorsHeaders: vi.fn().mockReturnValue({}),
   getSecurityHeaders: vi.fn().mockReturnValue({}),
-  // `/api/files/[id]` wraps its handler in this; the real one only copies CORS
-  // headers onto the response, which the two mocks above already stub out.
   withCorsRoute:
     (handler: (...args: unknown[]) => Promise<Response>) =>
     (...args: unknown[]) =>
@@ -114,7 +102,6 @@ const TEST_USER = { userId: 'user-test-id', email: 'test@example.com' };
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 const PRO_SUBSCRIPTION = { status: 'active', plan_tier: 'pro' };
 
-/** 1x1 transparent PNG, so the hash assertion is over real image bytes. */
 const PNG_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
@@ -343,9 +330,6 @@ describe('Article 50(2) — generated image provenance', () => {
   );
 
   it('binds the claim to the bytes when the provider returns a URL instead of base64', async () => {
-    // OpenAI's response shape is either `b64_json` or `url`; the url shape only
-    // materialises its bytes inside the persistence branch, and an empty
-    // content hash there would leave the artefact marked but unbound.
     mockFetch.mockImplementation(async (input: unknown) => {
       const url = typeof input === 'string' ? input : String((input as { url?: string }).url ?? '');
       if (url.includes('api.openai.com')) {
@@ -380,13 +364,6 @@ describe('Article 50(2) — generated image provenance', () => {
   });
 });
 
-/**
- * The generation response is ephemeral. `/api/files/[id]` is how the bytes
- * actually leave the product — it is the URL the generation route hands back
- * (`authenticatedMediaUrl`), what the chat image renderer loads, and what a
- * download hits — so the mark is only real if it survives the round trip
- * through `media_assets.metadata` and comes back out on that response.
- */
 describe('Article 50(2) — the mark survives to the download', () => {
   const ASSET_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -422,8 +399,6 @@ describe('Article 50(2) — the mark survives to the download', () => {
   }
 
   it('re-emits the claim the generation route persisted', async () => {
-    // Round trip: generate, take the exact metadata blob handed to
-    // insertMediaAsset, hand it back as the stored row.
     mockGetSubscription.mockResolvedValue(PRO_SUBSCRIPTION);
     rlsMocks.getUserScopedDb.mockResolvedValue({
       db: {},
@@ -463,8 +438,6 @@ describe('Article 50(2) — the mark survives to the download', () => {
   });
 
   it('serves no marker for an asset that carries no claim', async () => {
-    // Uploads share this route. Marking them would be a false claim, so the
-    // absent-claim path must stay silent rather than default to "true".
     assetMocks.byId.mockResolvedValue(storedRow({ filename: 'notes.png' }));
 
     const response = await GET_FILE(...fileRequest());

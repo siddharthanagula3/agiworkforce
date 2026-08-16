@@ -1,19 +1,4 @@
 #!/usr/bin/env node
-/**
- * Repository-wide model-ID literal guard.
- *
- * Concrete catalog keys, provider wire IDs, and legacy model aliases belong in
- * the model registry. Consumers must resolve them through catalog/routing
- * helpers so a model replacement does not require a repository-wide rewrite.
- * This guard deliberately scans production code, tests, fixtures, snapshots,
- * comments, and documentation. Synthetic fixture IDs are harmless because the
- * token set is derived from the canonical registry inputs rather than from a
- * provider-name regular expression.
- *
- * The only exclusions are the exact authored model-registry inputs and exact
- * generated mirrors emitted by packages/ai/model-registry/scripts/compile.mjs.
- * There are no test, documentation, language, or directory-wide exemptions.
- */
 
 import { execFileSync } from 'node:child_process';
 import { lstatSync, readFileSync, readlinkSync } from 'node:fs';
@@ -33,15 +18,6 @@ const LOCAL_MODEL_CATALOG_PATH = 'packages/platform/local-llm/src/catalog.ts';
 export const SPEECH_ARTIFACT_REGISTRY_PATH =
   'packages/ai/model-registry/catalog/speech-artifacts.json';
 
-/**
- * Exact owner/generated paths permitted to contain concrete model IDs.
- *
- * Authored inputs are the exact hosted-registry files read by compile.mjs plus
- * the on-device catalog that owns local model identities. Generated mirrors
- * are the files written and byte-checked by the hosted-registry compiler.
- * Keeping this list exact prevents a sibling test, script, or hand-maintained
- * file from acquiring an accidental directory-wide exemption.
- */
 export const MODEL_ID_OWNER_PATHS = Object.freeze([
   CURATION_PATH,
   SYNCED_PATH,
@@ -98,20 +74,9 @@ const BINARY_EXTENSIONS = new Set([
   '.zip',
 ]);
 
-// A direct letter/digit makes a candidate part of a longer identifier. Every
-// punctuation character is a boundary because wrappers, dated snapshots,
-// prose periods, mapping colons, shell `:-` defaults, and provider/model routes
-// must not hide concrete IDs, including word-only IDs. Longest-token-first
-// matching below prevents a shorter catalog alias from double-matching a longer
-// known model ID.
 const MODEL_ID_ALPHANUMERIC = /[A-Za-z0-9]/;
 const TOKEN_GROUP_CACHE = new WeakMap();
 
-/**
- * Retired model families are no longer present in canonical metadata, so a
- * catalog-derived token scan cannot remember them. Family-shaped deny rules
- * close that deletion blind spot without pinning a retired concrete model ID.
- */
 export const RETIRED_MODEL_FAMILY_PATTERNS = Object.freeze([
   {
     id: 'concrete-gpt-model-family-literal',
@@ -226,19 +191,6 @@ function addToken(tokenSources, value, source) {
   tokenSources.set(value, sources);
 }
 
-/**
- * Load every concrete ID consumer code could otherwise pin:
- * - canonical model map keys, display names, and explicit id fields;
- * - provider-native apiModelId wire values;
- * - provider defaults/task routes and tier references;
- * - canonicalization keys (legacy model aliases) and their targets;
- * - upstream-synced model keys.
- * - canonical on-device model and runtime preset IDs.
- *
- * Provider aliases are intentionally excluded: they identify providers, not
- * models. Generic routing aliases live in routing-policies.json and likewise
- * are not concrete model IDs.
- */
 export function loadCanonicalModelIdTokens(repoRoot = REPO_ROOT) {
   const curation = readJson(repoRoot, CURATION_PATH);
   const synced = readJson(repoRoot, SYNCED_PATH);
@@ -250,9 +202,6 @@ export function loadCanonicalModelIdTokens(repoRoot = REPO_ROOT) {
     addToken(tokenSources, modelKey, `models.${modelKey}`);
     addToken(tokenSources, model?.id, `models.${modelKey}.id`);
     addToken(tokenSources, model?.apiModelId, `models.${modelKey}.apiModelId`);
-    // Display names are model identities just as much as wire IDs. Matching is
-    // case-sensitive, so an ordinary lowercase word remains prose while the
-    // exact catalog-owned product label cannot be copied into a consumer.
     addToken(tokenSources, model?.name, `models.${modelKey}.name`);
   }
 
@@ -296,11 +245,6 @@ export function loadCanonicalModelIdTokens(repoRoot = REPO_ROOT) {
     );
   }
 
-  // Local speech size aliases can be ordinary prose, so their unique artifact
-  // filenames are the guarded identity. Voice/binary IDs are already
-  // namespace-shaped and safe to guard directly. URLs contain these same
-  // filename/ID tokens, so a copied endpoint is rejected without making host
-  // names or immutable source revisions into model identities.
   for (const [index, artifact] of (speechArtifacts.whisperModels ?? []).entries()) {
     addToken(tokenSources, artifact?.filename, `speechArtifacts.whisperModels.${index}.filename`);
   }
@@ -373,7 +317,6 @@ function hasAlphanumericEdge(text, edgeIndex) {
   return edge !== undefined && MODEL_ID_ALPHANUMERIC.test(edge);
 }
 
-/** Find non-overlapping, boundary-safe concrete model-ID occurrences in text. */
 export function findModelIdOccurrences(text, tokens) {
   const groups = groupTokensByFirstCharacter(tokens);
   const occurrences = [];
@@ -396,9 +339,6 @@ export function findModelIdOccurrences(text, tokens) {
       const leftEdgeIndex = index - 1;
       const rightEdgeIndex = index + candidate.id.length;
       if (hasAlphanumericEdge(text, leftEdgeIndex) || hasAlphanumericEdge(text, rightEdgeIndex)) {
-        // Do not fall back to a shorter alias after a longer known candidate
-        // matched textually. That would misclassify an ordinary extended word
-        // such as `<known-longer-id-prefix>ution` as its shorter alias.
         break;
       }
       matched = candidate;
@@ -455,7 +395,6 @@ function readUtf8Text(filePath) {
   }
 }
 
-/** Scan an explicit file set. Tests use this to prove every file class. */
 export function scanModelIdFiles({ repoRoot = REPO_ROOT, filePaths, tokens }) {
   const violations = [];
   const skippedFiles = [];
@@ -497,10 +436,6 @@ export function scanModelIdFiles({ repoRoot = REPO_ROOT, filePaths, tokens }) {
   return { violations, skippedFiles };
 }
 
-/**
- * Discover tracked plus non-ignored untracked files. Including untracked files
- * closes the local false-green where a clean checkout sees different inputs.
- */
 export function discoverRepositoryFiles(repoRoot = REPO_ROOT) {
   let output;
   try {

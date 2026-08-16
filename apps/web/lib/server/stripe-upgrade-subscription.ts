@@ -52,14 +52,6 @@ function isOwnedCurrentPlanSubscription(
   return resolvePlanTier(subscription.metadata, priceId) === stored.planTier;
 }
 
-/**
- * Resolve the Stripe subscription that owns a paid in-app entitlement.
- *
- * A delayed webhook or legacy row can leave the local subscription ID empty
- * even though the trusted Stripe customer still has a live subscription. Both
- * the preview and charge routes use this same lookup so they cannot disagree
- * and accidentally fall back to a second full-price Checkout subscription.
- */
 export async function resolveStripeSubscriptionForUpgrade(
   stripe: Stripe,
   stored: StoredUpgradeSubscription,

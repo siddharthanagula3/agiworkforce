@@ -40,12 +40,6 @@ interface HealthSignal {
   checks: HealthCheckResult['checks'] | null;
 }
 
-/**
- * Runs the shared health checks in-process. No self-HTTP request: building a
- * fetch URL from request headers (Host / x-forwarded-proto) is a Host-header
- * SSRF vector, so the page calls the same function the /api/health route
- * uses. A timeout guard keeps a slow dependency from stalling the page.
- */
 async function fetchHealth(): Promise<HealthSignal> {
   try {
     const timeout = new Promise<null>((resolve) => {
@@ -61,7 +55,6 @@ async function fetchHealth(): Promise<HealthSignal> {
   }
 }
 
-/** What the live check covers, in the order the check runs them. */
 const COVERED: { key: 'environment' | 'database' | 'stripe'; label: string; what: string }[] = [
   {
     key: 'environment',
@@ -80,7 +73,6 @@ const COVERED: { key: 'environment' | 'database' | 'stripe'; label: string; what
   },
 ];
 
-/** What the live check does NOT cover. Stated so the signal is not over-read. */
 const NOT_COVERED = [
   'Authentication (Clerk)',
   'Object storage (Cloudflare R2)',

@@ -6,19 +6,6 @@ import { useSupportSession } from '../hooks/useSupportSession';
 import { buildAttemptedActions, buildHandoffCitations } from '../lib/support-client';
 import type { SupportTurn } from '../lib/contract';
 
-/**
- * The escalation payload is where two founder requirements meet:
- *
- *  - the human must receive the transcript, the citations and WHAT THE AGENT
- *    ALREADY TRIED, or the "asynchronous channel that DOES get read" is only
- *    half-built and the user repeats themselves; and
- *  - a `secret_once` action result is live credential material that must never
- *    reach the transcript, the escalation email, an audit record or a prompt.
- *
- * The second one is the reason this file exists. It is asserted end-to-end on
- * the real request body, not on an intermediate object.
- */
-
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: (headers: HeadersInit = {}) => Promise.resolve(headers),
   getCsrfToken: () => Promise.resolve('test-csrf'),
@@ -156,7 +143,6 @@ describe('the escalation payload', () => {
     await user.click(screen.getByRole('button', { name: /show me what this does/i }));
     await user.click(await screen.findByRole('button', { name: /yes, do it/i }));
 
-    // The key IS shown to the user, exactly once, in the action card.
     expect(await screen.findByText(LIVE_KEY)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'escalate' }));
@@ -165,8 +151,6 @@ describe('the escalation payload', () => {
     const raw = JSON.stringify(handoffBody());
     expect(raw).not.toContain(LIVE_KEY);
     expect(raw).not.toContain('sk_live_');
-    // And the withholding is explicit rather than a silent omission, so the
-    // human reading the email knows the action completed.
     expect(raw).toContain('Result withheld');
   });
 
@@ -189,7 +173,6 @@ describe('the escalation payload', () => {
     expect(attempted[0]?.action).toBe('regenerate_api_key');
     expect(attempted[0]?.outcome).toBe('succeeded');
 
-    // And the sources the agent showed, so the human starts where it stopped.
     expect(body['citations']).toEqual([{ title: 'API keys', url: '/docs/api-keys' }]);
   });
 
@@ -202,7 +185,6 @@ describe('the escalation payload', () => {
     await user.click(screen.getByRole('button', { name: /show me what this does/i }));
     await screen.findByRole('button', { name: /yes, do it/i });
 
-    // Deliberately do NOT confirm.
     await user.click(screen.getByRole('button', { name: 'escalate' }));
     await screen.findByTestId('handoff');
 
@@ -235,7 +217,6 @@ describe('escalation payload builders', () => {
           kind: 'abstention',
           reason: 'hard_abstain_billing',
           text: 'no',
-          // Same URL as above plus a new one: the human should see two, not three.
           citations: [
             { id: '2', title: 'Docs', url: '/docs' },
             { id: '3', title: 'Refunds', url: '/refund-policy' },

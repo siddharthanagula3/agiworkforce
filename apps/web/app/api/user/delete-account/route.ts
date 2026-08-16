@@ -13,44 +13,8 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 
-/**
- * DELETE /api/user/delete-account
- *
- * Permanently deletes a user's account and all associated data.
- * Requires authenticated session (Bearer token or cookie).
- *
- * The profiles soft-delete is written via Neon parameterized SQL.
- * The auth user removal uses clerkClient().users.deleteUser.
- *
- * This endpoint schedules deletion rather than doing it immediately,
- * giving the user a 24-hour grace window before permanent erasure.
- *
- * PER-24: the erasure the response promises is performed by
- * `GET /api/cron/purge-deleted-accounts`, which runs
- * `lib/server/account-erasure.ts` once `deletion_scheduled_for` has passed.
- * Before that job existed this route's "will be permanently deleted within 24
- * hours" was simply untrue: nothing ever consumed `deletion_scheduled_for`, so
- * conversations, artifacts, memories, settings and every stored R2 object
- * survived indefinitely.
- *
- * HONESTY CONTRACT — do not re-add either claim without the implementation:
- *
- * 1. No confirmation email is sent. There is no transactional email provider
- *    anywhere in this repository (no resend/sendgrid/postmark/mailgun/SES/smtp
- *    dependency or client). This response previously asserted "A confirmation
- *    email has been sent", which was a false statement inside a GDPR Art. 17
- *    flow. When an email provider is wired, send the mail here first, then
- *    restore the sentence.
- * 2. There is no self-serve cancel route. `deletion_requested_at` /
- *    `deletion_scheduled_for` are written here and consumed only by the purge
- *    cron; nothing clears them. The grace window is real (the cron will not act
- *    before `deletion_scheduled_for`), so support can still reverse it, but the
- *    user cannot. Point them at support until a cancel endpoint exists.
- */
-
 export const runtime = 'nodejs';
 
-/** Security headers applied to all responses from this endpoint. */
 const SECURITY_HEADERS = {
   'Content-Security-Policy': "default-src 'none'",
   'X-Content-Type-Options': 'nosniff',
@@ -58,24 +22,15 @@ const SECURITY_HEADERS = {
 
 const PG_UNDEFINED_COLUMN = '42703';
 
-/**
- * The immediate hard-delete below is irreversible, so only ONE failure may
- * reach it: the deployment genuinely has no `deletion_requested_at` /
- * `deletion_scheduled_for` columns. A dropped connection, a statement timeout
- * or a permission error must not be read as "the schema is old" — that turned
- * every transient Neon blip into an unrecoverable erasure.
- */
 function isMissingDeletionColumns(error: unknown): boolean {
   if (!error || typeof error !== 'object') return false;
   return (error as Record<string, unknown>)['code'] === PG_UNDEFINED_COLUMN;
 }
 
 export async function DELETE(request: NextRequest) {
-  // Strict rate limit - this is a destructive action (5 req/min per IP)
   const rateLimitResponse = await withRateLimit(request, 'user-data-delete');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // SECURITY: CSRF protection - account deletion is an irreversible state-changing action
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
@@ -91,28 +46,9 @@ export async function DELETE(request: NextRequest) {
 
   const db = getNeonDb();
 
-  /**
-   * AUDIT-TRAIL-01 — why this event is recorded UNATTRIBUTED.
-   *
-   * `public.delete_user_data(text)` (0020_functions.sql) deletes every
-   * `security_audit_logs` row whose `user_id` matches the erased account. An
-   * `account_deletion_requested` row keyed to that user would therefore be
-   * destroyed by the very flow it records, leaving no evidence the erasure was
-   * ever requested. It is written with `user_id = null` plus a salted,
-   * non-reversible subject reference so the event survives erasure while
-   * carrying no personal identifier — which is also what GDPR Art. 17 wants.
-   *
-   * Consequence, stated honestly: this row does NOT appear in the user's own
-   * "Security activity" panel (that view filters on user_id).
-   */
   const subjectRef = pseudonymizeIdentifier(userId, 'delete-account-subject', 16);
 
   try {
-    // Schedule deletion: set deletion_requested_at. A background job
-    // (`/api/cron/purge-deleted-accounts`) performs the actual erasure once
-    // deletion_scheduled_for has passed. Nothing clears these columns, so the
-    // grace window is support-reversible only — see the HONESTY CONTRACT above
-    // before advertising a self-serve cancel.
     try {
       const scheduledRows = await db.execute(
         `update profiles
@@ -127,9 +63,6 @@ export async function DELETE(request: NextRequest) {
       );
 
       if (scheduledRows === 0) {
-        // The purge cron selects due accounts FROM `profiles`, so a schedule
-        // that matched no profile row is a schedule nothing will ever consume.
-        // Reporting `scheduledFor` here would be the same lie PER-24 removed.
         logger.error({ userId }, 'Account deletion matched no profiles row; nothing was scheduled');
         return NextResponse.json(
           {
@@ -151,24 +84,14 @@ export async function DELETE(request: NextRequest) {
         );
       }
 
-      // Profiles table has no deletion columns on this deployment; the grace
-      // window cannot be recorded, so erase now rather than promise a window
-      // no cron can close.
       logger.warn(
         { userId, error: updateErrMsg },
         'Deletion columns are not provisioned; attempting immediate delete',
       );
 
       try {
-        // PER-24: the immediate path must erase the DATA too, not just the
-        // auth account. Previously it deleted the Clerk user and left every
-        // row and every stored object behind, with no owner left to request
-        // their removal.
         const erasure = await eraseUserAccountData(userId);
         if (!erasure.complete) {
-          // `eraseUserAccountData` deletes table by table and reports what it
-          // got through, so an incomplete run HAS removed data. Claiming
-          // otherwise sent users away believing their account was untouched.
           logger.error({ userId, erasure }, 'Immediate account erasure was incomplete');
           return NextResponse.json(
             {

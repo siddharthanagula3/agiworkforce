@@ -1,15 +1,3 @@
-/**
- * Defense-in-depth validation of RUN_PAGE_ACTIONS at content-script
- * entry-point (C-03 audit 2026-05-19; self-review #5 audit 2026-05-19).
- *
- * SAVE_SHORTCUT already rejects plans containing unknown action types at
- * save time. But shortcuts stored before that fix can still arrive at the
- * executor — `handleRunPageActions` re-validates with
- * validateShortcutActions and rejects the entire plan on any bad entry.
- *
- * Same applies to desktop-bridge-supplied plans forwarded via
- * `syncTabContextWithDesktop` (L-09 audit 2026-05-19).
- */
 
 import { describe, expect, it } from 'vitest';
 import { validateShortcutActions } from '../src/background/policy';
@@ -45,9 +33,6 @@ describe('handleRunPageActions / desktop-bridge plan validation', () => {
   });
 
   it('rejects a plan with one valid + one bad action — fail-closed semantics', () => {
-    // The PRE-fix behavior was to skip unknown actions and run the valid
-    // ones; that was the partial-execute risk. Now: the whole plan
-    // is rejected.
     expect(
       validateShortcutActions([
         { id: 'safe', type: 'get_page_info' },
@@ -57,9 +42,6 @@ describe('handleRunPageActions / desktop-bridge plan validation', () => {
   });
 
   it('rejects a plan that uses browser-tool passthroughs the page cannot run', () => {
-    // These used to pass the gate and then answer "Unsupported page action" at
-    // replay: `executePlannedAction` has no case for them and never had one.
-    // See `shortcut-action-coverage.test.ts` for the mirror contract.
     expect(
       validateShortcutActions([
         { id: '1', type: 'screenshot' },
@@ -72,10 +54,6 @@ describe('handleRunPageActions / desktop-bridge plan validation', () => {
   it('rejects an empty-string action type', () => {
     expect(validateShortcutActions([{ id: '1', type: '' }] as never)).toBe(false);
   });
-
-  // FIX (audit 2026-05-20, §1): per-parameter validation. The legacy gate
-  // only checked the action TYPE; selector/value/url could still smuggle
-  // attacker payloads past the gate.
 
   it('rejects a navigate action with a javascript: url', () => {
     expect(
@@ -92,7 +70,7 @@ describe('handleRunPageActions / desktop-bridge plan validation', () => {
   });
 
   it('rejects a click action with an oversized selector', () => {
-    const huge = '#a' + ' > div'.repeat(500); // way over 1024 chars
+    const huge = '#a' + ' > div'.repeat(500);
     expect(validateShortcutActions([{ id: '1', type: 'click', selector: huge }] as never)).toBe(
       false,
     );

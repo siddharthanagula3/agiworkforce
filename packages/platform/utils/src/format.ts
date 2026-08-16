@@ -75,7 +75,6 @@ export function formatRelativeTime(date: string | number | Date): string {
   if (isNaN(d.getTime())) return '';
   const then = d.getTime();
   const diffMs = then - now;
-  // Derive each unit independently from diffMs to avoid compounding rounding errors.
   const diffSecs = Math.round(diffMs / 1000);
   const diffMins = Math.round(diffMs / 60_000);
   const diffHours = Math.round(diffMs / 3_600_000);

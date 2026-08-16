@@ -40,7 +40,6 @@ function boot(): void {
   const inline = Array.from(parsed.querySelectorAll('script')).find((s) =>
     s.textContent?.includes('acquireVsCodeApi()'),
   );
-  // llm-guardrail-allow: executes repository-owned webview JavaScript in jsdom
   new Function(inline?.textContent ?? '')();
 }
 
@@ -82,7 +81,6 @@ describe('composer popover keyboard support', () => {
     press(menu, 'ArrowUp');
     expect(document.activeElement).toBe(items[0]);
 
-    // Wrapping backwards from the first item is what role="menu" implies.
     press(menu, 'ArrowUp');
     expect(document.activeElement).toBe(items[items.length - 1]);
   });
@@ -106,7 +104,6 @@ describe('composer popover keyboard support', () => {
 
     const items = Array.from(document.querySelectorAll('#plusMenu [role^="menuitem"]'));
     const tabbable = items.filter((i) => i.getAttribute('tabindex') === '0');
-    // Otherwise Tab walks every entry instead of leaving the menu.
     expect(tabbable).toHaveLength(1);
   });
 
@@ -155,8 +152,6 @@ describe('composer popover keyboard support', () => {
   });
 
   it('inherits the editor font family and size', () => {
-    // VSCX-15: a hardcoded stack ignored the user's font size, which is an
-    // accessibility setting rather than a preference.
     const html = renderWebview();
     expect(html).toContain('font-family: var(--vscode-font-family');
     expect(html).toContain('font-size: var(--vscode-font-size');

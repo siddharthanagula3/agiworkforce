@@ -1,13 +1,4 @@
 #!/usr/bin/env node
-/**
- * vsce-package.js — Wrapper that patches minimatch for vsce compatibility.
- *
- * Newer minimatch (v9+/v10+) removed the default export that vsce's compiled
- * CJS code expects. This wrapper monkey-patches require() to add it back,
- * then invokes vsce's programmatic API.
- *
- * Usage: node scripts/vsce-package.js [package|ls] [--no-dependencies] [--out <path>]
- */
 
 function loadVsceWithCompat() {
   const Module = require('module');

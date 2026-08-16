@@ -17,10 +17,6 @@ interface ActiveModeTagsProps {
   onDismiss: (key: string) => void;
 }
 
-/**
- * Tailwind can't dynamically compose class names like `bg-${color}-500/15`,
- * so we use a static mapping that returns the full class strings for each color.
- */
 const COLOR_CLASSES: Record<string, { bg: string; text: string }> = {
   teal: { bg: 'bg-teal-500/15', text: 'text-teal-400' },
   blue: { bg: 'bg-blue-500/15', text: 'text-blue-400' },
@@ -34,9 +30,6 @@ const COLOR_CLASSES: Record<string, { bg: string; text: string }> = {
 
 const DEFAULT_COLOR = { bg: 'bg-muted-foreground/15', text: 'text-muted-foreground' };
 
-/**
- * Maps IntentType strings to ModeTag configurations.
- */
 export const INTENT_TAG_MAP: Record<string, Omit<ModeTag, 'key' | 'autoDetected'>> = {
   search: { label: 'Web Search', color: 'teal', icon: Globe },
   'deep-research': { label: 'Deep Research', color: 'blue', icon: Microscope },
@@ -48,10 +41,6 @@ export const INTENT_TAG_MAP: Record<string, Omit<ModeTag, 'key' | 'autoDetected'
   music: { label: 'Music', color: 'rose', icon: Music },
 };
 
-/**
- * Convert an IntentType to a ModeTag for display.
- * Returns undefined for intent types that don't have a tag mapping (e.g. "chat").
- */
 export function intentToModeTag(
   intent: IntentType,
   autoDetected: boolean = false,

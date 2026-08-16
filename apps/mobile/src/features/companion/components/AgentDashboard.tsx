@@ -50,10 +50,6 @@ import {
 import { ExecutionStream } from '@/src/features/companion/components/ExecutionStream';
 import type { ApprovalRequest, RiskLevel } from '@/types/chat';
 
-// ---------------------------------------------------------------------------
-// Agent Status Icon
-// ---------------------------------------------------------------------------
-
 function AgentStatusIcon({ status }: { status: Agent['status'] }) {
   const colors = useThemeColors();
   switch (status) {
@@ -85,10 +81,6 @@ function getStatusBadgeColor(status: Agent['status']): 'blue' | 'green' | 'red' 
   }
 }
 
-// ---------------------------------------------------------------------------
-// Progress Bar
-// ---------------------------------------------------------------------------
-
 function ProgressBar({ progress }: { progress: number }) {
   const colors = useThemeColors();
   const clamped = Math.max(0, Math.min(100, progress));
@@ -102,14 +94,6 @@ function ProgressBar({ progress }: { progress: number }) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// ETA Calculator
-// ---------------------------------------------------------------------------
-
-/**
- * Estimate remaining time based on elapsed time and progress.
- * Returns a human-readable string or null if not calculable.
- */
 function estimateTimeRemaining(
   startedAt: string,
   progress: number,
@@ -124,7 +108,6 @@ function estimateTimeRemaining(
 
     let fraction = progress / 100;
 
-    // Use step-based rate if available (more accurate)
     if (stepsCompleted != null && totalSteps != null && stepsCompleted > 0 && totalSteps > 0) {
       fraction = stepsCompleted / totalSteps;
     }
@@ -145,10 +128,6 @@ function estimateTimeRemaining(
     return null;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Artifact Icon map
-// ---------------------------------------------------------------------------
 
 function ArtifactIcon({ type }: { type: RunArtifact['type'] }) {
   const colors = useThemeColors();
@@ -182,13 +161,8 @@ function getArtifactTextColor(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Run Artifacts List (compact)
-// ---------------------------------------------------------------------------
-
 interface RunArtifactsProps {
   artifacts: RunArtifact[];
-  /** Max items to show before collapsing */
   maxVisible?: number;
 }
 
@@ -239,10 +213,6 @@ function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Expandable Log View — last N tool calls
-// ---------------------------------------------------------------------------
-
 interface ToolCallLogProps {
   toolCalls: Agent['toolCalls'];
   maxVisible?: number;
@@ -254,7 +224,6 @@ function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
 
   if (toolCalls.length === 0) return null;
 
-  // Show most recent first
   const recent = [...toolCalls].reverse().slice(0, maxVisible);
   const visible = expanded ? recent : recent.slice(0, 3);
 
@@ -304,10 +273,6 @@ function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Risk level config + type icon map
-// ---------------------------------------------------------------------------
-
 const RISK_BORDER_COLORS: Record<RiskLevel, string> = {
   low: 'rgba(16, 185, 129, 0.3)',
   medium: 'rgba(245, 158, 11, 0.3)',
@@ -320,7 +285,6 @@ const RISK_BG_COLORS: Record<RiskLevel, string> = {
   high: 'rgba(239, 68, 68, 0.08)',
 };
 
-// Status colours differ per theme, so this is derived rather than frozen.
 function riskTextColor(risk: RiskLevel, colors: ReturnType<typeof useThemeColors>): string {
   switch (risk) {
     case 'low':
@@ -345,10 +309,6 @@ const TYPE_ICONS: Record<ApprovalRequest['type'], typeof Terminal> = {
   data_modification: Database,
   other: HelpCircle,
 };
-
-// ---------------------------------------------------------------------------
-// Approval Card (inline in agent card) — Task 3: richer preview
-// ---------------------------------------------------------------------------
 
 interface ApprovalCardProps {
   request: ApprovalRequest;
@@ -480,10 +440,6 @@ function ApprovalCard({ request }: ApprovalCardProps) {
     </Animated.View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Agent Card
-// ---------------------------------------------------------------------------
 
 interface AgentCardProps {
   agent: Agent;
@@ -618,7 +574,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                   <Text className="text-xs text-amber-400 font-medium">Pause</Text>
                 </Pressable>
               ) : (
-                /* waiting status — show resume */
                 <Pressable
                   onPress={() => handleCommand('resume')}
                   className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-md"
@@ -755,10 +710,6 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
   );
 }
 
-// ---------------------------------------------------------------------------
-// File Results Section — aggregates all file artifacts across agents
-// ---------------------------------------------------------------------------
-
 interface FileResultsSectionProps {
   agents: Agent[];
 }
@@ -767,7 +718,6 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
   const colors = useThemeColors();
   const [expanded, setExpanded] = useState(true);
 
-  // Collect all file artifacts from all agents
   const fileArtifacts = agents.flatMap((a) =>
     (a.artifacts ?? [])
       .filter((art) => art.type === 'file_created' || art.type === 'file_modified')
@@ -835,10 +785,6 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
     </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Task Results Section — completed task summaries with expandable details
-// ---------------------------------------------------------------------------
 
 interface TaskResultsSectionProps {
   agents: Agent[];
@@ -954,10 +900,6 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Agent Dashboard (main export)
-// ---------------------------------------------------------------------------
-
 export function AgentDashboard() {
   const colors = useThemeColors();
   const agents = useAgentStore((s) => s.agents);
@@ -979,7 +921,6 @@ export function AgentDashboard() {
 
   const handleAgentPress = useCallback(
     (agentId: string) => {
-      // Toggle selection
       selectAgent(selectedAgentId === agentId ? null : agentId);
     },
     [selectedAgentId, selectAgent],
@@ -1109,13 +1050,6 @@ export function AgentDashboard() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Calculate a human-readable time elapsed string from a start ISO date.
- */
 function getTimeElapsed(startedAt: string): string {
   try {
     const start = new Date(startedAt).getTime();
@@ -1143,7 +1077,6 @@ function getTimeElapsed(startedAt: string): string {
   }
 }
 
-// Re-export for use in detail screen
 export {
   RunArtifactsList,
   ToolCallLog,

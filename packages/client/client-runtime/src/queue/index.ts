@@ -1,21 +1,3 @@
-/**
- * @agiworkforce/client-runtime/queue
- *
- * Per-surface priority send pipeline. See `messageQueueManager.ts` for the
- * factory + design rationale, `types.ts` for the public surface.
- *
- * Usage:
- * ```ts
- * import { createMessageQueue, createWebStorageAdapter } from '@agiworkforce/client-runtime';
- *
- * const queue = createMessageQueue({
- *   storage: createWebStorageAdapter('agi.queue.web', window.localStorage),
- * });
- *
- * queue.enqueue({ value: 'hello', mode: 'prompt' });
- * const cmd = queue.dequeue();
- * ```
- */
 
 export {
   createMessageQueue,

@@ -96,11 +96,6 @@ function exchange(overrides?: {
   ];
 }
 
-/**
- * A typed send spy: the replay assertions read `mock.calls[0][2]` (the
- * `SendMessageOptions` bag), which an untyped `vi.fn()` erases to an empty
- * tuple.
- */
 function makeSendSpy() {
   return vi.fn(
     async (_conversationId: string, _content: string, _options?: SendMessageOptions) => {},
@@ -139,13 +134,11 @@ describe('useChat — regenerate (DES-C04)', () => {
     await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
     expect(sendMessage.mock.calls[0]?.[1]).toBe('What is the plan?');
 
-    // The stale exchange is gone from the transcript and a fresh pair replaced it.
     const transcript = useChatStore.getState().messagesByConversation[CONVERSATION_ID] ?? [];
     expect(transcript.map((m) => m.id)).not.toContain('assistant-1');
     expect(transcript).toHaveLength(2);
     expect(transcript[0]?.content).toBe('What is the plan?');
 
-    // Durable rows are dropped only AFTER the replacement send has run.
     await waitFor(() => expect(deleteMessages).toHaveBeenCalledOnce());
     expect(deleteMessages).toHaveBeenCalledWith(CONVERSATION_ID, ['user-1', 'assistant-1']);
   });

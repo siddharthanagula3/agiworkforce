@@ -3,9 +3,6 @@ import type { Artifact } from '../lib/types';
 import { useArtifactStore, type ArtifactViewMode } from '../stores/artifactStore';
 import { useUIStore } from '../stores/uiStore';
 
-/**
- * Shared artifact workspace state for the chat package.
- */
 export function useArtifact() {
   const isOpen = useUIStore((state) => state.activeRightPanel === 'artifact');
   const panelWidth = useUIStore((state) => state.artifactPanelWidth);

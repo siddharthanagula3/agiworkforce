@@ -94,10 +94,6 @@ function uniqueSkills(skills: readonly Skill[]): Skill[] {
   return Array.from(byName.values()).sort((left, right) => left.name.localeCompare(right.name));
 }
 
-/**
- * Format only display-safe catalog metadata for the model. Skill content and
- * host locations remain withheld until a real `skill.load` call executes.
- */
 export function formatSkillsForToolPrompt(
   skills: readonly Skill[],
   options: FormatSkillsForToolPromptOptions = {},
@@ -174,7 +170,6 @@ function boundedResult(result: SkillToolResult, context: SkillToolRuntimeContext
   if (byteLength(result.content) <= limit) return result;
   const message = 'Skill output exceeded the safe response limit and was not returned.';
   return {
-    // This fallback is ASCII, so character slicing is byte-exact.
     content: message.slice(0, limit),
     isError: true,
     code: 'skill_output_too_large',
@@ -200,7 +195,6 @@ function fenceSkillBody(skill: Skill): string {
   ].join('\n');
 }
 
-/** Execute the model-facing Skill capability against an already-resolved catalog. */
 export function executeSkillTool(
   skills: readonly Skill[],
   args: Record<string, unknown>,
@@ -226,8 +220,6 @@ export function executeSkillTool(
         description: oneLine(skill.description),
         source: skill.source,
         available: isSkillAvailable(skill, context),
-        // Integrity identity travels with the catalog entry so a caller can
-        // compare what it listed against what a later load actually returned.
         version: skill.version ?? null,
         contentHash: skill.contentHash,
         treeHash: skill.treeHash ?? null,

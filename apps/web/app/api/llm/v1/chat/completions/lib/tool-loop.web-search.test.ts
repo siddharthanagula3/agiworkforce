@@ -1,34 +1,14 @@
-/**
- * Integration test: web_search (WP4 generic tool) through the REAL tool-loop
- * dispatch. Mirrors tool-loop.url-fetch.test.ts's pattern exactly.
- *
- * Proves the full agentic path with mocked HTTP + provider:
- *   model emits a web_search tool_call → the loop executes the real
- *   executeWebSearch (fetch mocked, hitting Perplexity's Search API shape) →
- *   the tool result returns to the model on the next step → a cumulative
- *   x_search_results source event is emitted in the web_search shape (NO
- *   `tool` field, snippet mapped to encrypted_content — matching
- *   research-loop.ts's SourceAggregator, NOT fetchSourcesEvent's
- *   tool:'url_fetch' shape) → the final answer streams and terminates with
- *   [DONE].
- */
 
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 
-// DNS mock for the third test's url_fetch call — its SSRF guard
-// (assertResolvedPublicHostname) does a real node:dns/promises.lookup;
-// mirrors tool-loop.url-fetch.test.ts's setup exactly.
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 vi.mock('node:dns/promises', () => ({
   default: { lookup: dnsMocks.lookup },
   lookup: dnsMocks.lookup,
 }));
 
-// Mock the table-driven adapter dispatch seam the loop calls per step:
-// buildToolLoopStream(provider, processed, stepRequest, responseModel, sink)
-// — the same seam tool-loop.url-fetch.test.ts mocks.
 const factoryMocks = vi.hoisted(() => ({ streamRequest: vi.fn() }));
 vi.mock('./tool-loop-anthropic', () => ({
   buildToolLoopStream: factoryMocks.streamRequest,
@@ -55,7 +35,6 @@ function agentEvents(output: string): AgentEventEnvelope[] {
     });
 }
 
-/** Build a provider SSE ReadableStream from data lines. */
 function sseStream(events: unknown[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const payload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') + 'data: [DONE]\n\n';
@@ -130,10 +109,6 @@ function makeProcessed(tools: unknown[], options: { freeTrial?: boolean } = {}):
   return {
     provider: 'xai',
     requestedModel: 'test-model',
-    // The loop reads `chatRequest` from step 2 onward (tool_choice relaxation),
-    // so a fixture without one crashed every multi-step case in this file with
-    // "Cannot read properties of undefined (reading 'tool_choice')" — the tests
-    // never reached their assertions. Only the one test that set it by hand ran.
     chatRequest: {
       model: 'test-model',
       messages: [{ role: 'user', content: 'What happened in the news today?' }],
@@ -206,19 +181,15 @@ describe('tool-loop web_search integration', () => {
       processed.llmRequest.tool_choice = 'required';
       const output = await collect(runToolLoop(processed, { approvalMode: 'auto' }));
 
-      // 1. Timeline: running with the "Searching the web" phrase, then completed.
       expect(output).toContain('"x_tool_status"');
       expect(output).toContain('"name":"web_search"');
       expect(output).toContain('"status_phrase":"Searching the web"');
       expect(output).toContain('"status":"completed"');
 
-      // 2. Tool result event with the formatted search results.
       expect(output).toContain('"x_tool_result"');
       expect(output).toContain('Today in the news');
       expect(output).toContain('news.example/today');
 
-      // 3. Source joined the WEB_SEARCH citations flow — NOT url_fetch's shape:
-      //    no `tool` field, snippet mapped to encrypted_content.
       expect(output).toContain('"x_search_results"');
       expect(output).not.toContain('"tool":"url_fetch"');
       expect(output).toContain('"type":"web_search_result"');
@@ -227,9 +198,6 @@ describe('tool-loop web_search integration', () => {
       expect(output).toContain('"encrypted_content":"A summary of the top stories."');
       expect(output).toContain('"position":1');
 
-      // Search is mandatory only for the first provider step. Once the real
-      // result is appended, the provider must be free to synthesize the final
-      // cited answer instead of being trapped in an endless required-tool loop.
       expect(factoryMocks.streamRequest.mock.calls[0]?.[2]).toMatchObject({
         tool_choice: 'required',
       });
@@ -252,15 +220,10 @@ describe('tool-loop web_search integration', () => {
         ],
       });
 
-      // 4. Final answer streamed and the stream terminated — NOT via x_stream_error
-      //    (that path is turn-terminating and reserved for whole-provider-call
-      //    failures, not a single tool's result).
       expect(output).not.toContain('"x_stream_error"');
       expect(output).toContain("Here's what happened today. [1]");
       expect(output).toContain('data: [DONE]');
 
-      // 5. The real Perplexity Search API call was made exactly once, with the
-      //    model's query and the configured key.
       expect(fetchMock).toHaveBeenCalledTimes(1);
       const [calledUrl, init] = fetchMock.mock.calls[0]!;
       expect(calledUrl).toBe('https://api.perplexity.ai/search');
@@ -272,8 +235,6 @@ describe('tool-loop web_search integration', () => {
         'Bearer pplx-test-key',
       );
 
-      // 6. The second model call received the tool result message so the model
-      //    could ground its answer.
       const secondRequest = factoryMocks.streamRequest.mock.calls[1]?.[2] as {
         messages: Array<{ role: string; content: string; tool_call_id?: string }>;
       };
@@ -318,8 +279,6 @@ describe('tool-loop web_search integration', () => {
   });
 
   it(`stops searching after ${WEB_SEARCH_MAX_CALLS_PER_TURN} calls in one turn and tells the model to answer from what it has`, async () => {
-    // One more search step than the budget allows, then a final answer. The
-    // over-budget step must never reach the search backend.
     for (let i = 0; i < WEB_SEARCH_MAX_CALLS_PER_TURN + 1; i++) {
       factoryMocks.streamRequest.mockResolvedValueOnce(
         toolCallStream('web_search', { query: `query ${i}` }, `call_web_search_budget_${i}`),
@@ -340,12 +299,8 @@ describe('tool-loop web_search integration', () => {
         runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
       );
 
-      // The backend ran exactly the budgeted number of times — the extra call
-      // was refused locally, not passed through and paid for.
       expect(fetchMock).toHaveBeenCalledTimes(WEB_SEARCH_MAX_CALLS_PER_TURN);
       expect(output).toContain('Search budget reached');
-      // Refusal is a normal result, not an error: the turn keeps going and
-      // still produces an answer.
       expect(output).not.toContain('"x_stream_error"');
       expect(output).toContain('Answering with what I have.');
       expect(output).toContain('data: [DONE]');
@@ -379,9 +334,6 @@ describe('tool-loop web_search integration', () => {
       expect(output).not.toContain('"x_stream_error"');
       expect(fetchMock).not.toHaveBeenCalled();
 
-      // Loop continued to a second model call with the error fed back — proves
-      // this is the recoverable tool-result path, not the turn-terminating
-      // provider-error path.
       expect(factoryMocks.streamRequest).toHaveBeenCalledTimes(2);
       const secondRequest = factoryMocks.streamRequest.mock.calls[1]?.[2] as {
         messages: Array<{ role: string; content: string }>;
@@ -421,7 +373,6 @@ describe('tool-loop web_search integration', () => {
         runToolLoop(makeProcessed([webSearchToolDef()]), { approvalMode: 'auto' }),
       );
 
-      // Two independent x_search_results events: one tagged url_fetch, one untagged.
       const events = output
         .split('\n\n')
         .filter((l) => l.startsWith('data: ') && l.includes('x_search_results'))

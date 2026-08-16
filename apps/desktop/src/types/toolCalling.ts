@@ -256,18 +256,8 @@ export interface ToolRegistryEntry {
   average_duration_ms?: number;
 }
 
-// ============================================
-// Tool Streaming Types
-// ============================================
-
-/**
- * Output chunk types for streaming tool output
- */
 export type OutputChunkType = 'stdout' | 'stderr' | 'log' | 'data' | 'binary';
 
-/**
- * Tool stream event types - matches Rust ToolStreamEvent enum
- */
 export type ToolStreamEventType =
   | 'started'
   | 'progress'
@@ -276,17 +266,11 @@ export type ToolStreamEventType =
   | 'error'
   | 'cancelled';
 
-/**
- * Base payload for tool stream events
- */
 export interface ToolStreamEventBase {
   type: ToolStreamEventType;
   tool_id: string;
 }
 
-/**
- * Tool execution started event
- */
 export interface ToolStreamStartedEvent extends ToolStreamEventBase {
   type: 'started';
   tool_name: string;
@@ -294,21 +278,14 @@ export interface ToolStreamStartedEvent extends ToolStreamEventBase {
   estimated_duration_ms?: number;
 }
 
-/**
- * Tool execution progress event
- */
 export interface ToolStreamProgressEvent extends ToolStreamEventBase {
   type: 'progress';
-  /** Progress value between 0.0 and 1.0 */
   progress: number;
   message?: string;
   bytes_processed?: number;
   bytes_total?: number;
 }
 
-/**
- * Tool output chunk event (for streaming output)
- */
 export interface ToolStreamOutputChunkEvent extends ToolStreamEventBase {
   type: 'output_chunk';
   chunk: string;
@@ -316,18 +293,12 @@ export interface ToolStreamOutputChunkEvent extends ToolStreamEventBase {
   is_final: boolean;
 }
 
-/**
- * Tool execution completed event
- */
 export interface ToolStreamCompletedEvent extends ToolStreamEventBase {
   type: 'completed';
   result: unknown;
   duration_ms: number;
 }
 
-/**
- * Tool execution error event
- */
 export interface ToolStreamErrorEvent extends ToolStreamEventBase {
   type: 'error';
   error: string;
@@ -336,18 +307,12 @@ export interface ToolStreamErrorEvent extends ToolStreamEventBase {
   retryable: boolean;
 }
 
-/**
- * Tool execution cancelled event
- */
 export interface ToolStreamCancelledEvent extends ToolStreamEventBase {
   type: 'cancelled';
   reason?: string;
   duration_ms: number;
 }
 
-/**
- * Union type for all tool stream events
- */
 export type ToolStreamEvent =
   | ToolStreamStartedEvent
   | ToolStreamProgressEvent
@@ -356,9 +321,6 @@ export type ToolStreamEvent =
   | ToolStreamErrorEvent
   | ToolStreamCancelledEvent;
 
-/**
- * Payload wrapper for tool stream events (matches Rust ToolStreamEventPayload)
- */
 export interface ToolStreamEventPayload {
   event: ToolStreamEvent;
   timestamp: string;
@@ -366,9 +328,6 @@ export interface ToolStreamEventPayload {
   agent_id?: string;
 }
 
-/**
- * State for tracking a streaming tool execution
- */
 export interface ToolStreamState {
   tool_id: string;
   tool_name: string;
@@ -387,14 +346,8 @@ export interface ToolStreamState {
   retryable?: boolean;
 }
 
-/**
- * Map of active tool streams by tool_id
- */
 export type ToolStreamMap = Map<string, ToolStreamState>;
 
-/**
- * Helper to create initial tool stream state
- */
 export function createToolStreamState(
   event: ToolStreamStartedEvent,
   timestamp: string,
@@ -410,9 +363,6 @@ export function createToolStreamState(
   };
 }
 
-/**
- * Helper to update tool stream state from an event
- */
 export function updateToolStreamState(
   state: ToolStreamState,
   event: ToolStreamEvent,

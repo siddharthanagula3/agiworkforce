@@ -7,25 +7,14 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { withErrorHandler } from '@/lib/error-handler';
 import { requireAdmin } from '@/lib/auth-guards';
 
-/**
- * Debug endpoint to check LLM provider configuration
- * Only accessible in development or by authenticated admins
- *
- * GET /api/debug/llm-status
- */
 async function handleGetLlmStatus(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'default');
   if (rateLimitResponse) return rateLimitResponse;
-  // Only allow in development or for canonical PLATFORM admins. The previous
-  // check accepted any 'owner'/'admin' of any organization_members row, so a user
-  // who created their own org (and is its owner) could read platform LLM provider
-  // configuration. requireAdmin gates on the platform role (Clerk metadata).
   const isDev = process.env.NODE_ENV === 'development';
   if (!isDev) {
     await requireAdmin(request);
   }
 
-  // Provider configuration check
   const providers = [
     { name: 'openai', envKey: 'OPENAI_API_KEY', baseUrlKey: 'OPENAI_BASE_URL' },
     { name: 'anthropic', envKey: 'ANTHROPIC_API_KEY', baseUrlKey: 'ANTHROPIC_BASE_URL' },
@@ -52,13 +41,11 @@ async function handleGetLlmStatus(request: NextRequest) {
     };
   }
 
-  // Environment info (safe subset only)
   const envInfo = {
     NODE_ENV: process.env['NODE_ENV'],
     VERCEL_ENV: process.env['VERCEL_ENV'] || null,
   };
 
-  // Log detailed info server-side only
   logger.info({ providerStatus: status, envInfo }, 'LLM status check');
 
   return NextResponse.json({

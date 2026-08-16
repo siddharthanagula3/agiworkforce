@@ -16,8 +16,8 @@ function assistantMessage(overrides: Record<string, unknown> = {}) {
 
 describe('isContinuableFinishReason', () => {
   it('accepts token-cap truncation reasons from both wire shapes', () => {
-    expect(isContinuableFinishReason('length')).toBe(true); // OpenAI wire
-    expect(isContinuableFinishReason('max_tokens')).toBe(true); // legacy Anthropic web wire
+    expect(isContinuableFinishReason('length')).toBe(true);
+    expect(isContinuableFinishReason('max_tokens')).toBe(true);
   });
 
   it('accepts the client-only user-stopped marker', () => {
@@ -55,8 +55,6 @@ describe('isMessageContinuable', () => {
     expect(isMessageContinuable(assistantMessage({ metadata: { finishReason: 'stop' } }))).toBe(
       false,
     );
-    // No recorded finish reason at all (e.g. legacy persisted messages) — no
-    // fake availability.
     expect(isMessageContinuable(assistantMessage({ metadata: {} }))).toBe(false);
     expect(isMessageContinuable(assistantMessage({ metadata: undefined }))).toBe(false);
   });

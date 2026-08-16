@@ -1,10 +1,3 @@
-/**
- * CanvasContainer
- *
- * Full canvas workspace: ArtifactList on the left + CanvasPanel on the right.
- * Renders as a fixed right-side panel (slide-in from right).
- * Used in AppLayout like the AgentTaskPanel.
- */
 
 import { Code2, X } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
@@ -29,7 +22,6 @@ export function CanvasContainer({ onClose, onFixBug }: CanvasContainerProps) {
   const activeArtifact =
     activeArtifactId != null ? artifacts.find((a) => a.id === activeArtifactId) : undefined;
 
-  // Decide layout: list only, or list + panel
   const showPanel = isPanelOpen && activeArtifact != null;
 
   return (

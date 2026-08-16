@@ -19,9 +19,6 @@ function assertClaimedScope(scope: ClaimedUserScope): void {
 }
 
 async function bindClaimedScope(db: DatabaseAdapter, scope: ClaimedUserScope): Promise<void> {
-  // The service adapter is privileged so the scheduler can discover due work
-  // across tenants. Once a row has been claimed, return to the ordinary
-  // NON-BYPASSRLS role before reading or writing anything for that owner.
   await db.execute('set local role app_rls');
   await db.query(
     `select set_config('request.jwt.claim.sub', $1, true),
@@ -30,16 +27,6 @@ async function bindClaimedScope(db: DatabaseAdapter, scope: ClaimedUserScope): P
   );
 }
 
-/**
- * Re-enter RLS from a trusted background row claim.
- *
- * Unlike request-scoped `withUser(jwt)`, a cron worker has no user JWT to
- * verify. Its authority is the `(user_id, organization_id)` pair returned by
- * the privileged claim query. Every adapter operation opens a short
- * transaction, binds that exact pair, switches to `app_rls`, and clears the
- * context at commit. Provider calls therefore never hold a database
- * transaction open and cannot accidentally persist in service context.
- */
 export function createClaimedUserScopedDb(
   serviceDb: DatabaseAdapter,
   scope: ClaimedUserScope,
@@ -67,7 +54,6 @@ export function createClaimedUserScopedDb(
     },
     withOrg: (organizationId: string | null) =>
       createClaimedUserScopedDb(serviceDb, { ...scope, organizationId }),
-    // The service adapter owns the shared pool; scoped wrappers never dispose it.
     dispose: async () => {},
   };
 }

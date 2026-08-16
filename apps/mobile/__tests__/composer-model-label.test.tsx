@@ -1,28 +1,7 @@
-/**
- * PAR-M19 — the model label on the composer's control row.
- *
- * Two failures this pins, both of which shipped before:
- *
- * 1. The label must render the CATALOG DISPLAY NAME. `model-picker/service`
- *    ends its lookup with `?? id`, so a selection the catalog no longer knows
- *    renders a raw wire id — which is what several surfaces were caught doing.
- *
- * 2. The muted effort suffix must be the effort the next turn will ACTUALLY
- *    carry. It is resolved through the same helpers as the send path
- *    (`getModelEffortOptions` + `resolveTurnEffort`, chatExecutionStore), so a
- *    model with no effort axis — or a stale effort it does not support, which
- *    the send path silently drops — renders no suffix rather than advertising a
- *    setting that will never be applied.
- *
- * Deliberately runs against the real catalog and the real stores: model ids are
- * derived from the catalog rather than hardcoded, so this keeps passing across
- * model renames and fails when the effort metadata really changes.
- */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
-// The only mock: which conversation is open. Everything else is real.
 let mockCurrentConversationId: string | null = null;
 jest.mock('@/stores/chatStore', () => ({
   useChatStore: (selector: (s: { currentConversationId: string | null }) => unknown) =>
@@ -43,7 +22,6 @@ import { useTierStore } from '@/src/features/billing/store';
 const tier = useTierStore.getState().tier;
 const catalog = getModelListForCloudAccess(true, tier);
 
-/** A model whose display name is a real name, not the id fallback. */
 function isNamed(id: string): boolean {
   return getShortDisplayName(id, tier) !== id;
 }
@@ -67,8 +45,6 @@ describe('composer model label', () => {
   });
 
   it('has catalog models to exercise both effort shapes', () => {
-    // A guard, not a formality: if the catalog stops carrying either shape the
-    // assertions below would silently stop testing anything.
     expect(effortModel).toBeDefined();
     expect(plainModel).toBeDefined();
   });
@@ -116,8 +92,6 @@ describe('composer model label', () => {
 
   it('renders no effort suffix for a model with no effort axis', () => {
     useModelStore.setState({ selectedModel: plainModel!.id });
-    // A stale effort left over from a previous model: the send path drops it,
-    // so the label must not claim it either.
     useAgentControlStore.getState().setProjectDefault('__default__', { effort: 'high' });
 
     const { getByText, queryByText } = renderLabel();

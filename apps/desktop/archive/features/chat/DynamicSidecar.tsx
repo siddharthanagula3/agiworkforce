@@ -45,7 +45,6 @@ import { ArtifactRenderer } from './ArtifactRenderer';
 import { DiffViewer } from './Sidecar/DiffViewer';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 
-// Lazy-loaded sidecar panels
 const LazyGitPanel = lazy(() =>
   import('@/features/git/GitPanel').then((m) => ({ default: m.GitPanel })),
 );
@@ -194,7 +193,6 @@ const headerIconMap: Record<Exclude<DynamicPanelType, null>, React.ReactNode> = 
   'dynamic-canvas': <Braces className="h-4 w-4 text-rose-400" />,
 };
 
-// AUDIT-005-018 fix: Separate component to handle video autoPlay with error handling
 function VideoPanel({ src, title }: { src?: string; title?: string }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [autoPlayFailed, setAutoPlayFailed] = useState(false);
@@ -203,15 +201,11 @@ function VideoPanel({ src, title }: { src?: string; title?: string }) {
     const video = videoRef.current;
     if (!video || !src) return;
 
-    // AUDIT-005-018 fix: Handle autoPlay promise rejection
-    // Browsers may block autoplay due to various policies
     const attemptAutoPlay = async () => {
       try {
         await video.play();
         setAutoPlayFailed(false);
       } catch (err) {
-        // AutoPlay was blocked - this is expected behavior in many browsers
-        // The video will still be playable via controls
         console.debug('[DynamicSidecar] Video autoPlay was blocked:', err);
         setAutoPlayFailed(true);
       }
@@ -279,21 +273,16 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
 }) => {
   const [isMinimized, setIsMinimized] = useState(defaultMinimized);
 
-  // AUDIT-SIDECAR-082 fix: Subscribe to store for live artifact updates
-  // Move hooks to top level to comply with rules of hooks
   const { messages } = useUnifiedChatStore(
     useShallow((state) => ({
       messages: state.messages,
     })),
   );
 
-  // Get IDs from payload for preview mode
   const artifactId = payload?.['artifactId'] as string | undefined;
   const messageId = payload?.['messageId'] as string | undefined;
 
-  // Find the live artifact from the store by resolving IDs
   const liveArtifact = useMemo(() => {
-    // First try to find by specific artifactId if provided
     if (artifactId) {
       for (const msg of messages) {
         const artifacts = msg.artifacts || [];
@@ -304,14 +293,12 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
       }
     }
 
-    // Fall back to finding by messageId and getting the latest artifact
     if (messageId) {
       const message = messages.find((m) => m.id === messageId);
       if (message) {
         const artifacts = message.artifacts || [];
         const metadataArtifacts = (message.metadata?.artifacts as Artifact[] | undefined) || [];
 
-        // Return the latest artifact (most recently updated)
         const allArtifacts = [...artifacts, ...metadataArtifacts];
         if (allArtifacts.length > 0) {
           return allArtifacts[allArtifacts.length - 1];
@@ -322,7 +309,6 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
     return null;
   }, [artifactId, messageId, messages]);
 
-  // Prefer live artifact from store, fall back to legacy static payload (for backward compatibility)
   const legacyArtifact = payload?.['artifact'] as Artifact | undefined;
   const previewArtifact = liveArtifact || legacyArtifact;
 
@@ -412,7 +398,6 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
         );
 
       case 'preview': {
-        // Use pre-computed values from top-level hooks
 
         if (previewArtifact) {
           return (
@@ -425,7 +410,6 @@ export const DynamicSidecar: React.FC<DynamicSidecarProps> = ({
           );
         }
 
-        // Fall back to content-based rendering
         if (typeof payload?.['content'] === 'string') {
           return (
             <div className="h-full overflow-auto rounded-lg border border-white/10 bg-black/30 p-4">

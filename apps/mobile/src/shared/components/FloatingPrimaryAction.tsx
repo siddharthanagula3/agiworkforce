@@ -5,19 +5,10 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { BOTTOM_SEARCH_BAR_HEIGHT, BOTTOM_SEARCH_BAR_MARGIN } from './BottomSearchBar';
 
-/** Pill height. Comfortably above the 44pt iOS minimum touch target. */
 export const FLOATING_PRIMARY_ACTION_HEIGHT = 48;
 
-/** Gap between the pill and the search bar it stacks on top of. */
 export const FLOATING_PRIMARY_ACTION_GAP = 12;
 
-/**
- * `contentContainerStyle.paddingBottom` for a list that sits underneath both a
- * `FloatingPrimaryAction` and a `BottomSearchBar`, so the last row can always
- * be scrolled clear of the pill overlaying it. The safe-area inset is NOT part
- * of this figure: the search bar below is in normal flow and already absorbs
- * it, and adding it twice leaves a visible dead band.
- */
 export const FLOATING_PRIMARY_ACTION_LIST_PADDING =
   BOTTOM_SEARCH_BAR_MARGIN +
   BOTTOM_SEARCH_BAR_HEIGHT +
@@ -25,16 +16,6 @@ export const FLOATING_PRIMARY_ACTION_LIST_PADDING =
   FLOATING_PRIMARY_ACTION_HEIGHT +
   12;
 
-/**
- * The floating labelled create pill shared by every list screen.
- *
- * Both references give a list its primary create action as a labelled pill
- * floating above the content — never a small unlabelled square in the header
- * (Projects shipped a 32×32 `[+]`, under the 44pt iOS minimum). It is pinned
- * above the `BottomSearchBar` rather than over it: the two controls share the
- * bottom-right corner, and the pill renders clipped behind the field without
- * the offset below.
- */
 export function FloatingPrimaryAction({
   label,
   icon: Icon,
@@ -45,7 +26,6 @@ export function FloatingPrimaryAction({
   label: string;
   icon: LucideIcon;
   onPress: () => void;
-  /** Defaults to `label`; pass one only when the spoken name should differ. */
   accessibilityLabel?: string;
   testID?: string;
 }) {

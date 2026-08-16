@@ -11,7 +11,6 @@ export interface WorkspaceMenuItemsProps {
   onManage: () => void;
 }
 
-/** Account-menu workspace selector shared by Chat and every secondary shell. */
 export function WorkspaceMenuItems({ onManage }: WorkspaceMenuItemsProps) {
   const overview = useOrganizationOverview();
   const switchWorkspace = useSwitchWorkspace();

@@ -1,14 +1,3 @@
-/**
- * options.ts — AGI extension options page (W5-05).
- *
- * Sections:
- *  - Permissions: task-notification toggle, approved sites allowlist
- *  - Account: log out
- *  - Shortcuts: keyboard shortcut reference
- *  - Help: links to the Help center, docs and support routes on the web app
- *
- * Styles injected via Constructable Stylesheets (CSP-compliant, same pattern as side_panel.ts).
- */
 
 import { getExtensionTokensCssAuto } from './tokens';
 import { clearAuthToken, getAuthToken } from './features/cloud-bridge/freeTrialClient';
@@ -24,8 +13,6 @@ import { SITE_ALLOWLIST_STORAGE_KEY } from './background/policy';
 const API_KEY_STORAGE_KEY = 'agi_api_key';
 const AUTOFILL_PROFILE_KEY = 'agi_autofill_profile';
 const DEV_BEARER_KEY = 'agi_dev_bearer_token';
-
-// ── Constructable Stylesheets (no <style> tag created) ──────────────────────
 
 function injectStyles(): void {
   const sheet = new CSSStyleSheet();
@@ -160,7 +147,6 @@ function injectStyles(): void {
 
     .opt-toggle:checked::after { transform: translateX(16px); }
     .opt-toggle:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
-
 
     /* Respect the OS "reduce motion" setting. Five infinite animations (typing
        dots, spinners, pulse states) plus smooth scrolling ran unconditionally,
@@ -830,8 +816,6 @@ function injectStyles(): void {
   document.adoptedStyleSheets = [sheet];
 }
 
-// ── DOM helpers ──────────────────────────────────────────────────────────────
-
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   attrs: Record<string, string> = {},
@@ -840,11 +824,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'style') {
-      // The extension CSP is `style-src 'self'` (no 'unsafe-inline'), so a
-      // `style="..."` ATTRIBUTE is blocked and the declaration silently never
-      // applies (plus a console CSP violation on every render). Apply each
-      // declaration through the CSSOM property setter instead, which CSP does
-      // not gate. Caught by the real-UI load-extension smoke (e2e/smoke.mjs).
       for (const decl of v.split(';')) {
         const idx = decl.indexOf(':');
         if (idx === -1) continue;
@@ -859,8 +838,6 @@ function el<K extends keyof HTMLElementTagNameMap>(
   if (text !== undefined) node.textContent = text;
   return node;
 }
-
-// ── Allowlist helpers ────────────────────────────────────────────────────────
 
 async function loadAllowlist(): Promise<string[]> {
   return new Promise((resolve, reject) => {
@@ -880,8 +857,6 @@ async function saveAllowlist(list: string[]): Promise<void> {
     [SITE_ALLOWLIST_STORAGE_KEY]: sanitizeApprovedSiteOrigins(list),
   });
 }
-
-// ── Build page ───────────────────────────────────────────────────────────────
 
 function buildPage(): void {
   injectStyles();
@@ -953,7 +928,6 @@ function buildPage(): void {
 
   const page = el('main', { class: 'opt-page' });
 
-  // Header
   const header = el('div', { class: 'opt-header' });
   const headerText = el('div');
   headerText.appendChild(el('h1', { class: 'opt-header-title' }, 'AGI Chrome settings'));
@@ -976,14 +950,11 @@ function buildPage(): void {
   header.appendChild(headerAccountButton);
   page.appendChild(header);
 
-  // ── Section: Permissions ──────────────────────────────────────────────────
-
   const permSection = el('section', { class: 'opt-section', id: 'opt-permissions' });
   const permHeader = el('div', { class: 'opt-section-header' });
   permHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Permissions'));
   permSection.appendChild(permHeader);
 
-  // Task notifications toggle
   const notifRow = el('div', { class: 'opt-row' });
   const notifLeft = el('div');
   notifLeft.appendChild(
@@ -1013,7 +984,6 @@ function buildPage(): void {
     'aria-describedby': 'opt-notif-description',
   }) as HTMLInputElement;
 
-  // Load saved preference (default true — matches user intent when they schedule tasks)
   chrome.storage.local.get({ agi_task_notifications: true }, (items) => {
     notifToggle.checked = items['agi_task_notifications'] !== false;
   });
@@ -1053,7 +1023,6 @@ function buildPage(): void {
   browserControlBoundary.appendChild(browserControlBoundaryText);
   permSection.appendChild(browserControlBoundary);
 
-  // Approved sites (allowlist)
   const allowlistBody = el('div', { class: 'opt-allowlist-body' });
   allowlistBody.appendChild(
     el(
@@ -1137,7 +1106,6 @@ function buildPage(): void {
       li.appendChild(removeBtn);
       allowlistUl.appendChild(li);
     }
-    // Update add/remove button for the current origin
     const stored = await loadAllowlist();
     if (currentSiteOrigin) {
       const isAdded = stored.includes(currentSiteOrigin);
@@ -1152,24 +1120,12 @@ function buildPage(): void {
     }
   }
 
-  // Populate the "current site" origin. The options page opens in its OWN
-  // chrome-extension:// tab, so `{active, currentWindow}` would resolve to the
-  // options page itself and Add would pollute the allowlist with the extension's
-  // own origin. Query the active tab of every window and pick the first real
-  // http(s) site instead — the page the user actually came from.
-  //
-  // `{active: true}` alone is not enough: with a SINGLE browser window the only
-  // active tab IS this options page, it gets filtered out as chrome-extension://,
-  // no site is found, and "Add" — the page's only site-permission control —
-  // stays permanently disabled showing "—". Query every tab and fall back to the
-  // most recently accessed http(s) one, which is the page the user came from.
   chrome.tabs.query({}, (tabs) => {
     currentSiteOrigin = selectApprovedSiteOrigin(tabs);
     if (currentSiteOrigin) {
       currentOriginLabel.textContent = currentSiteOrigin;
       addBtn.disabled = false;
     } else {
-      // Explain the dash instead of leaving a dead control next to it.
       currentOriginLabel.textContent = 'No site open';
       addBtn.disabled = true;
       addBtn.title = 'Open a website in a tab, then reopen Options to approve it.';
@@ -1211,8 +1167,6 @@ function buildPage(): void {
   permSection.appendChild(allowlistBody);
   page.appendChild(permSection);
 
-  // ── Section: Account ──────────────────────────────────────────────────────
-
   const accountSection = el('section', { class: 'opt-section', id: 'opt-account' });
   const accountHeader = el('div', { class: 'opt-section-header' });
   accountHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Account'));
@@ -1223,8 +1177,6 @@ function buildPage(): void {
     const accountRow = el('div', { class: 'opt-row' });
     const accountLeft = el('div');
 
-    // Resolve-in-progress: show a non-actionable row rather than asserting
-    // "Sign in" at a user who is already signed in.
     if (loading) {
       accountLeft.appendChild(el('div', { class: 'opt-row-label' }, 'Account'));
       accountLeft.appendChild(el('div', { class: 'opt-row-hint' }, 'Checking your account…'));
@@ -1262,10 +1214,6 @@ function buildPage(): void {
         try {
           if (action === 'open') {
             await openClerkSignIn();
-            // Sign-in completes in another tab. Keep this one handler and
-            // advance it to an explicit account re-check; stacking `onclick`
-            // on top of this addEventListener made the second click perform
-            // both actions at once.
             signInAction = 'check';
             signInBtn.textContent = 'Check sign-in';
             signInBtn.disabled = false;
@@ -1297,10 +1245,6 @@ function buildPage(): void {
       logoutBtn.textContent = 'Logging out…';
       logoutBtn.disabled = true;
       try {
-        // Actually end the session: clearAuthToken() runs signOutClerk() and clears
-        // the session/dev tokens — the same real sign-out the side panel uses. The
-        // storage.remove below only purged legacy keys that nothing writes, so the
-        // Clerk session (the real auth) survived and the panel stayed signed in.
         await clearAuthToken();
         await chrome.storage.local.remove([
           API_KEY_STORAGE_KEY,
@@ -1321,8 +1265,6 @@ function buildPage(): void {
 
   page.appendChild(accountSection);
 
-  // ── Section: Autofill Profile ─────────────────────────────────────────────
-
   const profileSection = el('section', { class: 'opt-section', id: 'opt-preferences' });
   const profileHeader = el('div', { class: 'opt-section-header' });
   profileHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Autofill Profile'));
@@ -1335,7 +1277,6 @@ function buildPage(): void {
   );
   profileSection.appendChild(profileHeader);
 
-  // Profile fields — two-column grid
   type ProfileKey =
     | 'firstName'
     | 'lastName'
@@ -1420,7 +1361,6 @@ function buildPage(): void {
   profileSection.appendChild(profileActions);
   let profileStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Load saved profile into inputs
   chrome.storage.local.get([AUTOFILL_PROFILE_KEY], (result) => {
     const runtimeError = chrome.runtime.lastError;
     if (runtimeError) {
@@ -1468,9 +1408,6 @@ function buildPage(): void {
 
   page.appendChild(profileSection);
 
-  // Development-only escape hatch for local gateway testing. Production
-  // bundles expose only the official Clerk Native API flow and never ask a
-  // user to copy a session cookie out of DevTools.
   if (import.meta.env.DEV) {
     const bearerSection = el('section', { class: 'opt-section', id: 'opt-cloud-auth' });
     const bearerHeader = el('div', { class: 'opt-section-header' });
@@ -1510,7 +1447,6 @@ function buildPage(): void {
     bearerBody.appendChild(bearerStatus);
     bearerSection.appendChild(bearerBody);
 
-    // Load existing token (show masked)
     chrome.storage.local.get([DEV_BEARER_KEY], (result) => {
       if (result[DEV_BEARER_KEY]) {
         bearerStatus.textContent = 'Token stored';
@@ -1539,8 +1475,6 @@ function buildPage(): void {
 
     page.appendChild(bearerSection);
   }
-
-  // ── Section: Shortcuts ────────────────────────────────────────────────────
 
   const shortcutsSection = el('section', { class: 'opt-section', id: 'opt-shortcuts' });
   const shortcutsHeader = el('div', { class: 'opt-section-header' });
@@ -1619,13 +1553,6 @@ function buildPage(): void {
   shortcutsSection.appendChild(shortcutStatus);
   page.appendChild(shortcutsSection);
 
-  // ── Section: Help ─────────────────────────────────────────────────────────
-  //
-  // The extension had no help affordance at all — neither the side panel nor
-  // this page offered a route to documentation or support, so a stuck user's
-  // only exit was to guess the marketing site. Every destination below is a
-  // route that exists in `apps/web/app` today; do not add one that does not.
-
   const helpSection = el('section', { class: 'opt-section', id: 'opt-help' });
   const helpHeader = el('div', { class: 'opt-section-header' });
   helpHeader.appendChild(el('h2', { class: 'opt-section-title' }, 'Help'));
@@ -1675,7 +1602,6 @@ function buildPage(): void {
 
   page.appendChild(helpSection);
 
-  // Version footer
   const ver = chrome.runtime.getManifest().version;
   page.appendChild(el('p', { class: 'opt-version' }, `AGI v${ver}`));
 

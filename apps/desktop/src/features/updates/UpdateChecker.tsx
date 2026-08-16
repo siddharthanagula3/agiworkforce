@@ -7,18 +7,10 @@ import { ToastAction } from '@/ui/Toast';
 import { UpdateDialog } from './UpdateDialog';
 
 interface UpdateCheckerProps {
-  /** Delay before checking for updates on startup (ms) */
   startupDelay?: number;
-  /** Callback when the user opens the available-update flow. */
   onUpdateNow?: () => void;
 }
 
-/**
- * UpdateChecker component
- *
- * Checks for updates on app startup and shows a toast notification
- * when an update is available. Respects user dismissal preferences.
- */
 export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateCheckerProps) {
   const { toast } = useToast();
   const { checkForUpdates, updateInfo, status } = useUpdater();
@@ -68,31 +60,25 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
     [toast, dismissUpdate, onUpdateNow],
   );
 
-  // Check for updates on startup
   useEffect(() => {
-    // Skip update check in web mode
     if (!isTauri && !isElectronHost) {
       return;
     }
 
-    // Don't check if auto-check is disabled
     if (!autoCheckEnabled) {
       return;
     }
 
-    // Prevent multiple checks in the same session
     if (hasCheckedRef.current) {
       return;
     }
 
     let mounted = true;
     const performCheck = async () => {
-      // Wait for store hydration first
       await waitForUpdaterHydration();
 
       if (!mounted) return;
 
-      // Check if enough time has passed since last check
       const now = Date.now();
       const intervalMs = checkIntervalHours * 60 * 60 * 1000;
 
@@ -115,14 +101,12 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
           showUpdateToast(info.version);
         }
       } catch (error) {
-        // Silently fail on auto-check to avoid annoying users
         if (import.meta.env.DEV) {
           console.debug('[UpdateChecker] Update check skipped:', error);
         }
       }
     };
 
-    // Delay the check to allow app to settle
     const timer = setTimeout(() => {
       void performCheck();
     }, startupDelay);
@@ -140,7 +124,6 @@ export function UpdateChecker({ startupDelay = 5000, onUpdateNow }: UpdateChecke
     showUpdateToast,
   ]);
 
-  // Show the appropriate Tauri install or Electron installer dialog.
   if (status === 'available' && updateInfo) {
     return <UpdateDialog open={dialogOpen} onOpenChange={setDialogOpen} />;
   }

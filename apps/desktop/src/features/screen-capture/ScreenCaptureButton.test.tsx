@@ -65,7 +65,6 @@ describe('ScreenCaptureButton', () => {
     );
     fireEvent.click(screen.getByRole('button'));
 
-    // The button click should show the region selection overlay
     await waitFor(() => {
       expect(screen.getByText('Click and drag to select a region')).toBeInTheDocument();
     });

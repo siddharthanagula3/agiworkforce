@@ -1,32 +1,10 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Scheduler Store
- *
- * Manages scheduled jobs and tasks for automated actions including briefings,
- * reminders, agent tasks, and custom actions.
- *
- * This is the single consolidated scheduler store. It was merged from the former
- * scheduledTaskStore (task-oriented, UI-friendly) and the original schedulerStore
- * (job-oriented, Tauri-event-driven). Both called the same Rust scheduler commands,
- * creating duplicate state and potential race conditions.
- *
- * Uses Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Persist middleware: Using createJSONStorage, partialize, version
- * - Tauri event subscription for real-time job updates
- */
 import { invoke, isTauri, listen, type UnlistenFn } from '../lib/tauri-mock';
 import { getSimpleErrorMessage } from '../lib/errorMessages';
 import { create } from 'zustand';
 import { createJSONStorage, devtools, persist, subscribeWithSelector } from 'zustand/middleware';
 import { toast } from 'sonner';
 
-// ============================================================================
-// Types — Job-oriented (backend wire format)
-// ============================================================================
-
-/** Action types matching Rust SchedulerActionType (serde rename_all = "camelCase") */
 export type SchedulerActionType =
   | 'workflow'
   | 'agiTask'
@@ -35,10 +13,8 @@ export type SchedulerActionType =
   | 'webhook'
   | 'script';
 
-/** Job status matching Rust JobStatus (serde rename_all = "camelCase") */
 export type JobStatus = 'active' | 'paused' | 'completed' | 'failed';
 
-/** Matches Rust ScheduledJob struct wire format (serde rename_all = "camelCase") */
 export interface ScheduledJob {
   id: string;
   name: string;
@@ -62,18 +38,14 @@ export interface NextRunInfo {
   nextRun: string;
 }
 
-// ============================================================================
-// Types — Task-oriented (UI-friendly, formerly in scheduledTaskStore)
-// ============================================================================
-
 export type TaskInterval = 'hourly' | 'daily' | 'weekly' | 'monthly' | 'custom';
 export type TaskStatus = 'active' | 'paused' | 'completed' | 'failed';
 
 export interface TaskSchedule {
   type: 'once' | 'recurring';
-  runAt?: number; // Unix timestamp (ms) for 'once'
+  runAt?: number;
   interval?: TaskInterval;
-  cronExpression?: string; // for 'custom' interval
+  cronExpression?: string;
   timezone?: string;
 }
 
@@ -97,17 +69,6 @@ export type CreateTaskInput = Omit<
   'id' | 'createdAt' | 'runCount' | 'lastRunAt' | 'nextRunAt' | 'lastOutput'
 >;
 
-// ============================================================================
-// Task helper utilities (formerly in scheduledTaskStore)
-// ============================================================================
-
-/**
- * Infer the recurring interval represented by a cron expression.
- *
- * The native scheduler uses six fields (seconds first), while a few older UI
- * entry points still produce five-field cron expressions. Accept both so the
- * Scheduled view never silently labels an unknown backend schedule as daily.
- */
 export function inferTaskInterval(cronExpression: string): TaskInterval {
   const fields = cronExpression.trim().split(/\s+/);
   const normalizedFields = fields.length === 6 ? fields.slice(1) : fields;
@@ -133,7 +94,6 @@ export function taskScheduleFromCronExpression(cronExpression: string): TaskSche
   };
 }
 
-/** Compute the next run timestamp from a schedule (client-side approximation). */
 function computeNextRunAt(schedule: TaskSchedule): number | null {
   const now = Date.now();
 
@@ -144,7 +104,6 @@ function computeNextRunAt(schedule: TaskSchedule): number | null {
     return null;
   }
 
-  // recurring
   switch (schedule.interval) {
     case 'hourly':
       return now + 60 * 60 * 1000;
@@ -161,7 +120,6 @@ function computeNextRunAt(schedule: TaskSchedule): number | null {
   }
 }
 
-/** Persist scheduled tasks to localStorage as a fallback when Tauri isn't available. */
 const TASKS_STORAGE_KEY = 'agiworkforce-scheduled-tasks-fallback';
 
 function persistTasksToStorage(tasks: ScheduledTask[]): void {
@@ -223,10 +181,6 @@ export function getRelativeTimeDisplay(timestamp: number | null): string {
   return past ? `${days}d ago` : `in ${days}d`;
 }
 
-// ============================================================================
-// Storage fallback for SSR
-// ============================================================================
-
 const storageFallback: Storage = {
   get length() {
     return 0;
@@ -238,23 +192,13 @@ const storageFallback: Storage = {
   setItem: () => undefined,
 };
 
-// ============================================================================
-// Store version for migrations
-// ============================================================================
-
 const SCHEDULER_STORE_VERSION = 1;
 
-// ============================================================================
-// Combined store state interface
-// ============================================================================
-
 interface SchedulerState {
-  // ── Job state (backend wire format) ──────────────────────────────────────
   jobs: ScheduledJob[];
   isLoading: boolean;
   error: string | null;
 
-  // Job actions
   addJob: (
     name: string,
     schedule: string,
@@ -282,16 +226,13 @@ interface SchedulerState {
   setError: (error: string | null) => void;
   clearError: () => void;
 
-  // Event listener management
   _unlistenFns: UnlistenFn[];
   initEventListeners: () => Promise<void>;
   cleanupEventListeners: () => void;
 
-  // Hydration tracking
   _hasHydrated: boolean;
   setHasHydrated: (state: boolean) => void;
 
-  // ── Task state (UI-friendly, formerly scheduledTaskStore) ─────────────────
   tasks: ScheduledTask[];
   createTask: (task: CreateTaskInput) => Promise<void>;
   updateTask: (id: string, updates: Partial<ScheduledTask>) => Promise<void>;
@@ -301,29 +242,21 @@ interface SchedulerState {
   fetchTasks: () => Promise<void>;
 }
 
-// ============================================================================
-// Store implementation
-// ============================================================================
-
 export const useSchedulerStore = create<SchedulerState>()(
   devtools(
     persist(
       subscribeWithSelector((set, get) => ({
-        // ── Job state ──────────────────────────────────────────────────────
         jobs: [],
         isLoading: false,
         error: null,
         _unlistenFns: [],
         _hasHydrated: false,
 
-        // ── Task state ─────────────────────────────────────────────────────
         tasks: [],
 
         setHasHydrated: (state: boolean) => {
           set({ _hasHydrated: state }, undefined, 'scheduler/setHasHydrated');
         },
-
-        // ── Job actions ────────────────────────────────────────────────────
 
         addJob: async (
           name: string,
@@ -334,15 +267,12 @@ export const useSchedulerStore = create<SchedulerState>()(
           set({ isLoading: true, error: null }, undefined, 'scheduler/addJob/start');
 
           try {
-            // Parse actionData from JSON string to object so Rust receives
-            // serde_json::Value as an object, not a string literal.
             let parsedActionData: Record<string, unknown> | undefined;
             try {
               parsedActionData = actionData
                 ? (JSON.parse(actionData) as Record<string, unknown>)
                 : undefined;
             } catch {
-              // If actionData is not valid JSON, wrap it as a plain object
               parsedActionData = actionData ? { raw: actionData } : undefined;
             }
 
@@ -353,7 +283,6 @@ export const useSchedulerStore = create<SchedulerState>()(
               actionData: parsedActionData,
             });
 
-            // Refresh job list after adding
             await get().listJobs();
 
             set({ isLoading: false }, undefined, 'scheduler/addJob/success');
@@ -499,7 +428,6 @@ export const useSchedulerStore = create<SchedulerState>()(
             const success = await invoke<boolean>('scheduler_toggle_job', { id: jobId });
 
             if (success) {
-              // Toggle the local state
               set(
                 (state) => ({
                   jobs: state.jobs.map((job) =>
@@ -541,7 +469,6 @@ export const useSchedulerStore = create<SchedulerState>()(
 
             if (success) {
               toast.success('Job triggered');
-              // Refresh to pick up updated last_run
               await get().listJobs();
             } else {
               toast.error('Job not found');
@@ -576,7 +503,6 @@ export const useSchedulerStore = create<SchedulerState>()(
             });
 
             if (success) {
-              // Refresh full job list to get the updated data from backend
               await get().listJobs();
               toast.success('Job updated');
             } else {
@@ -622,7 +548,6 @@ export const useSchedulerStore = create<SchedulerState>()(
           const unlistenFns: UnlistenFn[] = [];
 
           try {
-            // Listen for job execution events
             const unlistenJobExecuted = await listen<ScheduledJob>(
               'scheduler:job_executed',
               (event) => {
@@ -632,12 +557,10 @@ export const useSchedulerStore = create<SchedulerState>()(
             );
             unlistenFns.push(unlistenJobExecuted);
 
-            // Listen for job added events
             const unlistenJobAdded = await listen<ScheduledJob>('scheduler:job_added', (event) => {
               console.debug('[schedulerStore] Job added:', event.payload);
               set(
                 (state) => {
-                  // Avoid duplicates
                   if (state.jobs.some((j) => j.id === event.payload.id)) {
                     return state;
                   }
@@ -649,7 +572,6 @@ export const useSchedulerStore = create<SchedulerState>()(
             });
             unlistenFns.push(unlistenJobAdded);
 
-            // Listen for job removed events
             const unlistenJobRemoved = await listen<{ jobId: string }>(
               'scheduler:job_removed',
               (event) => {
@@ -665,7 +587,6 @@ export const useSchedulerStore = create<SchedulerState>()(
             );
             unlistenFns.push(unlistenJobRemoved);
 
-            // Listen for job updated events (pause/resume/etc)
             const unlistenJobUpdated = await listen<ScheduledJob>(
               'scheduler:job_updated',
               (event) => {
@@ -675,7 +596,6 @@ export const useSchedulerStore = create<SchedulerState>()(
             );
             unlistenFns.push(unlistenJobUpdated);
 
-            // Listen for scheduler errors
             const unlistenError = await listen<{ jobId: string; error: string }>(
               'scheduler:error',
               (event) => {
@@ -688,7 +608,6 @@ export const useSchedulerStore = create<SchedulerState>()(
             set({ _unlistenFns: unlistenFns }, undefined, 'scheduler/initEventListeners');
           } catch (error) {
             console.error('[schedulerStore] Failed to initialize event listeners:', error);
-            // Clean up any listeners that were successfully registered
             unlistenFns.forEach((fn) => fn());
             throw error;
           }
@@ -700,13 +619,10 @@ export const useSchedulerStore = create<SchedulerState>()(
           set({ _unlistenFns: [] }, undefined, 'scheduler/cleanupEventListeners');
         },
 
-        // ── Task actions (formerly scheduledTaskStore) ─────────────────────
-
         fetchTasks: async () => {
           set({ isLoading: true }, undefined, 'scheduler/fetchTasks/start');
           try {
             const jobs = await invoke<ScheduledJob[]>('scheduler_list_jobs');
-            // Map Rust ScheduledJob wire format → UI ScheduledTask
             const tasks: ScheduledTask[] = jobs.map((job) => ({
               id: job.id,
               name: job.name,
@@ -735,9 +651,6 @@ export const useSchedulerStore = create<SchedulerState>()(
             );
           } catch (error) {
             if (isTauri) {
-              // Real native failure — keep whatever tasks are already in
-              // memory (avoid flashing to blank) but surface the error
-              // rather than silently serving a possibly-stale local cache.
               const errorMessage = getSimpleErrorMessage(error);
               console.error('[schedulerStore] Failed to fetch tasks from backend:', error);
               set(
@@ -747,8 +660,6 @@ export const useSchedulerStore = create<SchedulerState>()(
               );
               return;
             }
-            // Tauri unavailable (web preview / dev without a native backend)
-            // — fall back to locally cached tasks.
             const tasks = loadTasksFromStorage();
             set({ tasks, isLoading: false }, undefined, 'scheduler/fetchTasks/fallback');
           }
@@ -761,10 +672,6 @@ export const useSchedulerStore = create<SchedulerState>()(
               prompt: input.prompt,
               schedule: input.schedule,
             });
-            // Re-fetch from the backend rather than splicing a locally-built
-            // task in: the backend is the source of truth for computed
-            // fields like nextRun (real cron evaluation, not the client's
-            // computeNextRunAt approximation).
             await get().fetchTasks();
           } catch (error) {
             if (isTauri) {
@@ -774,8 +681,6 @@ export const useSchedulerStore = create<SchedulerState>()(
               toast.error(`Failed to create task: ${errorMessage}`);
               throw error;
             }
-            // Tauri unavailable (web preview / dev without a native backend)
-            // — fall back to a local-only task so the UI stays usable.
             const now = Date.now();
             const newTask: ScheduledTask = {
               ...input,
@@ -810,7 +715,6 @@ export const useSchedulerStore = create<SchedulerState>()(
               toast.error(`Failed to update task: ${errorMessage}`);
               throw error;
             }
-            // Tauri unavailable — fall back to a local-only update.
             set(
               (state) => {
                 const tasks = state.tasks.map((t) =>
@@ -846,7 +750,6 @@ export const useSchedulerStore = create<SchedulerState>()(
               toast.error(`Failed to delete task: ${errorMessage}`);
               throw error;
             }
-            // Tauri unavailable — fall back to a local-only delete.
             set(
               (state) => {
                 const tasks = state.tasks.filter((t) => t.id !== id);
@@ -876,7 +779,6 @@ export const useSchedulerStore = create<SchedulerState>()(
               toast.error(`Failed to toggle task: ${errorMessage}`);
               throw error;
             }
-            // Tauri unavailable — fall back to a local-only toggle.
             set(
               (state) => {
                 const tasks = state.tasks.map((t) =>
@@ -903,7 +805,6 @@ export const useSchedulerStore = create<SchedulerState>()(
               toast.error(`Failed to run task: ${errorMessage}`);
               throw error;
             }
-            // Tauri unavailable — fall back to a local-only run record.
             const now = Date.now();
             set(
               (state) => {
@@ -932,13 +833,6 @@ export const useSchedulerStore = create<SchedulerState>()(
         storage: createJSONStorage(() =>
           typeof window === 'undefined' ? storageFallback : window.localStorage,
         ),
-        // Under Tauri, SQLite (via the Rust scheduler) is the sole source of
-        // truth for `tasks` — persisting it to localStorage too would be a
-        // second copy that can silently mask a native failure (a `set()`
-        // only happens on the success path, so this can't persist a lie,
-        // but it can still serve stale data before the next fetchTasks()).
-        // Only in a non-Tauri context (web preview / dev) does localStorage
-        // need to hold `tasks`, since there is no backend to fetch from.
         partialize: (state) =>
           isTauri ? { jobs: state.jobs } : { jobs: state.jobs, tasks: state.tasks },
         merge: (persistedState, currentState) => {
@@ -961,14 +855,6 @@ export const useSchedulerStore = create<SchedulerState>()(
   ),
 );
 
-// ============================================================================
-// Utility functions
-// ============================================================================
-
-/**
- * Wait for scheduler store to finish hydrating from localStorage.
- * Use this before accessing jobs that depend on persisted values.
- */
 export function waitForSchedulerHydration(): Promise<void> {
   return new Promise((resolve) => {
     const state = useSchedulerStore.getState();
@@ -984,10 +870,6 @@ export function waitForSchedulerHydration(): Promise<void> {
     });
   });
 }
-
-// ============================================================================
-// Selectors — Job-oriented
-// ============================================================================
 
 export const selectJobs = (state: SchedulerState) => state.jobs;
 export const selectEnabledJobs = (state: SchedulerState) =>
@@ -1008,7 +890,6 @@ export const selectJobCount = (state: SchedulerState) => state.jobs.length;
 export const selectEnabledJobCount = (state: SchedulerState) =>
   state.jobs.filter((job) => job.status === 'active').length;
 
-// Derived selector for upcoming jobs sorted by next_run
 export const selectUpcomingJobs = (state: SchedulerState) =>
   [...state.jobs]
     .filter((job) => job.status === 'active' && job.nextRun)
@@ -1018,21 +899,14 @@ export const selectUpcomingJobs = (state: SchedulerState) =>
       return new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime();
     });
 
-// ============================================================================
-// Selectors — Task-oriented
-// ============================================================================
-
 export const selectTasks = (state: SchedulerState) => state.tasks;
 export const selectActiveTasks = (state: SchedulerState) =>
   state.tasks.filter((t) => t.status === 'active');
 export const selectTaskById = (id: string) => (state: SchedulerState) =>
   state.tasks.find((t) => t.id === id);
 
-// Re-export the formerly-separate store as an alias so any code that
-// grabbed useScheduledTaskStore directly still works during migration.
 export { useSchedulerStore as useScheduledTaskStore };
 
-// Backward-compat type aliases for components that used the old type names
 /** @deprecated Use SchedulerActionType instead */
 export type ActionType = SchedulerActionType;
 /** @deprecated No longer needed — jobs use a cron string `schedule` field */

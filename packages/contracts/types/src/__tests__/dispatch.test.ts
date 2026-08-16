@@ -1,12 +1,3 @@
-/**
- * Dispatch contract — type-level + value-level smoke tests.
- *
- * These tests are intentionally light: the wire-format round-trip is
- * exercised by `apps/desktop/src-tauri/src/sys/security/dispatch_hmac.rs`
- * (Rust unit tests) and the mobile signer's vitest/jest suites. Here we
- * just verify that the canonical constants are stable and the type aliases
- * round-trip through the public API.
- */
 
 import { describe, expect, it } from 'vitest';
 import {
@@ -29,8 +20,6 @@ import {
 
 describe('dispatch — canonical wire-format constants', () => {
   it('locks the HKDF info parameter', () => {
-    // Both peers use this exact byte sequence in HKDF-Expand. Changing it
-    // breaks the wire format and rotates every session key.
     expect(DISPATCH_HKDF_INFO).toBe('dispatch-hmac-v2');
   });
 

@@ -1,15 +1,3 @@
-/**
- * Task-family signal building and route wiring on the managed-cloud web path.
- *
- * Two things are pinned here:
- *  1. `buildTaskFamilySignals` reads only structural request fields, and it
- *     distinguishes ABSENT from `false` — an omitted toggle must stay omitted,
- *     because the fast path treats absent as unknown and `false` as a decision.
- *  2. `resolveWebCloudModelRoute` forwards the family without ever changing the
- *     task type, the trust mode, or the runtime profile.
- *
- * All inputs are fixed literals. No wall-clock value is read anywhere.
- */
 import { describe, expect, it } from 'vitest';
 
 import { classifyTaskFamily } from '@agiworkforce/routing';
@@ -122,8 +110,6 @@ describe('resolveWebCloudModelRoute · family forwarding', () => {
       taskFamily: 'general_chat',
     });
     expect(route.status).toBe('selected');
-    // A web/cloud-chat route can only be a managed-cloud harness; if the family
-    // had leaked into admission this would resolve somewhere else or fail.
     expect(route.status === 'selected' && route.taskType).toBe('general');
   });
 

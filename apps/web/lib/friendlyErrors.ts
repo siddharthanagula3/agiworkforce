@@ -10,13 +10,9 @@
  * @module friendlyErrors
  */
 
-// Re-export core error handling from shared package
 export { getFriendlyError, formatErrorForChat, getErrorMessage } from '@agiworkforce/utils';
 export type { FriendlyError } from '@agiworkforce/utils';
 
-/**
- * Common user-friendly messages for various states
- */
 export const FRIENDLY_MESSAGES = {
   loading: [
     'Thinking...',
@@ -36,12 +32,8 @@ export const FRIENDLY_MESSAGES = {
   },
 } as const;
 
-/**
- * Get a random loading message
- */
 export function getLoadingMessage(): string {
   const messages = FRIENDLY_MESSAGES.loading;
-  // WEB-13: Math.random is intentional · cosmetic loading message picker, no security relevance.
 
   return messages[Math.floor(Math.random() * messages.length)] || messages[0] || 'Thinking...';
 }

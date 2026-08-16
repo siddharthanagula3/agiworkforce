@@ -1,26 +1,3 @@
-/**
- * keybindingContextParity.test.ts — dead-keybinding guard.
- *
- * `contributes.keybindings[].when` clauses can reference two kinds of context
- * keys:
- *   1. Custom `agi-workforce.*` keys this extension owns and must set itself
- *      via `vscode.commands.executeCommand('setContext', key, value)`.
- *   2. VS Code built-in keys (e.g. `focusedView`, `activeWebviewPanelId`,
- *      `editorTextFocus`) that the host sets automatically.
- *
- * A custom `agi-workforce.*` key that is referenced in a `when` clause but
- * never set anywhere in `src/` makes the whole clause permanently false —
- * the keybinding is silently dead (it never fires, with no error surfaced
- * anywhere). This regressed once: `agi-workforce.sidebarFocus` /
- * `agi-workforce.chatFocus` were added to gate the Shift+Tab "Cycle Agent
- * Mode" binding but were never wired to `setContext`, so the binding could
- * never trigger. The binding was ultimately removed: Shift+Tab is reverse
- * focus traversal and must never mutate agent authority. This guard remains
- * for the other contributed keybindings.
- *
- * This test asserts every custom `agi-workforce.*` context key referenced in
- * a keybinding `when` clause is set somewhere in `src/` via `setContext`.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
@@ -46,14 +23,6 @@ function readKeybindings(): PkgKeybinding[] {
   return pkg.contributes?.keybindings ?? [];
 }
 
-/**
- * Extract every `agi-workforce.<...>` identifier referenced in a `when`
- * clause as a standalone boolean context flag (e.g. `agi-workforce.hasDiff`
- * or `!agi-workforce.hasDiff`). Excludes occurrences that are string-literal
- * comparison values (e.g. `focusedView == 'agi-workforce.sidebar'`) — those
- * are built-in VS Code context keys compared against one of OUR view/panel
- * ids, not a custom flag we need to set ourselves.
- */
 function extractCustomContextKeys(when: string): string[] {
   const matches = when.match(/(?<!['"])agi-workforce\.[a-zA-Z0-9.]+(?!['"])/g) ?? [];
   return matches;
@@ -97,11 +66,6 @@ describe('keybinding when-clause context parity', () => {
     for (const kb of keybindings) {
       if (!kb.when) continue;
       for (const key of extractCustomContextKeys(kb.when)) {
-        // `agi-workforce.hasDiff`, etc. are command ids too (e.g.
-        // `agi-workforce.acceptDiff`) when they appear as `!agi-workforce.foo`
-        // negation targets used purely as flags — only flag keys that look
-        // like context flags (no further dots after the key segment beyond
-        // the namespace), matching the shape actually used by this codebase.
         if (!setKeys.has(key)) {
           unwired.push(`${key} (keybinding: ${kb.command}, when: "${kb.when}")`);
         }
@@ -116,16 +80,6 @@ describe('keybinding when-clause context parity', () => {
   });
 });
 
-/**
- * SIX-14: a live `when` clause is only half of a working keybinding. VS Code
- * invokes a keybound command with **no arguments** — there is no way for a
- * keybinding to supply one. `agi-workforce.acceptDiff` / `rejectDiff` were
- * registered as `(sessionId: string) => …` and bound to Ctrl/Cmd+Shift+Enter
- * and Escape, so the keyboard path looked up `undefined` in the session map and
- * did nothing, with no toast and no log.
- *
- * This guard invokes every keybound handler exactly the way the keyboard does.
- */
 describe('keybound commands tolerate a zero-argument invocation', () => {
   let handlers: Map<string, (...args: unknown[]) => unknown>;
   let originalRegisterCommand: typeof vscode.commands.registerCommand;
@@ -172,7 +126,6 @@ describe('keybound commands tolerate a zero-argument invocation', () => {
       handlers.set(id, handler);
       return { dispose: () => undefined } as vscode.Disposable;
     }) as never;
-    // Keyboard shortcuts fire with no editor, no terminal and no dialog answer.
     vscode.window.activeTextEditor = undefined;
     vscode.window.activeTerminal = undefined;
     vi.mocked(vscode.window.showInputBox).mockResolvedValue(undefined);
@@ -213,10 +166,6 @@ describe('keybound commands tolerate a zero-argument invocation', () => {
   });
 
   it('registers no keybound command with a required leading parameter', () => {
-    // A no-throw invocation cannot see the real failure mode: `acceptDiff` and
-    // `rejectDiff` did not throw on `undefined`, they just did nothing. A
-    // keybound handler that declares a required first parameter is by
-    // construction relying on an argument the keyboard can never send.
     const setupSource = fs.readFileSync(path.resolve(__dirname, '../core/commandSetup.ts'), 'utf8');
     const keybound = [...new Set(readKeybindings().map((kb) => kb.command))];
 
@@ -226,7 +175,7 @@ describe('keybound commands tolerate a zero-argument invocation', () => {
       const match = new RegExp(
         `register\\('${id.replace(/\./g, '\\.')}',\\s*(?:async\\s*)?\\(([^)]*)\\)`,
       ).exec(setupSource);
-      if (match === null) continue; // registered outside commandSetup.ts
+      if (match === null) continue;
       checked.push(id);
       const first = (match[1] ?? '').split(',')[0]?.trim() ?? '';
       const optional =
@@ -234,7 +183,6 @@ describe('keybound commands tolerate a zero-argument invocation', () => {
       if (!optional) offenders.push(`${id} (first parameter "${first}" is required)`);
     }
 
-    // The two commands this guard exists for must actually be in scope.
     expect(checked).toEqual(
       expect.arrayContaining(['agi-workforce.acceptDiff', 'agi-workforce.rejectDiff']),
     );

@@ -1,11 +1,3 @@
-/**
- * Local + sign-in-gated Managed Cloud model catalog for Mobile.
- *
- * Active/selectable rows come from @agiworkforce/local-llm. Cloud provider
- * models are included as gated rows and become selectable once the signed-in
- * entitlement proves AGI Cloud access (public alpha — no invite, no waitlist).
- * This service never fetches `/api/models`.
- */
 
 import {
   getDefaultModel as getCatalogDefaultModel,
@@ -52,7 +44,6 @@ export interface ModelDef {
   availability: ModelAvailability;
   runtimeLabel: string;
   detailLabel: string;
-  /** Short marketing description shown in the model picker below the name. */
   description?: string;
   lockReason?: string;
   fileSizeBytes?: number;
@@ -81,15 +72,6 @@ function tierUpgradeLockReason(modelId: string): string {
 
 const FREE_TIER_ECONOMY_MODEL_IDS = new Set(getAllowedModelsForTier('economy'));
 
-/**
- * Subscription-tier gate for cloud models as the SERVER actually enforces it.
- *
- * The shared tier + Mobile runtime selector owns paid access. The server's
- * free-trial path additionally accepts economy-list models from
- * free users (apps/web/lib/free-trial-config.ts FREE_TRIAL_MODELS =
- * getAllowedModelsForTier('economy')). Mirror that allowance so the picker
- * never locks a model the server would serve.
- */
 export function canAccessCloudModelForTier(modelId: string, subscriptionTier: string): boolean {
   const canonicalModelId = normalizeModelId(modelId) ?? modelId;
   if (subscriptionTier.toLowerCase() !== 'free') {
@@ -98,39 +80,12 @@ export function canAccessCloudModelForTier(modelId: string, subscriptionTier: st
   return FREE_TIER_ECONOMY_MODEL_IDS.has(canonicalModelId);
 }
 
-// ---------------------------------------------------------------------------
-// P3 Phase A: Environment-gating helpers
-//
-// `environmentAvailability` returns the runtime availability signal for a
-// required execution environment. Phase A always returns `{ configured: false }`,
-// locking every env-gated model in the picker until Phase B wires the real
-// signal:
-//   - 'e2b'           → managed-compute beta enabled + reachable (Phase B)
-//   - 'local-runtime' → on-device runtime installed + ready (Phase B)
-//
 // SAFETY: no current model sets `requiresEnvironment`, so Phase A is a
-// pure no-op for all live catalog rows.
-// ---------------------------------------------------------------------------
 
-/** Phase A stub — Phase B replaces with real env probe. */
 export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
-  // Phase B: check managed-compute beta flag for 'e2b';
-  //          check installed local runtime for 'local-runtime'.
   return { configured: false };
 }
 
-/**
- * Apply environment gating as the final transform on any ModelDef.
- * When `requiresEnvironment` is set and the environment is unavailable,
- * overrides `availability` to 'locked' and sets `lockReason` to the verdict
- * reason from `evaluateModelEnvironment`.
- *
- * Must be called AFTER all other availability assignments so that env-locked
- * models stay locked even when cloud is unlocked.
- *
- * When `requiresEnvironment` is undefined (all current models), returns `def`
- * unchanged — zero cost to existing rows.
- */
 export function applyEnvironmentGate(
   def: ModelDef,
   requiresEnvironment: ModelEnvironment | undefined,
@@ -172,7 +127,6 @@ const cloudModelSourceById = new Map<string, CloudModelDef>(
 
 export const DEFAULT_LOCAL_MODEL_ID = DEFAULT_LOCAL_MODEL.id;
 
-/** Canonical Auto profiles with Mobile-only icon presentation. */
 export const AUTO_MODES: AutoModeDef[] = MOBILE_AUTO_MODES;
 export const DEFAULT_AUTO_MODE_ID = MOBILE_DEFAULT_AUTO_MODE_ID;
 
@@ -245,9 +199,6 @@ function toLocalModelDef(model: OnDeviceModel): ModelDef {
     executorchPreset: model.executorchPreset,
     license: model.license,
   };
-  // NOTE: OnDeviceModel does not carry requiresEnvironment today — local-runtime
-  // gating is unwireable until the local catalog exposes the field (Phase B).
-  // Passing `undefined` is a safe no-op for all current on-device models.
   return applyEnvironmentGate(def, undefined);
 }
 
@@ -258,13 +209,6 @@ function toCloudModelDef(
 ): ModelDef {
   const providerLabel = getCloudProviderById(model.provider)?.name ?? model.provider;
 
-  // Two independent gates: signed-in-and-cloud-unlocked (public alpha access),
-  // then subscription-tier access to THIS model specifically (e.g. Opus/flagship
-  // models require Max). A Pro user is cloud-unlocked but must still see this
-  // model as locked with an upgrade reason, not as freely selectable — this is
-  // the same catalog gate `canAccessModel` enforces server-side
-  // (apps/web/lib/model-tiers.ts), so a model rejected server-side is never
-  // shown as usable client-side.
   const tierAccessOk =
     !cloudUnlocked || !subscriptionTier || canAccessCloudModelForTier(model.id, subscriptionTier);
   const availability: ModelAvailability = !cloudUnlocked || !tierAccessOk ? 'locked' : 'ready';
@@ -299,9 +243,6 @@ function toCloudModelDef(
     lockReason,
   };
 
-  // Apply environment gate LAST so env-locked models remain locked even when
-  // cloud is unlocked. CloudModelDef (from getPickerModels/PickerModelView)
-  // does not carry requiresEnvironment — look it up from the canonical catalog.
   const requiresEnvironment = getModelMetadataById(model.id)?.requiresEnvironment;
   return applyEnvironmentGate(def, requiresEnvironment);
 }
@@ -324,14 +265,6 @@ export const LOCKED_CLOUD_MODELS: ModelDef[] = [...MOBILE_CLOUD_PROVIDER_IDS]
 export const MODEL_LIST: ModelDef[] = [...LOCAL_MODEL_LIST, ...LOCKED_CLOUD_MODELS];
 export const DEFAULT_CLOUD_MODEL_ID = getDefaultModelFor(undefined, 'chat');
 
-/**
- * Tier-aware cloud default, for call sites that auto-select a model on
- * mode-switch / tier-revalidation (never for the user's own explicit pick).
- *
- * The shared registry owns the default for each tier. Mobile only verifies
- * that the returned model is admitted by the `mobile/cloud-chat` runtime
- * profile before exposing it to the app.
- */
 export function getDefaultCloudModelIdForTier(subscriptionTier?: string): string | undefined {
   const modelId = getDefaultModelFor(subscriptionTier, 'chat');
   return cloudModelSourceMap.has(modelId) ? modelId : DEFAULT_CLOUD_MODEL_ID;
@@ -365,12 +298,6 @@ export function isSelectableModelIdForCloudAccess(id: string, cloudUnlocked: boo
   return isSelectableModelId(id) || (cloudUnlocked && isCloudManagedModelId(id));
 }
 
-/**
- * Validate a selection against both the Local/Cloud trust boundary and the
- * user's current Cloud plan. Persisted Mobile state and conversation metadata
- * must use this same predicate as the picker so a downgraded account cannot
- * restore and dispatch a model the UI would correctly show as locked.
- */
 export function isSelectableModelIdForAccess(
   id: string,
   cloudUnlocked: boolean,
@@ -419,28 +346,12 @@ export function isAutoMode(id: string): boolean {
   return autoModeMap.has(id);
 }
 
-/**
- * Resolve a model id to the name a user should see.
- *
- * `allModelMap` holds the local models plus ONE preview cloud model per
- * provider (LOCKED_CLOUD_MODELS), not the whole cloud catalog — so looking a
- * cloud id up there missed almost every cloud model and fell through to the
- * raw wire id. The Models screen therefore exposed a catalog key while the
- * composer chip, which goes through getShortDisplayName, showed its name.
- *
- * Consulting the full cloud source first makes both helpers agree. The id
- * remains the last-resort fallback for an id no registry knows.
- */
 export function getDisplayName(id: string): string {
   const autoMode = autoModeMap.get(id);
   if (autoMode) return autoMode.name;
   return cloudModelSourceMap.get(id)?.name ?? getModelById(id)?.name ?? id;
 }
 
-/**
- * Managed Cloud receipts must resolve through the current cloud catalog.
- * Unknown historical ids describe removed capacity, not dynamic local models.
- */
 export function getManagedDisplayName(id: string | null | undefined): string {
   const normalizedId = id?.trim() ?? '';
   if (!normalizedId) return 'Unavailable model';
@@ -449,26 +360,11 @@ export function getManagedDisplayName(id: string | null | undefined): string {
   return cloudModelSourceMap.get(normalizedId)?.name ?? 'Unavailable model';
 }
 
-/**
- * Shown when a persisted selection matches nothing the catalog knows.
- *
- * This helper feeds user-facing chrome (the composer model chip, the Models
- * settings row, the Add-to-chat sheet). Falling back to the id printed a raw
- * wire value into those surfaces, which is developer output, not a model name.
- * A neutral label is the truthful answer: the app
- * cannot name a model it no longer ships.
- */
 export const UNKNOWN_MODEL_LABEL = 'Not set';
 
 export function getShortDisplayName(id: string, subscriptionTier?: string): string {
   const autoMode = autoModeMap.get(id);
   if (autoMode) return autoMode.name;
-  // Always show the actual model name — the composer's model chip is the
-  // single source of truth for the active model. A generic "AGI Cloud" label
-  // here hid the selection and duplicated the mode toggle's Cloud copy.
-  //
-  // The tier argument remains for source compatibility; tier controls access,
-  // never model identity or provenance labels.
   const model = getModelByIdForCloudAccess(id, true, subscriptionTier);
   return model?.name ?? UNKNOWN_MODEL_LABEL;
 }
@@ -478,10 +374,6 @@ export function getDefaultSelectableModelId(id?: string | null): string {
   return DEFAULT_LOCAL_MODEL_ID;
 }
 
-/**
- * Async shape kept for existing consumers/tests. This intentionally returns
- * embedded local/locked metadata only and performs no network request.
- */
 export async function fetchModelCatalog(): Promise<ModelDef[]> {
   return MODEL_LIST;
 }

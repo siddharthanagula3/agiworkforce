@@ -17,7 +17,6 @@ const PARSED = JSON.parse(FULL_ARGS) as {
   content: string;
 };
 
-/** Split a string into `count` roughly even chunks. */
 function chunk(raw: string, count: number): string[] {
   const size = Math.max(1, Math.ceil(raw.length / count));
   const chunks: string[] = [];
@@ -125,7 +124,6 @@ describe('PartialArtifactAccumulator', () => {
     expect(accumulator.push('{"title":"A', 0)).not.toBeNull();
     expect(accumulator.push('BC"', 2)).toBeNull();
     expect(accumulator.isDesynced).toBe(true);
-    // Even a correctly numbered follow-up stays refused.
     expect(accumulator.push('}', 1)).toBeNull();
     expect(accumulator.rawArguments).toBe('');
   });

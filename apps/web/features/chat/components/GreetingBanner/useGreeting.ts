@@ -59,15 +59,6 @@ const TIME_BANDS: Record<TimeBand, TimeBandConfig> = {
   },
 };
 
-/**
- * Make a profile name presentable in a hero headline.
- *
- * The rule now lives in `@agiworkforce/utils/display-name` because it is not a
- * greeting-specific concern: the sidebar account row rendered the same Clerk
- * profile as "SIDDHARTHA NAGULA" while this headline said "Siddhartha", which
- * is the inconsistency that made the local fix visibly wrong on screen. This
- * re-export keeps the existing greeting tests and call sites intact.
- */
 export { normalizeDisplayName as normalizeGreetingName } from '@agiworkforce/utils/display-name';
 
 function getTimeBand(hour: number): TimeBand {
@@ -83,21 +74,12 @@ export function useGreeting(): GreetingResult {
   const { user: compatibilityUser } = useAuthStore();
   const canonicalUser = useBillingStore((state) => state.user);
 
-  // PER-2: this used to read `localStorage['agi.profile.preferredName']` and
-  // give it precedence — a key NOTHING in the repository ever wrote, so the
-  // "preferred name" mechanism was dead code masquerading as the
-  // personalization feature. The preferred name now comes from the same
-  // server-resolved identity every other surface reads (PER-8): Settings →
-  // General writes it to the `general` settings namespace, GET /api/me
-  // resolves it, and the auth store carries it. Falls back to the full display
-  // name when the user has not set a preferred one.
   const userName =
     canonicalUser?.profile?.preferred_name ||
     canonicalUser?.name ||
     compatibilityUser?.preferredName ||
     compatibilityUser?.name;
 
-  // Memoize: greeting only changes when user name changes (time band is stable per page load)
   const [snapshot] = React.useState(() => {
     const now = new Date();
     return { hour: now.getHours(), variantIndex: now.getDate() % 3 };
@@ -109,10 +91,6 @@ export function useGreeting(): GreetingResult {
   const band = getTimeBand(hour);
   const config = TIME_BANDS[band];
 
-  // Cap name length to prevent layout overflow; strip non-printable chars.
-  // `\p{Cc}` is the Unicode control category (C0 0x00-0x1F plus DEL and the C1
-  // range), which covers the previous explicit escape range and satisfies
-  // `no-control-regex` without an inline suppression.
   const rawName = userName?.split(' ')[0]?.trim();
   const cleanedName = rawName && rawName.length <= 50 ? rawName.replace(/\p{Cc}/gu, '') : undefined;
   const firstName = cleanedName ? normalizeDisplayName(cleanedName) : undefined;

@@ -1,19 +1,3 @@
-/**
- * MessageLimitCard — in-transcript card for a managed quota / rate-limit
- * refusal.
- *
- * A managed ceiling (rolling 5-hour, weekly, flagship weekly, credits, billing
- * period, plain rate limit) is not a generic failure: the user needs the
- * reason, when it clears, and — when one actually exists — the upgrade that
- * lifts it. Desktop Cloud previously showed a toast that disappeared over an
- * empty assistant bubble, so a refusal mid-demo looked like the app breaking.
- *
- * Shape mirrors web's `InlinePaywallCard`, reads the same `metadata.paywall`
- * block `classifyManagedQuotaErrorCode` produces, and now shares its wording
- * via PAYWALL_FEATURE_COPY. Nothing is synthesised: the
- * upgrade CTA renders only when a next self-serve tier exists, and the reset
- * line only when the SERVER supplied an instant.
- */
 
 import { Gauge, Timer, Database, Sparkles } from 'lucide-react';
 import {
@@ -31,7 +15,6 @@ export interface MessagePaywallBlock {
   showUpgradeCta?: boolean;
   showResetTime?: boolean;
   suggestStandardModel?: boolean;
-  /** ISO instant reported by the server. Never client-derived. */
   resetAt?: string;
 }
 
@@ -65,10 +48,6 @@ export function readMessagePaywall(
   };
 }
 
-/**
- * Format the server's reset instant for display, or null when it is absent or
- * unparseable — the card must never invent a "clears at" time.
- */
 export function formatResetLabel(resetAt: string | undefined): string | null {
   if (!resetAt) return null;
   const parsed = new Date(resetAt);
@@ -82,19 +61,13 @@ function tierLabel(tier: string): string {
 
 export interface MessageLimitCardProps {
   block: MessagePaywallBlock;
-  /** Retry the refused turn. Omit to render the card without a retry action. */
   onRetry?: () => void;
-  /** Open billing/upgrade. Omit and the upgrade CTA is not rendered. */
   onUpgrade?: () => void;
   className?: string;
 }
 
 export function MessageLimitCard({ block, onRetry, onUpgrade, className }: MessageLimitCardProps) {
   const showUpgradeCta = block.showUpgradeCta !== false && Boolean(onUpgrade);
-  // Copy comes from @agiworkforce/types. This card previously carried a
-  // four-feature table of its own, so a refusal web described precisely
-  // ("Upgrade to Pro for video generation") arrived here as the generic
-  // "Upgrade to Pro for this capability" — same server, less information.
   const headline = showUpgradeCta
     ? `Upgrade to ${tierLabel(block.requiredTier)} for ${paywallUpgradeLabel(block.feature)}`
     : paywallLimitHeadline(block.feature);

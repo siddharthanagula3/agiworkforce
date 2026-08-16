@@ -1,10 +1,3 @@
-/**
- * Tests for transport.ts env-var filtering.
- *
- * We can't easily test the full resolveMcpTransport flow without spawning
- * real processes, so we test the filtering behavior by importing the module
- * and checking that the transport constructor receives filtered env vars.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +19,6 @@ import { resolveMcpTransport } from '../transport';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // Suppress console.warn from the env filtering
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });
 

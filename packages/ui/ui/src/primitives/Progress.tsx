@@ -10,13 +10,6 @@ interface ProgressProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
 
-// React 19 ref-as-prop pattern - no forwardRef needed
-//
-// Drift resolution (web vs desktop): web is canonical on both counts desktop
-// had dropped — (1) ARIA progressbar semantics (role/aria-valuenow/min/max) so
-// screen readers announce this as a progress indicator, and (2) a `max > 0`
-// guard on the percentage calc so `max={0}` degrades to 0% instead of
-// dividing by zero into `NaN` (which desktop rendered as `width: NaN%`).
 function Progress({
   className,
   value = 0,

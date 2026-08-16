@@ -15,7 +15,6 @@ import {
   type DownloadProgress,
 } from '../../stores/updaterStore';
 
-// Package version - will be replaced by build process or read from package.json
 const CURRENT_VERSION_FALLBACK = 'Unknown';
 
 interface UpdateCheckResult {
@@ -32,7 +31,6 @@ export function useUpdater() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [currentVersion, setCurrentVersion] = useState(CURRENT_VERSION_FALLBACK);
 
-  // Store state and actions
   const status = useUpdaterStore((state) => state.status);
   const updateInfo = useUpdaterStore((state) => state.updateInfo);
   const downloadProgress = useUpdaterStore((state) => state.downloadProgress);
@@ -49,7 +47,6 @@ export function useUpdater() {
   const clearDismissal = useUpdaterStore((state) => state.clearDismissal);
   const reset = useUpdaterStore((state) => state.reset);
 
-  // Track if component is mounted to prevent state updates after unmount
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -82,7 +79,6 @@ export function useUpdater() {
     void loadVersion();
   }, []);
 
-  // Listen for update events from Tauri
   useEffect(() => {
     if (!isTauri) return;
 
@@ -92,7 +88,6 @@ export function useUpdater() {
 
     const setupListeners = async () => {
       try {
-        // Listen for download progress events
         unlistenProgress = await listen<{ downloaded: number; total: number }>(
           'tauri://update-download-progress',
           (event) => {
@@ -103,14 +98,12 @@ export function useUpdater() {
           },
         );
 
-        // Listen for update downloaded event
         unlistenDownloaded = await listen('tauri://update-downloaded', () => {
           if (!mountedRef.current) return;
           setStatus('downloaded');
           setIsDownloading(false);
         });
 
-        // Listen for update error event
         unlistenError = await listen<string>('tauri://update-error', (event) => {
           if (!mountedRef.current) return;
           setError(event.payload);
@@ -130,9 +123,6 @@ export function useUpdater() {
     };
   }, [setDownloadProgress, setStatus, setError]);
 
-  /**
-   * Check for available updates
-   */
   const doCheckForUpdates = useCallback(async (): Promise<UpdateInfo | null> => {
     if (!isTauri && !isElectronHost) {
       setStatus('up-to-date');
@@ -159,13 +149,11 @@ export function useUpdater() {
           releaseDate: update.date,
         };
 
-        // Check if this version was dismissed recently
         if (shouldShowUpdateNotification(update.version, dismissedVersion, dismissedAt)) {
           setUpdateInfo(info);
           setStatus('available');
           return info;
         } else {
-          // Version was dismissed, don't show notification
           setStatus('idle');
           return null;
         }
@@ -194,9 +182,6 @@ export function useUpdater() {
     setLastCheckTime,
   ]);
 
-  /**
-   * Download and install the available update
-   */
   const downloadAndInstall = useCallback(async (): Promise<void> => {
     if (!isTauri && !isElectronHost) {
       setError('Updates are only available in the desktop application');
@@ -213,8 +198,6 @@ export function useUpdater() {
           return;
         }
         await update.downloadAndInstall();
-        // Electron's supported update path is a signed DMG in the OS browser.
-        // Keep the update visible until the user installs and relaunches it.
         setStatus('available');
       } catch (err) {
         if (!mountedRef.current) return;
@@ -231,7 +214,6 @@ export function useUpdater() {
     setDownloadProgress({ downloaded: 0, total: 0, percent: 0 });
 
     try {
-      // Dynamic import for download functionality
       const { check } = await import('@tauri-apps/plugin-updater');
       const update = await check();
 
@@ -262,10 +244,8 @@ export function useUpdater() {
           }
         });
 
-        // Clear any dismissal for this version since user chose to update
         clearDismissal();
 
-        // Relaunch the app to apply the update
         setStatus('installing');
         await relaunchApp();
       } else {
@@ -284,25 +264,18 @@ export function useUpdater() {
     }
   }, [setStatus, setError, setDownloadProgress, clearDismissal]);
 
-  /**
-   * Dismiss the current update notification
-   */
   const dismiss = useCallback(() => {
     if (updateInfo?.version) {
       dismissUpdate(updateInfo.version);
     }
   }, [updateInfo, dismissUpdate]);
 
-  /**
-   * Retry after an error
-   */
   const retry = useCallback(() => {
     reset();
     void doCheckForUpdates();
   }, [reset, doCheckForUpdates]);
 
   return {
-    // State
     status,
     updateInfo,
     downloadProgress,
@@ -311,7 +284,6 @@ export function useUpdater() {
     isDownloading,
     currentVersion,
 
-    // Actions
     checkForUpdates: doCheckForUpdates,
     downloadAndInstall,
     dismiss,
@@ -321,5 +293,4 @@ export function useUpdater() {
   };
 }
 
-// Re-export types for convenience
 export type { UpdateStatus, UpdateInfo, DownloadProgress };

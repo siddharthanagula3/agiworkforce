@@ -30,7 +30,6 @@ export interface AgentActivityTimelineProps {
   messageId: string;
   activity: AgentActivityState;
   defaultExpanded?: boolean;
-  /** Deterministic clock injection for tests and static previews. */
   nowMs?: number;
   onResolveApproval?: (toolCallId: string, decision: 'approved' | 'rejected') => void;
   approvalExpired?: boolean;
@@ -84,11 +83,6 @@ export function buildAgentActivitySummary(activity: AgentActivityState, nowMs: n
   if (activity.status === 'awaiting-approval') {
     return active ? `Needs approval · ${active}` : 'Needs approval';
   }
-  // Active work stays semantic and stable (no one-second render timer). Once a
-  // run settles, however, elapsed time is fixed useful output — the latest
-  // mobile reference presents it as “Worked for 5m 24s”. Prefer the canonical
-  // terminal timestamp, then the last event time, and only use the injected
-  // clock for a malformed legacy state with neither.
   const elapsed = formatDuration(
     Math.max(0, (activity.completedAtMs ?? activity.updatedAtMs ?? nowMs) - activity.startedAtMs),
   );

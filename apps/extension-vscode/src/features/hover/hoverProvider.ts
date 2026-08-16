@@ -1,10 +1,3 @@
-/**
- * hoverProvider.ts — Hover provider showing AGI Workforce quick actions
- *
- * When user hovers over a symbol, shows a markdown tooltip with
- * quick links to "Explain" and "Fix" commands.
- * Only active when agiWorkforce.hoverEnabled = true (default: false).
- */
 
 import * as vscode from 'vscode';
 

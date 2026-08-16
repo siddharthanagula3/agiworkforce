@@ -108,8 +108,6 @@ describe('DELETE /api/settings/sessions/[sessionId]', () => {
     const response = await request('sess_current', 'desktop-device-token');
 
     expect(response.status).toBe(200);
-    // The cookie mock still claims sess_current is "this device"; the bearer is
-    // authoritative and has no Clerk session, so isCurrent must stay false.
     expect(await response.json()).toEqual({ message: 'Session revoked', isCurrent: false });
     expect(mockRevokeSession).toHaveBeenCalledWith('sess_current');
   });

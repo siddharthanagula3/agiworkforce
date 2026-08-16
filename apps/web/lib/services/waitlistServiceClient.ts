@@ -1,9 +1,3 @@
-/**
- * Client-side waitlist and invite-code service.
- *
- * This file is the browser-safe companion to waitlistService.ts (server-only).
- * Routes through active Next.js API endpoints · direct browser database access removed.
- */
 
 import type { InviteCodeError } from '@shared/components/cloud-bridge/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -19,15 +13,7 @@ export interface WaitlistEntry {
   email: string;
   name?: string;
   referralSource?: string;
-  /**
-   * One decision per purpose that was on screen, ticked or not (DPDP s.6).
-   * `/api/waitlist/public` refuses the submission when the purpose that makes
-   * storing the address lawful is absent or false, so this is not optional in
-   * practice — it is typed optional only because `joinWaitlist` below posts to
-   * a different, account-bound route.
-   */
   consent?: ConsentDecision[];
-  /** Which consent surface collected the decisions. */
   consentSurface?: 'web-waitlist-inline' | 'web-waitlist-modal';
 }
 
@@ -57,9 +43,6 @@ function toInviteCodeError(value: unknown): InviteCodeError {
   return 'rpc_error';
 }
 
-/**
- * Atomic validate + redeem via the active claim-offer route.
- */
 export async function redeemInviteCode(code: string, source: string): Promise<RedeemInviteResult> {
   void source;
   try {
@@ -98,13 +81,6 @@ export async function redeemInviteCode(code: string, source: string): Promise<Re
   }
 }
 
-/**
- * Anonymous waitlist signup via /api/waitlist/public.
- *
- * Used by the public marketing site (waitlist modal, hero CTAs). Unlike
- * joinWaitlist below, this does NOT require a signed-in Clerk session ·
- * the server attaches the user id opportunistically when one exists.
- */
 export async function joinPublicWaitlist(entry: WaitlistEntry): Promise<JoinWaitlistResult> {
   try {
     const allowedSources = new Set(['website', 'byok', 'sync', 'billing', 'mobile', 'other']);
@@ -126,9 +102,6 @@ export async function joinPublicWaitlist(entry: WaitlistEntry): Promise<JoinWait
     });
 
     if (!res.ok) {
-      // The server's message is surfaced verbatim for the consent failures
-      // (400 CONSENT_REQUIRED), because "please try again" is wrong advice when
-      // the fix is to tick a box.
       const body = (await res.json().catch(() => null)) as {
         error?: { code?: string; message?: string } | string;
       } | null;
@@ -145,9 +118,6 @@ export async function joinPublicWaitlist(entry: WaitlistEntry): Promise<JoinWait
   }
 }
 
-/**
- * Waitlist signup via /api/waitlist/cloud-managed.
- */
 export async function joinWaitlist(entry: WaitlistEntry): Promise<JoinWaitlistResult> {
   try {
     const allowedSources = new Set(['byok', 'sync', 'billing', 'mobile', 'other']);

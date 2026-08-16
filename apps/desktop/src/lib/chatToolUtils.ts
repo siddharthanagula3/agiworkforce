@@ -1,9 +1,3 @@
-/**
- * Pure utility functions for tool name normalization and inline tool data transformation.
- *
- * Extracted from UnifiedAgenticChat/index.tsx to keep the main component focused on
- * orchestration logic.
- */
 import type { Artifact } from '../types/chat';
 import { getToolDisplayInfo } from './toolDisplayNames';
 import { decodeCompositeToolName } from './toolNameEncoding';
@@ -234,7 +228,6 @@ export const normalizeInlineToolData = (
       return image;
     });
 
-    // Accept single-image payload variants and normalize into images[]
     if (normalizedImages.length === 0) {
       const singleUrl =
         (data['url'] as string | undefined) ??
@@ -332,7 +325,6 @@ export const normalizeInlineToolData = (
   }
 
   if (normalizedTool.startsWith('browser_') || normalizedTool.startsWith('ui_')) {
-    // Preserve key browser/UI outputs in a consistent shape for inline renderers.
     data['toolName'] = normalizeToolNameForUi(toolName);
     const title = data['title'];
     if (typeof title === 'string' && title.trim().length > 0) {
@@ -344,8 +336,6 @@ export const normalizeInlineToolData = (
     }
   }
 
-  // AUDIT-UI-023: Normalize file_read tool data to match InlineCodeDiff expectations
-  // file_read returns { path, content } but InlineCodeDiff expects { filePath, before, after, operation }
   if (
     normalizedTool === 'file_read' ||
     normalizedTool.endsWith('read_text_file') ||
@@ -355,7 +345,6 @@ export const normalizeInlineToolData = (
     const content = (data['content'] as string | undefined) ?? (data['text'] as string | undefined);
 
     if (path && content !== undefined) {
-      // Transform into diff/read shape that InlineCodeDiff expects
       data['filePath'] = path;
       data['operation'] = 'read';
       data['before'] = '';
@@ -381,28 +370,24 @@ export const validateSlashCommandArgs = (command: string, args: string): boolean
 
   switch (command) {
     case 'terminal':
-      // Terminal commands shouldn't contain shell metacharacters in certain positions
       if (/[;|&`$(){}[\]\\]/.test(args) && /\b(rm|del|format|shutdown|poweroff)\b/i.test(args)) {
-        return false; // Reject dangerous combinations
+        return false;
       }
       break;
 
     case 'browser':
-      // Browser URLs should be relatively safe but check for injection
       if (args.includes('\n') || args.includes('\r')) {
-        return false; // No newlines in URLs
+        return false;
       }
       break;
 
     case 'code':
-      // Code arguments should not be excessively large (prevent memory issues)
       if (args.length > 5000) {
         return false;
       }
       break;
 
     case 'database':
-      // Database queries should not be excessively long
       if (args.length > 3000) {
         return false;
       }

@@ -1,10 +1,3 @@
-/**
- * ComputerUseOverlay
- *
- * Renders action indicators over the screenshot in the ExecutionSidecar
- * when a computer use session is active. Coordinates are scaled from
- * display space to container space for accurate positioning.
- */
 import { Keyboard, ArrowUp, ArrowDown, Crosshair } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -104,17 +97,14 @@ export function ComputerUseOverlay({
     return null;
   }
 
-  // Screenshot actions have no visual overlay
   if (lastAction.type === 'screenshot') {
     return null;
   }
 
-  // If there are no coordinates, we cannot position an indicator
   if (lastAction.x === undefined || lastAction.y === undefined) {
     return null;
   }
 
-  // Guard against zero-size displays to avoid division by zero
   if (displayWidth <= 0 || displayHeight <= 0) {
     return null;
   }

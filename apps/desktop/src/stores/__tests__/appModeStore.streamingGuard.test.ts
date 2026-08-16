@@ -1,19 +1,3 @@
-/**
- * DES-C16 — the mid-stream Local↔Cloud switch guard.
- *
- * `appModeStore.setMode` refuses a mode switch while a chat is streaming,
- * because the switch disposes the active runtime (`desktopChatRuntime`) and
- * wipes the conversation boundary (`App.tsx`), destroying the in-flight answer.
- *
- * The guard was inert twice over:
- *   1. `chatStore.ts` registered `useChatMessageStore`, but `isStreaming` lives
- *      on the execution store — `getState().isStreaming` was `undefined`, so
- *      `isChatStoreStreaming()` was permanently false.
- *   2. Managed Cloud turns stream through `@agiworkforce/unified-chat`'s shared
- *      store, which the desktop guard never consulted at all.
- *
- * Both readers now register into `chatStoreRef` and the guard is their OR.
- */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,7 +41,6 @@ vi.mock('../../utils/localStorage', () => ({
 import { useAppModeStore } from '../appModeStore';
 import { isChatStoreStreaming, registerChatStoreStateReader } from '../chat/chatStoreRef';
 import { useChatExecutionStore } from '../chat/chatExecutionStore';
-// Importing the barrel is what performs the desktop-side registration.
 import '../chat/chatStore';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -96,9 +79,6 @@ describe('DES-C16: mode switching is refused while any chat is streaming', () =>
   });
 
   it('refuses Cloud -> Local while the SHARED unified-chat store is streaming', () => {
-    // Every Managed Cloud turn streams through the shared store, not the
-    // desktop execution store. App.tsx registers it as a second reader; this
-    // stands in for it so the OR is exercised without importing the UI package.
     const sharedStore = { isStreaming: false };
     const dispose = registerChatStoreStateReader({ getState: () => sharedStore });
 

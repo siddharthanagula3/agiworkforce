@@ -5,22 +5,6 @@ import { describe, expect, it } from 'vitest';
 
 import { metadata } from '@/app/api-docs/layout';
 
-/**
- * `/api-docs` is the page a third-party integrator lands on, so it may name
- * only the developer surface that `apps/web/public/openapi.json` documents and
- * the repository actually ships.
- *
- * Two claims failed that before this test existed. The layout metadata sold
- * "webhooks, and SDK guides" — the published spec has no webhook path and every
- * workspace package is `private: true`, so neither is installable or callable.
- * And the page said the OpenAPI bundle "publish[es] at public launch" while
- * `public/openapi.json` was already being served, which hid the one artifact a
- * developer integrates against.
- *
- * Every allowance below is derived, not hardcoded: document a webhook path in
- * the spec, or publish a non-private package, and the matching term becomes
- * legal copy again.
- */
 const APP_DIR = path.join(__dirname, '..');
 const WEB_ROOT = path.resolve(APP_DIR, '../..');
 const REPO_ROOT = path.resolve(WEB_ROOT, '../..');
@@ -34,7 +18,6 @@ function specPaths(): string[] {
   return Object.keys(spec.paths).map((value) => value.toLowerCase());
 }
 
-/** A package a developer could `npm install` — i.e. one that is not private. */
 function publishablePackages(): string[] {
   const packagesDir = path.join(REPO_ROOT, 'packages');
   if (!fs.existsSync(packagesDir)) return [];
@@ -75,10 +58,6 @@ const pageSource = fs.readFileSync(path.join(APP_DIR, 'page.tsx'), 'utf8');
 describe('/api-docs metadata', () => {
   const text = metadataText();
 
-  /**
-   * Endpoint families an integrator would go looking for after reading the
-   * copy. Each is claimable only once the published spec has a path for it.
-   */
   it.each(['webhook', 'batch', 'rerank', 'realtime', 'fine-tun'])(
     'does not advertise "%s" without a documented endpoint',
     (term) => {

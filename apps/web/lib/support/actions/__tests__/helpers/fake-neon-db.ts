@@ -1,24 +1,3 @@
-/**
- * A small in-memory stand-in for the Neon adapter, used by the support-action
- * tests.
- *
- * It is deliberately NOT a "whatever you asked for, yes" mock. The two
- * statements that carry the security properties — the proposal INSERT and the
- * claim UPDATE — are implemented by evaluating the SAME predicates the real SQL
- * declares, against the bound parameters. So a test that confirms someone
- * else's proposal fails here for the same reason it would fail in Postgres:
- * `user_id = $2` does not match.
- *
- * Because a fake can always drift from the SQL it imitates, the tests ALSO
- * assert on the captured SQL text (that the claim really binds id, user_id and
- * token_hash and really requires `consumed_at is null`). Deleting a predicate
- * from the production query breaks that assertion even though the fake would
- * still behave.
- *
- * Any statement this file does not know is a thrown error, never an empty
- * result: a silently-empty result set is how a mock turns a broken query into a
- * passing test.
- */
 
 export interface FakeProposalRow {
   id: string;
@@ -74,7 +53,6 @@ export function createFakeNeonDb(seed?: {
     calls.push({ sql, params });
     const normalized = sql.replace(/\s+/gu, ' ').trim();
 
-    // ── support_action_proposals ────────────────────────────────────────────
     if (/^insert into public\.support_action_proposals/iu.test(normalized)) {
       const row: FakeProposalRow = {
         id: nextId(),
@@ -90,7 +68,6 @@ export function createFakeNeonDb(seed?: {
         outcome: 'proposed',
         created_at: new Date(),
       };
-      // `token_hash text not null unique`
       if (proposals.some((p) => p.token_hash === row.token_hash)) {
         throw new Error('duplicate key value violates unique constraint');
       }
@@ -138,7 +115,6 @@ export function createFakeNeonDb(seed?: {
       return [{ count: String(count) }];
     }
 
-    // ── connectors ──────────────────────────────────────────────────────────
     if (/^select id, connector_id, connected_at from user_connectors/iu.test(normalized)) {
       return connectors.map((c) => ({ ...c }));
     }
@@ -151,7 +127,6 @@ export function createFakeNeonDb(seed?: {
     if (/^delete from github_installations/iu.test(normalized)) return [];
     if (/^delete from public\.connector_tool_permissions/iu.test(normalized)) return [];
 
-    // ── api keys ────────────────────────────────────────────────────────────
     if (/^select id, name, scopes from public\.api_keys/iu.test(normalized)) {
       const [keyId, userId] = params as [string, string];
       const row = apiKeys.find(
@@ -216,7 +191,6 @@ export function createFakeNeonDb(seed?: {
     connectors,
     apiKeys,
     calls,
-    /** Captured statements whose text matches `pattern`. */
     callsMatching(pattern: RegExp): FakeDbCall[] {
       return calls.filter((c) => pattern.test(c.sql.replace(/\s+/gu, ' ')));
     },

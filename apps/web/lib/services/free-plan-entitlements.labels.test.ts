@@ -2,11 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-// BIZ-003: plan IDENTITY (the stable `pro` / `max_15x` ids) must survive a
-// display RENAME. This file pins the direction of that dependency — the
-// user-facing limit messages must resolve their plan name from the shared
-// billing catalog, never from a retyped copy. Renaming Max 5x in the catalog
-// used to leave this module printing the old name forever.
 vi.mock('@agiworkforce/types', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@agiworkforce/types')>();
   return {
@@ -38,8 +33,6 @@ describe('plan labels in entitlement messages follow the catalog', () => {
   });
 
   it('still refuses to name a plan that has no managed allowance', () => {
-    // `byok` is deliberately absent from the safe-label map, so it must fall
-    // through to the generic wording rather than gaining a name from the catalog.
     expect(getProjectLimitErrorMessage('byok')).toBe(
       'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.',
     );

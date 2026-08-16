@@ -1,24 +1,3 @@
-/**
- * Shared offline sync manager factory.
- *
- * Higher-level orchestration on top of `@agiworkforce/client-runtime/offline-queue`:
- *   - Tracks `SyncManagerState` (state machine: ONLINE / OFFLINE / SYNCING / ERROR).
- *   - Listens to browser online/offline events and debounces sync on
- *     connectivity restored.
- *   - Schedules exponential-backoff retries on sync failure.
- *   - Notifies UI subscribers of state changes.
- *
- * Browser primitives (`window` event listeners, `navigator.onLine`,
- * `setTimeout`) are injected via the `OfflineSyncOptions` adapters so
- * this module is unit-testable in Node and reusable across web + desktop
- * surfaces without copy-paste.
- *
- * Surface integration:
- *   - `apps/web/lib/offline/offlineSync.ts` — passes the web offline-queue
- *     instance, wires real `window` events, real `navigator.onLine`.
- *   - `apps/desktop/src/lib/offline/offlineSync.ts` — same shape with the
- *     desktop queue instance.
- */
 
 import type { SyncCallbacks, SyncManagerState, SyncSummary } from '@agiworkforce/types';
 import { SyncState } from '@agiworkforce/types';
@@ -43,20 +22,11 @@ export interface OfflineSyncNetworkHandlers {
 
 export interface OfflineSyncOptions {
   queue: OfflineSyncQueueAdapter;
-  /** Logger for non-fatal sync failures. Default: console.error. */
   logger?: OfflineSyncLogger;
-  /** Subscribe to browser online/offline events. Returns cleanup. Default:
-   *  uses `window.addEventListener` if a `window` global exists; otherwise
-   *  returns a no-op cleanup (manual driving in tests). */
   subscribeNetworkEvents?: (handlers: OfflineSyncNetworkHandlers) => () => void;
-  /** Read current online state. Default: `navigator.onLine` if available,
-   *  otherwise `false`. */
   readInitialOnline?: () => boolean;
-  /** Debounce delay before performing sync after connectivity restored. */
   syncDebounceMs?: number;
-  /** Base delay for retry backoff after a failed sync. */
   retryBaseMs?: number;
-  /** Cap on retry backoff. */
   retryMaxMs?: number;
 }
 

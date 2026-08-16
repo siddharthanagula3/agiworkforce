@@ -1,9 +1,6 @@
-// Chat Feature - Public API
 
-// Components
 export * from './components';
 
-// Hooks
 export * from './hooks';
 
 // Types · exclude ToolCall/ToolCallStatus since they are already exported by ./components

@@ -1,17 +1,7 @@
-/**
- * Chat Store Types
- *
- * Shared type definitions for chat-related stores.
- * Extracted from unifiedChatStore for better modularity.
- */
 
 import type { Artifact } from '../../types/chat';
 import type { ChatExecutionMode } from '@agiworkforce/types';
 
-/**
- * Widget data type for embedded widgets (INT-001)
- * Widgets can be forms, data tables, charts, confirmations, etc.
- */
 export interface ChatWidgetData {
   id: string;
   type: string;
@@ -31,15 +21,10 @@ export interface MessageMetadata {
   streaming?: boolean;
   artifacts?: Artifact[];
   type?: 'reasoning' | 'response' | 'deep-research-task';
-  /** Task ID for deep research messages */
   taskId?: string;
-  /** Indicates this message was edited by the user */
   edited?: boolean;
-  /** Timestamp of when the message was last edited */
   editedAt?: Date;
-  /** Original content before editing (for history) */
   originalContent?: string;
-  /** Embedded widgets in this message (INT-001) */
   widgets?: ChatWidgetData[];
 
   tool?: string;
@@ -77,9 +62,7 @@ export interface Attachment {
   size?: number;
   mimeType?: string;
   content?: string;
-  /** Duration in seconds for audio files */
   duration?: number;
-  /** Transcription text for audio files */
   transcription?: string;
 }
 
@@ -141,7 +124,6 @@ export interface InlinePanelContent {
     latencyMs?: number;
     error?: string;
   };
-  /** Generic data payload for inline tool results (swarm, skill, memory, vision, etc.) */
   data?: Record<string, unknown>;
 }
 
@@ -235,13 +217,10 @@ export interface EnhancedMessage {
   reactions?: MessageReaction[];
   inlinePanels?: InlinePanel[];
   slashCommand?: SlashCommandMetadata;
-  /** Branch this message belongs to (defaults to 'main') */
   branchId?: string;
-  /** Parent message ID for branched conversations */
   parentMessageId?: string;
 }
 
-/** Represents a conversation branch (fork point) */
 export interface BranchSummary {
   id: string;
   name: string;
@@ -258,19 +237,13 @@ export interface ConversationSummary {
   lastMessage?: string;
   createdAt?: Date;
   updatedAt: Date;
-  /** Per-conversation custom instructions */
   customInstructions?: string;
-  /** Project ID this conversation belongs to */
   projectId?: string;
-  /** When true, messages in this conversation are not persisted to disk */
   incognito?: boolean;
-  /** Per-conversation model override — takes precedence over the global default model */
   modelOverride?: string;
-  /** Immutable execution boundary. Local -> BYOK transitions create a fork. */
   executionMode: ChatExecutionMode;
 }
 
-// Pending user message - for mid-task input while AI is processing
 export interface PendingUserMessage {
   id: string;
   content: string;
@@ -327,12 +300,6 @@ export type ActiveView =
   | 'terminal'
   | 'vision';
 
-/**
- * Conversation Mode controls AI autonomy level
- * - 'auto': Agent acts autonomously without prompts (default)
- * - 'manual': Agent asks for permission before dangerous actions
- */
 export type ConversationMode = 'auto' | 'manual';
 
-/** Default branch ID for conversations — the primary/trunk branch. */
 export const DEFAULT_BRANCH_ID = 'main' as const;

@@ -1,14 +1,3 @@
-/**
- * Unit tests for task-family session stickiness and escalation-only switching.
- *
- * The two behaviours that must never regress:
- *   - a session stays pinned when nothing failed, even if this turn's router
- *     preferred someone else;
- *   - a switch may only move UP the ladder, and every refusal says which rule
- *     refused it.
- *
- * All inputs are fixed literals. No wall-clock value is read anywhere.
- */
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -23,7 +12,6 @@ const HIGH_MODEL_ID = 'fixture-high-model';
 const VISION_LOW_MODEL_ID = 'fixture-vision-low-model';
 const VISION_HIGH_MODEL_ID = 'fixture-vision-high-model';
 
-/** Cheapest → most capable, exactly as `escalationLadder` is derived. */
 const LADDER = [LOW_MODEL_ID, MID_MODEL_ID, HIGH_MODEL_ID] as const;
 
 const session = (modelKey: string, priorTurnCount = 3): TaskFamilySessionRoute => ({

@@ -61,13 +61,9 @@ const ANTHROPIC_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface AnthropicAdapterConfig extends ProviderAdapterConfig {
-  /** Enable ephemeral cache_control on system prompt + last user turn. */
   enableCacheControl?: boolean;
-  /** Cache retention strategy. Default: short. */
   cacheRetention?: 'short' | 'long' | 'none';
-  /** Anthropic service tier (api.anthropic.com only). */
   serviceTier?: 'auto' | 'standard_only';
-  /** Beta features (e.g., "prompt-caching-2024-07-31"). */
   betaFeatures?: string[];
 }
 
@@ -102,7 +98,6 @@ export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): Pro
     async *stream(req: ChatRequest, signal: AbortSignal): AsyncIterable<StreamChunk> {
       const translated = translateChatRequest(req);
 
-      // Apply Anthropic-specific payload policy (cache_control + service_tier).
       const policy = resolveAnthropicPayloadPolicy({
         api: 'anthropic-messages',
         ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
@@ -114,15 +109,9 @@ export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): Pro
         ...(config.serviceTier ? { serviceTier: config.serviceTier } : {}),
       });
 
-      // Mutate translated params in-place per policy.
       const payload = translated as unknown as Record<string, unknown>;
       applyAnthropicPayloadPolicyToParams(payload, policy);
 
-      // Hand off to SDK. The SDK's `messages.stream()` returns an async iterable
-      // of MessageStreamEvent which we translate to our StreamChunk shape.
-      // The 90s stream watchdog wraps the translated chunks so silent-drop
-      // connections (cellular hand-off, NAT timeout) surface as a clean
-      // StreamIdleTimeoutError instead of hanging the chat indefinitely.
       try {
         const sdkStream = sdk.messages.stream(
           translated as unknown as Anthropic.MessageStreamParams,

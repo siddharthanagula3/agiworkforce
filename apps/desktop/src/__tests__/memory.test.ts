@@ -1,18 +1,10 @@
-/**
- * Memory Tauri Commands Integration Tests
- *
- * Tests for the memory management Tauri commands that expose the MemoryManager
- * to the frontend, allowing the AGI to persist and recall information across sessions.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
 
-// Mock Tauri invoke before importing the store
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-// Mock sonner toast to prevent side effects
 vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
@@ -20,7 +12,6 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Types matching the Rust backend structures
 type MemoryCategory = 'preference' | 'fact' | 'decision' | 'context';
 
 interface MemoryEntry {
@@ -48,9 +39,6 @@ describe('Memory Tauri Commands', () => {
     vi.clearAllMocks();
   });
 
-  // ==========================================================================
-  // memory_remember - Store a preference
-  // ==========================================================================
   describe('memory_remember', () => {
     it('should store a preference with default importance', async () => {
       const mockId = 1;
@@ -95,7 +83,6 @@ describe('Memory Tauri Commands', () => {
     });
 
     it('should update existing memory with same category and topic', async () => {
-      // First call creates the memory
       vi.mocked(invoke).mockResolvedValueOnce(1);
       await invoke('memory_remember', {
         category: 'preference',
@@ -104,7 +91,6 @@ describe('Memory Tauri Commands', () => {
         importance: 5,
       });
 
-      // Second call updates the same memory
       vi.mocked(invoke).mockResolvedValueOnce(1);
       const result = await invoke('memory_remember', {
         category: 'preference',
@@ -148,9 +134,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_recall - Retrieve stored memory
-  // ==========================================================================
   describe('memory_recall', () => {
     it('should retrieve stored memory by category and topic', async () => {
       const mockEntry: MemoryEntry = {
@@ -212,9 +195,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_search - Search memories by keyword
-  // ==========================================================================
   describe('memory_search', () => {
     it('should search memories by query text', async () => {
       const mockResults: MemoryEntry[] = [
@@ -302,9 +282,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_get_by_category - Get all preferences
-  // ==========================================================================
   describe('memory_get_by_category', () => {
     it('should get all preferences', async () => {
       const mockPreferences: MemoryEntry[] = [
@@ -422,9 +399,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_forget - Delete a memory
-  // ==========================================================================
   describe('memory_forget', () => {
     it('should delete a memory by ID', async () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
@@ -460,9 +434,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_forget_topic - Delete by category and topic
-  // ==========================================================================
   describe('memory_forget_topic', () => {
     it('should delete a memory by category and topic', async () => {
       vi.mocked(invoke).mockResolvedValueOnce(true);
@@ -491,9 +462,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_log_context - Add daily log entry
-  // ==========================================================================
   describe('memory_log_context', () => {
     it('should log a context entry with default type', async () => {
       const mockLogId = 100;
@@ -563,9 +531,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_get_daily_logs - Get logs for a specific date
-  // ==========================================================================
   describe('memory_get_daily_logs', () => {
     it('should get daily logs for a specific date', async () => {
       const mockLogs: DailyLogEntry[] = [
@@ -608,9 +573,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_get_session_context - Get combined context
-  // ==========================================================================
   describe('memory_get_session_context', () => {
     it('should get session context for AGI initialization', async () => {
       const mockContext = `## User Preferences
@@ -651,9 +613,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_get_important - Get high-importance memories
-  // ==========================================================================
   describe('memory_get_important', () => {
     it('should get high-importance memories with default threshold', async () => {
       const mockImportant: MemoryEntry[] = [
@@ -705,9 +664,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_export_all - Export all memories for backup
-  // ==========================================================================
   describe('memory_export_all', () => {
     it('should export all memories', async () => {
       const mockExport: MemoryEntry[] = [
@@ -740,9 +696,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_cleanup_logs - Cleanup old daily logs
-  // ==========================================================================
   describe('memory_cleanup_logs', () => {
     it('should cleanup old logs with default retention', async () => {
       const deletedCount = 15;
@@ -779,9 +732,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // ==========================================================================
-  // memory_list_all - List all memories (used by memoryStore.loadAll)
-  // ==========================================================================
   describe('memory_list_all', () => {
     it('should list all memories', async () => {
       const mockMemories: MemoryEntry[] = [
@@ -831,7 +781,6 @@ describe('Memory Tauri Commands', () => {
     });
   });
 
-  // M36 — Tauri command name and payload shape verification
   describe('Command name and payload shape verification (M36)', () => {
     describe('memory_remember command signature', () => {
       it('sends exactly the expected keys: category, topic, content, importance', async () => {
@@ -1000,7 +949,6 @@ describe('Memory Tauri Commands', () => {
 
         const [commandName] = vi.mocked(invoke).mock.calls[0]!;
         expect(commandName).toBe('memory_export_all');
-        // No second argument (or undefined)
         expect(vi.mocked(invoke).mock.calls[0]!.length).toBe(1);
       });
 

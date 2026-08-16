@@ -1,20 +1,7 @@
-/**
- * Dynamic Open Graph / social share card (1200x630) rendered with next/og.
- *
- * Replaces the old `public/app-preview.png` desktop screenshot that link
- * unfurlers (Slack/X/iMessage/LinkedIn) showed. Branded, professional, and
- * always in sync with the product name/tagline — no stale static screenshot.
- * `lib/seo/site.ts` OG_IMAGE points here, so every page's og:image + twitter
- * card uses it.
- */
 import { ImageResponse } from 'next/og';
-
-// Route handlers run on the Node runtime by default (Fluid Compute); ImageResponse
-// is supported there — no edge runtime needed. The card is constant, so Next caches it.
 
 const AMBER = '#C8892A';
 
-/** The 12-ray AGI brand mark from app/icon.svg, drawn at an arbitrary size. */
 const MARK_LINES: ReadonlyArray<[number, number, number, number]> = [
   [12, 7.4, 12, 3],
   [14.3, 8.02, 16.5, 4.21],

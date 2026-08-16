@@ -1,7 +1,3 @@
-/**
- * User profile store using Zustand
- * Handles user data, profile information, and preferences
- */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -125,7 +121,6 @@ export const useUserProfileStore = create<UserProfileStore>()(
         }),
         merge: (persistedState, currentState) => {
           const persisted = persistedState as Partial<UserProfileState>;
-          // Rehydrate Date fields that JSON.parse converts to strings
           if (persisted.user) {
             persisted.user.createdAt = new Date(persisted.user.createdAt);
             persisted.user.updatedAt = new Date(persisted.user.updatedAt);
@@ -149,49 +144,23 @@ export const useUserProfileStore = create<UserProfileStore>()(
   ),
 );
 
-// ============================================================================
-// SELECTOR HOOKS (optimized for re-renders with explicit return types)
-// ============================================================================
-
-/**
- * Selector for user object - may be null if not authenticated
- */
 export const useUser = (): UserProfile | null => useUserProfileStore((state) => state.user);
 
-/**
- * Selector for user plan - returns undefined if user is null
- */
 export const useUserPlan = (): UserProfile['plan'] | undefined =>
   useUserProfileStore((state) => state.user?.plan);
 
-/**
- * Selector for user usage stats - returns undefined if user is null
- */
 export const useUserUsage = (): UserProfile['usage'] | undefined =>
   useUserProfileStore((state) => state.user?.usage);
 
-/**
- * Selector for user billing info - returns undefined if user is null
- */
 export const useUserBilling = (): UserProfile['billing'] | undefined =>
   useUserProfileStore((state) => state.user?.billing);
 
-/**
- * Selector for user profile details - returns undefined if user is null
- */
 export const useUserProfileDetails = (): UserProfile['profile'] | undefined =>
   useUserProfileStore((state) => state.user?.profile);
 
-/**
- * Selector for loading state - primitive boolean
- */
 export const useUserProfileLoading = (): boolean => useUserProfileStore((state) => state.isLoading);
 
-/**
- * Selector for error state - may be null
- */
 export const useUserProfileError = (): string | null => useUserProfileStore((state) => state.error);
 
-// Legacy alias for backward compatibility
 /** @deprecated Use useUserProfileDetails instead */
 export const useUserProfile = useUserProfileDetails;

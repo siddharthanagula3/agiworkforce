@@ -1,26 +1,3 @@
-/**
- * AUDIT-TRAIL-01 — the Enterprise "audit trail" actually records events.
- *
- * Before this suite existed, `security_audit_logs` only ever received FAILURE
- * signals (auth_failed, rate_limit_exceeded, …) from four call sites, and
- * `enterprise_audit_events` had a read endpoint but zero writers anywhere in
- * the repo. The Enterprise page sells an audit trail; the table was empty.
- *
- * What this file proves, against the real implementation:
- *   1. `recordAuditEvent` issues exactly one INSERT into security_audit_logs
- *      with the actor, action, severity, ip, user-agent and endpoint in the
- *      documented parameter positions.
- *   2. IP comes from `getClientIp` semantics (rightmost x-forwarded-for hop,
- *      x-real-ip preferred) — not the spoofable leftmost hop.
- *   3. An org-scoped event ALSO calls the SECURITY DEFINER writer added in
- *      0087, with the outcome/severity vocabulary enterprise_audit_events
- *      accepts.
- *   4. Representative route handlers really write a row: api key created,
- *      api key revoked, member role changed.
- *   5. A failing audit write NEVER breaks the request it observes.
- *
- * Redaction is proven separately in audit-trail-redaction.test.ts.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -72,9 +49,6 @@ vi.mock('@/app/api/settings/team/team-admin-access', () => ({
 
 import { NextRequest } from 'next/server';
 import { recordAuditEvent } from '@/lib/security-audit';
-// Route handlers are imported statically (vi.mock calls above are hoisted, so
-// the mocks are already in place). Importing them inside a test body makes the
-// module-graph transform cost count against the per-test timeout.
 import { POST as createApiKey } from '@/app/api/settings/api-keys/route';
 import { DELETE as revokeApiKey } from '@/app/api/settings/api-keys/[keyId]/route';
 import { PATCH as updateMemberRole } from '@/app/api/settings/team/[memberId]/route';
@@ -82,7 +56,6 @@ import { PATCH as updateMemberRole } from '@/app/api/settings/team/[memberId]/ro
 const SECURITY_LOG_INSERT = /INSERT INTO security_audit_logs/i;
 const ENTERPRISE_WRITER = /record_enterprise_audit_event/i;
 
-/** All INSERTs issued against security_audit_logs, as [sql, params] pairs. */
 function auditInserts(): Array<[string, unknown[]]> {
   return (mockExecute.mock.calls as Array<[string, unknown[]]>).filter(([sql]) =>
     SECURITY_LOG_INSERT.test(sql),
@@ -95,7 +68,6 @@ function auditParams(index = 0): unknown[] {
   return call[1];
 }
 
-/** Positional decode of the single INSERT this module owns. */
 function decodeAuditRow(params: unknown[]) {
   return {
     userId: params[0],
@@ -122,10 +94,6 @@ beforeEach(() => {
     fn({ query: mockQuery, execute: mockExecute }),
   );
 });
-
-// ───────────────────────────────────────────────────────────────────────────
-// 1. Service level
-// ───────────────────────────────────────────────────────────────────────────
 
 describe('recordAuditEvent — writes a real security_audit_logs row', () => {
   it('records actor, action, severity, ip, user-agent, endpoint and details', async () => {
@@ -156,9 +124,6 @@ describe('recordAuditEvent — writes a real security_audit_logs row', () => {
       resourceType: 'api_key',
       resourceId: 'key_1',
       resourceName: 'CI key',
-      // Snake_case aliases so the existing read layer's
-      // `details->>'resource_type'` filter (app/api/settings/audit-logs/route.ts)
-      // actually matches these rows instead of staying empty forever.
       resource_type: 'api_key',
       resource_id: 'key_1',
     });
@@ -167,7 +132,6 @@ describe('recordAuditEvent — writes a real security_audit_logs row', () => {
   it('takes the RIGHTMOST x-forwarded-for hop, never the spoofable leftmost one', async () => {
     const request = new Request('https://app.example.com/api/auth/set-token', {
       method: 'POST',
-      // An attacker controls the first entry: `curl -H 'X-Forwarded-For: 1.2.3.4'`.
       headers: { 'x-forwarded-for': '1.2.3.4, 198.51.100.22' },
     });
 
@@ -237,13 +201,12 @@ describe('recordAuditEvent — enterprise dual-write', () => {
     expect(writes).toHaveLength(1);
 
     const [, params] = writes[0]!;
-    expect(params[0]).toBe('11111111-2222-3333-4444-555555555555'); // organization_id
-    expect(params[1]).toBe('user_admin'); // actor_user_id
-    expect(params[2]).toBe('web'); // surface
-    expect(params[3]).toBe('member_role_changed'); // action
-    expect(params[4]).toBe('organization_member'); // resource_type
-    expect(params[5]).toBe('user_target'); // resource_id
-    // Vocabularies enterprise_audit_events actually accepts.
+    expect(params[0]).toBe('11111111-2222-3333-4444-555555555555');
+    expect(params[1]).toBe('user_admin');
+    expect(params[2]).toBe('web');
+    expect(params[3]).toBe('member_role_changed');
+    expect(params[4]).toBe('organization_member');
+    expect(params[5]).toBe('user_target');
     expect(['success', 'failure', 'denied']).toContain(params[6]);
     expect(['info', 'warning', 'critical']).toContain(params[7]);
   });
@@ -270,10 +233,6 @@ describe('recordAuditEvent — enterprise dual-write', () => {
     expect(params[4]).toBe('organization_member');
   });
 });
-
-// ───────────────────────────────────────────────────────────────────────────
-// 2. Route level — the events an enterprise auditor expects
-// ───────────────────────────────────────────────────────────────────────────
 
 describe('POST /api/settings/api-keys writes api_key_created', () => {
   it('records the key id, label and scopes', async () => {
@@ -338,7 +297,6 @@ describe('DELETE /api/settings/api-keys/[keyId] writes api_key_revoked', () => {
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user_actor' });
     mockQuery.mockResolvedValue([{ id: 'key_abc', user_id: 'user_actor', revoked_at: null }]);
     mockRevokeApiKey.mockResolvedValue(undefined);
-    // The audit INSERT is the only db.execute this handler makes.
     mockExecute.mockRejectedValue(new Error('relation "security_audit_logs" does not exist'));
 
     const response = await revokeApiKey(
@@ -350,12 +308,10 @@ describe('DELETE /api/settings/api-keys/[keyId] writes api_key_revoked', () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ message: 'API key revoked' });
-    // The revocation itself still happened.
     expect(mockRevokeApiKey).toHaveBeenCalledOnce();
   });
 
   it('still returns 200 when the enterprise dual-write fails', async () => {
-    // A bad org id must not 500 the request it observes.
     mockQuery.mockRejectedValue(new Error('permission denied for function'));
 
     await expect(
@@ -378,7 +334,6 @@ describe('PATCH /api/settings/team/[memberId] writes member_role_changed', () =>
       if (/pg_advisory_xact_lock/.test(sql)) return [];
       if (ENTERPRISE_WRITER.test(sql)) return [{ record_enterprise_audit_event: 'row-uuid' }];
       if (/from public\.organization_members/.test(sql)) {
-        // First call resolves the requester, second the target.
         const calls = mockQuery.mock.calls.filter(([s]) =>
           /from public\.organization_members/.test(String(s)),
         ).length;
@@ -410,7 +365,6 @@ describe('PATCH /api/settings/team/[memberId] writes member_role_changed', () =>
     const row = decodeAuditRow(auditParams());
     expect(row.eventType).toBe('member_role_changed');
     expect(row.userId).toBe('user_admin');
-    // Promotion to admin is deliberately warning-level, not info.
     expect(row.severity).toBe('warning');
     expect(row.details).toMatchObject({
       organizationId,
@@ -439,7 +393,6 @@ describe('recordAuditEvent — the two writes fail independently', () => {
       }),
     ).resolves.toBeUndefined();
 
-    // One broken table must not silently empty the other audit trail.
     expect(enterpriseWrites()).toHaveLength(1);
   });
 
@@ -469,17 +422,11 @@ describe('recordAuditEvent — rows are readable through the existing audit-log 
     });
 
     const details = decodeAuditRow(auditParams()).details;
-    // app/api/settings/audit-logs/route.ts filters on details->>'resource_type'
-    // and projects details->>'resource_id'; without these the panel's filter
-    // would never match a row we wrote.
     expect(details['resource_type']).toBe('connector');
     expect(details['resource_id']).toBe('conn_1');
   });
 
   it('uses the event_type strings the read layer already advertises', async () => {
-    // app/api/settings/audit-logs/actions/route.ts ships a hardcoded
-    // `knownActions` list; these entries were dead strings before anything wrote
-    // them.
     for (const eventType of ['login', 'logout', 'api_key_created', 'api_key_revoked'] as const) {
       mockExecute.mockClear();
       await recordAuditEvent({ userId: 'user_actor', eventType, endpoint: '/api/test' });

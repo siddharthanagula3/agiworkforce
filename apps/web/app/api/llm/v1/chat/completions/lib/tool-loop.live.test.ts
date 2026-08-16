@@ -50,7 +50,6 @@ import { runToolLoop } from './tool-loop';
 
 const LIVE = process.env['AGI_LIVE_PROVIDER_SMOKE'] === '1';
 
-/** Load provider keys into `process.env` in-process. Values are never printed. */
 function loadServerKeys(): void {
   const path = process.env['AGI_SMOKE_ENV_FILE'] ?? join(process.cwd(), '.env.local');
   let raw: string;
@@ -116,7 +115,6 @@ async function collect(gen: AsyncGenerator<Uint8Array>): Promise<string> {
   return out;
 }
 
-// llm-guardrail-allow: paid live-network call, gated by AGI_LIVE_PROVIDER_SMOKE
 describe.skipIf(!LIVE)('tool loop, live end to end', () => {
   it(
     'has a real model call a real tool and use the real result',
@@ -136,17 +134,10 @@ describe.skipIf(!LIVE)('tool loop, live end to end', () => {
         );
       }
 
-      // The model chose the tool. Nothing scripted this; if the loop failed to
-      // offer the tool, or the provider request dropped it, there is no call.
       expect(output, 'model never emitted a url_fetch call').toContain('"name":"url_fetch"');
 
-      // The tool ran and finished. A dispatched-but-failed tool reports a
-      // different status, so this separates "offered" from "worked".
       expect(output, 'url_fetch did not complete').toContain('"status":"completed"');
 
-      // The fetched content reached the model and came back in the answer.
-      // "Example Domain" appears nowhere in the prompt or the tool definition,
-      // so it can only have come over the wire.
       expect(output, 'fetched content never reached the final answer').toContain('Example Domain');
     },
   );

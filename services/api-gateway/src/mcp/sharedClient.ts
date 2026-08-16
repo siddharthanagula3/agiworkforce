@@ -1,22 +1,3 @@
-/**
- * @file Shared-package MCP client for the api-gateway.
- *
- * Uses the official `@modelcontextprotocol/sdk` via the shared
- * `@agiworkforce/mcp` package's transport-discriminated client. This replaced
- * an earlier hand-rolled JSON-RPC proxy, which has since been removed — all
- * MCP traffic in the gateway now goes through the official SDK client.
- *
- * Why the SDK:
- *   - It supports `streamable-http` (modern bidi stream), `sse` (legacy), AND
- *     stdio behind a single `Client` API — less code and fewer bugs than
- *     hand-rolling stdio framing and HTTP polling.
- *   - Tool catalogs across many servers build with a single
- *     `buildMcpToolCatalog()` call, and per-server failures are isolated.
- *   - Config validation already happens in `mcpConfig.ts`'s allowlist;
- *     this module assumes an already-validated config and focuses on lifecycle.
- *
- * Consume this module's `getSharedMcpProxy()` for gateway MCP access.
- */
 
 import {
   buildMcpToolCatalog,
@@ -30,7 +11,6 @@ import {
 import { logger } from '../lib/logger';
 import { loadMcpConfig, type McpServerEntry } from './mcpConfig';
 
-/** Maps the gateway's server-config shape onto the shared package's shape. */
 function toSharedConfig(entry: McpServerEntry): SharedMcpServerConfig {
   if (entry.transport.type === 'stdio') {
     return {
@@ -39,9 +19,6 @@ function toSharedConfig(entry: McpServerEntry): SharedMcpServerConfig {
       env: entry.transport.env,
     };
   }
-  // HTTP transport — the shared package picks streamable-http by default
-  // when no explicit `transport` field is present, which matches the SDK's
-  // recommended direction. Pass any custom headers through.
   return {
     url: entry.transport.url,
     transport: 'streamable-http',
@@ -50,9 +27,7 @@ function toSharedConfig(entry: McpServerEntry): SharedMcpServerConfig {
 }
 
 interface SharedMcpProxyState {
-  /** server id → live handle (lazy-opened on first use). */
   handles: Map<string, McpServerHandle>;
-  /** Promise of the in-flight catalog build to coalesce concurrent calls. */
   catalogBuild: Promise<McpToolCatalog> | null;
 }
 
@@ -61,11 +36,6 @@ const state: SharedMcpProxyState = {
   catalogBuild: null,
 };
 
-/**
- * Build a flat catalog across every configured server. Uses the shared
- * package's bulk builder, which isolates per-server failures. Caches the
- * full catalog in memory for `cacheTtlMs` (default: 60s).
- */
 let catalogCacheValue: McpToolCatalog | null = null;
 let catalogCacheExpiresAt = 0;
 export async function getSharedMcpCatalog(cacheTtlMs = 60_000): Promise<McpToolCatalog> {
@@ -84,7 +54,6 @@ export async function getSharedMcpCatalog(cacheTtlMs = 60_000): Promise<McpToolC
   state.catalogBuild = (async () => {
     try {
       const { catalog, handles } = await buildMcpToolCatalog(configs);
-      // Replace any existing handles, closing the old ones cleanly.
       const previous = state.handles;
       state.handles = new Map();
       for (const handle of handles) {
@@ -103,10 +72,6 @@ export async function getSharedMcpCatalog(cacheTtlMs = 60_000): Promise<McpToolC
   return state.catalogBuild;
 }
 
-/**
- * Call a tool on a server. Lazily ensures the server is connected;
- * subsequent calls reuse the cached handle.
- */
 export async function callSharedMcpTool(
   serverId: string,
   toolName: string,
@@ -124,7 +89,6 @@ export async function callSharedMcpTool(
   return handle.callTool(toolName, args);
 }
 
-/** Close every open handle (call on graceful shutdown). */
 export async function closeAllSharedMcpHandles(): Promise<void> {
   const handles = Array.from(state.handles.values());
   state.handles.clear();

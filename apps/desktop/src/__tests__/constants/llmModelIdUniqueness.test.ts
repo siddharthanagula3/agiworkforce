@@ -1,11 +1,3 @@
-/**
- * Regression test: all models in MODEL_METADATA must have unique apiModelId values.
- *
- * Audit finding: duplicate apiModelId values could cause silent routing errors
- * where the wrong model is invoked at the provider API level.
- *
- * This test pins the constraint so any future duplicate is caught immediately.
- */
 import { describe, it, expect } from 'vitest';
 import { modelsCatalogJson } from '@agiworkforce/types';
 import { MODEL_ID_ALIASES, MODEL_METADATA, normalizeModelId } from '../../constants/llm';
@@ -16,11 +8,11 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
   ).filter(([modelId, metadata]) => metadata.id === modelId);
 
   it('all canonical models with an apiModelId have unique values across the catalog', () => {
-    const seen = new Map<string, string>(); // apiModelId → model id
+    const seen = new Map<string, string>();
     const duplicates: Array<{ apiModelId: string; first: string; duplicate: string }> = [];
 
     for (const [modelId, metadata] of canonicalCatalogEntries) {
-      if (!metadata.apiModelId) continue; // auto-mode entries have no apiModelId
+      if (!metadata.apiModelId) continue;
 
       if (seen.has(metadata.apiModelId)) {
         duplicates.push({
@@ -53,11 +45,6 @@ describe('MODEL_METADATA — apiModelId uniqueness (audit regression)', () => {
     for (const [alias, canonicalId] of Object.entries(MODEL_ID_ALIASES)) {
       expect(normalizeModelId(alias)).toBe(canonicalId);
 
-      // When the alias also exists as a live (non-deprecated) catalog
-      // entry, the entry takes precedence in MODEL_METADATA so callers
-      // looking up the literal ID get the entry's canonical metadata.
-      // Live entries remain directly addressable even when a separate alias
-      // points clients at a newer catalog-owned model.
       const meta = MODEL_METADATA[alias];
       const aliasIsLiveEntry = meta && meta.id === alias && !meta.deprecated;
       if (aliasIsLiveEntry) continue;

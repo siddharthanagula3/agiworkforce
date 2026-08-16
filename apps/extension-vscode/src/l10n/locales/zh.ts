@@ -1,6 +1,3 @@
-/**
- * Chinese catalog. Key parity with `en` is enforced by l10n.test.ts.
- */
 const zh = {
   'applyEdit.prompt': 'AGI Workforce：应用 {command} 的结果？',
   'applyEdit.applyInline': '就地应用',

@@ -1,16 +1,3 @@
-/**
- * PAR-M40 — transcript code blocks had no language header row.
- *
- * The card used to be a bordered box with the copy button absolutely
- * positioned at top:6/right:6 over 28pt of reserved blank padding, and the
- * fence language (`match[3]`) was handed to the tokenizer and then discarded —
- * so a reader could never tell what language a block was, and an unlabelled
- * fence got no label at all.
- *
- * These tests pin the replacement: a real header row carrying a muted 11pt
- * language label ("Plain text" when the fence has none) with the copy control
- * beside it in normal flow.
- */
 import { View } from 'react-native';
 import { render } from '@testing-library/react-native';
 
@@ -51,11 +38,8 @@ describe('code-card header row', () => {
     const screen = renderFence('```ts\nconst x = 1;\n```');
 
     const copy = screen.getByLabelText('Copy code');
-    // Absolute positioning is what forced the blank 28pt gutter above the body.
     expect(copy).not.toHaveStyle({ position: 'absolute' });
 
-    // Label and copy control share one row, so both are siblings of the same
-    // parent — the header — rather than the label being absent entirely.
     const label = screen.getByText('ts');
     expect(label.parent).toBeTruthy();
     expect(copy.parent).toBeTruthy();
@@ -71,8 +55,6 @@ describe('code-card header row', () => {
   });
 
   it('treats a whitespace-only fence tag as unlabelled', () => {
-    // ```   \n … ``` — the tokenizer regex only captures \w+, so a padded
-    // fence yields no language and must still get the fallback label.
     const screen = renderFence('```   \nnothing\n```');
 
     expect(screen.getByText('Plain text')).toBeTruthy();

@@ -1,14 +1,4 @@
-/**
- * UI Component Library
- *
- * Primitive React components (shadcn/radix-based design system).
- * Moved here from src/components/ui/ in the Phase 5 reorg. The forwarding
- * layer that reorg left at src/components/ui/ is deleted — every caller
- * imports '@/ui/X' directly, and check-structure-conventions.mjs fails the
- * build if that path comes back.
- */
 
-// Core Components
 export * from './Accordion';
 export * from './Alert';
 export * from './AlertDialog';
@@ -37,7 +27,6 @@ export * from './Toast';
 export * from './Toaster';
 export * from './Tooltip';
 
-// Enhanced Components (Accessibility & UX Improvements)
 export * from './AccessibleDialog';
 export * from './ConfirmDialog';
 export * from './ContextMenu';

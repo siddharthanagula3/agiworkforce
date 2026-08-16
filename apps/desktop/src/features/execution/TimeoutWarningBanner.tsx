@@ -1,9 +1,3 @@
-/**
- * TimeoutWarningBanner Component
- *
- * A compact banner that displays when a task is approaching timeout.
- * Shows remaining time and quick action buttons.
- */
 import { useMemo, type FC } from 'react';
 import { AlertTriangle, Clock, Zap, X } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -20,9 +14,6 @@ export interface TimeoutWarningBannerProps {
   className?: string;
 }
 
-/**
- * Format remaining time in human-readable format
- */
 function formatRemainingTime(seconds: number): string {
   if (seconds <= 0) return 'Time expired';
 
@@ -42,18 +33,12 @@ function formatRemainingTime(seconds: number): string {
   return `${secs}s`;
 }
 
-/**
- * Get visual urgency level based on remaining time
- */
 function getUrgencyLevel(seconds: number): 'critical' | 'warning' | 'info' {
-  if (seconds <= 300) return 'critical'; // < 5 minutes
-  if (seconds <= 1800) return 'warning'; // < 30 minutes
+  if (seconds <= 300) return 'critical';
+  if (seconds <= 1800) return 'warning';
   return 'info';
 }
 
-/**
- * Get colors based on urgency
- */
 function getColors(urgency: 'critical' | 'warning' | 'info') {
   switch (urgency) {
     case 'critical':

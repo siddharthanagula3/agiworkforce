@@ -33,7 +33,6 @@ export function QRPairingCard() {
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<number | null>(null);
 
-  // Generate QR image whenever qrData changes
   useEffect(() => {
     let cancelled = false;
 
@@ -61,7 +60,6 @@ export function QRPairingCard() {
     };
   }, [qrData]);
 
-  // Auto-clear errors after 4 seconds
   useEffect(() => {
     if (!error) return undefined;
     const timeout = window.setTimeout(() => clearError(), 4000);

@@ -1,8 +1,3 @@
-/**
- * Tests for the four tool-loop SSE delta contracts (`x_tool_status`,
- * `x_tool_approval_request`, `x_tool_result`, `x_search_results`) mirrored
- * from `apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts`.
- */
 
 import { describe, expect, it } from 'vitest';
 import {

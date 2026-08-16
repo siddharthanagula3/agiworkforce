@@ -1,30 +1,3 @@
-// SYNC-RULE COMPLIANCE — Chrome surface
-//
-// Rule as amended: CLI and VS Code stay local/workspace/task scoped. Chrome
-// automatically mirrors a conversation to the signed-in AGI account ONLY when
-// every turn in it was inferred in Managed Cloud. A Local or BYOK turn
-// permanently disqualifies that conversation (founder decision, 2026-08-13).
-//
-// How this surface stays inside the rule:
-//   • Browser conversations (`agi_browser_conversations_v2`) remain
-//     AUTHORITATIVE in `chrome.storage.local` — device-scoped, never written to
-//     `chrome.storage.sync`. The account copy is a one-way replica; nothing is
-//     ever read back from it into Chrome.
-//   • Eligibility is per-message provenance (`HistoryMessage.runtime ===
-//     'managed-cloud'` for EVERY message), and the disqualification is sticky.
-//     An unstamped (pre-feature) message fails closed.
-//   • Eligible signed-in chats mirror automatically to the shared account
-//     conversation store. Writes force `skipLlm: true`, so they can never
-//     trigger inference or billing.
-//   • ALL cloud egress for this feature is confined to
-//     `features/cloud-bridge/conversationSync.ts` and its transport in
-//     `features/cloud-bridge/conversationSyncClient.ts` — the cloud-bridge gate
-//     enforced by `scripts/check-no-cloud-ipc-v1.mjs`. No other module in this
-//     extension may construct a Managed Cloud chat client.
-//   • Local eviction (30-day TTL, quota trims) NEVER deletes the account copy.
-//     Cloud deletes originate only from an explicit user deletion in the
-//     history drawer.
-//   • Bridge calls execute a turn but do not transfer ownership or persistence.
 
 import type {
   ConnectionStatus,
@@ -199,12 +172,10 @@ const state: BackgroundState = {
 interface ActiveChatStream {
   clientInstanceId: string;
   owner: ManagedCloudOwner;
-  /** Exact credential captured for this run; never replaced with ambient auth. */
   token: string;
   controller: AbortController;
   cancelRequested: boolean;
   cancelNotified: boolean;
-  /** Durable Managed Cloud identity for targeted scheduled-run cancellation. */
   requestId?: string;
   cloudRun?: import('@agiworkforce/cloud-contracts').ManagedCloudAgentRunReference;
 }
@@ -369,9 +340,6 @@ async function invalidateManagedCloudOwner(
   owner: ManagedCloudOwner,
   includeInactiveJournals = false,
 ): Promise<void> {
-  // Abort every admitted operation before the first await. Storage reads can
-  // be delayed; an explicit account transition must become authoritative in
-  // this event-loop turn, not after a journal lookup completes.
   const admittedStreams: ActiveChatStream[] = [];
   for (const [streamKey, active] of activeChatStreams) {
     if (!sameManagedCloudOwner(active.owner, owner)) continue;
@@ -388,8 +356,6 @@ async function invalidateManagedCloudOwner(
     admittedRecoveries.push(recovery);
   }
 
-  // Start captured-handle cancellation independently of storage. Journal I/O
-  // must not prevent a known server run from receiving its cancellation.
   const immediateCancellations: Array<{
     requestId?: string;
     runId: string;
@@ -487,9 +453,6 @@ async function invalidateManagedCloudOwner(
 }
 
 function retireManagedCloudOwner(owner: ManagedCloudOwner): void {
-  // Drop every debounced and in-flight conversation mirror before the new
-  // identity is exposed. The transport-boundary owner re-check in
-  // `conversationSyncClient` is the backstop; this stops the work outright.
   abortConversationSyncForOwnerChange();
   retiredManagedCloudOwners.add(managedCloudOwnerKey(owner));
   while (retiredManagedCloudOwners.size > 100) {
@@ -503,15 +466,6 @@ function isRetiredManagedCloudOwner(owner: ManagedCloudOwner): boolean {
   return retiredManagedCloudOwners.has(managedCloudOwnerKey(owner));
 }
 
-/**
- * Reconcile a 401 against the exact credential that received it.
- *
- * Rejected A work is always torn down by owner. Clerk sign-out is a second,
- * compare-and-clear step inside clerkAuth: if B (or a refreshed bearer for A)
- * became current meanwhile, it is left untouched. Pending computer-use starts
- * intentionally remain admission-gated because they do not own auth until
- * getManagedCloudAuthContext() returns.
- */
 async function invalidateRejectedManagedCloudCredential(
   rejected: Pick<ActiveChatStream, 'owner' | 'token'>,
 ): Promise<void> {
@@ -534,9 +488,6 @@ async function invalidateRejectedManagedCloudCredential(
     teardownErrors.push(error);
   }
   if (cleared) {
-    // The exact rejected incarnation is gone. Retire it synchronously, then
-    // tombstone even inactive scheduled journals so no later worker can resume
-    // work with that rejected authority.
     retireManagedCloudOwner(rejected.owner);
     try {
       await invalidateManagedCloudOwner(rejected.owner, true);
@@ -550,20 +501,17 @@ async function invalidateRejectedManagedCloudCredential(
   }
 }
 
-// Pending requests waiting for responses
 const pendingRequests = new Map<
   string,
   {
     resolve: (value: ExtensionResponse) => void;
     reject: (reason: unknown) => void;
     timeout: ReturnType<typeof setTimeout>;
-    /** Only the first connect response may arrive before a secret exists. */
     allowUnsignedResponse: boolean;
   }
 >();
 const pendingContextHandoffApprovals = new Set<string>();
 
-// WebMCP: per-tab tool catalog
 const webmcpToolsByTab = new Map<
   number,
   {
@@ -591,17 +539,13 @@ const NATIVE_RECONNECT_BASE_DELAY_MS = 1000;
 const NATIVE_RECONNECT_MAX_DELAY_MS = 30000;
 const NATIVE_RECONNECT_MAX_ATTEMPTS = 8;
 const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
-// SHORTCUTS_STORAGE_KEY, TASKS_STORAGE_KEY, MAX_SHORTCUTS, MAX_TASKS, TASK_ALARM_PREFIX
-// are now owned by background/shortcuts.ts and background/tasks.ts respectively.
 const TAB_GROUP_NAME = 'AGI Workforce';
 
 export interface SharedBackgroundContext {
   nativeReconnectTimer: ReturnType<typeof setTimeout> | null;
   nativeReconnectAttempt: number;
   nativeHandshakeInFlight: boolean;
-  /** True when max reconnect attempts exhausted. Prevents macOS permission popup loops. */
   nativeReconnectGaveUp: boolean;
-  /** True once Chrome begins suspending this service worker. */
   nativeSuspendInProgress: boolean;
 }
 
@@ -617,23 +561,6 @@ function createSharedBackgroundContext(): SharedBackgroundContext {
 
 const _bgCtx: SharedBackgroundContext = createSharedBackgroundContext();
 
-/**
- * Per-session HMAC secret negotiated with the native host on connect.
- *
- * FIX (audit 2026-05-20, §2): the legacy native-messaging envelope paired
- * requests with their responses purely by UUID, with no integrity envelope.
- * A compromised native host (or any in-process MITM that can intercept
- * postMessage in this extension service worker) could swap responses
- * across in-flight requests — answer a benign ping with the data from a
- * concurrent `chat_message` call.
- *
- * Mitigation: at connect time, ask the native host for a 32-byte session
- * secret in its connect ack. Every outgoing request gets a per-request
- * `mac = HMAC-SHA256(secret, id || timestamp || body)` and every incoming
- * response is verified the same way against the request's id. A host that
- * does not negotiate this secret is incompatible and is rejected before any
- * privileged request can be sent.
- */
 let nativeSessionSecret: ArrayBuffer | null = null;
 
 async function importHmacKey(rawSecret: ArrayBuffer): Promise<CryptoKey> {
@@ -659,12 +586,6 @@ async function computeEnvelopeMac(
 }
 
 function setNativeSessionSecret(hex: string | undefined): void {
-  // FIX (Codex P2, 2026-05-20): strict format check. The previous accept-any
-  // ≥32-char string would silently coerce non-hex (or odd-length) input into
-  // zeroed/truncated bytes via `parseInt(NaN, 16) = NaN → 0`, producing an
-  // HMAC key that differs from the host's and breaking every signed
-  // response once strict-mode (P1, below) is in effect. Require exactly
-  // 64 hex chars = 32 bytes.
   const isWellFormed =
     typeof hex === 'string' && hex.length === 64 && /^[0-9a-fA-F]{64}$/.test(hex);
   if (!isWellFormed) {
@@ -675,7 +596,6 @@ function setNativeSessionSecret(hex: string | undefined): void {
     nativeSessionSecret = null;
     return;
   }
-  // Parse 64-char hex into 32-byte ArrayBuffer.
   const bytes = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
     bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
@@ -691,10 +611,6 @@ function clearNativeReconnectTimer(): void {
 }
 
 function resetNativeReconnectState(): void {
-  // L-07 audit 2026-05-19: `nativeReconnectGaveUp` is cleared in two paths:
-  // (a) here, on explicit manual reconnect; (b) in connectToNativeHost
-  // success block (line ~311), on handshake success. Both are intentional.
-  // Do not consolidate — they have different preconditions.
   _bgCtx.nativeReconnectAttempt = 0;
   _bgCtx.nativeReconnectGaveUp = false;
   clearNativeReconnectTimer();
@@ -728,10 +644,6 @@ async function triggerManualReconnect(): Promise<ExtensionResponse> {
 }
 
 function scheduleNativeReconnect(trigger: string): void {
-  // Debounce: if a reconnect timer is already pending, skip this call.
-  // The attempt counter only increments when a new timer is actually scheduled,
-  // which is the correct behavior — duplicate disconnect events should not
-  // accelerate the backoff.
   if (_bgCtx.nativeReconnectTimer) {
     return;
   }
@@ -741,9 +653,6 @@ function scheduleNativeReconnect(trigger: string): void {
     NATIVE_RECONNECT_MAX_ATTEMPTS,
   );
 
-  // Stop retrying once max attempts are exhausted. Without this guard the
-  // reconnect loop runs indefinitely, launching the native host binary on
-  // every attempt and triggering repeated macOS permission prompts.
   if (_bgCtx.nativeReconnectAttempt >= NATIVE_RECONNECT_MAX_ATTEMPTS) {
     logger.warn('Max native reconnect attempts reached; giving up until user action', { trigger });
     _bgCtx.nativeReconnectGaveUp = true;
@@ -800,8 +709,6 @@ function initialize(): void {
       });
     }
   });
-  // Claude-style front door: clicking the toolbar icon opens the side-panel chat
-  // (no popup). Persistent + idempotent, so calling it on every SW start is safe.
   chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
     logger.warn('setPanelBehavior(openPanelOnActionClick) failed', err);
   });
@@ -811,9 +718,6 @@ function initialize(): void {
   void restoreScheduledTaskAlarms()
     .then(recoverScheduledTaskRuns)
     .catch((error) => logger.warn('Failed to restore scheduled Managed Cloud work', error));
-  // One-shot migration of the autofill profile from chrome.storage.sync (which
-  // replicates to Google's servers) into chrome.storage.local (device-only).
-  // Idempotent and silent on storage error. See H-04 in audits/2026-05-19.
   void migrateAutofillProfile().catch((err) => {
     logger.debug('Autofill profile migration failed (non-fatal)', err);
   });
@@ -822,10 +726,6 @@ function initialize(): void {
 function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
   const clientInstanceId = parseManagedChatPortName(port.name);
   if (!clientInstanceId) return;
-  // A Chrome side-panel document may be associated with its host tab. Treat
-  // the sender's extension URL/origin as authoritative instead of requiring a
-  // tabless port; content scripts still fail because their document and tab
-  // URLs are HTTP(S), not the extension origin.
   if (
     !isTrustedExtensionPageSender(
       {
@@ -879,7 +779,7 @@ function connectToNativeHost(): void {
     port.onDisconnect.addListener(handleNativeDisconnect);
 
     state.nativePort = port;
-    state.isNativeConnected = false; // Not connected until handshake succeeds
+    state.isNativeConnected = false;
     state.lastNativeError = null;
     _bgCtx.nativeHandshakeInFlight = true;
 
@@ -903,15 +803,13 @@ function connectToNativeHost(): void {
           throw new Error(pingResult?.error ?? 'Native ping failed');
         }
 
-        // Handshake succeeded — only now mark as connected
         state.isNativeConnected = true;
         _bgCtx.nativeReconnectAttempt = 0;
-        _bgCtx.nativeReconnectGaveUp = false; // Reset so future disconnects can retry
+        _bgCtx.nativeReconnectGaveUp = false;
         clearNativeReconnectTimer();
         state.connectionStatus = 'connected';
         void notifyConnectionStatusChange();
 
-        // Drain any messages queued while disconnected
         if (state.messageQueue.length > 0 && !state.isProcessingQueue) {
           state.isProcessingQueue = true;
           const queued = state.messageQueue.splice(0);
@@ -919,7 +817,6 @@ function connectToNativeHost(): void {
             try {
               await handleMessage(msg, {} as chrome.runtime.MessageSender, () => {});
             } catch (err) {
-              // Best-effort drain — don't block reconnection
               logger.debug('Failed to drain queued message during reconnect', err);
             }
           }
@@ -970,13 +867,8 @@ function sendNativeRequest(
   const options: NativeRequestOptions =
     typeof timeoutOrOptions === 'number' ? { timeoutMs: timeoutOrOptions } : timeoutOrOptions;
   const timeoutMs = options.timeoutMs ?? NATIVE_REQUEST_TIMEOUT_MS;
-  // L-04 audit 2026-05-19: accept a per-call timeoutMs. Default stays at
-  // NATIVE_REQUEST_TIMEOUT_MS (10s); long calls (chat_message, etc.)
-  // now pass 30000 explicitly instead of getting wrapped in `withTimeout`
-  // and risking double-timeouts.
   return new Promise((resolve, reject) => {
     void (async () => {
-      // Allow sending during handshake (port exists but isNativeConnected not yet true)
       const portReadyForHandshake = !!state.nativePort && _bgCtx.nativeHandshakeInFlight;
       if (!portReadyForHandshake && (!state.nativePort || !state.isNativeConnected)) {
         if (!_bgCtx.nativeReconnectGaveUp) {
@@ -1002,10 +894,6 @@ function sendNativeRequest(
         return;
       }
 
-      // FIX (audit 2026-05-20, §2): attach an HMAC envelope when a session
-      // secret is available. The native host echoes the same id and signs
-      // its response with the same secret; verifyResponseMac() rejects on
-      // mismatch.
       const id = createRequestId();
       const timestamp = Date.now();
       try {
@@ -1120,8 +1008,6 @@ function invalidateWebMCPToolsForNavigation(tabId: number): number {
       .catch(() => {
         // Side panel may not be open; ignore.
       });
-    // Clear the paired Desktop catalog through the same authenticated envelope
-    // before any post-navigation discovery can publish a replacement.
     sendAuthenticatedWebMCPNativeUpdate(tabId, cleared);
   }
   return navigationGeneration;
@@ -1130,10 +1016,6 @@ function invalidateWebMCPToolsForNavigation(tabId: number): number {
 function handleNativeMessage(message: NativeMessageEnvelope): void {
   logger.debug('Received native message', message);
 
-  // FIX (audit 2026-05-20, §2): if the native host sends a session_secret
-  // (in the connect-handshake response), latch it for subsequent MAC
-  // computation. A missing or malformed secret makes the handshake fail;
-  // privileged requests are never allowed to downgrade to an unsigned mode.
   const maybeSecret = (message as unknown as Record<string, unknown>)['session_secret'];
   if (typeof maybeSecret === 'string' && !nativeSessionSecret) {
     setNativeSessionSecret(maybeSecret);
@@ -1146,13 +1028,6 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
       clearTimeout(timeout);
       pendingRequests.delete(message.id);
 
-      // FIX (audit 2026-05-20, §2 + Codex P1 2026-05-20): once a session
-      // secret has been negotiated, we are in STRICT mode — every response
-      // must carry a valid mac+timestamp envelope. An attacker that can
-      // tamper with response framing must not be able to defeat the
-      // integrity check by simply stripping the `mac`/`timestamp` fields
-      // (downgrade attack). Only when no secret has ever been negotiated
-      // do we accept the legacy success/error envelope.
       const respMac = (message as unknown as Record<string, unknown>)['mac'];
       const respTs = (message as unknown as Record<string, unknown>)['timestamp'];
       if (nativeSessionSecret) {
@@ -1165,9 +1040,6 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
           reject(new Error('Native response missing required MAC envelope'));
           return;
         }
-        // The host signs with the same payload shape: id|ts|body. Body is
-        // the message *without* id/mac/timestamp/session_secret so the
-        // signature is over a stable canonical form.
         const body: Record<string, unknown> = {
           ...(message as unknown as Record<string, unknown>),
         };
@@ -1193,9 +1065,6 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
         return;
       }
 
-      // The initial connect response is the only response allowed before the
-      // negotiated secret exists. It is used solely to obtain that secret; the
-      // handshake rejects immediately afterward if the response omitted it.
       if (!request.allowUnsignedResponse) {
         reject(new Error('Native response arrived without an authenticated session'));
         return;
@@ -1210,8 +1079,6 @@ function handleNativeMessage(message: NativeMessageEnvelope): void {
 }
 
 function handleNativeDisconnect(): void {
-  // FIX (audit 2026-05-20, §2): drop the session secret on disconnect
-  // so a reconnect must re-negotiate.
   nativeSessionSecret = null;
   const error = chrome.runtime.lastError?.message || 'Native host disconnected';
   logger.warn('Native host disconnected', { error });
@@ -1229,20 +1096,10 @@ function handleNativeDisconnect(): void {
 
   void notifyConnectionStatusChange();
 
-  // A service worker that is already shutting down must not schedule another
-  // native connection. The next worker instance performs a fresh authenticated
-  // handshake from its newly initialized background context.
   if (_bgCtx.nativeSuspendInProgress) {
     return;
   }
 
-  // Stop retrying immediately for permanent errors (host not installed, or macOS
-  // access denied) — these will never resolve without user action and would cause
-  // repeated macOS permission prompts on every reconnect attempt.
-  //
-  // Deliberately narrow patterns to avoid false positives:
-  //   - 'not found' is too broad (matches transient messages)
-  //   - 'com.agiworkforce.browser' always matches since it's the host name
   const isPermanentError =
     error.includes('Native host not found') ||
     error.includes('Specified native messaging host not found') ||
@@ -1261,17 +1118,10 @@ function showNotification(
   title: string,
   message: string,
   tabId?: number,
-  /**
-   * Background result this notification announces. Clicking the notification
-   * opens that conversation in the side panel, so a scheduled answer is one
-   * click away instead of only discoverable in the History drawer.
-   */
   conversationId?: string,
   conversationOwner?: ManagedCloudOwner,
 ): void {
   if (!chrome.notifications?.create) return;
-  // L-12 audit 2026-05-19: crypto.randomUUID prefix instead of Date.now so
-  // rapid notifications don't collide.
   const notifId = `agi_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
   chrome.notifications.create(
     notifId,
@@ -1287,7 +1137,6 @@ function showNotification(
       }
     },
   );
-  // Store tabId for click handler
   if (tabId) {
     chrome.storage.session.set({ [`agi_notif_${notifId}`]: tabId }).catch(() => {});
   }
@@ -1296,9 +1145,6 @@ function showNotification(
   }
 }
 
-// Single source of truth for the "Task notifications" options toggle. Previously
-// only the pre-run reminder honored it while Task Completed/Failed fired
-// regardless, so turning the toggle OFF still produced completion notifications.
 async function taskNotificationsEnabled(): Promise<boolean> {
   try {
     const { agi_task_notifications: enabled } = await chrome.storage.local.get({
@@ -1306,17 +1152,10 @@ async function taskNotificationsEnabled(): Promise<boolean> {
     });
     return enabled !== false;
   } catch {
-    return true; // fail-open to the default-on behavior
+    return true;
   }
 }
 
-/**
- * No schedule binding here on purpose. Both call sites are proven ownerful or
- * proven unbound: the Managed Cloud branch has already resolved `credential`
- * before it announces the run, and the other call is past the
- * `hasManagedBoundary` early return, so its task has no `managedCloudAccountId`
- * to state. Adding a binding parameter would compute a value nothing reads.
- */
 async function notifyScheduledTaskRunning(
   taskName: string,
   signal: AbortSignal,
@@ -1341,10 +1180,6 @@ async function notifyScheduledTaskRunning(
 }
 
 chrome.notifications?.onClicked?.addListener((notifId: string) => {
-  // A completion notification for a background run points at the conversation
-  // holding its answer. Park the pointer before the panel opens (a panel that
-  // is still booting cannot receive a runtime message) and also broadcast it,
-  // for the case where a panel is already open and idle.
   void getManagedCloudAuthContext().then(async (credential) => {
     if (!credential || isRetiredManagedCloudOwner(credential.owner)) return;
     const conversationId = await takeNotificationConversation(notifId, credential.owner);
@@ -1360,7 +1195,6 @@ chrome.notifications?.onClicked?.addListener((notifId: string) => {
         // No extension view is open yet; the parked pointer covers that case.
       });
   });
-  // Open side panel when notification clicked
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tab = tabs[0];
     if (tab?.id && chrome.sidePanel) {
@@ -1382,14 +1216,10 @@ async function ensureTabGroup(tabId: number): Promise<boolean> {
     }
     return true;
   } catch (err) {
-    // tabGroups API may not be available in all contexts
     logger.debug('Tab group operation failed (non-fatal)', err);
     return false;
   }
 }
-
-// loadShortcuts, saveShortcuts, handleSaveShortcut, handleListShortcuts, handleDeleteShortcut
-// extracted to background/shortcuts.ts
 
 async function handleReplayShortcut(
   message: import('./types').ReplayShortcutMessage,
@@ -1401,10 +1231,6 @@ async function handleReplayShortcut(
   if (!shortcut) {
     return { success: false, error: 'Shortcut not found' } as ExtensionResponse;
   }
-  // SECURITY (C-03 audit 2026-05-19): if this shortcut was created by a web
-  // page (not the trusted UI), confirm the origin is still allowlisted.
-  // Auto-delete stale records so they can't accumulate as a persistent
-  // attacker capability.
   if (
     shortcut.createdByOrigin &&
     shortcut.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
@@ -1431,11 +1257,6 @@ async function handleReplayShortcut(
     } as ExtensionResponse;
   }
   if (plan.kind === 'prompt') {
-    // A prompt shortcut carries no recorded page actions — run its saved prompt
-    // through the chat path (the same route the scheduler uses for prompt-only
-    // tasks) instead of dispatching an empty RUN_PAGE_ACTIONS batch, which
-    // no-ops on the page yet previously still reported "completed" (fake
-    // success).
     const safePrompt = plan.prompt.slice(0, TASK_PROMPT_MAX_CHARS);
     const chatMsg: Omit<import('./types').ChatMessageMessage, 'owner'> & {
       owner?: ManagedCloudOwner;
@@ -1448,8 +1269,6 @@ async function handleReplayShortcut(
       modelSelection: 'auto',
       ...(expectedOwner ? { owner: expectedOwner } : {}),
     };
-    // SIX-04: nothing listens for `shortcut-replay` chunks, so the answer is
-    // filed into the conversation store the side panel's History drawer reads.
     let deliveredAnswer = '';
     let deliveredOwner: ManagedCloudOwner | undefined;
     const delivery = createBackgroundChatDelivery(
@@ -1503,8 +1322,6 @@ async function handleReplayShortcut(
   }
   return result;
 }
-
-// Scheduled-task storage and alarm mechanics live in background/tasks.ts.
 
 async function scheduledTaskManagedPrompt(
   task: Pick<ScheduledTask, 'prompt' | 'shortcutId'>,
@@ -1605,10 +1422,6 @@ interface ScheduledTaskExecutionOutcome {
 function beginScheduledTaskHeartbeat(): () => void {
   const ping = (): void => {
     try {
-      // Chrome 110+ resets the MV3 idle timer when an extension API is called.
-      // This heartbeat exists only while a user-authorized scheduled operation
-      // is active; durable recovery below remains authoritative if the process
-      // or browser still exits.
       chrome.runtime.getPlatformInfo(() => {
         void chrome.runtime.lastError;
       });
@@ -2014,26 +1827,11 @@ interface ScheduledTaskCompletionNotice {
   taskName: string;
   answer?: string;
   conversationId?: string;
-  /** Owner of the conversation the notification links to, when there is one. */
   conversationOwner?: ManagedCloudOwner;
-  /**
-   * Account incarnation the finished run was authorized under. Kept separate
-   * from `conversationOwner` because a run can complete without producing a
-   * linkable conversation, and the fence must still hold in that case.
-   */
   runOwner?: ManagedCloudOwner;
   signal?: AbortSignal;
 }
 
-/**
- * No schedule binding here either, for the same reason. `completeScheduledTaskRun`
- * only reaches this after a run journal exists, and a journal always carries a
- * resolved `owner` (`ScheduledTaskRunJournal.owner` is required and the journal
- * parser rejects a record without one), so the fence always decides on the
- * owner. `executeScheduledTask`'s own completion call is on the device-local
- * branch, past the `hasManagedBoundary` early return, so its task has no
- * `managedCloudAccountId` to state.
- */
 async function notifyScheduledTaskCompleted(notice: ScheduledTaskCompletionNotice): Promise<void> {
   const { taskName, answer = '', conversationId, conversationOwner } = notice;
   const fenceOwner = notice.runOwner ?? conversationOwner;
@@ -2059,11 +1857,6 @@ async function notifyScheduledTaskCompleted(notice: ScheduledTaskCompletionNotic
   );
 }
 
-/**
- * The failure text names the schedule, and `owner` is undefined whenever the
- * run threw before it proved who authorized it — so this is the one notifier
- * that must be told which schedule it is talking about.
- */
 async function notifyScheduledTaskFailed(
   taskName: string,
   detail: string,
@@ -2180,12 +1973,6 @@ async function recoverScheduledTaskRun(
     return;
   }
   if (!sameManagedCloudOwner(journal.owner, credential.owner)) {
-    // A different account must never recover this run. A replacement session
-    // for the same account may cancel, but never resume or render, the old
-    // incarnation's paid work.
-    // A different account cannot inspect or cancel A's server run, but it must
-    // still durably tombstone the journal. Otherwise a missed transition lets A
-    // resume stale paid work when it signs in again later.
     await abandonScheduledTaskRun(
       journal,
       journal.owner.accountId === credential.owner.accountId ? credential : null,
@@ -2267,9 +2054,6 @@ async function recoverScheduledTaskRun(
     }
     await abandonScheduledTaskRun(latest ?? journal, credential);
     const detail = error instanceof Error ? error.message.slice(0, 160) : 'Unknown error';
-    // Recovery runs off the run journal, not the schedule record, so there is
-    // no binding to state. The journal's owner is always resolved, so the fence
-    // decides on it.
     await notifyScheduledTaskFailed(
       journal.taskName,
       `could not be recovered: ${detail}`,
@@ -2384,8 +2168,6 @@ async function runScheduledManagedPrompt(
     }
   }
   if (signal.aborted) {
-    // If another execution won the serialized journal insert, it owns that
-    // request. An aborted stale lease must never cancel the winner's journal.
     if (journalWasCreated) await abandonScheduledTaskRun(journal, credential);
     throw new ScheduledTaskCancelledError();
   }
@@ -2442,10 +2224,6 @@ async function executeScheduledTask(
   logger.info('Executing scheduled task', { id: task.id, name: task.name });
 
   try {
-    // SECURITY (C-02 audit 2026-05-19): fire-time allowlist re-check. Tasks
-    // created from a non-extension-UI origin must verify the originating
-    // origin is still on `agi_site_allowlist`. If not, auto-delete so the
-    // task does not accumulate as a persistent capability.
     if (
       task.createdByOrigin &&
       task.createdByOrigin !== ORIGIN_EXTENSION_PAGE &&
@@ -2537,8 +2315,6 @@ async function executeScheduledTask(
       scheduledTaskExecutions.isCurrent(lease),
     );
     if (!recorded) throw new ScheduledTaskCancelledError();
-    // Device-local branch only: `hasManagedBoundary` returned above, so
-    // `task.managedCloudAccountId` is undefined here by construction.
     await notifyScheduledTaskCompleted({
       taskName: task.name,
       signal: lease.controller.signal,
@@ -2551,11 +2327,6 @@ async function executeScheduledTask(
     if (error instanceof ScheduledTaskAuthorityError) {
       logger.warn(error.message, { taskId: task.id });
       if (error.notifyCurrentUser) {
-        // `managedExecutionOwner` is undefined here whenever
-        // `requireScheduledTaskCredential` threw before the assignment that
-        // captures it — the signed-out and session-replaced cases. The
-        // schedule's binding is then the only thing left saying whose schedule
-        // this notification would be about.
         await publishAuthorizedScheduledTaskNotification(
           scheduledTaskNotificationAuthority({
             schedule: task,
@@ -2577,10 +2348,6 @@ async function executeScheduledTask(
     }
     if (error instanceof ScheduledTaskRecoveryPendingError) {
       logger.warn(error.message, { taskId: task.id });
-      // Every throw that lands here happens after `managedExecutionOwner` was
-      // captured, so the owner decides and the binding is not consulted. The
-      // real schedule is still passed rather than an empty one, because an
-      // empty one would assert something untrue about a bound task.
       await publishAuthorizedScheduledTaskNotification(
         scheduledTaskNotificationAuthority({
           schedule: task,
@@ -2614,23 +2381,6 @@ async function executeScheduledTask(
   }
 }
 
-// EXT-1, EXT-2 (audit 2026-05-03): allowlist-based sender validation.
-//
-// The previous implementation accepted any tab as a valid sender. Combined
-// with the content-script `<all_urls>` match, every web page the user
-// visits could fire privileged background commands. This meant any XSS
-// on any visited page = full extension takeover.
-//
-// We now gate by an explicit user-managed origin allowlist stored under
-// `chrome.storage.local.agi_site_allowlist`. Extension pages (popup,
-// side panel, options) remain trusted; tab-originated messages are
-// trusted only if the tab's origin is on the list.
-// SECURITY (H-1): PING and GET_AGI_BRIDGE_URL previously bypassed origin checks.
-// Removed both from the discovery bypass set. Extension-origin senders (popup,
-// side panel) are already trusted via the `!sender.tab` branch in
-// isAllowlistedSender(). Content scripts on arbitrary pages must NOT receive
-// responses to fingerprinting probes.
-// DISCOVERY_MESSAGE_TYPES now imported from `./background/policy` (audit 2026-05-19).
 let siteAllowlistCache = new Set<string>();
 chrome.storage.local
   .get(SITE_ALLOWLIST_STORAGE_KEY)
@@ -2656,8 +2406,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   cancelActiveComputerUseRun('tab_intent_changed', lease.runId);
 });
 
-// W5-06: persisted side-panel preference. Outgoing turns carry a snapshot so
-// routing cannot race a later toggle or affect non-side-panel chat surfaces.
 let quickModeCache = false;
 chrome.storage.local
   .get({ agi_quick_mode: false })
@@ -2681,7 +2429,6 @@ function rejectComputerUseOwnership(
   throw new Error(`Computer-use ownership lost: ${reason}`);
 }
 
-/** Reassert the account/session and exact foreground-tab intent for one lease. */
 async function assertComputerUseOwnership(lease: ComputerUseRunLease): Promise<string> {
   computerUseRuns.assertCurrent(lease);
 
@@ -2758,7 +2505,6 @@ function isAllowlistedSender(
   sender: chrome.runtime.MessageSender,
   messageType: string | undefined,
 ): boolean {
-  // Extension pages (popup, side panel, options) are always trusted.
   if (
     isTrustedExtensionPageSender(
       {
@@ -2775,10 +2521,8 @@ function isAllowlistedSender(
     return true;
   }
 
-  // Reject anything without tab info.
   if (!sender.tab || !sender.tab.url) return false;
 
-  // Discovery messages don't expose any privileged capability.
   if (messageType && DISCOVERY_MESSAGE_TYPES.has(messageType)) return true;
 
   let origin: string;
@@ -2790,18 +2534,11 @@ function isAllowlistedSender(
   return siteAllowlistCache.has(origin);
 }
 
-// DOM_MUTATION_MESSAGE_TYPES is now sourced from `./background/policy` so the
-// side panel, tests, and any other consumer share one source of truth. See the
-// policy module's comment for the historical fix history (EXT-3, H-2,
-// CHROME-NEW-002, CHROME-NEW-005, P0-D). Adding a new content-script handler
-// that writes DOM? Add the wire-message type to `DOM_MUTATION_MESSAGE_TYPES`
-// in `policy.ts`.
-
 function senderTabAllowedToMutate(
   sender: chrome.runtime.MessageSender,
   targetTabId: number | undefined,
 ): boolean {
-  if (typeof targetTabId !== 'number') return true; // no target = sender's own tab
+  if (typeof targetTabId !== 'number') return true;
   return sender?.tab?.id === targetTabId;
 }
 
@@ -2818,7 +2555,6 @@ function handleMessage(
     return false;
   }
 
-  // EXT-1/2: gate by user-managed allowlist.
   if (!isAllowlistedSender(sender, msg.type)) {
     logger.warn('Rejected message from non-allowlisted sender', {
       url: sender?.tab?.url,
@@ -2832,11 +2568,6 @@ function handleMessage(
     return false;
   }
 
-  // SECURITY (C-02 / C-03 audit 2026-05-19): some message types create
-  // persistent state (chrome.alarms, chrome.storage.local shortcuts) that
-  // outlives the originating tab and survives removal from the allowlist.
-  // These must originate from a trusted extension page (popup / side panel /
-  // options), never from a content script — even on an allowlisted origin.
   if (EXTENSION_PAGE_ONLY_MESSAGE_TYPES.has(msg.type)) {
     if (
       !isTrustedExtensionPageSender(
@@ -2863,7 +2594,6 @@ function handleMessage(
     }
   }
 
-  // EXT-3: block cross-tab DOM mutation.
   if (DOM_MUTATION_MESSAGE_TYPES.has(msg.type)) {
     if (!senderTabAllowedToMutate(sender, msg.tabId)) {
       logger.warn('Rejected cross-tab DOM mutation', {
@@ -2879,12 +2609,6 @@ function handleMessage(
     }
   }
 
-  // chrome.sidePanel.open() requires a live user gesture and must be called
-  // SYNCHRONOUSLY inside this onMessage listener — deferring it through
-  // handleMessageAsync's .then() continuation drops the activation, so the
-  // in-page panel's "Open side panel" button did nothing. Handle it here, after
-  // the security gates above, for a content-script sender that carries its tab.
-  // Extension-page senders (no sender.tab) fall through to the async handler.
   if (msg.type === 'OPEN_SIDE_PANEL' && sender.tab?.id != null && chrome.sidePanel?.open) {
     chrome.sidePanel.open({ tabId: sender.tab.id }).catch((err) => {
       logger.warn('OPEN_SIDE_PANEL synchronous open failed', err);
@@ -3251,25 +2975,13 @@ async function handleMessageAsync(
     }
 
     case 'CAPTURE_SCREENSHOT': {
-      // SECURITY (H-09 audit 2026-05-19): only capture the sender's own tab.
-      // The previous implementation fell back to `chrome.tabs.query({active:
-      // true})`, which let an allowlisted content script wait for the user to
-      // switch tabs and then exfiltrate a screenshot of whatever was visible.
-      // Extension pages (popup / side panel) have `!sender.tab` — they must
-      // explicitly include `tabId` in the message, which is resolved upstream.
       let resolvedTabId = tabId;
       let resolvedWindowId = windowId;
 
       if (sender.tab) {
-        // Content-script sender — restrict to its own tab regardless of the
-        // tabId passed in the message body. This closes the cross-tab
-        // capture path.
         resolvedTabId = sender.tab.id;
         resolvedWindowId = sender.tab.windowId;
       } else if (!resolvedTabId || resolvedWindowId === undefined) {
-        // Extension-page sender (popup / side panel) with no explicit tabId:
-        // fall back to the active tab so the popup's "capture page" button
-        // still works.
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
         resolvedTabId = resolvedTabId ?? activeTab?.id;
         resolvedWindowId = resolvedWindowId ?? activeTab?.windowId;
@@ -3451,8 +3163,6 @@ async function handleMessageAsync(
     }
 
     case 'WEBMCP_TOOLS_CHANGED': {
-      // Page-declared tool metadata is untrusted even after the origin
-      // allowlist gate. Validate it again before storage, UI, or native egress.
       const toolsMsg = message as import('./types').WebMCPToolsChangedMessage;
       const toolsTabId = sender?.tab?.id;
       if (typeof toolsTabId !== 'number') {
@@ -3505,10 +3215,6 @@ async function handleMessageAsync(
       return { success: true } as ExtensionResponse;
     }
 
-    // SECURITY: the tab-group cases fall back to the active tab when no tabId
-    // is supplied, so they are in EXTENSION_PAGE_ONLY_MESSAGE_TYPES — otherwise
-    // a content script in a background tab could regroup the tab the user is
-    // actually looking at.
     case 'GET_TAB_GROUP_STATE': {
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
@@ -3609,8 +3315,6 @@ async function handleMessageAsync(
       const credential = requestedOwner
         ? await getExactScheduledMutationCredential(requestedOwner)
         : null;
-      // A stale A panel must receive no managed rows if ambient Clerk auth is
-      // already B, even before its foreground auth observer catches up.
       return handleListScheduledTasks(
         credential && requestedOwner ? requestedOwner.accountId : undefined,
       );
@@ -3742,17 +3446,6 @@ async function handleMessageAsync(
       if (!isAllowedProbeUrl(probeUrl)) {
         return { success: false, error: 'Probe URL not allowed' } as ExtensionResponse;
       }
-      // SECURITY (H-01 audit 2026-05-19): restrict NLWEB_PROBE to the
-      // sender's own origin. Discovery is intrinsically same-origin —
-      // probing arbitrary public URLs through the extension turned the
-      // service worker into an SSRF reflector (the extension's IP, no
-      // Origin header, may bypass CORS allowlists that key on Origin).
-      //
-      // Self-review #11 audit 2026-05-19: fail-closed for extension pages
-      // too. The prior implementation exempted senders with no `sender.tab`
-      // (i.e. popup / side panel). No extension-page code currently calls
-      // NLWEB_PROBE, so fail-closed costs nothing today and prevents a
-      // future caller from bypassing the SSRF check.
       if (!sender.tab?.url) {
         return {
           success: false,
@@ -3819,11 +3512,6 @@ async function handleMessageAsync(
       );
     }
 
-    // SECURITY: every memory case is in EXTENSION_PAGE_ONLY_MESSAGE_TYPES.
-    // Memories are user-authored notes in chrome.storage.local that outlive the
-    // origin's place on the allowlist (same C-02/C-03 argument as shortcuts),
-    // and reading them hands the page the user's own notes. The side panel's
-    // memory drawer is the only sender.
     case 'LIST_MEMORIES' as ExtensionMessage['type']: {
       const memories = await memoryList();
       return { success: true, memories } as ExtensionResponse;
@@ -3875,7 +3563,6 @@ async function handleMessageAsync(
       } as ExtensionResponse;
     }
 
-    // W5-06: quick mode get/set
     case 'GET_QUICK_MODE' as ExtensionMessage['type']: {
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
     }
@@ -3887,11 +3574,6 @@ async function handleMessageAsync(
       return { success: true, enabled: quickModeCache } as ExtensionResponse;
     }
 
-    // ── Account-backed conversation mirroring ────────────────────────────
-    // Every case here re-validates the caller-supplied owner and refuses a
-    // retired incarnation. `SYNC_CONVERSATION` in particular replies
-    // immediately and NEVER awaits the flush: local chat must not be able to
-    // stall or fail because the account mirror is slow or down.
     case 'SYNC_CONVERSATION' as ExtensionMessage['type']: {
       const syncMsg = message as import('./types').SyncConversationMessage;
       const syncOwner = normalizeManagedCloudOwner(syncMsg.owner);
@@ -3911,9 +3593,6 @@ async function handleMessageAsync(
       if (!delOwner || isRetiredManagedCloudOwner(delOwner)) {
         return { success: false, error: 'Invalid Managed Cloud owner' } as ExtensionResponse;
       }
-      // Await only the local tombstone write, not the remote DELETE. A success
-      // response therefore means the deletion is durable across worker
-      // eviction, while the network drain remains best-effort in the background.
       const queued = await queueCloudConversationDeletion(
         delOwner,
         delCloudMsg.cloudConversationId,
@@ -3925,10 +3604,6 @@ async function handleMessageAsync(
     }
 
     case 'AGI_START_COMPUTER_USE' as ExtensionMessage['type']: {
-      // SECURITY: 'AGI_START_COMPUTER_USE' is in EXTENSION_PAGE_ONLY_MESSAGE_TYPES —
-      // the handleMessage guard above already rejected any non-UI sender before we
-      // reach this case. Here we additionally re-validate the target tab's origin
-      // against siteAllowlistCache before starting the CDP loop.
       const cuMsg = message as import('./types').StartComputerUseMessage;
       const cuTabId = cuMsg.tabId;
       const cuGoal = typeof cuMsg.goal === 'string' ? cuMsg.goal.slice(0, 4096) : '';
@@ -3969,7 +3644,6 @@ async function handleMessageAsync(
 
       const startWasCancelled = (): boolean => !isCurrentComputerUseStart(cuRunId, startGeneration);
 
-      // Re-validate the tab's origin against the allowlist (belt-and-suspenders).
       let cuTab: chrome.tabs.Tab | undefined;
       try {
         cuTab = await chrome.tabs.get(cuTabId);
@@ -4025,15 +3699,6 @@ async function handleMessageAsync(
         );
       }
 
-      // Read the "ask before acting" preference stored by the side panel.
-      // The side panel writes 'agi_cu_ask_before_acting' (boolean) to
-      // chrome.storage.local when the toggle changes.
-      //
-      // SECURITY (trust-boundary P0): autonomous CDP browser control on a
-      // prompt-injectable page must DEFAULT to human-in-the-loop. So an UNSET
-      // pref means ask-before-acting (default-deny). Allow-all ("autopilot") is
-      // an explicit opt-out the user must choose by turning the toggle OFF.
-      // Only an explicit stored `false` disables the gate.
       let askPref: Record<string, unknown>;
       try {
         askPref = await chrome.storage.local.get('agi_cu_ask_before_acting');
@@ -4045,11 +3710,6 @@ async function handleMessageAsync(
         return failStart('AGI_START_COMPUTER_USE: superseded or cancelled before admission');
       }
 
-      // Resolve the automation model this account is entitled to. A Max /
-      // Enterprise plan allows the premium computer-use slot; every other tier
-      // resolves back to the balanced one. This read is advisory — a failure
-      // must not block a run the user is otherwise allowed to start, so it
-      // degrades to the tier-agnostic default rather than failing closed.
       const computerUseModel = resolveComputerUseModel(
         await getManagedModelAccess(authContext.token)
           .then((access) => access.subscriptionTier)
@@ -4062,8 +3722,6 @@ async function handleMessageAsync(
       clearPendingComputerUseStart(cuRunId);
       const lease = computerUseRuns.begin({
         runId: cuRunId,
-        // Monotonic enough across MV3 worker restarts for the long-lived side
-        // panel to reject a delayed lifecycle broadcast from an older run.
         generation: Date.now() * 1_000 + (startGeneration % 1_000),
         tabId: cuTabId,
         ...(cuTab.windowId === undefined ? {} : { windowId: cuTab.windowId }),
@@ -4072,34 +3730,19 @@ async function handleMessageAsync(
         credential: authContext.token,
       });
 
-      // onBeforeAction wiring:
-      //   - When askBeforeActing is false (explicit autopilot opt-out): no gate —
-      //     every action is allowed immediately (user chose lowest-friction).
-      //   - When askBeforeActing is true: the background sends an AGI_CU_APPROVE_REQUEST
-      //     message to the side panel, then waits for an AGI_CU_APPROVE_RESPONSE
-      //     (allow/deny). The side panel's showApprovalCard() provides the UI.
-      //     A 30 s timeout is applied; no response = DENY (fail-CLOSED) so a
-      //     closed/unresponsive panel can never auto-approve an action. Matches
-      //     agentLoop's fail-closed contract (commit security review 2026-06-13).
       const onBeforeAction = askBeforeActing
         ? async (
             toolName: string,
             args: Record<string, unknown>,
             signal?: AbortSignal,
           ): Promise<boolean> => {
-            // SECURITY (commit review 2026-06-13): CSPRNG request id, not Math.random,
-            // so a prompt-injected page cannot guess an in-flight approval id.
             const requestId = `cu_approve_${crypto.randomUUID()}`;
-            // Notify the side panel to show an approval card
             broadcastComputerUseForCurrentRun(lease, {
               type: 'AGI_CU_APPROVE_REQUEST',
               requestId,
               toolName,
-              // A sentence the user can actually consent to, not a stringified
-              // function call. See describeAction.ts for why.
               description: describeComputerUseAction(toolName, args),
             });
-            // Wait for the side panel's response (or timeout after 30 s → DENY)
             const decision = await new Promise<boolean>((resolve, reject) => {
               let settled = false;
               const cleanup = (): void => {
@@ -4124,14 +3767,9 @@ async function handleMessageAsync(
                 );
               };
               const timeout = setTimeout(() => {
-                finish(false); // fail-CLOSED: deny if no approval arrives in time
+                finish(false);
               }, 30_000);
               function listener(msg: unknown, sender: chrome.runtime.MessageSender): void {
-                // SECURITY (commit review 2026-06-13): only honor approval responses
-                // from a trusted extension page (popup/side panel/options) — these
-                // have no sender.tab. Reject content-script / external senders so a
-                // prompt-injected page cannot forge an AGI_CU_APPROVE_RESPONSE and
-                // bypass the human approval gate.
                 if (
                   !isTrustedExtensionPageSender(
                     {
@@ -4162,7 +3800,7 @@ async function handleMessageAsync(
             });
             return decision;
           }
-        : undefined; // allow-all (no gate)
+        : undefined;
 
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
@@ -4279,7 +3917,6 @@ async function handleMessageAsync(
     }
 
     case 'BRIDGE_URL_CHANGED': {
-      // Validate the new URL before accepting it
       const newUrl = (message as import('./types').BridgeUrlChangedMessage).url?.trim();
       if (newUrl) {
         const validated = validateBridgeUrl(newUrl);
@@ -4296,7 +3933,6 @@ async function handleMessageAsync(
     }
 
     default: {
-      // Forward other messages to content script
       let resolvedTabId = tabId;
       if (!resolvedTabId) {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -4312,34 +3948,9 @@ async function handleMessageAsync(
   }
 }
 
-/**
- * Cookie-domain blocklist.
- *
- * SECURITY (M-01 audit 2026-05-19): the previous implementation matched
- * cookie domains with bare regexes like `/bank/i` and `/stripe\.com$/i`.
- * Two problems:
- *   1. `/bank/i` matches any string containing "bank" — fine for legitimate
- *      bank-named hostnames; the substring matching is preserved for that
- *      category bucket. But the suffix-anchored regexes silently broke
- *      under port suffixes: `/stripe\.com$/i` is anchored on the regex but
- *      tested against `urlOrDomain.replace(/^https?:\/\//, '').split('/')[0]`
- *      which retains `:port` — so `stripe.com:443` would fail the `$`
- *      anchor and slip through.
- *   2. Hostname parsing was DIY: split on `/`. URLs like `http://attacker.com\@github.com`
- *      can confuse naive splitting on some browser parses.
- *
- * We now parse with `new URL`, lowercase the hostname (no port, no path,
- * no userinfo), then match against structured {hostname, mode} entries.
- *   - `exact`: hostname must equal the entry's value.
- *   - `suffix`: hostname is the entry's value OR ends with `.<value>`.
- *   - `substring`: hostname contains the value (for category bucket
- *     keywords like "bank" that aren't suffix-anchorable).
- */
 type CookieBlockEntry = { value: string; mode: 'exact' | 'suffix' | 'substring' };
 
 const BLOCKED_COOKIE_DOMAINS: ReadonlyArray<CookieBlockEntry> = [
-  // Financial — substring keywords. False positives are acceptable here;
-  // a false-allow on a bank-flavored site is much worse than a false-block.
   { value: 'bank', mode: 'substring' },
   { value: 'paypal', mode: 'substring' },
   { value: 'venmo', mode: 'substring' },
@@ -4353,40 +3964,28 @@ const BLOCKED_COOKIE_DOMAINS: ReadonlyArray<CookieBlockEntry> = [
   { value: 'kraken', mode: 'substring' },
   { value: 'stripe.com', mode: 'suffix' },
   { value: 'plaid.com', mode: 'suffix' },
-  // Government & healthcare
   { value: 'gov', mode: 'suffix' },
   { value: 'mil', mode: 'suffix' },
   { value: 'healthcare', mode: 'substring' },
   { value: 'medical', mode: 'substring' },
   { value: 'health.com', mode: 'suffix' },
-  // Cloud infrastructure & developer tools
   { value: 'aws.amazon.com', mode: 'suffix' },
   { value: 'console.cloud.google.com', mode: 'suffix' },
   { value: 'portal.azure.com', mode: 'suffix' },
   { value: 'github.com', mode: 'suffix' },
   { value: 'gitlab.com', mode: 'suffix' },
   { value: 'bitbucket.org', mode: 'suffix' },
-  // Auth & identity providers
   { value: 'accounts.google.com', mode: 'suffix' },
   { value: 'login.microsoftonline.com', mode: 'suffix' },
   { value: 'auth0.com', mode: 'suffix' },
   { value: 'okta.com', mode: 'suffix' },
-  // Email & communication
   { value: 'mail.google.com', mode: 'suffix' },
   { value: 'outlook.live.com', mode: 'suffix' },
   { value: 'outlook.office.com', mode: 'suffix' },
-  // Social media (auth tokens)
   { value: 'facebook.com', mode: 'suffix' },
   { value: 'twitter.com', mode: 'suffix' },
   { value: 'x.com', mode: 'suffix' },
   { value: 'instagram.com', mode: 'suffix' },
-  // Platforms the extension targets — DOM-level only, never cookies.
-  // CHROME-NEW-006 (2026-05-05) + M-01 (2026-05-19): suffix mode replaces
-  // the prior `/(^|\.)linkedin\.com$/i` regexes which silently broke under
-  // port suffixes (`linkedin.com:443`).
-  // L-08 note: linkedin/lever/etc. are deliberately blocked at the COOKIE
-  // layer even though autofill targets them; autofill only writes DOM, never
-  // reads cookies.
   { value: 'linkedin.com', mode: 'suffix' },
   { value: 'slack.com', mode: 'suffix' },
   { value: 'notion.so', mode: 'suffix' },
@@ -4394,7 +3993,6 @@ const BLOCKED_COOKIE_DOMAINS: ReadonlyArray<CookieBlockEntry> = [
   { value: 'lever.co', mode: 'suffix' },
   { value: 'greenhouse.io', mode: 'suffix' },
   { value: 'workday.com', mode: 'suffix' },
-  // CHROME-NEW-003 (2026-05-04): the extension's own auth surfaces.
   { value: 'agiworkforce.com', mode: 'suffix' },
 ];
 
@@ -4412,10 +4010,6 @@ function matchCookieBlock(hostname: string, entry: CookieBlockEntry): boolean {
 
 function isCookieDomainAllowed(urlOrDomain: string): boolean {
   if (!urlOrDomain) return false;
-  // Parse strictly: extract just the hostname (lowercase, no port, no path,
-  // no userinfo). The prior implementation used DIY substring extraction
-  // which retained `:port` and broke suffix-anchored matchers; this is the
-  // M-01 fix.
   let hostname: string;
   try {
     const normalized = urlOrDomain.includes('://')
@@ -4423,7 +4017,7 @@ function isCookieDomainAllowed(urlOrDomain: string): boolean {
       : `https://${(urlOrDomain.split('/')[0] ?? '').toLowerCase()}`;
     hostname = new URL(normalized).hostname.toLowerCase();
   } catch {
-    return false; // fail-closed on unparseable input
+    return false;
   }
   if (!hostname) return false;
   return !BLOCKED_COOKIE_DOMAINS.some((entry) => matchCookieBlock(hostname, entry));
@@ -4496,7 +4090,6 @@ async function handleCreateTab(
       url: message.url,
       active: message.active !== false,
     });
-    // Add to AGI Workforce tab group
     if (tab.id) {
       void ensureTabGroup(tab.id);
     }
@@ -4553,7 +4146,6 @@ async function handleGetAccessibilityTree(tabId: number): Promise<ExtensionRespo
       type: 'GET_ACCESSIBILITY_TREE',
     } as ExtensionMessage)) as unknown as { success?: boolean; data?: unknown };
 
-    // Forward tree to native host if connected
     if (state.isNativeConnected && state.nativePort && response.success) {
       void sendNativeMessage({
         type: 'accessibility_tree',
@@ -4595,10 +4187,8 @@ async function checkDesktopConnection(): Promise<void> {
   if (!state.nativePort || !state.isNativeConnected) {
     if (!_bgCtx.nativeReconnectGaveUp && !_bgCtx.nativeHandshakeInFlight) {
       connectToNativeHost();
-      // A connection attempt was initiated — don't also schedule a reconnect below
       return;
     }
-    // Already in-flight or gave up — nothing to do
     return;
   }
 
@@ -4638,22 +4228,14 @@ async function notifyConnectionStatusChange(): Promise<void> {
     status: state.connectionStatus,
   };
 
-  // Broadcast to extension views (side panel, popup, options).
-  // chrome.runtime.sendMessage reaches all live extension pages; ignore the
-  // error that fires when no listener is registered (panel not open).
   chrome.runtime.sendMessage(statusPayload).catch(() => {});
 
   try {
-    // Also deliver to content scripts in open tabs (they listen on
-    // chrome.runtime.onMessage inside the tab context).
-    // Skip discarded tabs — they have no active content script to receive messages.
     const tabs = await chrome.tabs.query({ discarded: false });
 
     for (const tab of tabs) {
       if (tab.id) {
         chrome.tabs.sendMessage(tab.id, statusPayload, () => {
-          // Reading chrome.runtime.lastError clears the error state (Chrome API
-          // quirk). Without this, Chrome logs "Unchecked runtime.lastError".
           void chrome.runtime.lastError;
         });
       }
@@ -4669,11 +4251,6 @@ function setupContextMenu(): void {
     return;
   }
 
-  // L-13 audit 2026-05-19: contextMenus.removeAll is async but its callback
-  // does not gate the create() calls below. Chrome serializes these
-  // internally — removeAll completes before any subsequent create() in the
-  // same task — so there's no actual race. The callback is purely for
-  // logging the (rare) removal failure.
   chrome.contextMenus.removeAll(() => {
     if (chrome.runtime.lastError) {
       logger.warn('contextMenus.removeAll failed', chrome.runtime.lastError.message);
@@ -4846,9 +4423,6 @@ function setupContextMenu(): void {
   });
 }
 
-/**
- * Fire-and-forget wrapper for native message sends that do not need a response
- */
 function sendNativeMessage(message: Record<string, unknown>): Promise<void> {
   return sendNativeRequest(message)
     .then(() => undefined)
@@ -4944,45 +4518,29 @@ async function captureCurrentPage(): Promise<void> {
   }
 }
 
-// Bridge allowlisting is owned by `./background/policy` so side-panel,
-// pairing, and tests share one source of truth.
-
-/** Maximum response body size for NLWEB probe requests (256 KB). */
 const MAX_PROBE_RESPONSE_BYTES = 262_144;
 
-/**
- * Private/reserved IPv4 and IPv6 ranges that MUST NOT be probed.
- * Prevents SSRF reconnaissance of internal networks via the NLWEB_PROBE handler.
- */
 function isPrivateOrReservedHost(hostname: string): boolean {
-  // Strip IPv6 brackets
   const h = hostname.replace(/^\[|\]$/g, '');
 
-  // IPv6 loopback and link-local
   if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fd')) return true;
 
-  // Named loopback
   if (h === 'localhost' || h === '0.0.0.0') return true;
 
-  // IPv4 private/reserved ranges
   const ipv4Match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
   if (ipv4Match) {
     const [, a, b] = ipv4Match.map(Number);
-    if (a === 10) return true; // 10.0.0.0/8
-    if (a === 172 && b !== undefined && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-    if (a === 192 && b === 168) return true; // 192.168.0.0/16
-    if (a === 169 && b === 254) return true; // 169.254.0.0/16 (link-local)
-    if (a === 127) return true; // 127.0.0.0/8
-    if (a === 0) return true; // 0.0.0.0/8
+    if (a === 10) return true;
+    if (a === 172 && b !== undefined && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
   }
 
   return false;
 }
 
-/**
- * Validate that a probe URL is safe to fetch.
- * Blocks private/reserved IPs, non-http(s) schemes, and localhost.
- */
 function isAllowedProbeUrl(raw: string): boolean {
   try {
     const parsed = new URL(raw);
@@ -4994,23 +4552,12 @@ function isAllowedProbeUrl(raw: string): boolean {
   }
 }
 
-// validateBridgeUrl is now imported from `./background/policy` (audit 2026-05-19).
-// The function deliberately does not log here — it's called from multiple
-// surfaces (background, side panel, pairing); log at the call site instead.
-
 async function handleChatMessage(
   message: Omit<import('./types').ChatMessageMessage, 'owner'> & {
     owner?: ManagedCloudOwner;
   },
   _sender: chrome.runtime.MessageSender,
-  /**
-   * Present only for background-initiated runs (scheduled tasks, prompt
-   * shortcuts). Those streams have no live `CHAT_CHUNK` listener, so the
-   * generated — and billed — answer has to be filed into the conversation
-   * store or it is lost. See `features/background/background-results.ts`.
-   */
   delivery?: BackgroundChatDelivery,
-  /** Cancels alarm admission while auth or another pre-dispatch await is pending. */
   admissionSignal?: AbortSignal,
 ): Promise<ChromeManagedChatResult> {
   if (admissionSignal?.aborted) {
@@ -5117,9 +4664,6 @@ async function handleChatMessage(
   admissionSignal?.addEventListener('abort', abortForAdmission, { once: true });
   if (admissionSignal?.aborted) abortForAdmission();
 
-  // Only accumulated for background runs. An interactive turn is rendered and
-  // persisted by the panel that owns the stream, so buffering the whole answer
-  // here would just duplicate it in service-worker memory.
   const transcript: string[] = [];
   const onStreamText = (text: string): void => {
     if (activeChatStreams.get(streamKey) !== activeStream) return;
@@ -5128,11 +4672,6 @@ async function handleChatMessage(
   };
   let backgroundDeliveryAttempted = false;
   let backgroundDeliveryFailure: string | null = null;
-  /**
-   * File whatever the run produced before returning. Called on every terminal
-   * path — success, error and throw — because a stream that failed midway was
-   * still billed for the tokens it emitted.
-   */
   const deliverBackgroundResult = async (
     routing?: ChromeManagedChatResult['routing'],
   ): Promise<string | null> => {
@@ -5290,7 +4829,6 @@ async function handleChatMessage(
     return result;
   } finally {
     admissionSignal?.removeEventListener('abort', abortForAdmission);
-    // A stale completion must never delete a newer stream that reused the id.
     if (activeChatStreams.get(streamKey) === activeStream) activeChatStreams.delete(streamKey);
   }
 }
@@ -5351,8 +4889,6 @@ async function handleResumeChatRun(message: import('./types').ResumeChatRunMessa
 
   try {
     if (routing) {
-      // Restore the exact route before replay begins so a service-worker or
-      // side-panel restart cannot silently reset Auto to an unrelated model.
       publishManagedChatChunk(streamKey, activeStream, id, {
         text: '',
         done: false,
@@ -5534,17 +5070,6 @@ async function handleResolveChatApproval(
   }
 }
 
-/**
- * Handle an in-page prompt from the content-script overlay panel.
- *
- * Returns the full accumulated response text so the panel can render it
- * without needing a chunked messaging protocol.
- *
- * Same trust boundary as handleChatMessage: Chrome inference is Managed
- * Cloud only. The desktop bridge and native messaging carry pairing and
- * browser automation, never chat inference, and there is no local or BYOK
- * fallback — a failed Managed Cloud turn surfaces its error.
- */
 function inPagePromptFailure(
   outcome: InPagePromptOutcome,
   message: string,
@@ -5678,19 +5203,14 @@ function isValidMessage(message: unknown): message is ExtensionMessage {
   return typeof msg['type'] === 'string';
 }
 
-// Initialize on service worker start
 initialize();
 
-// Handle service worker keep-alive and periodic connection checks
 chrome.alarms.create('keep-alive', { periodInMinutes: 1.0 }, () => {
   if (chrome.runtime.lastError) {
     logger.warn('Failed to create keep-alive alarm', chrome.runtime.lastError.message);
   }
 });
 
-// Durable catch-up for the account mirror. An MV3 worker can be evicted
-// mid-debounce, which would strand every pending conversation write; the sweep
-// re-derives the work from stored state instead of from memory.
 chrome.alarms.create(SYNC_SWEEP_ALARM, { periodInMinutes: 1.0 }, () => {
   if (chrome.runtime.lastError) {
     logger.warn('Failed to create conversation sync alarm', chrome.runtime.lastError.message);
@@ -5713,18 +5233,14 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     void recoverScheduledTaskRuns().catch((error) => {
       logger.warn('Failed to retry scheduled Managed Cloud recovery', error);
     });
-    // Periodic connection check (replaces setInterval which is lost on MV3 suspension)
     if (!_bgCtx.nativeReconnectGaveUp && !state.isNativeConnected) {
       void connectToNativeHost();
     }
     return;
   }
 
-  // Handle scheduled task alarms (Gap 6 / W5-03)
   if (alarm.name.startsWith(TASK_ALARM_PREFIX)) {
     const taskId = alarm.name.slice(TASK_ALARM_PREFIX.length);
-    // Snapshot authority before the first await. Delete/disable/update commits
-    // invalidate this generation before writing task storage.
     const expectedGeneration = scheduledTaskExecutions.generation(taskId);
     void loadScheduledTasks()
       .then(async (tasks) => {
@@ -5747,26 +5263,12 @@ chrome.runtime.onSuspend.addListener(() => {
   }
 
   try {
-    // Closing the native port is the complete shutdown signal. Sending an
-    // unsigned ad-hoc "disconnect" envelope here would violate the authenticated
-    // session protocol and the native host correctly rejects it.
     state.nativePort.disconnect();
   } catch (error) {
     logger.debug('Native disconnect on suspend failed', error);
   }
 });
 
-// Removed 2026-08-09 (ExecutionPlan #9): `planActionsFromBrowserTool` and the
-// `browserTool` action bridge it wrapped. The bridge had no caller anywhere in
-// the extension — the computer-use agent drives the page through `cdpDriver`,
-// not through `RUN_PAGE_ACTIONS` — and most of the step types it emitted
-// (screenshot, right_click, double_click, triple_click, execute_script,
-// snapshot, wait) were never implemented by the content script's
-// `executePlannedAction` switch. Narrowing `ALLOWED_SHORTCUT_ACTION_TYPES` to
-// the switch made every plan it could produce fail the save/replay gate, so
 // keeping it exported would only have advertised a bridge guaranteed to be
-// rejected. Recover from git history if the bridge is ever needed; it must land
-// with matching `executePlannedAction` cases and allowlist entries.
 
-// Export for testing
 export { state, handleMessage, checkDesktopConnection };

@@ -20,19 +20,11 @@ import { ed25519 } from '@noble/curves/ed25519';
 import { bytesToBase64, utf8ToBytes } from './bytes';
 
 export interface TestKeyPair {
-  /** Raw 32-byte Ed25519 secret key (== the seed). */
   privateKey: Uint8Array;
-  /** Raw 32-byte Ed25519 public key. */
   publicKey: Uint8Array;
-  /** Base64 public key, as embedded in configs / license `policyKeys`. */
   publicKeyB64: string;
 }
 
-/**
- * Derive a deterministic keypair from a fixed 32-byte seed. Pass a 32-byte
- * `Uint8Array`, or a short ASCII label that is padded/truncated to 32 bytes
- * (labels keep fixtures readable — e.g. `'agi-root-key-1'`).
- */
 export function deriveKeyPairFromSeed(seed: Uint8Array | string): TestKeyPair {
   let privateKey: Uint8Array;
   if (typeof seed === 'string') {
@@ -49,10 +41,6 @@ export function deriveKeyPairFromSeed(seed: Uint8Array | string): TestKeyPair {
   return { privateKey, publicKey, publicKeyB64: bytesToBase64(publicKey) };
 }
 
-/**
- * Build a signed container file for the given payload object and format. Returns
- * the exact bytes that would be written to disk (`.agilicense` or policy file).
- */
 export function makeSignedContainer(
   payload: unknown,
   privateKey: Uint8Array,
@@ -69,17 +57,10 @@ export function makeSignedContainer(
   return utf8ToBytes(JSON.stringify(container, null, 2));
 }
 
-/**
- * Corrupt an already-signed container by flipping one byte in the decoded
- * payload's base64 while leaving the signature intact — yields a container whose
- * signature no longer matches. Used to produce "tampered" fixtures. Kept as a
- * simple byte-flip (not a malleability edge case) so TS and Rust verifiers agree.
- */
 export function tamperContainerPayload(containerBytes: Uint8Array): Uint8Array {
   const text = new TextDecoder().decode(containerBytes);
   const container = JSON.parse(text) as { format: string; payload: string; signature: string };
   const payloadChars = container.payload.split('');
-  // Flip the last non-padding character to a different base64 symbol.
   let idx = payloadChars.length - 1;
   while (idx >= 0 && payloadChars[idx] === '=') idx -= 1;
   const current = payloadChars[idx];

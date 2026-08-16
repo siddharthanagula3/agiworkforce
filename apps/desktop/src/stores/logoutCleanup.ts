@@ -1,16 +1,3 @@
-/**
- * Centralized logout cleanup utility
- *
- * This module provides a single function that clears all store state when
- * a user logs out. It ensures that:
- * 1. All sensitive user data is removed from memory
- * 2. All event listeners are cleaned up
- * 3. All persisted state is cleared where appropriate
- * 4. No memory leaks from active timers/intervals
- *
- * Import and call this function in authStore.signOut() to ensure
- * complete cleanup across all stores.
- */
 
 import { useBillingUsageStore, stopMetricsAutoRefresh } from './billingUsage';
 import { useBrowserStore } from './browserStore';
@@ -24,66 +11,40 @@ import { cleanupAgentTaskEventListeners, useAgentTaskStore } from './agentTaskSt
 import { cleanupRuntimeActivityEventListeners } from '../hooks/useAgenticEvents';
 import { useMcpStore } from './mcpStore';
 import { useModelStore } from './modelStore';
-// Orchestration store archived - visual workflow builder removed
 import { useProductivityStore } from './productivityStore';
 import { useProjectStore } from './projectStore';
 import { useSettingsStore } from './settingsStore';
 import { useTerminalStore } from './terminalStore';
 import { useUnifiedChatStore } from './unifiedChatStore';
-// Removed 2026-05-03: stores deleted as dead code (no external consumers).
-// If a future feature re-introduces them, re-add the cleanup hook here.
-//   automationStore, onboardingStore, settingsV2Store, chatMemoryStore,
-//   checkpointStore, gitStore, hooksStore, intentStore, knowledgeStore,
-//   llmConfigStore, visionStore
 import { useCodingCheckpointStore } from './codingCheckpointStore';
 import { useProjectMemoryStore } from './projectMemoryStore';
 import { useSecurityStore } from './securityStore';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 
-/**
- * Clears all store state on logout.
- * Call this after cloudAccountAuth.signOut() completes.
- *
- * Order matters: clean up stores with dependencies last.
- */
 export function cleanupAllStoresOnLogout(): void {
   try {
-    // 1. Clean up stores with event listeners and timers first
-    // These have active resources that need to be released
 
-    // Browser store has Tauri event listeners
     const browserStore = useBrowserStore.getState();
     browserStore.cleanup();
 
-    // Terminal store has session listeners
     const terminalStore = useTerminalStore.getState();
     terminalStore.reset();
 
-    // (automation store removed 2026-05-03 — was dead code)
-
-    // HIGH-001/HIGH-002: Connectors store — clear OAuth timers and state
     const connectorsStore = useConnectorsStore.getState();
     connectorsStore.resetOnLogout();
 
-    // AUDIT-006-011: Productivity store cleanup
     const productivityStore = useProductivityStore.getState();
     productivityStore.resetOnLogout();
 
-    // 2. Clean up data stores
-
-    // Unified chat store - clears conversations, messages, pending state
     const chatStore = useUnifiedChatStore.getState();
     chatStore.resetOnLogout();
 
-    // AUDIT-006-019: MCP store - use dedicated resetOnLogout function
     const mcpStore = useMcpStore.getState();
     mcpStore.resetOnLogout();
 
-    // AUDIT-006-022: Database store - clear connections and state
     const databaseStore = useDatabaseStore.getState();
     databaseStore.resetOnLogout();
 
-    // AUDIT-006-028: Execution store - cleanup event listeners and reset
     cleanupBackgroundTaskEventListeners();
     cleanupAgentWorkflowEventListeners();
     cleanupAgentTaskEventListeners();
@@ -93,20 +54,14 @@ export function cleanupAllStoresOnLogout(): void {
     const executionStore = useExecutionStore.getState();
     executionStore.reset();
 
-    // Orchestration store archived - visual workflow builder removed
-
-    // Stop analytics auto-refresh before resetting state
     stopMetricsAutoRefresh();
 
-    // Billing/Usage consolidated store - clear usage data but keep filters and budget config
     useBillingUsageStore.setState({
-      // Cost state
       costOverview: null,
       costAnalytics: null,
       loadingCostOverview: false,
       loadingCostAnalytics: false,
       costError: null,
-      // Usage state
       usageStats: null,
       usageStatsLoading: false,
       showAutomationWarning: false,
@@ -114,14 +69,12 @@ export function cleanupAllStoresOnLogout(): void {
       showStorageWarning: false,
       showTokenWarning: false,
       usageError: null,
-      // Analytics state
       systemMetrics: null,
       appMetrics: null,
       analyticsUsageStats: null,
       featureUsage: [],
       isLoadingMetrics: false,
       isLoadingStats: false,
-      // ROI state
       roiReport: null,
       processMetrics: [],
       userMetrics: [],
@@ -130,23 +83,12 @@ export function cleanupAllStoresOnLogout(): void {
       isLoadingROI: false,
     });
 
-    // Unified Auth store cleanup is handled by the caller (auth.ts signOut)
-    // to avoid a circular dependency (auth -> logoutCleanup -> auth).
-
-    // 3. Clean up stores that should preserve some state (preferences)
-
-    // Code store - close all files
     const codeStore = useCodeStore.getState();
     codeStore.closeAllFiles();
 
-    // Model store - reset selection but keep favorites (user preference)
     const modelStore = useModelStore.getState();
     modelStore.reset();
 
-    // Project state can belong to either the local device or the signed-in
-    // Cloud account. Clear the in-memory/persisted projection on logout; Local
-    // projects are canonical in the native database and hydrate again when the
-    // user returns to Local mode.
     useProjectStore.setState({
       projects: [],
       activeProjectId: null,
@@ -154,19 +96,10 @@ export function cleanupAllStoresOnLogout(): void {
       error: null,
     });
 
-    // Settings store - preserve settings (they're app-level, not user-level)
-    // Just clear any error state
     useSettingsStore.setState({
       error: null,
     });
 
-    // (onboardingStore + settingsV2Store removed 2026-05-03 — were dead code)
-
-    // 4. Clean up feature stores — use safe setState to initial values.
-    // These stores may not expose a reset() method, so we set state directly.
-    // Note: 8 of the original 11 feature stores (chatMemory, checkpoint, git,
-    // hooks, intent, knowledge, llmConfig, vision) were deleted as dead code
-    // on 2026-05-03; only the 3 still-active stores remain in the cleanup list.
     const featureStores = [
       useCodingCheckpointStore,
       useProjectMemoryStore,
@@ -185,10 +118,6 @@ export function cleanupAllStoresOnLogout(): void {
   }
 }
 
-/**
- * Clears persisted storage for user-specific data.
- * Call this to ensure a completely clean slate on logout.
- */
 export function clearPersistedUserData(): void {
   if (typeof window === 'undefined') return;
 
@@ -199,9 +128,6 @@ export function clearPersistedUserData(): void {
     'billing-usage-store',
     'connectors-store',
     STORAGE_KEYS.ID_MAPPINGS,
-    // Persisted user content whose stores this module never touches — they are
-    // not imported above, so neither a reset() nor a rehydrate ever rewrote
-    // their payload and it survived sign-out intact on a shared machine.
     'agiworkforce-memory', // remembered facts about the user
     'agiworkforce-custom-instructions',
     'research-store', // research reports
@@ -212,9 +138,6 @@ export function clearPersistedUserData(): void {
     'image-gallery-store', // generated images
     'execution-sidecar-storage',
     'tool-storage', // includes the user's trusted-workflow decisions
-    // Legacy store keys (now consolidated or removed). Nothing writes these
-    // any more; they stay so an install upgrading from an older build still
-    // gets its old payload dropped on the next sign-out.
     'unified-chat-storage',
     'agi-web-chat',
     'billing-storage', // Legacy - now in unified-auth-storage

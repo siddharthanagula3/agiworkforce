@@ -1,11 +1,3 @@
-/**
- * Cloud sync trigger — MANAGED-ONLY gate (trust boundary).
- *
- * The auto-trigger must invoke the sync engine ONLY in AGI-managed cloud mode.
- * It must never fire in Local mode or BYOK mode (BYOK runs under appMode='cloud'
- * but selectPrivacyMode returns 'byok'). These tests pin that invariant against
- * the real triggerCloudSync code path.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => ({
@@ -20,8 +12,6 @@ vi.mock('../../stores/appModeStore', () => ({
   selectPrivacyMode: () => h.privacyMode,
 }));
 vi.mock('../../stores/auth', async (importOriginal) => ({
-  // Keep the REAL cloud-session predicate: mocking it away is how the
-  // signed-in/signed-out split-brain went unnoticed.
   selectHasCloudAccountSession: (await importOriginal<typeof import('../../stores/auth')>())
     .selectHasCloudAccountSession,
   useUnifiedAuthStore: {

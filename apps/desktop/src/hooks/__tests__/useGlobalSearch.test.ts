@@ -2,8 +2,6 @@ import { renderHook } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act } from 'react';
 
-// ── Store mocks ───────────────────────────────────────────────────────────────
-
 vi.mock('../../stores/chat/chatStore', () => ({
   useChatStore: vi.fn((selector) =>
     selector({
@@ -126,8 +124,6 @@ vi.mock('fuse.js', async () => {
   return actual;
 });
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 import { useGlobalSearch } from '../useGlobalSearch';
 
 describe('useGlobalSearch', () => {
@@ -157,7 +153,6 @@ describe('useGlobalSearch', () => {
 
     const connGroup = result.current.find((g) => g.group === 'Connectors');
     expect(connGroup).toBeDefined();
-    // Only gmail is connected
     expect(connGroup!.items.every((i) => i.id === 'connector-gmail')).toBe(true);
   });
 
@@ -202,19 +197,16 @@ describe('useGlobalSearch', () => {
     act(() => {
       vi.runAllTimers();
     });
-    // Empty query shows all groups
     const allGroups = result.current.map((g) => g.group);
     expect(allGroups).toContain('Chats');
 
     rerenderHook({ q: 'xyzzyplonkzomg' });
-    // Before timer fires the debounced value hasn't changed — groups still populated
     const chatGroupBeforeDebounce = result.current.find((g) => g.group === 'Chats');
     expect(chatGroupBeforeDebounce).toBeDefined();
 
     act(() => {
       vi.advanceTimersByTime(200);
     });
-    // After 200ms query resolves and no group has matching items
     expect(result.current.every((g) => g.items.length === 0)).toBe(true);
   });
 

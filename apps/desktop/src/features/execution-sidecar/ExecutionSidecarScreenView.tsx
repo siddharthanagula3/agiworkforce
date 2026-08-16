@@ -17,7 +17,6 @@ export function ExecutionSidecarScreenView() {
   const screenWidth = useComputerUseStore((s) => s.screenWidth);
   const screenHeight = useComputerUseStore((s) => s.screenHeight);
 
-  // Derive last action from action log for overlay positioning
   const lastAction = actionLog.length > 0 ? actionLog[actionLog.length - 1] : undefined;
 
   const handleImageLoad = useCallback(() => {
@@ -36,7 +35,6 @@ export function ExecutionSidecarScreenView() {
   const filmstripScreenshots = useExecutionSidecarStore((s) => s.filmstripScreenshots);
   const latestFilmstrip = filmstripScreenshots[filmstripScreenshots.length - 1];
 
-  // Determine which image to show, in priority order
   const imageData =
     computerUseActive && computerUseScreenshot
       ? `data:image/png;base64,${computerUseScreenshot}`

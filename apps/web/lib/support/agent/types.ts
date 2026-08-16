@@ -1,16 +1,4 @@
-/**
- * Public contract for the grounded support answer engine.
- *
- * This module is the seam the other support builders integrate against. It is
- * intentionally free of `server-only` so the widget can import the TYPES; the
- * implementation modules that touch providers carry `server-only` themselves.
- */
 
-/**
- * A resolved source. `title`/`url`/`snippet` are ALWAYS produced server-side by
- * looking a chunk id up in the retrieved set — the model never emits any of
- * them, so an injected document cannot introduce an attacker-controlled URL.
- */
 export interface SupportCitation {
   title: string;
   url: string;
@@ -42,9 +30,7 @@ export interface SupportRoute {
 export interface SupportAnswerOk {
   kind: 'answer';
   text: string;
-  /** Invariant: length >= 1. An answer with no source is downgraded to an abstention. */
   citations: SupportCitation[];
-  /** Always one of `input.availableActions`, else null. The engine executes nothing. */
   proposedActionId: string | null;
   route: SupportRoute;
   handoffOffered: boolean;
@@ -55,7 +41,6 @@ export interface SupportAbstention {
   reason: SupportAbstentionReason;
   text: string;
   authoritativeLinks: SupportCitation[];
-  /** Always true: an abstention always offers a human. */
   handoffOffered: true;
   route: SupportRoute | null;
 }
@@ -68,11 +53,6 @@ export interface SupportViewer {
   planTier: string | null;
 }
 
-/**
- * An account fact resolved SERVER-SIDE by the account-context builder from the
- * authenticated session. The answer engine never reads a database and never
- * takes a user id from the model or the client.
- */
 export interface SupportAccountFact {
   label: string;
   value: string;
@@ -100,16 +80,10 @@ export interface SupportAnswerInput {
   signal?: AbortSignal;
 }
 
-// ---------------------------------------------------------------------------
-// Corpus / retrieval shapes
-// ---------------------------------------------------------------------------
-
 export interface CorpusChunk {
-  /** Globally unique within the merged index. */
   id: string;
   docId: string;
   docTitle: string;
-  /** Site-relative public route, e.g. `/byok`. Never an authenticated surface. */
   path: string;
   category: string;
   tags: readonly string[];

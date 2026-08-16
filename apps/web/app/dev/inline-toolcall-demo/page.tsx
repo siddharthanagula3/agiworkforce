@@ -1,18 +1,3 @@
-// apps/web/app/dev/inline-toolcall-demo/page.tsx
-//
-// R23 lane A · static-render smoke-test harness for the R22 inline tool-call
-// badge visual (commits 9707de324 → e361da768).
-//
-// SYNTHETIC DATA: this harness hand-crafts InlineToolCall / InlineToolCallGroup
-// / WebSearchCard props so we can verify the visual without a live provider +
-// tool-use loop. This route is a visual harness only and does not prove BYOK or
-// managed-cloud runtime availability.
-//
-// Reference image: ~/Desktop/reference/ui/desktop/claude-artifacts/02_*.png and
-// 06_*.png. This page renders all the badge variants in a column so the
-// captured screenshot can be diffed visually side-by-side with Claude.
-//
-// Read-only on app code · this is the only new mount we add for the smoke test.
 
 'use client';
 
@@ -25,10 +10,6 @@ import {
 
 const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
   {
-    // Synthetic layout data, but pointed at a real, stable page: the previous
-    // fixture invented a versioned-model announcement and release title
-    // that do not exist. A screenshot of this harness is meant to be diffed
-    // against a competitor's UI, so it must not contain a fabricated release.
     url: 'https://www.anthropic.com/news',
     title: 'Anthropic · News',
     domain: 'anthropic.com',
@@ -61,10 +42,6 @@ const FILESYSTEM_RESULTS: WebSearchResultItem[] = [
 ];
 
 export default function InlineToolCallDemoPage() {
-  // SIX-24: `app/dev/layout.tsx` already 404s this whole segment under
-  // NODE_ENV=production (a real 404 status, unlike the 200-with-empty-body this
-  // branch produces). Kept as defence-in-depth for the case where that layout
-  // is removed.
   if (process.env.NODE_ENV === 'production') {
     return null;
   }

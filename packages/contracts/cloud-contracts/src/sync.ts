@@ -1,32 +1,6 @@
-/**
- * Cloud contracts — the cross-device delta-sync family served by apps/web:
- *
- *   GET/POST /api/chat/sync      (conversations + messages + artifacts)
- *   GET/POST /api/memory/sync    (user_memories)
- *   GET/POST /api/projects/sync  (user_projects)
- *   GET/POST /api/settings/sync  (single cloud-safe settings document)
- *
- * These schemas are the complete cross-language wire contract. Push requests
- * are shared because optimistic concurrency is a protocol property, not a
- * route-local validation detail.
- *
- * Wire conventions (server contract):
- *   - snake_case field names on pull; camelCase on push bodies.
- *   - `server_version` is a Postgres bigint serialized as a string.
- *   - timestamps are ISO strings (timestamptz through JSON serialization).
- *   - deltas arrive ordered by `server_version asc`; tombstones are included
- *     (`deleted_at` / `is_deleted`) so deletes propagate.
- *
- * Enforcement anchors: apps/web/app/api/{chat,memory,projects,settings}/sync/
- * __tests__/route.contract.test.ts assert live route output parses against
- * these schemas. Mobile's cloudSyncEngine validates every response with them;
- * desktop's Rust clients replay the shared v2 golden fixture from
- * `data/cloud_sync.rs` and `data/memory_sync.rs`.
- */
 
 import { z } from 'zod';
 
-/** PostgreSQL bigint revision serialized without JavaScript precision loss. */
 export const ServerVersionSchema = z
   .string()
   .regex(/^\d{1,19}$/)
@@ -35,14 +9,12 @@ export const ServerVersionSchema = z
     'server version exceeds PostgreSQL bigint range',
   );
 
-/** `{ id, server_version }` ack row returned for each applied push item. */
 export const AppliedRowSchema = z.object({
   id: z.string(),
   server_version: ServerVersionSchema,
 });
 export type AppliedRow = z.infer<typeof AppliedRowSchema>;
 
-/** Mutable sync protocol. Version 1 used unsafe client-wall-clock LWW. */
 export const SyncProtocolVersionSchema = z.literal(2);
 
 function rejectDuplicateIds(
@@ -62,10 +34,6 @@ function rejectDuplicateIds(
     seen.add(item.id);
   }
 }
-
-// ---------------------------------------------------------------------------
-// /api/chat/sync
-// ---------------------------------------------------------------------------
 
 export const ConversationWireDeltaSchema = z.object({
   id: z.string(),
@@ -130,9 +98,7 @@ export const ConversationSyncPushItemSchema = z.object({
   model: z.string().max(200).nullable().optional(),
   projectId: z.string().max(200).nullable().optional(),
   pinned: z.boolean().optional(),
-  /** Last server revision observed by this client; `0` creates. */
   baseVersion: ServerVersionSchema,
-  /** Tombstone intent only. The server owns the deletion timestamp. */
   isDeleted: z.boolean().optional(),
 });
 export type ConversationSyncPushItem = z.infer<typeof ConversationSyncPushItemSchema>;
@@ -147,9 +113,7 @@ export const MessageSyncPushItemSchema = z.object({
   inputTokens: z.number().int().nonnegative().optional(),
   outputTokens: z.number().int().nonnegative().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-  /** Last server revision observed by this client; `0` creates. */
   baseVersion: ServerVersionSchema,
-  /** Tombstone intent only. The server owns the deletion timestamp. */
   isDeleted: z.boolean().optional(),
 });
 export type MessageSyncPushItem = z.infer<typeof MessageSyncPushItemSchema>;
@@ -165,9 +129,7 @@ export const ArtifactSyncPushItemSchema = z.object({
   currentVersion: z.number().int().positive().optional(),
   pinned: z.boolean().optional(),
   tags: z.array(z.string().max(100)).max(50).optional(),
-  /** Last server revision observed by this client; `0` creates. */
   baseVersion: ServerVersionSchema,
-  /** Tombstone intent only. The server owns the deletion timestamp. */
   isDeleted: z.boolean().optional(),
 });
 export type ArtifactSyncPushItem = z.infer<typeof ArtifactSyncPushItemSchema>;
@@ -215,15 +177,10 @@ export const ChatSyncPushResponseSchema = z.object({
 });
 export type ChatSyncPushResponse = z.infer<typeof ChatSyncPushResponseSchema>;
 
-// ---------------------------------------------------------------------------
-// /api/memory/sync
-// ---------------------------------------------------------------------------
-
 export const MemoryWireDeltaSchema = z.object({
   id: z.string(),
   content: z.string(),
   category: z.string().nullable(),
-  /** Free-form on the wire ('mobile' | 'desktop' | 'web' | 'auto' | null today). */
   source: z.string().nullable(),
   pinned: z.boolean(),
   is_deleted: z.boolean(),
@@ -246,9 +203,7 @@ export const MemorySyncPushItemSchema = z.object({
   category: z.string().max(200).nullable().optional(),
   source: z.string().max(50).nullable().optional(),
   pinned: z.boolean().optional(),
-  /** Last server revision observed by this client; `0` creates. */
   baseVersion: ServerVersionSchema,
-  /** Tombstone intent only. The server owns the deletion timestamp. */
   isDeleted: z.boolean().optional(),
 });
 export type MemorySyncPushItem = z.infer<typeof MemorySyncPushItemSchema>;
@@ -273,10 +228,6 @@ export const MemorySyncPushResponseSchema = z.object({
   cursor: ServerVersionSchema,
 });
 export type MemorySyncPushResponse = z.infer<typeof MemorySyncPushResponseSchema>;
-
-// ---------------------------------------------------------------------------
-// /api/projects/sync
-// ---------------------------------------------------------------------------
 
 export const ProjectWireDeltaSchema = z.object({
   id: z.string(),
@@ -308,7 +259,6 @@ export const ProjectSyncPushItemSchema = z.object({
   color: z.string().max(50).nullable().optional(),
   isArchived: z.boolean().optional(),
   metadata: z.record(z.string(), z.unknown()).nullable().optional(),
-  /** Last server-owned revision observed for this project; `0` creates. */
   baseVersion: ServerVersionSchema,
   deletedAt: z.string().datetime().nullable().optional(),
 });
@@ -335,7 +285,6 @@ export type ProjectsSyncPushRequest = z.infer<typeof ProjectsSyncPushRequestSche
 
 export const ProjectSyncConflictSchema = z.object({
   id: z.string(),
-  /** Current server winner. Null means the requested non-zero revision no longer exists. */
   current: ProjectWireDeltaSchema.nullable(),
 });
 export type ProjectSyncConflict = z.infer<typeof ProjectSyncConflictSchema>;
@@ -346,24 +295,13 @@ const ProjectAppliedRowSchema = AppliedRowSchema.extend({
 
 export const ProjectsSyncPushResponseSchema = z.object({
   applied: z.array(ProjectAppliedRowSchema),
-  /** Present on the current server; default keeps rolling upgrades fail-safe. */
   conflicts: z.array(ProjectSyncConflictSchema).optional().default([]),
   cursor: ServerVersionSchema,
 });
 export type ProjectsSyncPushResponse = z.infer<typeof ProjectsSyncPushResponseSchema>;
 
-// ---------------------------------------------------------------------------
-// /api/settings/sync (single document — no pagination)
-// ---------------------------------------------------------------------------
-
 const CloudSafeSettingsNamespaceSchema = z.record(z.string(), z.unknown());
 
-/**
- * The only top-level settings namespaces permitted to cross a device boundary.
- * The object is intentionally strip-mode: unknown namespaces are removed at
- * every client parse boundary, while the Web route remains the authoritative
- * recursive secret scrubber for keys inside an allowed namespace.
- */
 export const CloudSafeSettingsSchema = z.object({
   appearance: CloudSafeSettingsNamespaceSchema.optional(),
   personalization: CloudSafeSettingsNamespaceSchema.optional(),
@@ -381,7 +319,6 @@ export type CloudSafeSettings = z.infer<typeof CloudSafeSettingsSchema>;
 export const SettingsServerVersionSchema = ServerVersionSchema;
 
 export const SettingsSyncPullResponseSchema = z.object({
-  /** Cloud-safe namespaces only — the server allowlist-filters and secret-scrubs. */
   settings: CloudSafeSettingsSchema,
   cursor: SettingsServerVersionSchema,
   hasMore: z.boolean(),
@@ -390,13 +327,11 @@ export type SettingsSyncPullResponse = z.infer<typeof SettingsSyncPullResponseSc
 
 export const SettingsSyncPushRequestSchema = z.object({
   settings: CloudSafeSettingsSchema,
-  /** Last server-owned revision observed by this client. */
   baseVersion: SettingsServerVersionSchema,
 });
 export type SettingsSyncPushRequest = z.infer<typeof SettingsSyncPushRequestSchema>;
 
 export const SettingsSyncPushResponseSchema = z.object({
-  /** true = baseVersion matched; false = the client must pull the server winner. */
   applied: z.boolean(),
   cursor: SettingsServerVersionSchema,
 });

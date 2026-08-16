@@ -1,19 +1,3 @@
-/**
- * @file LLM Proxy Routes — Managed Cloud Model Access
- * @security
- * - Rate limiting: Server-enforced per route
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Authentication: JWT required (via authenticateToken)
- * - Plan enforcement: Canonical plan and model-tier admission
- * - Server-side API keys: Never exposed to client
- *
- * Proxies OpenAI-compatible LLM requests (desktop ManagedCloudProvider and
- * other managed-cloud clients) to upstream providers through the canonical
- * `packages/ai/providers` adapters (restructure Wave 2). Request/response wire
- * conversion lives in `@agiworkforce/provider-protocol` (`openai-wire-compat`),
- * shared with the web v1 route, so the OpenAI-compatible contract stays
- * byte-stable while provider mechanics live in one place.
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -75,12 +59,7 @@ import {
 const router: Router = Router();
 
 router.use(authenticateToken);
-// SECURITY: Baseline rate limit for all LLM endpoints (100/min fallback)
 router.use(createRateLimiter('default'));
-
-// =============================================================================
-// CONSTANTS
-// =============================================================================
 
 /**
  * Models allowed on the Basic tier — derived from the shared model catalog.
@@ -96,11 +75,6 @@ export const BASIC_ALLOWED_MODELS: ReadonlySet<string> = new Set(
   getAllowedModelsForTier('economy'),
 );
 
-/**
- * Tier model sets are catalog-derived. Basic receives economy models, Pro and
- * Team add pro_additions, and Max/Max 15x/Enterprise add flagships. Free chat
- * uses the economy set under its private server-side allowance.
- */
 export const PRO_ALLOWED_MODELS: ReadonlySet<string> = new Set([
   ...getAllowedModelsForTier('economy'),
   ...getAllowedModelsForTier('pro_additions'),
@@ -111,12 +85,7 @@ export const FLAGSHIP_ALLOWED_MODELS: ReadonlySet<string> = new Set([
   ...getAllowedModelsForTier('flagship_additions'),
 ]);
 
-/** Hard upper bound for one managed-provider request, including streaming. */
 const LLM_PROVIDER_DEADLINE_MS = 10 * 60 * 1_000;
-
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
 
 const messageSchema = z.object({
   role: z.enum(['system', 'user', 'assistant', 'tool']),
@@ -138,15 +107,6 @@ const chatCompletionSchema = z
   })
   .strict();
 
-// =============================================================================
-// HELPERS
-// =============================================================================
-
-// Providers this proxy forwards to: every cloud adapter wired in
-// lib/providerAdapters.ts (restructure Wave 2 step 2 widened this from the
-// first-party trio to all eleven cloud providers). Local-device providers
-// (ollama unless the server deploys one, lmstudio always) stay out of the
-// managed proxy; models from unwired providers fail closed with a 400.
 type Provider = Exclude<ProviderId, 'ollama'>;
 
 const PROXIED_PROVIDERS: ReadonlySet<CatalogProvider> = new Set<CatalogProvider>([
@@ -237,17 +197,10 @@ export async function enforcePlanTier(
     );
   }
 
-  // Preserve the existing fail-closed behavior for a corrupt empty-string
-  // database tier. A missing row/null tier is the legitimate Free case, but
-  // an explicitly stored empty tier must not silently gain Free admission.
   const tier =
     subscription?.plan_tier === ''
       ? subscription.plan_tier
       : effectivePlanTier(rawTier, subscription?.status);
-  // Bind the required capability to the trusted surface class. Developer
-  // surfaces (CLI/IDE device tokens) require Pro-or-higher developer_surfaces;
-  // app surfaces require managed_chat. This closes the header-forgeable
-  // developer-surface bypass at the LLM proxy, mirroring the plan-gate.
   const requiredCapability = surface === 'developer' ? 'developer_surfaces' : 'managed_chat';
   if (!canUseBillingPlanCapability(tier, requiredCapability)) {
     logger.warn(
@@ -267,12 +220,6 @@ export async function enforcePlanTier(
     throw new AppError(`Model "${model}" is not available on managed cloud.`, 403);
   }
 
-  // Free resolves through the shared catalog gate like every other tier. This
-  // previously carried `(tier === 'free' && minimumTier === 'basic')`, which
-  // admitted Free to the ENTIRE Economy roster because `getMinimumRequiredTier`
-  // is roster-based and reports 'basic' for all of it. apps/web meanwhile sells
-  // Free only the models whose `tierPolicy.minTier` is 'free', so the gateway
-  // was handing out models the product does not offer on that plan.
   const allowed = canAccessModelForSubscriptionTier(model, tier);
   if (allowed) return tier;
 
@@ -285,27 +232,8 @@ export async function enforcePlanTier(
   throw new AppError(`Model "${model}" requires a Max plan or above.`, 403);
 }
 
-/**
- * Ordered managed-failover plan header (AUTO-ROUTER-MIGRATION-01).
- *
- * The canonical resolver (`packages/ai/routing` resolveAutoRoute) runs on the
- * client surface and emits registry-ordered, distinct-provider fallback routes
- * for AUTO-PROFILE selections only — explicit user selections always resolve
- * with an empty fallback list, because an explicit selection is a contract
- * the gateway must never silently rewrite. Clients forward that plan as a
- * comma-separated list of catalog model IDs in this header; its absence means
- * "no failover is permitted for this request".
- *
- * The plan rides a header rather than the body so the OpenAI-compatible wire
- * body stays byte-stable (see file docstring) and the billing request-hash /
- * idempotency fingerprint is unaffected by resolver plan recomputation.
- * Entries are advisory candidates: the gateway re-checks catalog membership,
- * proxied-provider support, and tier admission per attempt before use, and
- * never forwards upstream provider model IDs back to the client.
- */
 export const MANAGED_FALLBACK_MODELS_HEADER = 'x-agi-fallback-models';
 
-/** Resolver plans hold at most a few distinct-provider routes; bound defensively. */
 const MAX_FALLBACK_PLAN_ROUTES = 4;
 const FALLBACK_MODEL_ID_PATTERN = /^[A-Za-z0-9._:/-]{1,100}$/;
 
@@ -340,20 +268,6 @@ export function parseFallbackPlanHeader(
   return plan;
 }
 
-/**
- * Characters of provider-generated output carried by one canonical chunk.
- *
- * Thinking and tool-call output count: providers bill them as output tokens
- * exactly like visible text, so an abandoned reasoning or tool-calling stream
- * costs real money even when the client saw no prose. `tool-use-start` carries
- * the emitted tool name, which is why a disconnect between a tool call opening
- * and its first argument delta is still charged rather than fully refunded.
- *
- * This undercounts providers that bill hidden reasoning the stream never
- * carries (including provider reasoning tokens): those turns settle below
- * their true provider cost. It is a floor on what the turn cost, not a
- * reconstruction of the provider's own invoice.
- */
 function generatedOutputChars(chunk: StreamChunk): number {
   switch (chunk.type) {
     case 'text-delta':
@@ -368,26 +282,6 @@ function generatedOutputChars(chunk: StreamChunk): number {
   }
 }
 
-// GW-2 (audit 2026-05-03): SECURITY GUARDRAIL — upstream requests are built
-// exclusively inside `packages/ai/providers` adapters from server env keys.
-// NEVER thread `req.headers` (or the user's `Authorization: Bearer <jwt>`)
-// into adapter config/fetch — forwarding it upstream would leak the user's
-// session token. If a future pattern needs to forward headers selectively,
-// add an explicit allowlist — anything else is a security review blocker.
-
-// =============================================================================
-// ROUTE: POST /chat/completions
-// =============================================================================
-
-/**
- * POST /api/llm/v1/chat/completions
- * Proxy LLM requests to upstream providers with server-side API keys.
- *
- * Accepts OpenAI-compatible request format, routes to the correct provider
- * based on the model catalog, and returns OpenAI-compatible responses.
- *
- * SECURITY: JWT required. Plan tier enforced. Rate limited per tier.
- */
 router.post(
   '/chat/completions',
   createRateLimiter('llm-completions'),
@@ -438,8 +332,6 @@ router.post(
         idempotencyKey,
         provider,
         request: body as ManagedUsageRequestBody,
-        // The rolling five-hour, weekly and flagship ceilings are per-tier;
-        // without the tier the reservation cannot be capped at all.
         planTier: tier,
       });
       await markManagedUsageProviderStarted({
@@ -464,15 +356,8 @@ router.post(
     let billingFinalized = false;
     let providerSuccessObserved = false;
     let actualUsage: Omit<StreamChunkUsage, 'type'> = {};
-    // Output characters the current attempt got out of the provider. A client
-    // that hangs up or stalls mid-stream never reaches the provider's usage
-    // event, so this is the only measure left of what was already generated.
     let servedOutputChars = 0;
 
-    // The route currently serving the request. Starts at the primary and
-    // advances only when managed failover rotates to a fallback attempt, so
-    // billing settlement, usage events, and response attribution always name
-    // the model that actually served (or last attempted) the request.
     let served: { model: string; provider: Provider } = { model: body.model, provider };
 
     const captureUsage = (chunk: StreamChunkUsage): void => {
@@ -522,26 +407,11 @@ router.post(
       }
     };
 
-    // A client that abandons a stream mid-flight — hanging up, or stalling the
-    // socket until the gateway deadline fires — used to land in
-    // `releaseFailedReservation`, which refunds the whole reservation and leaves
-    // nothing in the rolling windows. The provider had already generated (and
-    // charged AGI for) the tokens streamed so far, so walking away one chunk
-    // before the end of every turn ran for free. Output the provider actually
-    // produced settles as completed instead; abandonment before the first output
-    // token still releases, matching `recover_stale_managed_usage_requests`.
-    //
-    // Scope: this covers CLIENT-caused abandonment only. A mid-stream provider
-    // error, a missing stop, or a deadline reached while waiting on the provider
-    // still refunds in full — charging a user for the gateway's own failure is a
-    // product decision, not this guard's call.
     const settleAbandonedStream = async (): Promise<void> => {
       if (billingFinalized || providerSuccessObserved) return;
       const measured =
         actualUsage.inputTokens !== undefined || actualUsage.outputTokens !== undefined;
       if (!measured && servedOutputChars === 0) return;
-      // Claim the terminal transition before awaiting: the finally block below
-      // runs `releaseFailedReservation`, which must not refund this stream.
       providerSuccessObserved = true;
       logger.info(
         {
@@ -563,12 +433,6 @@ router.post(
         await finalizeBilling('completed');
       } catch (error) {
         // No safety net behind this: `providerSuccessObserved` is already
-        // latched so the `finally` release is suppressed, and lease recovery
-        // does not retry a settlement — `recover_stale_managed_usage_requests`
-        // (0056) enqueues `-estimated_cost_cents` and marks the row
-        // `outcome_unknown`, i.e. exactly the full refund this settle exists to
-        // prevent. A failure here therefore loses the charge; it is logged at
-        // error level so it is visible rather than silently free.
         logger.error(
           {
             userId: user.userId,
@@ -616,11 +480,6 @@ router.post(
       eventType: 'llm_stream' | 'llm_completion',
       usage?: { prompt_tokens?: number; completion_tokens?: number } | null,
     ): void => {
-      // PostgrestBuilder.then() returns PromiseLike, not Promise — `.catch`
-      // isn't on the prototype. Pair the rejection handler via the 2-arg
-      // `.then(onfulfilled, onrejected)` form to swallow rejected inserts
-      // (audit 2026-05-20, §14: was leaking unhandledRejection on dropped
-      // SSE connections).
       usageDb
         .from('usage_events')
         .insert({
@@ -647,9 +506,6 @@ router.post(
         );
     };
 
-    // One lifecycle (and one 10-minute deadline) spans the whole request,
-    // including every failover attempt: a client disconnect or expired
-    // deadline terminates the request, never a rotation.
     const lifecycle = createStreamLifecycle({ deadlineMs: LLM_PROVIDER_DEADLINE_MS });
     let responseComplete = false;
 
@@ -659,11 +515,6 @@ router.post(
       adapter: ProviderAdapter;
     }
 
-    // Admission is re-checked per attempt at attempt time: a fallback entry
-    // that is catalog-unknown, non-proxied, tier-forbidden, or unconfigured is
-    // skipped (never served), and the original provider failure surfaces if no
-    // admitted candidate remains. Only AppError-class rejections skip — an
-    // infrastructure error (unexpected throw) still fails the request.
     const remainingFallbackModels = [...fallbackModels];
     const credentialFailover = new CredentialFailoverState();
     const nextFallbackRoute = async (): Promise<AttemptRoute | null> => {
@@ -706,11 +557,6 @@ router.post(
       failure: SafeProviderFailure,
     ): Promise<AttemptRoute | null> => {
       if (lifecycle.signal.aborted) return null;
-      // A rejected key condemns the provider account, not the request: the
-      // remaining plan routes are distinct providers holding distinct keys, so
-      // a suspended, revoked or out-of-credit upstream rotates instead of
-      // stranding the turn. Recorded before the route lookup so the rejected
-      // provider's own remaining routes are skipped rather than replayed.
       const credentialRotation = credentialFailover.recordFailure(
         served.provider,
         failure.category,
@@ -746,23 +592,13 @@ router.post(
       res.removeListener('close', abortForDisconnect);
     };
 
-    // Streaming response
     if (body.stream) {
       let routeError: AppError | null = null;
       let wroteClientEvent = false;
-      // True only while a write is parked waiting for the client's socket to
-      // drain. A client that stops reading without closing never sets
-      // `req.aborted`/`res.destroyed`, so this flag is the only evidence that
-      // the gateway deadline expired because the CLIENT stalled rather than
-      // because the provider hung — see the stalled-reader settle in the catch
-      // below.
       let awaitingClientDrain = false;
 
       const prepareSseHeaders = (): void => {
         if (res.hasHeader('Content-Type')) return;
-        // Deliberately do not flush here. The first actual SSE event commits
-        // the 200 response, preserving an HTTP error path if the provider
-        // fails before producing client-visible output.
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
@@ -777,8 +613,6 @@ router.post(
         const accepted = res.write(payload);
         wroteClientEvent = true;
         if (!accepted) {
-          // Left latched when the drain never arrives, so the catch below can
-          // tell a stalled reader apart from a hung provider.
           awaitingClientDrain = true;
           await lifecycle.waitForDrain(res);
           awaitingClientDrain = false;
@@ -807,8 +641,6 @@ router.post(
           served = { model: attempt.model, provider: attempt.provider };
           actualUsage = {};
           servedOutputChars = 0;
-          // Per-attempt assembler so the wire stream attributes the model
-          // that is actually serving this attempt, never a failed primary.
           const assembler = new OpenAIWireAssembler({ model: attempt.model });
           const writeWireEvent = async (wire: Record<string, unknown>): Promise<void> => {
             await writeSsePayload(`data: ${JSON.stringify(wire)}\n\n`);
@@ -857,8 +689,6 @@ router.post(
 
               if (chunk.type === 'usage') captureUsage(chunk);
 
-              // OpenAI-compatible providers may emit a usage-only event after
-              // their finish event. No other data is valid after a stop.
               if (pendingStop && chunk.type !== 'usage') {
                 attemptFailure = { failure: malformedStreamFailure(), phase: 'event-after-stop' };
                 break;
@@ -916,15 +746,6 @@ router.post(
               attemptFailure = { failure: toSafeProviderFailure(err), phase: 'thrown-error' };
             }
 
-            // The same abandonment as a hang-up, with the socket left open: the
-            // client stopped reading and never sent FIN, so the write parked in
-            // `waitForDrain` until the gateway deadline expired. `req.aborted`
-            // and `res.destroyed` both stay false, so the branches above cannot
-            // see it and the turn would otherwise reach
-            // `releaseFailedReservation` and be refunded in full after the
-            // provider had already generated (and charged for) the output.
-            // Only the settlement changes here — the failure terminal below is
-            // still composed and attempted, so the wire contract is unchanged.
             if (!clientGone && awaitingClientDrain) {
               logger.info(
                 { provider: served.provider, model: served.model },
@@ -945,11 +766,6 @@ router.post(
 
           logFailure(attemptFailure.failure, attemptFailure.phase);
 
-          // Managed failover: only before the first byte reaches the client
-          // (a half-streamed response from provider A continued by provider B
-          // would be corruption), and only for failures `rotateAfterFailure`
-          // admits — availability, or a credential rejection that condemns one
-          // provider account.
           const nextRoute: AttemptRoute | null = wroteClientEvent
             ? null
             : await rotateAfterFailure(attemptFailure.failure);
@@ -992,7 +808,6 @@ router.post(
       return;
     }
 
-    // Non-streaming response
     let routeError: AppError | null = null;
     let servedAssembler: OpenAIWireAssembler | null = null;
 
@@ -1117,10 +932,6 @@ router.post(
 
         logNonStreamFailure(attemptFailure.failure, attemptFailure.phase);
 
-        // Managed failover: nothing has been written to the client on this
-        // path (the JSON body is sent only after success), so an eligible
-        // availability failure may rotate even after partial provider output —
-        // the per-attempt assembler and usage reset discard that output.
         const nextRoute = await rotateAfterFailure(attemptFailure.failure);
         if (nextRoute) {
           attempt = nextRoute;

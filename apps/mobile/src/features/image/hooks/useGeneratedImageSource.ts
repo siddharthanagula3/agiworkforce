@@ -21,14 +21,6 @@ function ephemeralImageUri(value: string): string | null {
   return null;
 }
 
-/**
- * Resolve generated-image bytes without widening the Cloud trust boundary.
- *
- * Durable transcript images must be owner-scoped `/api/files/<uuid>` paths;
- * those resolve only through API_URL and receive a fresh Clerk bearer header
- * in memory. Explicitly-marked unsaved responses may display a provider/data
- * URI for this render only, without requesting or attaching an auth token.
- */
 export function useGeneratedImageSource(
   imageUrl: string,
   allowEphemeral: boolean,

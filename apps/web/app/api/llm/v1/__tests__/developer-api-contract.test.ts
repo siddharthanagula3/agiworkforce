@@ -1,21 +1,3 @@
-/**
- * The published developer contract must describe the API that actually ships.
- *
- * `public/openapi.json` documented checkout, device linking and `/me` and not a
- * single inference endpoint, while the product advertises an OpenAI-compatible
- * gateway — so the one artifact a developer integrates against said nothing
- * about the endpoints they were being sent to.
- *
- * The subtle half is WHICH credential each endpoint takes. An AGI API key
- * (`sk_live_…`) is opaque: `lib/server/rls-db.ts` refuses to bind it as a
- * database subject because it carries no signed `sub` claim. So any route that
- * reaches `getUserScopedDb` is session-only no matter what scope its auth gate
- * accepts, and advertising an API key there would send integrators at a wall.
- * That reachability rule is asserted in both directions here: a documented
- * `ApiKeyAuth` operation must be free of the RLS dependency, and an operation
- * that withholds `ApiKeyAuth` must still have one — otherwise the endpoint has
- * become usable and the spec is the thing that is stale.
- */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -35,7 +17,6 @@ const spec = JSON.parse(readFileSync(path.join(webRoot, 'public/openapi.json'), 
   >;
 };
 
-/** Route sources under `dir`, excluding tests — a test may mention a helper the route never calls. */
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
     const full = path.join(dir, entry);
@@ -118,7 +99,6 @@ describe('published OpenAPI spec', () => {
 describe('published rate-limit table', () => {
   const doc = readFileSync(path.join(repoRoot, 'docs/api/rate-limits.md'), 'utf8');
 
-  /** Documented endpoint label -> the limiter bucket the route actually applies. */
   const documentedKeys: Record<string, keyof typeof rateLimitConfigs> = {
     '`GET /models`': 'default',
     '`GET /credits/balance`': 'credits-balance',

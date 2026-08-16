@@ -1,20 +1,3 @@
-/**
- * SendPreview — surface-agnostic "what will be sent" disclosure card.
- *
- * Closes the PLAN.md section 5 task: "Add visible 'what will be sent'
- * previews for cloud/BYOK turns." Hosts build a `SendPreviewPresentation`
- * via `summarizeSendPreview` (from `@agiworkforce/types`) and pass it in.
- *
- * The card surfaces the destination (local device / BYOK provider host /
- * Managed gateway), the privacy short label, the model, and an
- * expand/collapse details block (message size, attachments, system-prompt
- * size, context-budget estimate, tools). It is intentionally privacy-
- * positive for Local turns — the banner copy makes the local-only
- * guarantee explicit rather than re-using the cloud-mode "destination"
- * framing.
- *
- * Round-8 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import { useId, useState } from 'react';
 import { ChevronDown, ChevronUp, Cloud, HardDrive, KeyRound, Lock } from 'lucide-react';
@@ -23,15 +6,8 @@ import { cn } from '../lib/utils';
 
 export interface SendPreviewProps {
   presentation: SendPreviewPresentation;
-  /** Initial expanded state for the details block; defaults to collapsed. */
   defaultExpanded?: boolean;
-  /**
-   * `card` is the full trust-boundary explainer. `compact` keeps the
-   * destination visible beside a composer without permanently occupying a
-   * banner row; the complete explanation remains available on demand.
-   */
   variant?: 'card' | 'compact';
-  /** Optional class for host-layout integration. */
   className?: string;
 }
 
@@ -68,9 +44,6 @@ export function SendPreview({
 }: SendPreviewProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const generatedDetailsId = useId();
-  // Preserve the long-standing stable card id (and its snapshot contract).
-  // Compact disclosures may coexist across embedded surfaces, so those use a
-  // React-generated id to keep their popover relationship unique.
   const detailsId = variant === 'compact' ? generatedDetailsId : 'send-preview-details';
   const detailsAvailable = Boolean(
     presentation.bodyCharLabel ||

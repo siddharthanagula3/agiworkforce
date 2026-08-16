@@ -9,15 +9,6 @@ import {
 } from './Toast';
 import { useToast } from '../hooks/useToast';
 
-/**
- * Toaster component that renders toast notifications.
- *
- * Features:
- * - Accessible live region announcements
- * - Visual icons for different variants
- * - Swipe-to-dismiss on touch devices
- * - Keyboard dismissible
- */
 export function Toaster() {
   const { toasts } = useToast();
 

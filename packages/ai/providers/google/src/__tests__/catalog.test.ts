@@ -1,8 +1,3 @@
-/**
- * Catalog SSOT regression: GOOGLE_MODEL_CATALOG must derive from
- * `models.json` and surface every Google-provider entry. Earlier versions
- * were hardcoded inline.
- */
 
 import { describe, expect, it } from 'vitest';
 

@@ -1,10 +1,6 @@
 import type { z } from 'zod';
 import { createError } from '@/lib/errors';
 
-/**
- * Parse a project API body with the shared Cloud contract while preserving a
- * field-specific, safe validation message for Web API callers.
- */
 export function parseProjectRequest<T>(schema: z.ZodType<T>, input: unknown): T {
   const parsed = schema.safeParse(input);
   if (parsed.success) return parsed.data;

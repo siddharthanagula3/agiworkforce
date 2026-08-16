@@ -1,16 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M30 — Projects gets the same list ergonomics as Chats.
- *
- * The screen shipped with no search, no sort, raw store order (which made the
- * "Updated 3 days ago" caption on every card meaningless) and creation hidden
- * in a 32×32 header square, under the 44pt iOS minimum. It now adopts the
- * shared `BottomSearchBar` + `FloatingPrimaryAction` and a funnel sort chip.
- *
- * NOT covered, deliberately: ownership chips (All / Created by you / Shared
- * with you). No project record carries an owner — see
- * stores/projects/cloudProjectStore.ts:26-51 — so there is nothing to filter on.
- */
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
@@ -19,8 +7,6 @@ import type { ReactTestInstance } from 'react-test-renderer';
 const mockPush = jest.fn();
 const mockSetActiveProject = jest.fn();
 
-// Deliberately NOT in recency order, so "sorted by updatedAt desc" cannot pass
-// by accidentally echoing store order.
 const mockProjects = [
   {
     id: 'project-mid',
@@ -51,15 +37,9 @@ const mockProjects = [
 let mockActiveProjectId: string | null = null;
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -156,7 +136,6 @@ function renderedOrder(screen: ReturnType<typeof render>): string[] {
   );
 }
 
-/** testIDs in rendered document order — cheap proof of vertical placement. */
 function testIDsInOrder(root: ReactTestInstance): string[] {
   const ids: string[] = [];
   const walk = (node: ReactTestInstance) => {
@@ -206,7 +185,6 @@ describe('Projects list ergonomics', () => {
     chooseSort(screen, 'Name');
 
     expect(renderedOrder(screen)).toEqual(['Android polish', 'Billing rewrite', 'Zurich launch']);
-    // The chip reports the order it is in, so the list is never silently sorted.
     expect(screen.getByLabelText('Sort projects. Name')).toBeTruthy();
   });
 
@@ -225,7 +203,6 @@ describe('Projects list ergonomics', () => {
     fireEvent.changeText(screen.getByLabelText('Search projects'), 'zurich');
     expect(renderedOrder(screen)).toEqual(['Zurich launch']);
 
-    // Description matches too — "dunning" appears nowhere in a project name.
     fireEvent.changeText(screen.getByLabelText('Search projects'), 'dunning');
     expect(renderedOrder(screen)).toEqual(['Billing rewrite']);
 
@@ -237,11 +214,8 @@ describe('Projects list ergonomics', () => {
   it('keeps the search field out of the scrolling list so it cannot scroll away', () => {
     const screen = render(<ProjectsTabScreen />);
 
-    // The field is not a row of the list — a scrolling field is exactly the
-    // defect PAR-M31 records on the connectors directory.
     expect(within(screen.getByTestId('projects-list')).queryByTestId('projects-search')).toBeNull();
 
-    // ...and it renders after the list, i.e. below it, not above it.
     const ids = testIDsInOrder(screen.UNSAFE_root);
     expect(ids).toContain('projects-search');
     expect(ids.indexOf('projects-list')).toBeLessThan(ids.indexOf('projects-search'));
@@ -252,8 +226,6 @@ describe('Projects list ergonomics', () => {
 
     const create = screen.getByLabelText('Create new project');
     expect(create.props.style.minHeight).toBeGreaterThanOrEqual(44);
-    // Exactly one create affordance while the list has content — the 32×32
-    // header square is gone, not duplicated.
     expect(screen.getAllByLabelText('Create new project')).toHaveLength(1);
 
     fireEvent.press(create);

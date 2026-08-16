@@ -1,23 +1,3 @@
-/**
- * ProjectHeader — surface-agnostic header card for a project.
- *
- * Closes the host-adoption side of the PLAN.md section 5 "Define project
- * schema" task. Hosts build a `ProjectHeaderPresentation` via
- * `summarizeProjectHeader` (from `@agiworkforce/types`) and pass it in.
- *
- * The header surfaces the project's identity (icon, name, description),
- * trust posture (privacy + provider chips, with explicit "Local" framing
- * when `staysLocal`), default model, denormalized counts (knowledge files,
- * members), last-used label, imported-from chip, and the set of allowed
- * surfaces — in the canonical order produced by `summarizeProjectHeader`.
- *
- * The shared `ProjectHeaderPresentation` accent palette is intentionally
- * bounded (emerald / sky / amber / rose / violet / zinc) so this component
- * can map every value to a deterministic Tailwind class set without
- * leaking arbitrary `style={{ backgroundColor }}` values into the DOM.
- *
- * Round-10 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import { Folder, KeyRound, Lock, Users } from 'lucide-react';
 import type { ProjectAccentColor, ProjectHeaderPresentation } from '@agiworkforce/types';
@@ -25,13 +5,7 @@ import { cn } from '../lib/utils';
 
 export interface ProjectHeaderProps {
   presentation: ProjectHeaderPresentation;
-  /** Optional class for host-layout integration. */
   className?: string;
-  /**
-   * Omits the repeated icon/title when the host already renders project
-   * identity nearby, while retaining trust, provenance, and availability
-   * context.
-   */
   compact?: boolean;
 }
 

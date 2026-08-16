@@ -1,15 +1,3 @@
-/**
- * `charge.dispute.created` is a fraud control with authorization consequences:
- * it writes `status = 'past_due'` + `cancel_at_period_end = true` (which
- * lib/entitlement.ts reads as "not entitled") and claws back every remaining
- * credit. A control that removes access has to leave a record the affected
- * customer can read, or it is silent authorization policy — the account stops
- * working and nothing in the product says why.
- *
- * These tests pin the audit row, not the log line: `security_audit_logs` is
- * what GET /api/settings/activity and GET /api/settings/audit-logs return to
- * the user; `logger.warn` is server-side only.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -91,8 +79,6 @@ function withProfile() {
 
 describe('charge.dispute.created records why access was removed', () => {
   beforeEach(() => {
-    // clearAllMocks drops queued return values as well as call history, so
-    // every stub the handler depends on is re-armed here.
     vi.clearAllMocks();
     chargesRetrieve.mockResolvedValue({ id: 'ch_123', customer: 'cus_123' });
     creditMocks.getBalance.mockResolvedValue({ credits_remaining_cents: 1500 });
@@ -119,8 +105,6 @@ describe('charge.dispute.created records why access was removed', () => {
   });
 
   it('still records the reason when the account had no credits left to claw back', async () => {
-    // The entitlement revocation happens either way, so the explanation has to
-    // as well — a zero balance must not make the downgrade unexplained.
     creditMocks.getBalance.mockResolvedValue({ credits_remaining_cents: 0 });
     const { db, calls } = withProfile();
 
@@ -137,8 +121,6 @@ describe('charge.dispute.created records why access was removed', () => {
   });
 
   it('records nothing when no user owns the disputed charge', async () => {
-    // Nothing was revoked, so there is no authorization decision to explain and
-    // no user to attribute a row to.
     const { db } = makeDb(() => []);
 
     await dispatchStripeEvent(db, stripeStub, disputeEvent);

@@ -1,12 +1,3 @@
-/**
- * The Tasks nav row carries a count of Managed Cloud runs stopped waiting on
- * the user. Cloud runs are durable — they keep going with Desktop closed — so
- * without this the shell gives no sign that a run needs an approval.
- *
- * What matters here is the wiring and the gating, not the arithmetic (that is
- * covered in stores/__tests__/cloudTaskBadgeStore.test.ts): the badge appears
- * only in a managed session, never in Local, and never at zero.
- */
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -87,8 +78,6 @@ vi.mock('../../../stores/appModeStore', () => ({
     selector({ mode: 'cloud', setMode: vi.fn() }),
 }));
 
-// The real hook runs; only the store beneath it is faked, so the gating logic
-// under test (managed + signed in, else reset) is genuinely exercised.
 vi.mock('../../../stores/cloudTaskBadgeStore', () => {
   const useCloudTaskBadgeStore = (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ needsUserCount: mocks.needsUserCount });
@@ -123,7 +112,6 @@ describe('Tasks nav badge', () => {
 
     const badge = screen.getByTestId('nav-badge-tasks');
     expect(badge).toHaveTextContent('3');
-    // The badge has to sit on the Tasks row, not merely somewhere in the nav.
     expect(badge.closest('button')?.textContent).toContain('Tasks');
     expect(mocks.refresh).toHaveBeenCalled();
   });
@@ -145,7 +133,6 @@ describe('Tasks nav badge', () => {
 
   it('never polls or badges in a Local session', () => {
     mocks.privacyMode = 'local';
-    // Even if a count survived in the store, Local must not render it.
     mocks.needsUserCount = 4;
     render(<Sidebar mode="chat" />);
 

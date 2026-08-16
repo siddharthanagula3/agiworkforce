@@ -28,9 +28,7 @@ import 'server-only';
  * destructive, external, privileged, or expensive agent actions."
  */
 
-/** How the agent turn must treat a proposed shell command. */
 export type CommandRisk =
-  /** Read-only and workspace-scoped; may run unattended. */
   | 'safe'
   /** May run only after the user explicitly approves this exact command. */
   | 'requires_approval'
@@ -39,25 +37,11 @@ export type CommandRisk =
 
 export interface CommandClassification {
   risk: CommandRisk;
-  /** Why, in language that can be shown verbatim in an approval prompt. */
   reason: string;
 }
 
-/**
- * Shell metacharacters that make a command line something other than a single
- * program invocation. Their presence means we cannot reason about what runs,
- * so the command is escalated regardless of how benign the first token looks.
- * `echo hi && rm -rf /` must never classify on `echo`.
- */
 const SHELL_METACHARACTERS = /[;&|`$(){}<>\n\r]|\|\||&&/;
 
-/**
- * Commands that only read. Matched against the FIRST token, and only when the
- * line contains no metacharacters. Deliberately short: every entry here is a
- * decision that an agent may run it with no human in the loop, so the bar is
- * "cannot mutate the workspace, cannot reach the network, cannot read secrets
- * outside the workspace".
- */
 const READ_ONLY_COMMANDS = new Set([
   'ls',
   'pwd',
@@ -87,11 +71,6 @@ const READ_ONLY_COMMANDS = new Set([
   'python3',
 ]);
 
-/**
- * Never approvable from an agent turn. These are not "dangerous but sometimes
- * fine" — they are actions where a yes/no prompt cannot convey what is being
- * consented to, or where the blast radius leaves the sandbox entirely.
- */
 const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   {
     pattern: /\bsudo\b|\bsu\b/,
@@ -125,10 +104,6 @@ const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   },
 ];
 
-/**
- * Actions that are legitimate but must be shown to the user first. Matching
- * here produces an approval prompt naming the exact command.
- */
 const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   {
     pattern: /\brm\b|\bmv\b|\btruncate\b|\bshred\b/,
@@ -150,13 +125,6 @@ const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
   },
 ];
 
-/**
- * Classify a proposed shell command.
- *
- * Order matters: denial wins over approval, approval wins over the read-only
- * allowlist, and anything unrecognized escalates. An empty or oversized command
- * is rejected rather than treated as a no-op.
- */
 export function classifyCommandRisk(rawCommand: string): CommandClassification {
   const command = rawCommand.trim();
 
@@ -167,8 +135,6 @@ export function classifyCommandRisk(rawCommand: string): CommandClassification {
     return { risk: 'denied', reason: 'Command contains a null byte.' };
   }
 
-  // Denials are checked against the WHOLE line, before any tokenization, so
-  // they cannot be hidden behind a leading benign command.
   for (const { pattern, reason } of DENIED_PATTERNS) {
     if (pattern.test(command)) return { risk: 'denied', reason };
   }
@@ -177,9 +143,6 @@ export function classifyCommandRisk(rawCommand: string): CommandClassification {
     if (pattern.test(command)) return { risk: 'requires_approval', reason };
   }
 
-  // Beyond this point we would be reasoning about "the program being run".
-  // That is only meaningful for a single invocation with no shell control
-  // characters; otherwise escalate rather than guess.
   if (SHELL_METACHARACTERS.test(command)) {
     return {
       risk: 'requires_approval',
@@ -200,21 +163,10 @@ export function classifyCommandRisk(rawCommand: string): CommandClassification {
   };
 }
 
-/** Tool names the Cloud Code agent may call. */
 export const CLOUD_CODE_READ_FILE_TOOL = 'read_file';
 export const CLOUD_CODE_LIST_FILES_TOOL = 'list_files';
 export const CLOUD_CODE_RUN_COMMAND_TOOL = 'run_command';
 
-/**
- * Tool definitions for the Cloud Code agent turn.
- *
- * These are ADDITIVE to `e2bExecutionToolDefs()` (write_file, create_folder,
- * execute_code), which the agent reuses rather than redeclaring — one owner for
- * the sandbox tool contract, per the service-layer rule. What is added here is
- * what a *coding* agent needs and a code-execution tool set does not have:
- * reading existing files, listing the tree, and running shell commands under
- * the approval boundary above.
- */
 export function cloudCodeAgentToolDefs(): Array<{
   type: 'function';
   function: { name: string; description: string; parameters: Record<string, unknown> };

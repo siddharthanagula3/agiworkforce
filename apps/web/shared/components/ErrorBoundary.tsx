@@ -83,8 +83,6 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   handleGoHome = () => {
-    // A soft navigation can preserve this boundary's errored state. Reload the
-    // document so the home route mounts with a fresh React tree.
     window.location.assign(new URL('/', window.location.origin));
   };
 

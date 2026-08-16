@@ -1,13 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Cloud Connectors directory — OAuth connect flow.
- *
- * A provider with a registered platform OAuth app cannot be connected by a
- * directory toggle: `POST /api/connectors` answers 409 and the service turns
- * that into an `oauth-required` handoff. The screen must open the provider's
- * consent screen, then decide connected/not-connected ONLY from the refreshed
- * `/api/connectors` response — a dismissed browser sheet proves nothing.
- */
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -190,8 +181,6 @@ describe('Cloud Connectors — OAuth connect flow', () => {
 
     await waitFor(() => expect(alertSpy).toHaveBeenCalledTimes(1));
     expect(alertSpy.mock.calls[0]?.[0]).toBe('Could not open Linear authorization');
-    // Only the initial load — a failed handoff must not re-read the directory
-    // and must leave the row un-connected.
     expect(mockFetchDirectory).toHaveBeenCalledTimes(1);
     expect(getByLabelText('Linear. Connect')).toBeTruthy();
   });

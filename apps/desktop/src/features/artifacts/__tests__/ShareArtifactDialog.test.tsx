@@ -1,15 +1,3 @@
-/**
- * DOC-018 — the desktop share dialog must not promise a publish path desktop
- * does not have.
- *
- * Desktop injects a `localFileWriter` and no `CloudPublisher`
- * (`features/artifacts/publishAdapter.ts`), and Cloud mode does not change it:
- * `ChatInterface` renders the shared unified-chat `ArtifactPanel` with no
- * `publishArtifact` prop, so its Publish falls back to a clipboard snapshot.
- * The dialog therefore must not tell the user to switch to Cloud mode to get a
- * hosted link, and must not resurrect a launch-gate ("coming soon", waitlist,
- * invite, private beta) for a product that has none.
- */
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ShareArtifactDialog } from '../ShareArtifactDialog';

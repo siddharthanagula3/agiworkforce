@@ -1,11 +1,3 @@
-/**
- * Runtime schemas for the subset of Desktop's Rust `RealtimeEvent` protocol
- * used by the optional VS Code health bridge.
- *
- * Keep the externally tagged variant names and snake_case fields aligned with
- * `apps/desktop/src-tauri/src/integrations/realtime/events.rs`. The bridge does
- * not define a second VS Code-only wire format.
- */
 
 import { z } from 'zod';
 

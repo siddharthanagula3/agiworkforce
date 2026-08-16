@@ -1,9 +1,3 @@
-/**
- * Credit formatting utilities
- *
- * Credits are stored in cents (1 cent = 1 credit).
- * Display credits as whole numbers instead of dollar amounts.
- */
 
 /**
  * Format cents as credits (1 cent = 1 credit)

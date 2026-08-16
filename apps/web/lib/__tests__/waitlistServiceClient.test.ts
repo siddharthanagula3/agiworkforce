@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// waitlistServiceClient routes through active Next.js API endpoints · Neon
-// browser access was removed. Mock global fetch and CSRF header injection.
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
@@ -14,10 +12,6 @@ vi.mock('@/lib/client/csrf', () => ({
 
 import { redeemInviteCode, joinWaitlist } from '../services/waitlistServiceClient';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeJsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,
@@ -29,10 +23,6 @@ function makeJsonResponse(body: unknown, status = 200): Response {
 beforeEach(() => {
   vi.clearAllMocks();
 });
-
-// ---------------------------------------------------------------------------
-// redeemInviteCode
-// ---------------------------------------------------------------------------
 
 describe('redeemInviteCode', () => {
   it('POSTs to /api/claim-offer with uppercased code and CSRF header', async () => {
@@ -86,10 +76,6 @@ describe('redeemInviteCode', () => {
     expect(result).toEqual({ success: true, inviteId: 'inv-xyz' });
   });
 });
-
-// ---------------------------------------------------------------------------
-// joinWaitlist
-// ---------------------------------------------------------------------------
 
 describe('joinWaitlist', () => {
   it('returns success on 200 response', async () => {

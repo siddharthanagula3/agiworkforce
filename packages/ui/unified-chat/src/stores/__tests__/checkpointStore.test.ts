@@ -1,9 +1,3 @@
-/**
- * Phase A Slice 3 — checkpointStore tests.
- *
- * Tests: Checkpoint CRUD, Branch CRUD, forkAtCheckpoint, clearConversation,
- * and all selectors.
- */
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -13,10 +7,6 @@ import {
   selectActiveBranchId,
 } from '../checkpointStore';
 import type { Checkpoint, Branch } from '../checkpointStore';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function resetStore() {
   useCheckpointStore.setState({
@@ -49,10 +39,6 @@ function makeBranch(overrides?: Partial<Branch>): Branch {
 const CONV_A = 'conv-a';
 const CONV_B = 'conv-b';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Initial state
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('checkpointStore — initial state', () => {
   beforeEach(resetStore);
 
@@ -68,10 +54,6 @@ describe('checkpointStore — initial state', () => {
     expect(selectActiveBranchId(CONV_A)(useCheckpointStore.getState())).toBeUndefined();
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// setCheckpoints
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('checkpointStore — setCheckpoints', () => {
   beforeEach(resetStore);
@@ -102,10 +84,6 @@ describe('checkpointStore — setCheckpoints', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// addCheckpoint
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('checkpointStore — addCheckpoint', () => {
   beforeEach(resetStore);
 
@@ -126,10 +104,6 @@ describe('checkpointStore — addCheckpoint', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// removeCheckpoint
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('checkpointStore — removeCheckpoint', () => {
   beforeEach(resetStore);
 
@@ -144,7 +118,6 @@ describe('checkpointStore — removeCheckpoint', () => {
   });
 
   it('is no-op for unknown conversation', () => {
-    // Should not throw
     useCheckpointStore.getState().removeCheckpoint('no-such-conv', 'any-id');
     expect(selectCheckpoints('no-such-conv')(useCheckpointStore.getState())).toEqual([]);
   });
@@ -156,10 +129,6 @@ describe('checkpointStore — removeCheckpoint', () => {
     expect(selectCheckpoints(CONV_A)(useCheckpointStore.getState())).toHaveLength(1);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// setBranches / setActiveBranch
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('checkpointStore — branches', () => {
   beforeEach(resetStore);
@@ -185,10 +154,6 @@ describe('checkpointStore — branches', () => {
     expect(selectBranches(CONV_B)(useCheckpointStore.getState())).toHaveLength(2);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// forkAtCheckpoint
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('checkpointStore — forkAtCheckpoint', () => {
   beforeEach(resetStore);
@@ -226,10 +191,6 @@ describe('checkpointStore — forkAtCheckpoint', () => {
     expect(branches[0]!.name).toBeUndefined();
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// clearConversation
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('checkpointStore — clearConversation', () => {
   beforeEach(resetStore);

@@ -1,25 +1,5 @@
-/**
- * Terminal API
- *
- * Standalone API wrappers for all terminal Rust commands.
- * The terminalStore.ts uses these commands inline; this module provides
- * importable functions for use outside the store (components, hooks, other APIs).
- *
- * Rust commands (terminal.rs):
- *   execute_terminal_command, terminal_execute, terminal_detect_shells,
- *   terminal_create_session, terminal_send_input, terminal_resize,
- *   terminal_kill, terminal_list_sessions, terminal_get_history,
- *   terminal_ai_suggest_command, terminal_ai_explain_error,
- *   terminal_smart_commit, terminal_ai_suggest_improvements,
- *   terminal_set_env, terminal_get_env, terminal_list_env,
- *   terminal_unset_env, terminal_clear_history
- */
 
 import { invoke } from '../lib/tauri-mock';
-
-// ============================================================================
-// Interfaces
-// ============================================================================
 
 export interface ExecuteResult {
   stdout: string;
@@ -50,11 +30,6 @@ export interface ExecuteCommandOptions {
   timeoutMs?: number;
 }
 
-// ============================================================================
-// One-Shot Execution Commands
-// ============================================================================
-
-/** Execute a terminal command with full options (shell, cwd, streaming, timeout) */
 export const executeTerminalCommand = async (
   command: string,
   options?: ExecuteCommandOptions,
@@ -74,7 +49,6 @@ export const executeTerminalCommand = async (
   }
 };
 
-/** Simplified terminal execution (command + optional working dir) */
 export const terminalExecute = async (
   command: string,
   workingDir?: string,
@@ -90,11 +64,6 @@ export const terminalExecute = async (
   }
 };
 
-// ============================================================================
-// Shell Detection
-// ============================================================================
-
-/** Detect all available shells on the system */
 export const terminalDetectShells = async (): Promise<ShellInfo[]> => {
   try {
     return await invoke<ShellInfo[]>('terminal_detect_shells');
@@ -104,11 +73,6 @@ export const terminalDetectShells = async (): Promise<ShellInfo[]> => {
   }
 };
 
-// ============================================================================
-// Session Management
-// ============================================================================
-
-/** Create a new terminal session with specified shell type */
 export const terminalCreateSession = async (shellType: string, cwd?: string): Promise<string> => {
   try {
     return await invoke<string>('terminal_create_session', {
@@ -121,7 +85,6 @@ export const terminalCreateSession = async (shellType: string, cwd?: string): Pr
   }
 };
 
-/** Send input data to a terminal session */
 export const terminalSendInput = async (sessionId: string, data: string): Promise<void> => {
   try {
     await invoke<void>('terminal_send_input', { sessionId, data });
@@ -131,7 +94,6 @@ export const terminalSendInput = async (sessionId: string, data: string): Promis
   }
 };
 
-/** Resize a terminal session */
 export const terminalResize = async (
   sessionId: string,
   cols: number,
@@ -145,7 +107,6 @@ export const terminalResize = async (
   }
 };
 
-/** Kill a terminal session */
 export const terminalKill = async (sessionId: string): Promise<void> => {
   try {
     await invoke<void>('terminal_kill', { sessionId });
@@ -155,7 +116,6 @@ export const terminalKill = async (sessionId: string): Promise<void> => {
   }
 };
 
-/** List all active terminal session IDs */
 export const terminalListSessions = async (): Promise<string[]> => {
   try {
     return await invoke<string[]>('terminal_list_sessions');
@@ -165,7 +125,6 @@ export const terminalListSessions = async (): Promise<string[]> => {
   }
 };
 
-/** Get command history for a session */
 export const terminalGetHistory = async (sessionId: string, limit?: number): Promise<string[]> => {
   try {
     return await invoke<string[]>('terminal_get_history', {
@@ -178,7 +137,6 @@ export const terminalGetHistory = async (sessionId: string, limit?: number): Pro
   }
 };
 
-/** Clear command history for a session */
 export const terminalClearHistory = async (sessionId: string): Promise<void> => {
   try {
     await invoke<void>('terminal_clear_history', { sessionId });
@@ -188,11 +146,6 @@ export const terminalClearHistory = async (sessionId: string): Promise<void> => 
   }
 };
 
-// ============================================================================
-// Environment Variables
-// ============================================================================
-
-/** Set an environment variable in a terminal session */
 export const terminalSetEnv = async (
   sessionId: string,
   key: string,
@@ -206,7 +159,6 @@ export const terminalSetEnv = async (
   }
 };
 
-/** Get an environment variable from a terminal session */
 export const terminalGetEnv = async (sessionId: string, key: string): Promise<string | null> => {
   try {
     return await invoke<string | null>('terminal_get_env', { sessionId, key });
@@ -216,7 +168,6 @@ export const terminalGetEnv = async (sessionId: string, key: string): Promise<st
   }
 };
 
-/** List all environment variables in a terminal session */
 export const terminalListEnv = async (sessionId: string): Promise<[string, string][]> => {
   try {
     return await invoke<[string, string][]>('terminal_list_env', { sessionId });
@@ -226,7 +177,6 @@ export const terminalListEnv = async (sessionId: string): Promise<[string, strin
   }
 };
 
-/** Unset an environment variable in a terminal session */
 export const terminalUnsetEnv = async (sessionId: string, key: string): Promise<void> => {
   try {
     await invoke<void>('terminal_unset_env', { sessionId, key });
@@ -236,11 +186,6 @@ export const terminalUnsetEnv = async (sessionId: string, key: string): Promise<
   }
 };
 
-// ============================================================================
-// AI Commands
-// ============================================================================
-
-/** AI-powered command suggestion from natural language intent */
 export const terminalAiSuggestCommand = async (
   intent: string,
   shellType: string,
@@ -258,7 +203,6 @@ export const terminalAiSuggestCommand = async (
   }
 };
 
-/** AI-powered error explanation */
 export const terminalAiExplainError = async (
   errorOutput: string,
   command?: string,
@@ -276,7 +220,6 @@ export const terminalAiExplainError = async (
   }
 };
 
-/** AI-powered smart commit for a terminal session */
 export const terminalSmartCommit = async (sessionId: string): Promise<string> => {
   try {
     return await invoke<string>('terminal_smart_commit', { sessionId });
@@ -286,7 +229,6 @@ export const terminalSmartCommit = async (sessionId: string): Promise<string> =>
   }
 };
 
-/** AI-powered command improvement suggestions */
 export const terminalAiSuggestImprovements = async (
   command: string,
   shellType: string,

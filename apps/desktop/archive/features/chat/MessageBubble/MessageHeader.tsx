@@ -1,9 +1,3 @@
-/**
- * MessageHeader Component
- *
- * Displays message header with avatar, name, timestamp, role badge,
- * model info, and status indicators.
- */
 
 import React, { memo, useMemo, useState, useCallback } from 'react';
 import { AlertCircle, Loader2, Pencil, RotateCw } from 'lucide-react';
@@ -33,18 +27,15 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
 }) => {
   const isSimpleMode = useSimpleModeStore((state) => state.mode === 'simple');
 
-  // Quick answer toggle state — local to each message header instance
   const [isQuickMode, setIsQuickMode] = useState(false);
   const handleQuickToggle = useCallback((quickMode: boolean) => {
     setIsQuickMode(quickMode);
   }, []);
 
-  // Determine whether this assistant message used extended thinking
   const hasThinking = useMemo(() => {
     if (!isAssistant) return false;
     const meta = message.metadata as Record<string, unknown> | undefined;
     if (!meta) return false;
-    // Covers Anthropic thinking, DeepSeek <think>, and explicit reasoning type
     if (meta['thinking'] || meta['type'] === 'reasoning') return true;
     const content = message.content;
     return (
@@ -57,8 +48,6 @@ const MessageHeaderComponent: React.FC<MessageHeaderProps> = ({
     );
   }, [isAssistant, message.metadata, message.content]);
 
-  // BUG-334: Select only the last action trail entry instead of the entire array
-  // to prevent all MessageHeaders from re-rendering on every trail update.
   const lastActionTrailEntry = useUnifiedChatStore((state) =>
     state.actionTrail.length > 0 ? state.actionTrail[state.actionTrail.length - 1] : null,
   );

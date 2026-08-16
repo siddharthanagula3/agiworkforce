@@ -34,10 +34,6 @@ import {
   type ReportDelivery,
 } from '@/services/contentReport';
 
-// ---------------------------------------------------------------------------
-// Category labels
-// ---------------------------------------------------------------------------
-
 const CATEGORIES: Array<{ id: ReportCategory; label: string }> = [
   { id: 'harmful', label: 'Harmful or dangerous' },
   { id: 'inaccurate', label: 'Inaccurate or misleading' },
@@ -46,10 +42,6 @@ const CATEGORIES: Array<{ id: ReportCategory; label: string }> = [
   { id: 'privacy', label: 'Privacy concern' },
   { id: 'other', label: 'Other' },
 ];
-
-// ---------------------------------------------------------------------------
-// Outcome copy — one line per outcome the service can actually produce
-// ---------------------------------------------------------------------------
 
 const DELIVERY_BODY: Record<ReportDelivery['kind'], string> = {
   'submitted-to-server':
@@ -62,7 +54,6 @@ const DELIVERY_BODY: Record<ReportDelivery['kind'], string> = {
     'No mail app is set up on this device, so the report could not be handed off. It is still saved here.',
 };
 
-/** Result heading — truthful about whether anything actually left the device. */
 const DELIVERY_TITLE: Record<ReportDelivery['kind'], string> = {
   'submitted-to-server': 'Report submitted for review',
   'stored-on-device': 'Report saved on this device',
@@ -70,19 +61,11 @@ const DELIVERY_TITLE: Record<ReportDelivery['kind'], string> = {
   'email-unavailable': 'Report saved on this device',
 };
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 interface ReportFlagButtonProps {
   messageId: string;
   conversationId: string;
   contentExcerpt: string;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function ReportFlagButton({
   messageId,
@@ -134,7 +117,6 @@ export function ReportFlagButton({
     }
   }, [messageId, conversationId, contentExcerpt, selectedCategory, userNote, sendEmail]);
 
-  /** Post-save hand-off, for a report the user chose not to email at first. */
   const handleEmailHandoff = useCallback(async () => {
     if (!saved) return;
     setLoading(true);
@@ -387,10 +369,6 @@ export function ReportFlagButton({
     </>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   flagBtn: {

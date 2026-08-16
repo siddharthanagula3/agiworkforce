@@ -22,9 +22,7 @@ export type SubscriptionRow = {
   cancel_at_period_end: boolean;
   canceled_at: string | null;
   stripe_coupon_id: string | null;
-  /** StoreKit's stable subscription identifier (migration 0046). */
   apple_original_transaction_id: string | null;
-  /** Play Billing's durable purchase token (migration 0046). */
   google_purchase_token: string | null;
   updated_at: string;
 };
@@ -123,13 +121,6 @@ export type OrganizationRow = {
   updated_at: string;
 };
 
-/**
- * `organizations` columns added by 0085_organization_seats_lifecycle.sql.
- *
- * `owner_user_id` and `seats_consumed` are DERIVED — maintained exclusively by
- * database triggers and rejected on any direct `app_rls` write. `licensed_seats`
- * is written by billing provisioning only. Nothing in this app may UPDATE them.
- */
 export type OrganizationSeatColumns = {
   owner_user_id: string | null;
   licensed_seats: number;
@@ -164,7 +155,6 @@ export type OrganizationInvitationRow = {
   email: string;
   role: 'admin' | 'member' | 'viewer';
   status: OrganizationInvitationStatus;
-  /** sha256 hex. The raw token is returned to the caller exactly once. */
   token_hash: string;
   invited_by_user_id: string;
   accepted_by_user_id: string | null;
@@ -397,10 +387,8 @@ export type SSOConnectionRow = {
   is_active: boolean;
   created_at: string;
   updated_at: string;
-  /** Added by migration 0083 — links the row to the provisioned Clerk enterprise connection. */
   clerk_connection_id: string | null;
   oidc_discovery_url: string | null;
-  /** The matching OIDC client secret is forwarded to Clerk and never stored. */
   oidc_client_id: string | null;
   acs_url: string | null;
   sp_entity_id: string | null;
@@ -449,8 +437,6 @@ export type DirectorySyncConnectionRow = {
 export type DirectorySyncEventRow = {
   id: string;
   connection_id: string;
-  /** Added by 0084_scim_provisioning.sql — SCIM has no RLS subject, so every
-   * statement must be able to name its tenant explicitly. */
   organization_id: string;
   event_type: string;
   user_email: string | null;
@@ -472,15 +458,6 @@ export type GitHubPrReviewAttemptRow = {
   tokens_used: number | null;
 };
 
-// ---------------------------------------------------------------------------
-// SCIM 2.0 provisioning runtime — 0084_scim_provisioning.sql
-// ---------------------------------------------------------------------------
-
-/**
- * An IdP bearer credential. `token_hash` is the Argon2id digest and must never
- * be selected into a response; use `Omit<ScimTokenRow, 'token_hash'>` for any
- * shape that leaves the server.
- */
 export type ScimTokenRow = {
   id: string;
   connection_id: string;
@@ -496,11 +473,6 @@ export type ScimTokenRow = {
   updated_at: string;
 };
 
-/**
- * A SCIM /Users resource. `linked_user_id` is null while the person has no AGI
- * account yet — the resource is real and addressable by the IdP, but no
- * organization membership exists until the account appears.
- */
 export type ScimProvisionedUserRow = {
   id: string;
   connection_id: string;
@@ -520,7 +492,6 @@ export type ScimProvisionedUserRow = {
   updated_at: string;
 };
 
-/** A SCIM /Groups resource. `mapped_role` can never be 'owner' (see 0084). */
 export type ScimGroupRow = {
   id: string;
   connection_id: string;

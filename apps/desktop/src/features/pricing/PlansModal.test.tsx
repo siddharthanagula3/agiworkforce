@@ -150,8 +150,6 @@ describe('PlansModal paid-plan CTA routing (public alpha — no waitlist)', () =
   });
 
   it('shows the Basic tier in the desktop plan list (Basic is cross-surface)', () => {
-    // Founder decision 2026-07-19: Basic ($7/mo, ₹399) is available on ALL surfaces
-    // (PLAN_SURFACE_VISIBILITY.basic = ['web','desktop','mobile']), so it renders here.
     render(<PlansModal open onOpenChange={vi.fn()} />);
 
     expect(screen.getByTestId('plan-basic')).toBeInTheDocument();
@@ -196,8 +194,6 @@ describe('PlansModal paid-plan CTA routing (public alpha — no waitlist)', () =
       return detail?.type === 'open-cloud-waitlist';
     });
     expect(waitlistDispatches).toHaveLength(0);
-    // The footer's "no invite needed" copy is fine; waitlist/invite-code
-    // gating UI is not.
     expect(screen.queryByText(/waitlist/i)).toBeNull();
     expect(screen.queryByText(/invite code/i)).toBeNull();
 

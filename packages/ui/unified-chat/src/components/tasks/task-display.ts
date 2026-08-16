@@ -1,14 +1,8 @@
 import type { CloudAgentRun, CloudAgentWorkMode } from '@agiworkforce/cloud-contracts';
 
 // The run-state enum isn't exported as a standalone type from cloud-contracts;
-// derive it from the run schema (the single source of truth).
 export type AgentTaskState = CloudAgentRun['state'];
 
-// Presentation helpers for the Cloud task (agent-run) list. Kept pure + separate
-// so the state→label/tone mapping and the cancellable predicate are unit-tested
-// independently of the React panel.
-
-/** The original goal a re-run re-sends, reconstructed from the run journal. */
 export interface AgiWorkRerunGoal {
   goal: string;
   constraints?: string;
@@ -74,8 +68,6 @@ export function taskStateTone(state: AgentTaskState): TaskStateTone {
   }
 }
 
-// Tailwind classes per tone for the state badge. Colours match the rest of the
-// app's status vocabulary (green=done, red=failed, amber=needs-you, blue=active).
 export const TASK_TONE_BADGE_CLASS: Record<TaskStateTone, string> = {
   active: 'border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400',
   attention: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
@@ -84,10 +76,6 @@ export const TASK_TONE_BADGE_CLASS: Record<TaskStateTone, string> = {
   muted: 'border-border bg-muted text-muted-foreground',
 };
 
-// A run can be cancelled only while it is still doing (or waiting to do) work.
-// Terminal states (ready_for_review/completed/failed/cancelled/archived) are
-// not cancellable. `ready_for_review` is the workflow's successful final state,
-// even though its presentation tone still calls for the user's attention.
 export function isCancellableState(state: AgentTaskState): boolean {
   return (
     state === 'queued' || state === 'running' || state === 'awaiting_input' || state === 'paused'

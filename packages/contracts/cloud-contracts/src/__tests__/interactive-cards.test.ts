@@ -79,14 +79,6 @@ describe('map search card contract', () => {
   });
 });
 
-/**
- * Slice 1 guards the DEGRADATION path, which ships before any producer exists.
- *
- * A degradation path retrofitted under deadline pressure is a degradation path
- * that does not work, so these tests exercise it while it is the only path there
- * is.
- */
-
 const envelope = {
   schemaVersion: 1,
   cardId: 'toolu_01abc',
@@ -127,14 +119,9 @@ describe('parseInteractiveCardDelta', () => {
   });
 
   it('keeps cardId equal to the originating tool call id', () => {
-    // Load-bearing: the card IS a pending tool call, which is what lets an
-    // answer satisfy the exact-set-equality invariant the approval checkpoint
-    // enforces without relaxing it.
     const card = parseInteractiveCardDelta({ card: envelope });
     expect(card?.cardId).toBe(card?.producedBy.toolCallId);
   });
-
-  // --- the degradation contract -------------------------------------------
 
   it('degrades an UNKNOWN kind to fallback instead of dropping it', () => {
     const payload = clone(envelope);
@@ -146,8 +133,6 @@ describe('parseInteractiveCardDelta', () => {
   });
 
   it('degrades a HIGHER schemaVersion to fallback instead of dropping it', () => {
-    // Pinning schemaVersion with z.literal(1) would discard the card INCLUDING
-    // the fallback that exists to cover exactly this case.
     const payload = clone(envelope);
     payload.schemaVersion = 2;
     const card = parseInteractiveCardDelta({ card: payload });
@@ -212,8 +197,6 @@ describe('interaction', () => {
   });
 
   it('refuses an interaction claiming a non-cloud trust boundary', () => {
-    // Local must never reach our cloud and BYOK streams direct from the client
-    // with no server tool loop, so neither can own a suspended card.
     for (const mode of ['local_only', 'byok']) {
       const payload = clone(envelope) as Record<string, unknown>;
       payload['interaction'] = {
@@ -222,7 +205,6 @@ describe('interaction', () => {
         expiresAt: '2026-08-05T11:00:00.000Z',
         executionMode: mode,
       };
-      // The envelope itself fails, so nothing downstream can treat it as live.
       expect(parseInteractiveCardDelta({ card: payload })).toBeNull();
     }
   });
@@ -261,9 +243,6 @@ describe('url safety', () => {
   };
 
   it('rejects a javascript: source url', () => {
-    // zod's .url() ACCEPTS javascript: — verified against the pinned version.
-    // This refinement is the thing standing between a model-authored string and
-    // three different client sanitizers.
     const body = clone(itinerary) as Record<string, unknown>;
     body['summarySources'] = [{ url: 'javascript:alert(1)', title: 'x' }];
     expect(ItineraryCardBodySchema.safeParse(body).success).toBe(false);
@@ -327,9 +306,6 @@ describe('itinerary invariants — the wrong-city link', () => {
   });
 
   it('REFUSES a route marked available while a place is unresolved', () => {
-    // This is the exact payload that produced a directions link to Irving TX and
-    // Anaheim CA. It now fails at the boundary, on every surface, independently
-    // of any UI code.
     const body = clone(base) as Record<string, unknown>;
     body['route'] = {
       status: 'available',
@@ -355,8 +331,6 @@ describe('itinerary invariants — the wrong-city link', () => {
   });
 
   it('refuses identity fields smuggled onto the unresolved branch', () => {
-    // .strict() on both branches: a stray lat/providerPlaceId must not ride
-    // along and get picked up by a permissive consumer.
     const body = clone(base) as Record<string, unknown>;
     (body['places'] as Array<Record<string, unknown>>)[1] = {
       status: 'unresolved',
@@ -461,9 +435,6 @@ describe('resolveInteractiveCardRenderer', () => {
   const card = parseInteractiveCardDelta({ card: envelope })!;
 
   it('returns null for a kind this surface has no renderer for', () => {
-    // A surface ships the subset it can actually render; the missing-renderer
-    // path and the unknown-kind path both land on fallback, so the one path is
-    // exercised constantly and cannot rot.
     const registry: InteractiveCardRegistry<string> = {};
     expect(resolveInteractiveCardRenderer(registry, card)).toBeNull();
   });

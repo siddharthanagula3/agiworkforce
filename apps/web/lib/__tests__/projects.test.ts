@@ -25,7 +25,6 @@ describe('mapProjectRow', () => {
     expect(mapped.isArchived).toBe(false);
     expect(mapped.metadata).toEqual({ foo: 'bar' });
 
-    // Round-10 defaults · these columns are absent pre-migration.
     expect(mapped.defaultPrivacyMode).toBe('managed');
     expect(mapped.defaultProviderMode).toBe('ManagedGateway');
     expect(mapped.allowedSurfaces).toEqual(['web', 'desktop', 'mobile']);

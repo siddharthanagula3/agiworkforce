@@ -45,13 +45,7 @@ describe('AGI Desktop Local capability honesty and MCP approval', () => {
     await waitForDesktopShell();
     await enterLocalDesktopShell();
 
-    // The isolated WDIO bundle has its own app-data directory, but specs still
-    // share that profile for the complete run. Restore the exact MCP snapshot
-    // in finally so a failed assertion cannot strand this fixture or replace a
-    // same-name entry created by an earlier journey.
     const originalMcpConfig = await invokeNative<McpConfigSnapshot>('mcp_get_config');
-    // Decimal keeps the synthesized connector label byte-for-byte predictable:
-    // buildCustomMcpConnectorDef title-cases alphabetic slug segments.
     const fixtureToken = Date.now().toString();
     const fixtureDisplayName = `MCP approval fixture ${fixtureToken}`;
     const fixtureServerName = `custom-mcp-approval-fixture-${fixtureToken}`;
@@ -131,8 +125,6 @@ describe('AGI Desktop Local capability honesty and MCP approval', () => {
       const name = await $('input#custom-mcp-name');
       const url = await $('input#custom-mcp-url');
       await name.setValue(fixtureDisplayName);
-      // No listener is required: the test denies the native approval before the
-      // transport can make a request. The unroutable loopback port is defence in depth.
       await url.setValue(fixtureTarget);
       await clickElement(await $('button=Save connector'));
 
@@ -204,8 +196,6 @@ describe('AGI Desktop Local capability honesty and MCP approval', () => {
         timeoutMsg: 'Custom MCP fixture was not removed after the manual journey',
       });
     } finally {
-      // Reject first so mcp_connect_server cannot remain suspended while its
-      // configuration is restored after a mid-journey failure.
       const pendingApproval = await $('[data-testid="mcp-tool-confirmation-prompt"]');
       if ((await pendingApproval.isExisting()) && (await pendingApproval.isDisplayed())) {
         const deny = await pendingApproval.$('button[aria-label="Deny"]');

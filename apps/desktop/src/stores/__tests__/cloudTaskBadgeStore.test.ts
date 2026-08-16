@@ -1,13 +1,3 @@
-/**
- * The Tasks nav badge counts durable Managed Cloud runs, so the store that
- * feeds it sits directly on a trust boundary and on an honesty rule:
- *
- *   - it must never issue the cloud read outside a managed, signed-in session;
- *   - it must never display a count it did not just receive from the server.
- *
- * Both are asserted here rather than left to the caller's gating, because the
- * store is the thing that touches the network.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -84,7 +74,6 @@ describe('cloudTaskBadgeStore', () => {
     await useCloudTaskBadgeStore.getState().refresh();
 
     const state = useCloudTaskBadgeStore.getState();
-    // awaiting_input x2 + paused x1 — running/queued proceed without the user.
     expect(state.needsUserCount).toBe(3);
     expect(state.activeCount).toBe(5);
     expect(state.truncated).toBe(false);
@@ -127,7 +116,6 @@ describe('cloudTaskBadgeStore', () => {
 
   it('drops a response that arrives after the session left managed mode', async () => {
     mocks.listRuns.mockImplementation(async () => {
-      // The user switches to Local while the request is in flight.
       mocks.privacyMode = 'local';
       return { runs: [run('awaiting_input'), run('paused')], nextCursor: null };
     });

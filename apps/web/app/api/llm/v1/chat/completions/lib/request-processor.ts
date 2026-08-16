@@ -114,10 +114,7 @@ import {
   MAP_SEARCH_TOOL_NAME,
 } from '@/lib/services/map-search-tool-service';
 import { ChatAttachmentHydrationError, hydrateChatAttachments } from './chat-attachment-hydration';
-// PER-7: Settings promises "AGI will keep these in mind across chats"; this is
-// the read side that makes that true (see the injection site below).
 import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
-// GOV-18: real `X-Quota-Warning` derivation, replacing the hardcoded null.
 import { buildQuotaWarningHeader } from '@/lib/server/managed-usage-policy';
 import {
   enforceManagedContentSafetyPreference,
@@ -125,7 +122,6 @@ import {
 } from '@/lib/services/managed-content-safety-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
 
-// OpenAI-compatible request schema
 export const ChatCompletionRequestSchema = z
   .object({
     model: z.string().min(1),
@@ -140,7 +136,6 @@ export const ChatCompletionRequestSchema = z
               text: z.string().optional(),
               image_url: z
                 .object({
-                  // AUDIT-FIX: C-3 · schema-level SSRF gate (defense-in-depth, runtime check still at line ~321).
                   url: z.string().superRefine((value, ctx) => {
                     try {
                       validateUserImageUrl(value);
@@ -166,7 +161,6 @@ export const ChatCompletionRequestSchema = z
           ),
         ]),
         name: z.string().optional(),
-        // WEB-21 (audit 2026-05-19): strict tool_calls schema replaces z.unknown.
         tool_calls: z.array(ToolCallResponseSchema).max(32).optional(),
         tool_call_id: z.string().max(256).optional(),
       }),
@@ -176,7 +170,6 @@ export const ChatCompletionRequestSchema = z
     n: z.number().int().positive().optional(),
     stream: z.boolean().optional().default(false),
     stop: z.union([z.string(), z.array(z.string())]).optional(),
-    // SECURITY: cap output token requests · 64 000 is generous for current frontier models.
     max_tokens: z.number().int().positive().max(64000).optional(),
     max_completion_tokens: z.number().int().positive().max(64000).optional(),
     presence_penalty: z.number().min(-2).max(2).optional(),
@@ -197,25 +190,6 @@ export const ChatCompletionRequestSchema = z
       })
       .strict()
       .optional(),
-    /*
-     * CAPABILITY HONESTY: this field was once validated here and read nowhere
-     * else, so a caller could ask for `json_object` / `json_schema`, receive
-     * 200 OK, and get prose. Silently ignoring a structured-output request is
-     * worse than refusing it — the caller's parser fails downstream with no
-     * indication of why.
-     *
-     * `text` and `json_object` are now both REAL: `json_object` appends a
-     * directive and the non-streaming response path parses and validates the
-     * completion before returning it (`lib/json-object-mode.ts`), so a 200 with
-     * `json_object` means the body genuinely parses as a JSON object.
-     *
-     * `json_schema` remains refused. Enforcing a caller-supplied schema needs
-     * either native per-provider support — which differs in shape and coverage
-     * across the providers this gateway routes to — or a validate-and-retry loop
-     * that spends the caller's money on retries they did not ask for. Tool
-     * calling (`tools` + `tool_choice`) IS wired and is the supported way to get
-     * a schema-shaped payload today.
-     */
     response_format: z
       .object({
         type: z.enum(['text', 'json_object', 'json_schema']).optional(),
@@ -234,17 +208,6 @@ export const ChatCompletionRequestSchema = z
     web_search: z.boolean().optional(),
     web_fetch: z.boolean().optional(),
     research: z.boolean().optional(),
-    /**
-     * CAP-045 slice 4: material carried forward when the user retries a research
-     * run that errored or was interrupted. Purely additive and fully bounded —
-     * the loop pre-seeds these sources into its aggregator (keeping their citation
-     * numbers stable) and tells the model not to repeat the completed queries, so
-     * a retry does not pay to re-run work that already succeeded.
-     *
-     * This is a HINT, not a grant: the retry still goes through the normal
-     * request path, so reservation, metering, and every quota gate apply exactly
-     * as they do to a first attempt.
-     */
     research_resume: z
       .object({
         sources: z
@@ -271,48 +234,26 @@ export const ChatCompletionRequestSchema = z
       })
       .optional(),
     code_execution: z.boolean().optional(),
-    // Logical client selection only. The server owns the Office schemas,
-    // generation runtime, storage target, and emitted file descriptors.
     office_creation: z.boolean().optional(),
-    // Product mode, not a provider hint. `agiwork` is paid managed-cloud work
-    // that exposes AGI's server-owned search/fetch/sandbox tools below.
     work_mode: z.enum(CLOUD_WORK_MODES).optional(),
-    // CAP-048: the structured goal the composer captures in AGI Work mode. Purely
-    // additive and fully bounded — the server stores it on the run's journal (so
-    // `/tasks` can show WHICH task a run is) and threads it into the tool-free
-    // planning turn. Ignored unless `work_mode === 'agiwork'`.
     agi_work_goal: AgiWorkGoalSchema.optional(),
     thinking_mode: z.boolean().optional(),
     thinking: z
       .object({
         type: z.string(),
-        // SECURITY: Anthropic's documented max for extended thinking is 32 000.
         budget_tokens: z.number().int().positive().max(32000).optional(),
       })
       .optional(),
     effort: z.string().optional(),
     use_prompt_cache: z.boolean().optional(),
-    // Browser-reported IANA zone is a display/context hint only. The server's
-    // clock remains authoritative and derives the corresponding local instant.
     client_timezone: z
       .string()
       .trim()
       .max(64)
       .refine(isValidIanaTimeZone, 'client_timezone must be a valid IANA time zone')
       .optional(),
-    // Optional, additive: identifies the owned cloud conversation this request belongs to.
-    // The processor verifies it against web_conversations.user_id before billing, provider,
-    // tool, or E2B work. A conversation id is never an authorization token.
     conversation_id: z.string().uuid().optional(),
-    // BUG-10/STR-5: the row id the CLIENT will use for this turn's assistant
-    // message. Optional and additive. When present the server persists the
-    // assistant turn itself (see assistant-turn-persistence.ts) under the SAME
-    // id, so the server write and the client's own `/api/chat/conversations/
-    // [id]/messages` upsert collapse into one row instead of duplicating the
-    // turn in the transcript. Absent means the caller owns persistence.
     assistant_message_id: z.string().uuid().optional(),
-    // Composer activation sends only a catalog identity. Host locations and
-    // instruction content are never accepted on the browser contract.
     skill_name: z
       .string()
       .trim()
@@ -331,13 +272,6 @@ export const ChatCompletionRequestSchema = z
       .optional(),
   })
   .superRefine((value, ctx) => {
-    /*
-     * json_object cannot be honoured on a stream. A stream hands the caller
-     * bytes as they arrive, so by the time the payload could be parsed it has
-     * already been delivered; buffering the whole response to validate it would
-     * make `stream: true` a lie. Refusing here — with the fix named — is the
-     * only option that does not silently break one promise to keep the other.
-     */
     if (value.response_format?.type === 'json_object' && value.stream) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -358,21 +292,17 @@ export type ManagedSkillSelectionResult =
 
 type QuotaFeature = 'chat' | 'image' | 'video' | 'computer_use';
 
-/** Explicit execution verbs paired with an executable subject. */
 const RE_CODE_EXECUTION_ACTION = /\b(run|execute|test|benchmark)\b/i;
 const RE_CODE_EXECUTION_SUBJECT =
   /\b(code|script|program|python|javascript|typescript|sql|notebook|command)\b|```/i;
 
-/** Data-analysis requests that require an interpreter rather than prose-only reasoning. */
 const RE_DATA_EXECUTION_ACTION = /\b(analyze|calculate|compute|process|plot|chart)\b/i;
 const RE_DATA_EXECUTION_SUBJECT = /\b(data|dataset|csv|spreadsheet|table|statistics?)\b/i;
 
-/** Editable Office deliverables supported by the canonical managed Office tool. */
 const RE_OFFICE_CREATION_ACTION = /\b(create|generate|make|prepare|produce|export|build)\b/i;
 const RE_OFFICE_CREATION_ARTIFACT =
   /\.(docx|pptx)\b|\b(word document|powerpoint|slide deck|presentation|office file)\b/i;
 
-/** A supplied URL is fetched only when the user explicitly asks us to inspect it. */
 const RE_HTTP_URL = /https?:\/\/[^\s<>"']+/i;
 const RE_URL_FETCH_ACTION = /\b(read|summarize|analyse|analyze|review|check|inspect|open|fetch)\b/i;
 
@@ -382,16 +312,6 @@ export type ImplicitManagedToolIntentContext = {
   planTier: string | null | undefined;
 };
 
-/**
- * Infer safe, reversible tool availability from explicit user intent.
- *
- * This is server-owned product policy because Web, Desktop Cloud, and Mobile
- * Cloud share this request boundary. The model still decides whether to call
- * an offered tool; this function never executes a tool by itself. Normal-chat
- * execution remains metered by the plan's usage limits, while the separate
- * long-running AGI Work mode remains Pro-and-above (`agi_work` capability) and
- * explicitly user-selected.
- */
 export function applyImplicitManagedToolIntent(
   request: ChatCompletionRequest,
   context: ImplicitManagedToolIntentContext,
@@ -400,8 +320,6 @@ export function applyImplicitManagedToolIntent(
     request.web_search = true;
   }
 
-  // The platform-executed tool loop is a streaming contract. Do not turn a
-  // valid non-streaming API request into a downstream 422 implicitly.
   if (!request.stream) return;
 
   if (
@@ -431,12 +349,6 @@ export function applyImplicitManagedToolIntent(
   }
 }
 
-/**
- * Make explicit tool modes part of Auto's route decision. The classifier only
- * sees message prose, so without this step a user could enable Deep Research,
- * Office creation, or Run code and still be routed to a model that cannot
- * execute the selected mode.
- */
 export function resolveToolAwareTaskType(
   classifiedTaskType: RoutingTaskType,
   request: Pick<
@@ -450,10 +362,6 @@ export function resolveToolAwareTaskType(
   return classifiedTaskType;
 }
 
-/**
- * Add only path-free Skill metadata and the canonical server-owned definition.
- * The selected body remains withheld until the model makes a real load call.
- */
 export function applyManagedSkillSelection(
   request: ChatCompletionRequest,
   catalog: readonly Skill[],
@@ -473,10 +381,6 @@ export function applyManagedSkillSelection(
     ...(request.tools ?? []).filter((tool) => tool.function.name !== 'skill'),
     createSkillToolDefinition(),
   ];
-  // Selecting a Skill in the composer is an execution instruction, not a hint
-  // the model may silently ignore. Force the first provider step through the
-  // canonical Skill tool; the tool loop restores `auto` after that call so the
-  // model can finish or use other explicitly enabled tools without looping.
   request.tool_choice = {
     type: 'function',
     function: { name: SKILL_TOOL_NAME },
@@ -484,7 +388,6 @@ export function applyManagedSkillSelection(
   return { ok: true };
 }
 
-/** Add the canonical server-owned Office creator without trusting client schemas. */
 export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): void {
   if (!request.office_creation) return;
   request.tools = [
@@ -493,11 +396,6 @@ export function applyManagedOfficeFileCreation(request: ChatCompletionRequest): 
   ];
 }
 
-/**
- * Offer the server-owned map-search tool only when the caller explicitly says
- * it can render the matching card. The public API and older clients therefore
- * never receive a tool result they cannot display.
- */
 export function applyMapSearchCardCapability(
   request: ChatCompletionRequest,
   params: { surface: CloudChatSurface; toolsCapable: boolean; userMessage: string },
@@ -506,10 +404,6 @@ export function applyMapSearchCardCapability(
     (params.surface !== 'web' && params.surface !== 'mobile' && params.surface !== 'chrome') ||
     !params.toolsCapable ||
     !request.stream ||
-    // Route/trip/direction wording is included because that is what people
-    // actually type when they want a map. "calculate the trip from Texas to
-    // Las Vegas" matched none of the map-only words, so the tool was never
-    // offered and the model answered with a pasted link instead.
     !/\b(map|maps|mapped|nearby|near me|where is|where are|route|routes|directions|drive from|driving from|road ?trip|itinerary|how far)\b/i.test(
       params.userMessage,
     ) ||
@@ -521,11 +415,6 @@ export function applyMapSearchCardCapability(
     ...(request.tools ?? []).filter((tool) => tool.function.name !== MAP_SEARCH_TOOL_NAME),
     createMapSearchToolDefinition(),
   ];
-  // The caller proved it can render the card and the user explicitly asked for
-  // a map. Treat that as an execution instruction, not an optional suggestion
-  // the model may ignore. Preserve an explicit API caller choice; app surfaces
-  // normally omit it. The map loop emits the validated card and terminates the
-  // turn after this single call, so no second-step tool-choice reset is needed.
   if (request.tool_choice === undefined) {
     request.tool_choice = {
       type: 'function',
@@ -534,7 +423,6 @@ export function applyMapSearchCardCapability(
   }
 }
 
-/** Make the AGI Work composer mode operational at the server trust boundary. */
 export function applyWorkMode(chatRequest: ChatCompletionRequest): void {
   if (chatRequest.work_mode !== 'agiwork') return;
 
@@ -557,11 +445,6 @@ export type WorkModeEntitlementError = {
   requiredTier: 'pro';
 };
 
-/**
- * AGI Work is a separate paid capability from ordinary Managed Cloud chat.
- * Keep this gate independent from the caller surface so Basic cannot enable
- * the tool loop by sending `work_mode: "agiwork"` from Web or Desktop.
- */
 export function getWorkModeEntitlementError(
   workMode: ChatCompletionRequest['work_mode'],
   planTier: string | null | undefined,
@@ -574,24 +457,6 @@ export function getWorkModeEntitlementError(
   };
 }
 
-/**
- * Keep ordinary request recovery responsive while giving durable agent runs
- * enough time to span many bounded invocations without the billing recovery job
- * classifying an active run as abandoned.
- *
- * The long lease used to be AGI Work's alone, which was correct while AGI Work
- * was the only thing that ran on the durable transport. It no longer is: an
- * ordinary chat turn that reaches for a tool now runs as a durable workflow too
- * (`AGI_DURABLE_INITIAL_TURNS`), chaining bounded ~210 s invocations without
- * settling in between. A chain of five is already past the 900 s lease, at which
- * point `recover_stale_managed_usage_requests` would refund a reservation whose
- * run is still executing — silently, and in the customer's favour, so nothing
- * would ever surface it.
- *
- * So the lease follows the transport, not the label: any turn that can enter the
- * tool loop gets the long lease. Plain chat, which never goes durable and is
- * capped by the route's own `maxDuration`, keeps the responsive one.
- */
 export function resolveManagedUsageLeaseSeconds(
   chatRequest: Pick<ChatCompletionRequest, 'work_mode' | 'tools' | 'web_search' | 'code_execution'>,
 ): number {
@@ -605,26 +470,12 @@ export function resolveManagedUsageLeaseSeconds(
 
 export type ProcessedRequest = {
   requestId: string;
-  /** Active organization captured at admission; null means Personal. */
   organizationId?: string | null;
-  /** Durable paid-request lifecycle; absent only for the free-trial path. */
   managedUsage?: ManagedUsageRequestReservation;
   chatRequest: ChatCompletionRequest;
-  /** Conversation this request belongs to, if the caller sent one (see conversation_id). */
   conversationId: string | undefined;
-  /**
-   * BUG-10/STR-5: true when the owned conversation is a Temporary Chat.
-   * Server-side assistant-turn persistence is skipped for them, matching the
-   * client and the Temporary Chat contract.
-   */
   conversationIsTemporary?: boolean;
-  /**
-   * BUG-10/STR-5: caller-supplied row id for this turn's assistant message.
-   * The single join key that lets the server-side write and the client-side
-   * write be the same row. Absent for callers that own persistence entirely.
-   */
   assistantMessageId?: string | undefined;
-  /** Conservative user-authored facts captured before server prompt enrichment. */
   autoMemoryFacts?: string[];
   requestedModel: string;
   provider: string;
@@ -634,44 +485,9 @@ export type ProcessedRequest = {
   usedFallback: boolean;
   fallbackReason: string | undefined;
   originalModel: string;
-  /**
-   * The resolver's ordered managed-failover plan (AUTO-ROUTER-MIGRATION-01,
-   * web twin of the gateway's x-agi-fallback-models execution): registry-
-   * ordered, tier-admitted candidate model ids that route.ts may rotate to
-   * when the primary attempt fails on an availability-class error before
-   * the first byte reaches the client. STRUCTURALLY EMPTY for explicit
-   * (non-Auto) selections — the resolver emits no fallbacks for them, so an
-   * explicit selection can never rotate — and empty for free-trial requests
-   * (their pinned model and prompt accounting must not hop providers).
-   * Optional (additive schema evolution): absent means no failover, so
-   * pre-existing ProcessedRequest fixtures stay valid.
-   */
   fallbackModels?: string[];
-  /**
-   * Plan tier the request was admitted under; managed-failover re-checks
-   * candidate admission against it per attempt (a stale plan entry must be
-   * skipped, never served). Optional for the same fixture-compat reason.
-   */
   subscriptionTier?: string;
-  /**
-   * CPST Stage-0 telemetry, MANAGED CLOUD ONLY
-   * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2/§4.3).
-   * Interim route identity for the resolved route, built by
-   * `buildInterimRoutePlanId`. It is NOT an `ExecutionPlan` id — that contract
-   * does not exist yet (§3) — and is self-labelled `interim:` so no consumer
-   * mistakes it for one. Persisted into the managed-usage `usage` jsonb at
-   * finalize time and never used to make a routing decision. Optional for the
-   * same additive-schema reason as the fields above: absent means unknown.
-   */
   routePlanId?: string;
-  /**
-   * CPST Stage-0 telemetry, MANAGED CLOUD ONLY: additional provider attempts
-   * inside THIS billed request, incremented only by `buildFailoverAttemptView`
-   * (lib/managed-failover.ts), which is the sole place an extra attempt is
-   * created. Absent when no rotation happened — task-scoped retry counting
-   * needs the task identifier the design document leaves undecided (OQ-6), so
-   * absence is recorded as unknown rather than asserted as zero.
-   */
   retries?: number;
   resolvedTaskType: RoutingTaskType;
   classifierConfidence: number;
@@ -679,18 +495,7 @@ export type ProcessedRequest = {
   quotaFeature: QuotaFeature;
   quotaWarningHeader: string | null;
   isFlagshipRequest: boolean;
-  /**
-   * True when Deep Research mode was applied (research:true and the resolved
-   * model supports web search). route.ts uses this to enter the multi-turn
-   * research loop on streaming, non-free-trial requests. Optional (additive
-   * schema evolution): absent/undefined means false, so pre-existing
-   * ProcessedRequest fixtures stay valid without churn.
-   */
   researchMode?: boolean;
-  /**
-   * CAP-045 slice 4: validated retry material (`research_resume`), surfaced only
-   * when this really is a research request. route.ts seeds the loop with it.
-   */
   researchResume?: {
     sources: Array<{ url: string; title?: string; snippet?: string }>;
     steps: ResearchStep[];
@@ -705,14 +510,6 @@ export type ProcessedRequest = {
       multimodal_content?: unknown[];
       tool_calls?: unknown[];
       tool_call_id?: string;
-      /**
-       * INTERNAL, tool-loop-only: signed thinking blocks re-attached to an
-       * assistant tool_use turn the agentic loop replays to Anthropic under
-       * extended thinking. Set only by tool-loop.ts, forwarded to the request
-       * builder by canonical-request.ts's `toWireMessage`, and never present
-       * on a client-supplied message nor serialized onto any client wire.
-       * Fixes known-flaw TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01.
-       */
       __canonicalThinking?: ThinkingBlock[];
     }>;
     temperature?: number;
@@ -755,17 +552,6 @@ function modelSupportsEffort(provider: string, model: string): boolean {
   return provider === 'anthropic' || provider === 'openai' || provider === 'google';
 }
 
-/**
- * An explicit "Run code" request is a product instruction, not merely a hint
- * that the model may ignore. Platform-executed E2B tools are ordinary function
- * tools, so require one tool call on the first provider step when that mode is
- * enabled. Native provider sandboxes keep their existing provider-specific
- * behavior, and an API caller's explicit tool_choice always wins.
- * Anthropic stays on `auto`: official Claude model compatibility lists Haiku
- * 4.5 as supporting only `auto` and `none`, so forcing `required` would turn a
- * valid E2B request into a provider 400. AGI Work's server-owned prompt gives
- * Claude the corresponding strong tool-use instruction instead.
- */
 export function resolveInitialManagedCodeToolChoice(input: {
   requestedToolChoice: ChatCompletionRequest['tool_choice'];
   codeExecution: boolean | undefined;
@@ -788,15 +574,6 @@ export function resolveInitialManagedCodeToolChoice(input: {
   return undefined;
 }
 
-/**
- * A live-search request classified as research must search before answering,
- * otherwise an `auto` provider is free to ignore the attached hosted tool and
- * answer from stale training data. This is a server-owned one-shot policy: the
- * tool loop restores `auto` after the first call so the provider can synthesize
- * a final answer. Anthropic remains on `auto` because some admitted Claude
- * models support only `auto`/`none`; the capability preamble still explicitly
- * instructs those models to use the attached search tool.
- */
 export function resolveInitialWebSearchToolChoice(input: {
   requestedToolChoice: ChatCompletionRequest['tool_choice'];
   webSearch: boolean | undefined;
@@ -818,12 +595,6 @@ export function resolveInitialWebSearchToolChoice(input: {
   return undefined;
 }
 
-/**
- * Resolve the user-facing effort selection against the selected model's
- * canonical capability metadata. OpenAI effort ladders vary by model, so a
- * global provider map would silently discard newly introduced levels (or send
- * unsupported ones) until application code was edited.
- */
 export function resolveRequestEffort(
   provider: string,
   model: string,
@@ -840,30 +611,11 @@ export function resolveRequestEffort(
   return normalized;
 }
 
-/**
- * Whether an Anthropic model uses the NEW adaptive-thinking + `output_config.effort`
- * API generation (Opus 5, Sonnet 4.6) vs the classic manual
- * `thinking:{type:"enabled",budget_tokens}` generation (Haiku 4.5).
- *
- * CRITICAL: keys off the per-model `reasoning.control`, NOT just
- * `capabilities.thinking`. Opus 5 REJECTS the classic enabled+budget shape with
- * a 400; Haiku 4.5 is classic-only. Before this was control-aware, flipping
- * Haiku's `capabilities.thinking` to true (correct — it does think) would have
- * routed Haiku through `{type:"adaptive"}`, which is unverified on Haiku. Matrix
- * flag 3 + docs/research/reasoning-effort-capability-matrix-2026-07-10.md.
- *
- * The lookup uses `getModelMetadataById`, so request behavior comes from the
- * canonical catalog instead of model-family string matching. This matters for
- * Opus 5 because a manual enabled+budget block would be rejected by the live
- * provider contract.
- */
 export function anthropicUsesAdaptiveThinking(model: string): boolean {
   const metadata = getModelMetadataById(model);
   if (metadata?.provider !== 'anthropic' || !metadata.capabilities.thinking) return false;
   if (metadata.reasoning?.thinkingDefault === 'adaptive') return true;
   const control = metadata.reasoning?.control;
-  // effort_levels ⇒ adaptive+output_config.effort (Opus 5 / Sonnet 5).
-  // thinking_budget ⇒ classic enabled+budget (Haiku 4.5) — NOT adaptive.
   if (control === 'thinking_budget') return false;
   return true;
 }
@@ -930,10 +682,6 @@ export function buildThinkingConfig({
 
   if (usesAdaptive) return { type: 'adaptive' };
 
-  // Classic manual budget (Haiku 4.5, control=thinking_budget). Clamp the
-  // effort→budget preset to the model's declared thinkingBudget.max so a high
-  // effort can't exceed what the model accepts (Haiku max 32768 < the 'max'
-  // preset 65536). Matrix: Haiku budget min ~1024 / model-max.
   const budgetMax = getModelReasoning(model).thinkingBudget?.max;
   const budgetEffort = effort === 'none' || effort === 'minimal' ? 'medium' : (effort ?? 'medium');
   const preset = ANTHROPIC_THINKING_BUDGET[budgetEffort];
@@ -953,11 +701,6 @@ export function extractTextContent(
     .join('\n');
 }
 
-/**
- * Collect every prompt-bearing string used for quota and reserve estimates.
- * Server-owned function definitions consume provider input tokens just like
- * messages, so omitting them would undercount tool-enabled requests.
- */
 export function collectManagedPromptMaterials(request: ChatCompletionRequest): string[] {
   const materials = request.messages.map((message) => extractTextContent(message.content));
   if (request.tools?.length) materials.push(JSON.stringify(request.tools));
@@ -982,7 +725,6 @@ export async function enrichManagedMemoryContext(params: {
   if (prompt) applyManagedMemoryContext(params.chatRequest, prompt);
 }
 
-/** Website-first capture policy; later release slices enable other Cloud clients. */
 export function prepareManagedAutoMemoryFacts(params: {
   message: string;
   isTemporary: boolean;
@@ -1000,12 +742,6 @@ export function prepareManagedAutoMemoryFacts(params: {
   return extractCandidateMemoryFacts(params.message).slice(0, 5);
 }
 
-/**
- * Conservative generation-scope boundary. A turn that requests or is offered
- * any tool/search/work runtime is treated as tool-assisted; when the user has
- * not opted in, over-blocking generation is safer than persisting a fact from
- * an assisted turn whose terminal callback cannot reconstruct every tool call.
- */
 export function isManagedMemoryToolAssistedTurn(
   request: ChatCompletionRequest,
   resolvedTools: readonly unknown[] | undefined,
@@ -1031,28 +767,9 @@ export const RESEARCH_SYSTEM_PROMPT =
   ' Use plain language; avoid jargon where simpler terms work just as well.' +
   ' Do not pad the report with filler sentences; every paragraph must add new information.';
 
-/**
- * Mutates chatRequest in place: forces web_search AND web_fetch on and prepends
- * the research system prompt. Should only be called when the model supports
- * search (caller's guard). web_fetch lets research gathering rounds read full
- * pages: Anthropic gets its native web_fetch server tool; other tool-calling
- * providers get the platform url_fetch function tool (see the tool injection
- * block below).
- */
-/**
- * Mutates chatRequest in place: appends the json_object directive to the system
- * context. Same shape as `applyResearchMode` below.
- *
- * The directive is only half the guarantee — models ignore it often enough that
- * an instruction alone would be exactly the silent-wrongness this mode replaced.
- * The other half is `extractJsonObject` in the non-streaming response path,
- * which parses the completion before it is returned. Neither half is optional.
- */
 export function applyJsonObjectMode(chatRequest: ChatCompletionRequest): void {
   const firstMessage = chatRequest.messages[0];
   if (firstMessage?.role === 'system' && typeof firstMessage.content === 'string') {
-    // Appended, not prepended: the closing instruction about output format is
-    // the one the model should read last.
     firstMessage.content = `${firstMessage.content}\n\n${JSON_OBJECT_DIRECTIVE}`;
   } else {
     chatRequest.messages.unshift({ role: 'system', content: JSON_OBJECT_DIRECTIVE });
@@ -1133,12 +850,6 @@ function modelHasNativeAnthropicWebFetch(model: string): boolean {
   );
 }
 
-/**
- * Resolve URL-fetch tooling without pretending every Anthropic model supports
- * Anthropic's native server tool. Models that explicitly opt out use AGI's
- * platform-executed, SSRF-guarded `url_fetch` function in the streaming tool
- * loop, just like non-Anthropic providers.
- */
 export function resolveWebFetchTools({
   providerLower,
   model,
@@ -1196,11 +907,6 @@ export function shouldOfferGenericWebSearchTool({
   );
 }
 
-/**
- * Free chat includes first-party chat capabilities, but not Deep Research,
- * arbitrary API-defined tools, or multiple completions. Custom remote MCPs are
- * server-owned connector tools and therefore do not pass through this check.
- */
 export function isFreeTierBlockedAddOn(
   request: Pick<
     ChatCompletionRequest,
@@ -1216,21 +922,6 @@ export function isFreeTierBlockedAddOn(
   );
 }
 
-/**
- * Structural signals for the deterministic task-family fast path
- * (`packages/ai/routing/src/task-family.ts`).
- *
- * Reads only fields this request already carries — the work-mode toggle, the
- * explicit tool toggles, the caller's tool surface, attachment kinds, the token
- * and character lengths already computed for routing, and the canonical
- * runtime profile. It never reads message prose: the prose classifier is
- * `classifyTaskLocally`, and duplicating it here would create a second,
- * silently diverging one.
- *
- * `web/cloud-chat` is passed as the surface because that is the runtime profile
- * `resolveWebCloudModelRoute` hardcodes; the family stage records it and does
- * not branch on it.
- */
 export function buildTaskFamilySignals(
   request: Pick<
     ChatCompletionRequest,
@@ -1276,17 +967,9 @@ export function resolveWebCloudModelRoute(
   subscriptionTier: string | undefined,
   taskType: RoutingTaskType,
   usage?: {
-    /** Remaining managed-usage budget in cents; when set, Auto prefers the
-     *  best model this budget can still cover (bias, not a gate). */
     budgetRemainingCents?: number;
     estimatedInputTokens?: number;
     estimatedOutputTokens?: number;
-    /**
-     * Deterministic task family, or `null`/omitted when the fast path
-     * declined. Never changes `taskType` and never changes admission — it only
-     * lets Auto order the candidate set the task type already produced, and
-     * only when `AGI_ROUTING_TASK_FAMILY_STAGE=1`.
-     */
     taskFamily?: TaskFamily | null;
   },
 ) {
@@ -1411,7 +1094,6 @@ export async function processRequest(
     throw error;
   }
 
-  // Body size guard (Content-Length header)
   const contentLength = parseInt(request.headers.get('content-length') ?? '0', 10);
   if (contentLength > MAX_BODY_BYTES) {
     return {
@@ -1429,7 +1111,6 @@ export async function processRequest(
     };
   }
 
-  // Body size guard (actual bytes · Content-Length can be absent or spoofed)
   let body: unknown;
   try {
     const rawBody = await request.arrayBuffer();
@@ -1481,9 +1162,6 @@ export async function processRequest(
     };
   }
 
-  // Fingerprint the caller's validated logical request before any server-side
-  // routing/fallback mutates `chatRequest`. Reusing a key with a different
-  // payload is a conflict; transport retries of the same payload are stable.
   const managedRequestHash = fingerprintManagedUsageRequest(validationResult.data);
 
   const chatRequest = validationResult.data;
@@ -1506,16 +1184,8 @@ export async function processRequest(
     };
   }
 
-  // TTFT: everything below the validation gates used to be one strict chain of
   // round trips — scoped-db handshake, ownership lookup, safety preference,
-  // attachment hydration, memory policy, credit balance — each paying its full
-  // latency before the provider saw the turn. The legs that do not read each
-  // other's result are started together here and consumed in the original
-  // order, so every early response keeps the precedence it had.
   const scopedDbPromise = getUserScopedDb(request);
-  // Every leg awaits this and maps a rejection to the response it always
-  // returned; the sink only stops Node reporting the rejection as unhandled in
-  // the window before the first leg gets there.
   scopedDbPromise.catch(() => {});
 
   const requestedModel = chatRequest.model;
@@ -1524,21 +1194,12 @@ export async function processRequest(
     planTier: subscription.plan_tier,
   });
 
-  // Usage-aware routing and the credit gate further down read the same balance
-  // row and nothing in this request mutates the ledger between them, so it is
-  // read once, alongside the preflight, instead of twice after it. Free plans
-  // never touch the cents ledger, so they start nothing.
   let creditBalancePromise: ReturnType<typeof CreditService.getBalance> | null =
     freeTrialEnabled || isFreePlanTier(subscription.plan_tier)
       ? null
       : CreditService.getBalance(userId);
   creditBalancePromise?.catch(() => {});
 
-  // The standing "Instructions for AGI" are a settings read no other preflight
-  // leg depends on. Started here it is already resolved at the injection site
-  // below, where it used to be the last round trip in front of the provider
-  // call. Read failures drop the block (the documented degradation) rather
-  // than failing an otherwise valid turn.
   const chatSurface = resolveCloudChatSurface(request);
   const customInstructionsPromise =
     chatSurface === 'api'
@@ -1548,15 +1209,11 @@ export async function processRequest(
           return null;
         });
 
-  // Read before hydration rewrites the parts, and shared by the ownership and
   // safety legs so both keep seeing the caller's own words.
   const latestUserPrompt = extractTextContent(
     [...chatRequest.messages].reverse().find((message) => message.role === 'user')?.content ?? '',
   );
 
-  // Everything in this turn that the caller wrote. Read here, next to
-  // `latestUserPrompt` and for the same reason: before hydration rewrites the
-  // parts, so the platform floor sees the caller's own words.
   const clientAuthoredPromptSegments = chatRequest.messages
     .filter((message) => message.role === 'user' || message.role === 'system')
     .map((message) => extractTextContent(message.content))
@@ -1610,12 +1267,6 @@ export async function processRequest(
               };
             }
 
-            // Project-scoped conversation ("AGI Work"): load the owned project's
-            // instructions + knowledge-file manifest and merge them into the system
-            // context. Without this, a persisted project_id scopes nothing and the
-            // composer's project picker would be cosmetic. This fails closed: a
-            // project-scoped turn must never silently run without its requested
-            // instructions, sources, and relevant conversation history.
             if (ownedRows[0].project_id) {
               try {
                 const projectContext = await loadProjectContext(scoped.db, {
@@ -1695,19 +1346,6 @@ export async function processRequest(
       : Promise.resolve({ ok: true, isTemporary: false });
 
   const safetyLeg: Promise<{ ok: true } | ProcessFailure> = (async () => {
-    // Platform floor first, and outside the try/catch below on purpose: it
-    // takes no database, so it cannot be skipped by the preference read
-    // failing, and it takes no preference, so it cannot be turned off by the
-    // account. The account preference underneath is a comfort setting layered
-    // on top of this, not a substitute for it.
-    //
-    // It sees every client-authored message, not just `latestUserPrompt`. The
-    // request schema accepts `system` messages from the caller and forwards
-    // them to the provider verbatim, so moderating only the final user turn
-    // would be bypassed by sending the request as a system message and
-    // "continue" as the user message. Assistant and tool messages are excluded
-    // deliberately: they are the model's own prior output, and refusing a
-    // follow-up because of what the model already said is a bad refusal.
     const platform = moderateManagedPrompt({
       userId,
       segments: clientAuthoredPromptSegments,
@@ -1778,15 +1416,6 @@ export async function processRequest(
 
   const conversationIsTemporary = ownership.isTemporary;
 
-  // Managed account memory is server-owned context shared by every Cloud
-  // client. Temporary Chats deliberately opt out. Loading is best-effort so a
-  // memory-store outage cannot take down an otherwise valid chat turn, while
-  // owner mismatch always fails closed by skipping enrichment.
-  //
-  // The policy row and the attachment bytes come from different stores and
-  // neither reads the other, so they are fetched together. Enrichment still
-  // runs after hydration resolves: both rewrite the thread in place, so they
-  // must never interleave.
   const memoryPolicyLeg: Promise<ManagedMemoryPolicy> = conversationIsTemporary
     ? Promise.resolve(DISABLED_MANAGED_MEMORY_POLICY)
     : (async () => {
@@ -1883,19 +1512,9 @@ export async function processRequest(
   }
 
   if (freeTrialEnabled) {
-    // Free = full Hobby experience, gated per-model: a prompt is never wasted on an
-    // action the selected model can't perform (e.g. images to a no-vision model).
-    // Aggregate usage is gated by private server policy after this capability check.
     const trialCaps = getModelMetadataById(requestedModel)?.capabilities;
     const trialProviderLower =
       getModelMetadataById(requestedModel)?.provider?.toLowerCase() ?? null;
-    // Model-agnostic web search: a tools-capable model WITHOUT a native search path
-    // (for example, an open-weight tools model) still gets platform web search
-    // via the generic Perplexity fallback tool. The composer lights the Web-search
-    // toggle for these on `tools`, not `search`, so the trial capability gate must
-    // match — do not 403 them just because the model's intrinsic `search` cap is
-    // false. Whether the tool actually fires is still decided downstream by
-    // shouldOfferGenericWebSearchTool (backend + streaming).
     const hasGenericWebSearchFallback =
       webSearchNeedsGenericTool(trialProviderLower) && trialCaps?.tools === true;
     const hasImagePart = chatRequest.messages.some((msg) =>
@@ -1951,7 +1570,6 @@ export async function processRequest(
 
   applyWorkMode(chatRequest);
 
-  // WEB-MULTIMODAL-IMAGE-SSRF: validate every user-supplied image_url before forwarding.
   for (let mi = 0; mi < chatRequest.messages.length; mi++) {
     const msg = chatRequest.messages[mi]!;
     if (!Array.isArray(msg.content)) continue;
@@ -1989,7 +1607,6 @@ export async function processRequest(
     }
   }
 
-  // Task-aware classifier (synchronous · no DB/network)
   let lastUserIndex = -1;
   for (let index = chatRequest.messages.length - 1; index >= 0; index -= 1) {
     if (chatRequest.messages[index]?.role === 'user') {
@@ -2006,10 +1623,6 @@ export async function processRequest(
     policy: managedMemoryPolicy,
   });
 
-  // The classifier contract expects PRIOR turns only; including the outgoing
-  // user message here double-counted its tokens and could trigger long-context
-  // routing prematurely. Multimodal parts are passed separately so Auto chooses
-  // a vision-capable route before the provider call.
   const routingHistory = chatRequest.messages
     .slice(0, Math.max(lastUserIndex, 0))
     .filter(
@@ -2074,11 +1687,6 @@ export async function processRequest(
     );
   }
 
-  // Usage-aware Auto: read the cheap single-row credit balance for paid users
-  // so Auto prefers the best model the remaining budget still covers. Bias only,
-  // and fail-open — a balance-read error just drops the signal (the durable
-  // usage reservation below stays the hard limit). Free-trial users carry no
-  // cents budget (they run on the free-trial token budget), so skip the read.
   let routeBudgetRemainingCents: number | undefined;
   if (!freeTrialEnabled) {
     try {
@@ -2087,8 +1695,6 @@ export async function processRequest(
         routeBudgetRemainingCents = budgetBalance?.credits_remaining_cents;
       }
     } catch (error) {
-      // Drop the shared read so the credit gate below still gets a fresh
-      // attempt; only routing is fail-open on a balance error.
       creditBalancePromise = null;
       logger.warn(
         { error, userId, requestId },
@@ -2101,12 +1707,6 @@ export async function processRequest(
     estimateTokens(lastUserText),
   );
 
-  // Deterministic task-family fast path. Computed ONLY when the operator flag
-  // is on, so with the flag off (the default) this path is byte-for-byte the
-  // previous behaviour: no classification runs, no family reaches Auto, and
-  // the resolver takes its `task_family_stage_disabled` branch. The family
-  // refines the already-computed `resolvedTaskType`; it never replaces it and
-  // never participates in admission.
   const routeTaskFamily: TaskFamily | null = taskFamilyRoutingStageEnabled()
     ? classifyTaskFamily(
         buildTaskFamilySignals(chatRequest, {
@@ -2118,10 +1718,6 @@ export async function processRequest(
       ).family
     : null;
 
-  // Canonical registry admission for both Auto aliases and explicit selections.
-  // This is the same policy seam used by unified-chat/Desktop. It validates the
-  // Web managed-cloud runtime profile, exact provider route, model lifecycle,
-  // intrinsic capabilities, tier policy, and harness implementation status.
   const routeDecision = resolveWebCloudModelRoute(
     chatRequest.model,
     subscription.plan_tier,
@@ -2193,8 +1789,6 @@ export async function processRequest(
     );
   }
 
-  // Defense-in-depth (all tiers): never forward image parts to a model without
-  // vision — the provider would reject them and the request/credits would be wasted.
   const resolvedModelCaps = getModelMetadataById(chatRequest.model)?.capabilities;
   if (resolvedModelCaps && !resolvedModelCaps.vision) {
     const hasImagePart = chatRequest.messages.some((msg) =>
@@ -2219,38 +1813,20 @@ export async function processRequest(
     }
   }
 
-  // json_object mode: append the output-format directive. Placed BEFORE the
-  // research block reads nothing from it and AFTER validation, so it applies to
-  // exactly the requests that asked for it. The directive alone is not the
-  // guarantee — `extractJsonObject` validates the completion before it is
-  // returned (see `lib/json-object-mode.ts`).
   if (wantsJsonObject(chatRequest.response_format)) {
     applyJsonObjectMode(chatRequest);
   }
 
-  // Deep Research mode: when the frontend sends research:true and the resolved
-  // model supports web search, inject the research system prompt and force
-  // web_search on so the tool-injection block below picks it up automatically.
-  // Non-search models silently skip this block (no crash, no wasted request).
   const researchMode = chatRequest.research === true && (resolvedModelCaps?.search ?? false);
   if (researchMode) {
     applyResearchMode(chatRequest);
   }
 
-  // Model tier access check
   if (
     !freeTrialEnabled &&
     !isAutoModeModelId(requestedModel) &&
     !checkModelTierAccess(chatRequest.model, subscription.plan_tier)
   ) {
-    // Lowercase key (e.g. 'pro') for clients to pattern-match on, alongside the
-    // uppercased word used in the human-readable message below. Clients (mobile,
-    // desktop, web) key their upgrade-prompt UI off this field the same way they
-    // already do for the HTTP 429 paywall shape (`{kind:'paywall', requiredTier}`)
-    // — before this field existed, a model-tier-gate rejection had no structured
-    // way to tell it apart from a generic server error, so every client fell back
-    // to a blank "Something went wrong" message instead of an actionable upgrade
-    // prompt.
     const requiredTierKey = getMinimumRequiredTier(chatRequest.model) ?? 'pro';
     const requiredTier = requiredTierKey?.toUpperCase() ?? 'PRO';
     return {
@@ -2377,7 +1953,6 @@ export async function processRequest(
 
   let provider = routeDecision.provider;
 
-  // Tier-aware quota gate
   const resolvedSlot: RoutingSlot | null = getSlotForModel(chatRequest.model);
   const isFlagshipRequest =
     resolvedSlot === 'flagship_coding_pro_plus' || resolvedSlot === 'flagship_general_pro_plus';
@@ -2391,21 +1966,8 @@ export async function processRequest(
     quotaFeature = 'computer_use';
   }
 
-  // The durable managed-usage reservation below is the sole paid usage gate.
-  // Keeping the former token/daily assertQuota gate here created a second,
-  // fail-open policy owner that could contradict the canonical 5-hour,
-  // weekly, flagship-weekly, and billing-period spend caps.
-  // GOV-18: assigned below, once the billing-period credit balance has been
-  // read — `buildQuotaWarningHeader` needs plan tier AND used/allocated cents,
-  // neither of which exists this early. Declared here so it stays in scope for
-  // every emit site that reads it off the processed request.
   let quotaWarningHeader: string | null = null;
 
-  // Egress policy: validate custom provider base URLs
-  // WEB-30 (audit 2026-05-19): extended map from 4 providers to 9 so all
-  // *_BASE_URL overrides flow through the allowlist. Pre-fix, an operator
-  // who set `ANTHROPIC_BASE_URL=http://169.254.169.254/...` (or any other
-  // unguarded provider) would bypass the egress allowlist entirely.
   const providerBaseUrlEnvMap: Record<string, string> = {
     openai: 'OPENAI_BASE_URL',
     qwen: 'QWEN_BASE_URL',
@@ -2446,7 +2008,6 @@ export async function processRequest(
     }
   }
 
-  // Message length validation
   let totalLength = 0;
   for (const msg of chatRequest.messages) {
     const textContent = extractTextContent(msg.content);
@@ -2482,7 +2043,6 @@ export async function processRequest(
     };
   }
 
-  // Token + cost estimation
   const rawEstimatedPromptTokens = collectManagedPromptMaterials(chatRequest).reduce(
     (sum, material) => {
       const baseTokens = Math.ceil(material.length / 3.5);
@@ -2491,26 +2051,11 @@ export async function processRequest(
     },
     0,
   );
-  // Clamp the prompt-token estimate to a realistic ceiling. No real prompt exceeds the
-  // largest model context window (~1M tokens), so a larger figure is a malformed/runaway
-  // estimate — and because this estimate drives the credit RESERVE, an inflated value
-  // produced huge per-request charges (e.g. an unresolved "unknown"-model request reserving
-  // $10+ that was never reconciled back down). The reserve is only an upper bound; the
-  // post-response reconciliation settles the real cost from actual tokens, so clamping here
-  // can only ever reduce an over-reserve, never under-charge a legitimate request.
   const MAX_ESTIMATED_PROMPT_TOKENS = 1_000_000;
   const estimatedPromptTokens = Math.min(rawEstimatedPromptTokens, MAX_ESTIMATED_PROMPT_TOKENS);
 
   const providerLower = provider.toLowerCase();
 
-  // Capability honesty (QA 1.7.20 / 1.11.1), BEFORE any credit reservation: a
-  // caller that explicitly asked to search must not receive a silent model-only
-  // answer. Native-search providers (anthropic/google/openai) search in both
-  // streaming and non-streaming paths, but every other provider searches only
-  // through the generic fallback tool, which runs inside the agentic loop and
-  // therefore requires streaming. So `web_search: true` on a generic-fallback
-  // provider with `stream: false` would attach no search tool at all and answer
-  // without browsing — reject it explicitly (mirrors office_creation_stream_required).
   if (chatRequest.web_search && !chatRequest.stream && webSearchNeedsGenericTool(providerLower)) {
     return {
       ok: false,
@@ -2580,12 +2125,6 @@ export async function processRequest(
     };
   }
 
-  // Default output cap when the client doesn't specify one. 1000 was far too low: it
-  // truncated HTML/code artifacts mid-stream, so the closing ``` fence never arrived, the
-  // artifact couldn't be extracted into a card, and the transcript was left showing raw
-  // code (this broke claude.ai-style artifact parity). 8192 lets a full artifact / long
-  // answer complete. It is a CAP, not a target — short replies still stop early, so cost
-  // for them is unchanged; only genuinely long responses use the extra headroom.
   const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
   let maxTokens =
     chatRequest.max_tokens || chatRequest.max_completion_tokens || DEFAULT_MAX_OUTPUT_TOKENS;
@@ -2610,7 +2149,6 @@ export async function processRequest(
   if (freeTrialEnabled) {
     estimatedCostCents = 0;
   } else {
-    // Credit allocation + availability check
     let existingBalance = await (creditBalancePromise ?? CreditService.getBalance(userId));
 
     logger.debug(
@@ -2716,8 +2254,6 @@ export async function processRequest(
       }
     }
 
-    // The request claim and financial reserve are one RLS-bound database
-    // transition. A concurrent/replayed key never reaches the provider twice.
     try {
       const scoped = await scopedDbPromise;
       if (scoped.userId !== userId) {
@@ -2752,16 +2288,6 @@ export async function processRequest(
       return { ok: false, response: managedUsageErrorResponse(managedError) };
     }
 
-    // GOV-18: derive the advisory `X-Quota-Warning` value for this admitted
-    // request. Placed here because it is the first point where BOTH the plan
-    // tier and the billing-period credit balance are known, and where
-    // `estimatedCostCents` is the reservation-adjusted figure, so the warning
-    // projects the request being admitted rather than the pre-reservation
-    // guess. Free-trial requests are skipped: they run on the token budget,
-    // not the cents ledger, so there is no allocation to be a percentage of.
-    // Rolling 5-hour/weekly observations are not read here (this path never
-    // loads them); the billing-period window alone still warns, and
-    // `buildQuotaWarningHeader` returns null for uncapped tiers.
     quotaWarningHeader = buildQuotaWarningHeader({
       planTier: subscription.plan_tier,
       creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
@@ -2770,7 +2296,6 @@ export async function processRequest(
     });
   }
 
-  // Build internal message format (preserving multimodal parts)
   const internalMessages = chatRequest.messages.map((msg) => ({
     role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
     content: extractTextContent(msg.content),
@@ -2779,20 +2304,12 @@ export async function processRequest(
     tool_call_id: msg.tool_call_id,
   }));
 
-  // Inject provider-specific built-in tools
-  // Only inject a built-in tool the resolved model can actually use (unknown models
-  // default to allowed so a missing catalog entry never silently drops the tool).
   let resolvedTools: unknown[] | undefined = chatRequest.tools;
   if (chatRequest.web_search) {
     resolvedTools = appendWebSearchTool(providerLower, resolvedTools, resolvedModelCaps, {
       researchMode,
     });
 
-    // WP4 generic fallback: platform-executed `web_search` function tool for every
-    // provider with no working native search path on this route (xai/deepseek/
-    // qwen/moonshot/zhipu/mistral/groq/nvidia_nim/open_router, which never had
-    // a native branch at all).
-    // Executed by the agentic tool loop exactly like url_fetch below.
     if (
       shouldOfferGenericWebSearchTool({
         providerLower,
@@ -2817,31 +2334,6 @@ export async function processRequest(
   }
 
   if (chatRequest.code_execution) {
-    // Code-execution router: tiered by provider when AGI_E2B_EXECUTION=1; native-always otherwise.
-    //
-    // E2B CUT-OVER (flag ON, streaming): every tools-capable provider uses the
-    // same platform sandbox so execution events and durable files behave the
-    // same on Web, Desktop, and Mobile. Provider-native tools remain the
-    // operator-controlled flag-off fallback.
-    //
-    // Model-agnostic: the E2B sandbox is platform-executed — it only needs the model to emit
-    // tool calls, exactly like the url_fetch tool above — so it is gated on the `tools`
-    // capability, NOT the per-model `codeExecution` cap. That lets tools-capable open-weight
-    // models that carry `codeExecution:false` (meaning "no
-    // *native* interpreter", which stays truthful in the catalog) still run code in the shared
-    // sandbox. The AGI_E2B_EXECUTION flag remains the single operator gate protecting
-    // managed-compute billing/abuse. The NATIVE fallback path keeps the `codeExecution` cap:
-    // only providers with a real native interpreter (anthropic/google/openai) resolve a tool;
-    // everyone else fails closed.
-    //
-    // The offer is guarded to streaming only (offer⊆run constraint): E2B tools
-    // are platform-executed and require the agentic loop to actually run them. That loop is only
-    // entered on the streaming path in route.ts. Offering E2B tools on a non-streaming
-    // request would inject a tool_call that nothing executes and stall the turn.
-    //
-    // FLAG OFF (default): byte-for-byte the pre-P3 behavior — the native path keyed on the
-    // model's own `codeExecution` cap. See docs/plans/e2b-universal-execution-design-* for the
-    // full design rationale.
     if (e2bCutoverEnabled() && providerRoutesToE2B(providerLower) && chatRequest.stream) {
       if (resolvedModelCaps?.tools ?? true) {
         resolvedTools = [...(resolvedTools ?? []), ...e2bExecutionToolDefs()];
@@ -2858,44 +2350,12 @@ export async function processRequest(
     autoMemoryFacts = [];
   }
 
-  // AUDIT-FIX SYS-1/SYS-2/SYS-3/SYS-5: prepend the base capability preamble.
-  //
-  // This route previously assembled NO unconditional system prompt — every
-  // role:'system' injection was mode-specific (research, AGI Work, skills,
-  // project context, memory), so an ordinary chat turn reached the provider
-  // with no identity, no date and no tool inventory. Tools were attached and
-  // never described, which is why the model denied having a sandbox or file
-  // system while execute_code and write_file sat in its tool array.
-  //
-  // It is built HERE, after every tool gate has run, precisely because
-  // `internalMessages` was snapshotted from chatRequest.messages above: any
-  // injection made before `resolvedTools` is final would describe a tool set
-  // that does not match the request. Unshifting onto the already-built array
-  // keeps the preamble first without reordering the existing mode prompts,
-  // which continue to follow it.
-  //
-  // Skipped for surface 'api': that is the public OpenAI-compatible endpoint,
-  // where a third-party integrator owns their own prompt and would not expect
-  // us to prepend one.
   if (chatSurface !== 'api') {
     const capabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
       timeZone: chatRequest.client_timezone,
     });
 
-    // PER-7: append the user's standing "Instructions for AGI" to the base
-    // preamble. Settings persists them and tells the user "AGI will keep these
-    // in mind across chats", but until this call no request path ever read the
-    // value, so the promise was false and the feature shipped inert.
-    //
-    // Appended to the capability preamble (rather than unshifted separately)
-    // so the model sees identity/date/tools first and the user's preferences
-    // as a trailing block of the same system turn — and so a user who has
-    // written no instructions produces byte-identical output to before.
-    // The read degrades to null on failure, so a settings outage drops the
-    // block instead of failing the turn. Skipped for surface 'api' along with
-    // the rest of the preamble: a third-party integrator owns their own
-    // prompt — which is why the read is never started for that surface.
     const customInstructionsPreamble = await customInstructionsPromise;
     const preamble = [capabilityPreamble, customInstructionsPreamble]
       .filter((block): block is string => Boolean(block))
@@ -2943,12 +2403,6 @@ export async function processRequest(
     usePromptCache: chatRequest.use_prompt_cache,
   };
 
-  // AUDIT-FIX SYS-16: fit the thread to the RESOLVED model's context window
-  // before it ever reaches a provider. Nothing did this, so a long chat was
-  // shipped verbatim and the provider rejected the whole request. Mutates
-  // `internalMessages` (llmRequest.messages) in place, so every downstream
-  // path -- standard single turn, tool loop, research loop -- inherits the
-  // fitted thread. No-ops when the model carries no catalog contextWindow.
   trimMessagesToContextWindow(internalMessages, chatRequest.model, maxTokens);
 
   if (freeTrialEnabled) {
@@ -2988,17 +2442,10 @@ export async function processRequest(
     usedFallback,
     fallbackReason,
     originalModel,
-    // The resolver already emits [] for explicit selections (rotation-free by
-    // structure, not by a route.ts conditional); free-trial requests are
-    // additionally pinned to their admitted model.
     fallbackModels: freeTrialEnabled
       ? []
       : routeDecision.fallbacks.map((fallback) => fallback.modelKey),
     subscriptionTier: subscription.plan_tier,
-    // CPST Stage-0 (managed cloud only): the resolver's route identity was
-    // computed and then discarded. Recording it costs nothing and changes no
-    // decision — it is the interim stand-in for the not-yet-existing
-    // ExecutionPlan id.
     routePlanId: buildInterimRoutePlanId(routeDecision),
     resolvedTaskType,
     classifierConfidence: classifierResult.confidence,
@@ -3007,8 +2454,6 @@ export async function processRequest(
     quotaWarningHeader,
     isFlagshipRequest,
     researchMode,
-    // Retry material is only meaningful for a research run; a non-research
-    // request that sends it gets it dropped rather than silently applied.
     ...(researchMode && chatRequest.research_resume
       ? {
           researchResume: {

@@ -1,18 +1,3 @@
-/**
- * Regression: selecting a managed-cloud model inside a Cloud chat must NOT pop a
- * "Switch from AGI Cloud to Local Mode?" dialog.
- *
- * Root cause: chat/[id].tsx resolveAppMode classified the tapped model via
- * getModelById, whose map (allModelMap) holds only local models + ONE "preview"
- * cloud model per provider (cloudPreviewModelByProvider). Non-preview cloud
- * models were therefore unknown to it and fell through to 'local', triggering
- * a spurious mode-switch prompt. The fix
- * routes resolveAppMode through executionModeForModel, which consults the FULL
- * managed-cloud catalog (cloudModelSourceMap).
- *
- * This test asserts the canonical classifier the fix relies on is correct for the
- * exact models that were misclassified. It fails against the old getModelById path.
- */
 import {
   DEFAULT_LOCAL_MODEL_ID,
   LOCKED_CLOUD_MODELS,

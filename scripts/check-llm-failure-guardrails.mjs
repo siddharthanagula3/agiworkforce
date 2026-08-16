@@ -10,8 +10,6 @@ const stagedMode = process.argv.includes('--staged');
 
 const SKIP_DIRS = new Set([
   '.agent',
-  // Isolated subagent git worktrees live here; scanning them double-counts
-  // the main tree (and flags this guard script's own pattern strings).
   '.claude',
   '.git',
   '.next',
@@ -31,11 +29,6 @@ const SKIP_DIRS = new Set([
 const SOURCE_EXTENSIONS = new Set(['.cjs', '.js', '.jsx', '.mjs', '.rs', '.ts', '.tsx']);
 const MANIFEST_BASENAMES = new Set(['package.json', 'Cargo.toml']);
 const EXEMPT_FILES = new Set(['scripts/check-llm-failure-guardrails.mjs']);
-// Archived material: superseded implementations retained for reference. These
-// are excluded from tsconfig, from the test run, and from the bundle, so their
-// sinks cannot execute — the guard's findings would be about code the product
-// cannot reach. Restoring a file means git mv-ing it back under src/, which
-// puts it back in scope here.
 const EXEMPT_PATH_PREFIXES = ['docs/archive/', 'apps/desktop/archive/'];
 const TAXONOMY_PATH = 'docs/agent-context/llm-failure-taxonomy.json';
 
@@ -175,14 +168,7 @@ function lineForOffset(text, offset) {
   return text.slice(0, offset).split('\n').length;
 }
 
-// A single flagged line may be explicitly allowed when it is provably safe by
-// inspection (e.g. a sink fed only sanitized input). The allowance must be a
-// justification comment — `llm-guardrail-allow: <reason>` — on the matched line
-// or the line directly above it, so every exemption is auditable in the diff.
 function isAllowedByAnnotation(lines, lineNo) {
-  // Check the matched line plus two lines on either side, so the justification
-  // survives formatter reflow of the surrounding expression (e.g. prettier
-  // wrapping a JSX attribute value across several lines).
   for (let i = lineNo - 2; i <= lineNo + 2; i++) {
     const line = lines[i - 1];
     if (line !== undefined && /llm-guardrail-allow:/.test(line)) return true;
@@ -190,25 +176,6 @@ function isAllowedByAnnotation(lines, lineNo) {
   return false;
 }
 
-/**
- * True when a line is entirely a comment.
- *
- * Deliberately line-level and conservative: it recognises `//`, a `/* … *​/` that
- * opens and closes on the line, and the ` * ` continuation of a block comment.
- * It does NOT track whether an earlier line opened a block, so `foo(); // note`
- * is code (correct) and a bare block-comment body line is a comment (correct).
- * Anything ambiguous stays a violation, because a checker that guesses wrong in
- * the permissive direction is how a real skipped test gets through.
- *
- * A leading `#` is NOT a comment in any language this checker scans
- * (SOURCE_EXTENSIONS is JS/TS/Rust only — none of them use `#` line comments).
- * Treating it as one made the `ignored Rust test` pattern unfireable: every
- * bare `#[ignore]` sits on a line starting with `#`, so the match was
- * discarded as prose and `--strict` reported zero ignored Rust tests against a
- * tree holding 33 of them. Rust attributes are code and must reach the
- * violation list; only `llm-guardrail-allow:` or an `#[ignore = "reason"]`
- * (which the pattern deliberately does not match) may excuse one.
- */
 function isCommentLine(line) {
   const trimmed = line.trim();
   if (trimmed.startsWith('#[') || trimmed.startsWith('#![')) return false;
@@ -236,11 +203,6 @@ function collectPatternViolations(files, patterns, { productionOnly = false } = 
       while ((match = regex.exec(text)) !== null) {
         const lineNo = lineForOffset(text, match.index);
         if (isAllowedByAnnotation(lines, lineNo)) continue;
-        // A match inside a comment is prose, not code. This fired on a docstring
-        // that explained a suite had PREVIOUSLY guarded all 15 of its tests with
-        // `test.skip(...)` — a file whose whole point was removing them. Blaming
-        // the fix for describing the bug it removed teaches people to delete the
-        // explanation instead, which is the opposite of what this check wants.
         if (isCommentLine(lines[lineNo - 1] ?? '')) continue;
         violations.push(`${relativePath}:${lineNo} ${label}`);
       }

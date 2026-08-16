@@ -25,15 +25,6 @@ function transcriptStatus(
   return status;
 }
 
-/**
- * Project the durable paid-job state into its original Web chat placeholder.
- *
- * The job remains authoritative. This update is an idempotent projection and
- * explicitly joins the owning conversation/user, so a system Workflow cannot
- * write an identically-shaped message belonging to another tenant. Chat rows
- * may be deleted independently; a detached projection never aborts billing or
- * provider reconciliation.
- */
 export async function syncVideoGenerationTranscript(
   db: DatabaseAdapter,
   job: VideoGenerationJob,
@@ -83,12 +74,6 @@ export async function syncVideoGenerationTranscript(
   return rows[0] ? 'updated' : 'not_found';
 }
 
-/**
- * Persist a definite HTTP start rejection without racing a server-owned job.
- * The absence of videoTaskId is the compare-and-set boundary: once job
- * creation binds that id in the same transaction, no client-observed error can
- * replace its authoritative queued/completed/failure projection.
- */
 export async function failUnboundVideoGenerationTranscript(input: {
   db: DatabaseAdapter;
   userId: string;

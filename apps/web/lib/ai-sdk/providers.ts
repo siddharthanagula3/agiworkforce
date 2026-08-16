@@ -1,23 +1,11 @@
 import 'server-only';
 
-/**
- * AI SDK v6 Provider Instances
- *
- * Creates Vercel AI SDK v6 provider instances for Anthropic, OpenAI, and Google.
- * This is a parallel path to the existing LLMProviderFactory - it does NOT replace it.
- * Use these helpers in /api/llm/v2 to opt into the AI SDK code path.
- */
-
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import type { LanguageModel } from 'ai';
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import { getOptionalEnv } from '@shared/utils/env';
-
-// ---------------------------------------------------------------------------
-// Provider option interfaces
-// ---------------------------------------------------------------------------
 
 export interface AnthropicProviderOptions {
   thinking?: { type: 'enabled' | 'disabled'; budgetTokens?: number };
@@ -34,10 +22,6 @@ export interface OpenAIProviderOptions {
 export interface GoogleProviderOptions {
   [key: string]: unknown;
 }
-
-// ---------------------------------------------------------------------------
-// Public helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Build the `providerOptions.anthropic` object to pass to `streamText`.
@@ -83,12 +67,6 @@ export function buildAnthropicProviderOptions(
   return Object.keys(anthropic).length > 0 ? { anthropic } : undefined;
 }
 
-/**
- * Build the `providerOptions.openai` object to pass to `streamText`.
- *
- * AI SDK v6: per-call OpenAI settings (reasoningEffort, reasoningSummary,
- * serviceTier) must be supplied via `providerOptions` in `streamText`.
- */
 export function buildOpenAIProviderOptions(
   options?: OpenAIProviderOptions,
 ): ProviderOptions | undefined {
@@ -111,7 +89,6 @@ export function getAnthropicModel(modelId: string, apiKey?: string): LanguageMod
       : {}),
   });
 
-  // AI SDK v6: provider(modelId) - per-call settings go via providerOptions in streamText
   return provider(modelId);
 }
 

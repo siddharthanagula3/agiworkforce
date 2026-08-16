@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-// Stub the artifact store so the component can render without a real Tauri backend
 vi.mock('../../../stores/artifactStore', () => ({
   useArtifactStore: (selector: (s: object) => unknown) => {
     const store = {
@@ -68,14 +67,10 @@ describe('ArtifactThumbnailRow', () => {
   });
 
   it('opens artifact panel on card click', async () => {
-    // The store mock at module level always returns a fresh fn pair per selector call.
-    // We verify the behaviour by checking that clicking the card triggers the
-    // aria-label–accessible button without throwing.
     const user = userEvent.setup();
     const artifact = makeArtifact({ id: 'art-1', title: 'Click Me' });
     render(<ArtifactThumbnailRow artifacts={[artifact]} />);
     const card = screen.getByRole('button', { name: /Open artifact: Click Me/i });
-    // Should not throw — the stub fns are no-ops
     await expect(user.click(card)).resolves.toBeUndefined();
   });
 });

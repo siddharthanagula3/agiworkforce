@@ -1,13 +1,3 @@
-/**
- * Unified Adapter Hooks
- *
- * Bridges the shape gap between the shared unified-chat store
- * (`@agiworkforce/unified-chat`) and the richer UI-adapter types used by
- * desktop-parity components.
- *
- * These are zero-cost reshaping adapters with no business logic.
- * All heavy state subscription is handled by the caller via useChatStore.
- */
 
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -15,10 +5,6 @@ import { useChatStore } from '@agiworkforce/unified-chat';
 import type { ChatMessage, Conversation } from '@agiworkforce/unified-chat';
 import type { ToolExecution } from '@shared/stores/tool-store';
 import { useModelStore } from '@shared/stores/model-store';
-
-// ============================================================================
-// Adapter Types
-// ============================================================================
 
 export interface AdaptedMessage {
   id: string;
@@ -69,9 +55,7 @@ export interface AdaptedModelState {
   updateModel: (id: string) => void;
 }
 
-// ============================================================================
 // Pure transformation functions (exported for testing)
-// ============================================================================
 
 export function adaptMessage(msg: ChatMessage): AdaptedMessage {
   const meta = msg.metadata as
@@ -146,21 +130,12 @@ export function adaptToolExecution(exec: ToolExecution): AdaptedToolEvent {
 }
 
 function formatDisplayName(toolName: string): string {
-  // Convert snake_case or camelCase tool names to readable labels
   return toolName
     .replace(/_/g, ' ')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-// ============================================================================
-// Hooks
-// ============================================================================
-
-/**
- * Adapts the active conversation's messages from ChatMessage[] to AdaptedMessage[].
- * Memoized - only recomputes when the raw messages array changes.
- */
 export function useAdaptedMessages(): AdaptedMessage[] {
   const { activeConversationId, messagesByConversation } = useChatStore(
     useShallow((s) => ({
@@ -176,20 +151,12 @@ export function useAdaptedMessages(): AdaptedMessage[] {
   }, [activeConversationId, messagesByConversation]);
 }
 
-/**
- * Adapts all conversations to ConversationSummary[].
- * Memoized - only recomputes when the conversations array changes.
- */
 export function useAdaptedSessions(): ConversationSummary[] {
   const conversations = useChatStore(useShallow((s) => s.conversations));
 
   return useMemo(() => conversations.map(adaptConversation), [conversations]);
 }
 
-/**
- * Adapts a single conversation by id to ConversationSummary.
- * Returns null if the conversation is not found.
- */
 export function useAdaptedSession(sessionId: string): ConversationSummary | null {
   const conversations = useChatStore(useShallow((s) => s.conversations));
 
@@ -199,19 +166,10 @@ export function useAdaptedSession(sessionId: string): ConversationSummary | null
   }, [conversations, sessionId]);
 }
 
-/**
- * Adapts ToolExecution[] to AdaptedToolEvent[] for the ToolTimeline component.
- * Accepts the raw executions array from useToolStore so the caller controls
- * which store slice to subscribe to.
- */
 export function useAdaptedToolEvents(executions: ToolExecution[]): AdaptedToolEvent[] {
   return useMemo(() => executions.map(adaptToolExecution), [executions]);
 }
 
-/**
- * Returns the selected model state in the adapter shape expected by
- * desktop-parity components.
- */
 export function useAdaptedModelState(): AdaptedModelState {
   const selectedModelId = useModelStore((s) => s.selectedModelId);
   const setSelectedModelId = useModelStore((s) => s.setSelectedModelId);

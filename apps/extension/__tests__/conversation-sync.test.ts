@@ -49,8 +49,6 @@ const chromeMock = {
 };
 (globalThis as unknown as Record<string, unknown>).chrome = chromeMock;
 
-// The auth context is the worker's identity source. Mocking it here is what
-// lets the owner-rotation case swap identities mid-flight.
 const authContext = {
   current: {
     token: 'test-bearer',
@@ -176,8 +174,6 @@ describe('conversation cloud sync', () => {
     const posts = messagePosts();
     expect(posts).toHaveLength(2);
     for (const post of posts) {
-      // Guards the retry-duplication hazard: the shared client retries 5xx, and
-      // that is only safe because the server upserts on this id.
       expect(post.body['id']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-/i);
       expect(post.body['skipLlm']).toBe(true);
       expect(post.headers['x-agi-organization-id']).toBe('personal');
@@ -276,7 +272,6 @@ describe('conversation cloud sync', () => {
   it('skips the trailing turn while a stream is live, then sends it once settled', async () => {
     await upsertConversation(OWNER, 'conv-stream', cloudMessages(3_000, 'part'));
 
-    // Twelve saveMessages()-equivalent flushes during one streamed turn.
     for (let index = 0; index < 12; index += 1) {
       await upsertConversation(OWNER, 'conv-stream', cloudMessages(3_000, `part${index}`));
       await flushConversation(OWNER, 'conv-stream', true);
@@ -284,7 +279,6 @@ describe('conversation cloud sync', () => {
     expect(messagePosts()).toHaveLength(1);
     expect(messagePosts()[0]!.body['content']).toBe('ask');
 
-    // The stream settles; the assistant turn is written exactly once.
     await flushConversation(OWNER, 'conv-stream', false);
     expect(messagePosts()).toHaveLength(2);
     expect(messagePosts()[1]!.body['content']).toBe('part11');
@@ -332,7 +326,6 @@ describe('conversation cloud sync', () => {
     const grown = messagePosts().filter((post) => post.body['content'] === 'short and then longer');
     expect(grown).toHaveLength(1);
     expect(grown[0]!.body['id']).toBe(firstId);
-    // And only ONE conversation was ever created.
     expect(conversationPosts()).toHaveLength(1);
   });
 
@@ -389,8 +382,6 @@ describe('conversation cloud sync', () => {
   it('aborts before egress when the owner rotates mid-flight', async () => {
     await upsertConversation(OWNER, 'conv-rotate', cloudMessages(7_000));
 
-    // Swap identities after the binding is claimed but before the transport
-    // resolves its token, which is where the fence lives.
     respond = (request) => {
       authContext.current = { token: 'other-bearer', owner: { ...OTHER_OWNER } };
       return defaultResponder(request);
@@ -398,14 +389,11 @@ describe('conversation cloud sync', () => {
 
     await expect(flushConversation(OWNER, 'conv-rotate')).resolves.toBeUndefined();
 
-    // The transcript never left the browser under the NEW identity: the
-    // message POSTs failed at the transport fence, before any body was built.
     expect(messagePosts()).toHaveLength(0);
     expect(
       requests.every((request) => request.headers['Authorization'] === 'Bearer test-bearer'),
     ).toBe(true);
     const entry = await getConversation(OWNER, 'conv-rotate');
-    // A stale owner must not write an error record either.
     expect(entry?.cloudSync?.state).not.toBe('error');
   });
 
@@ -466,7 +454,6 @@ describe('conversation cloud sync', () => {
     respond = () => jsonResponse({ error: 'Not found' }, 404);
 
     await expect(queueCloudConversationDeletion(OWNER, cloudId, null)).resolves.toBe(true);
-    // The eager drain inside `queueCloudConversationDeletion` is fire-and-forget.
     await sweepConversationSync();
 
     expect(requests.some((request) => request.method === 'DELETE')).toBe(true);

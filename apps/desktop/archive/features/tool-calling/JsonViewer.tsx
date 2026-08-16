@@ -1,9 +1,3 @@
-/**
- * JsonViewer Component
- *
- * Beautiful JSON data viewer with syntax highlighting, collapsible sections,
- * search, and copy functionality. Optimized for large JSON objects.
- */
 
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Copy, Check, ChevronRight, ChevronDown, Search, X } from 'lucide-react';
@@ -87,13 +81,11 @@ function JsonTreeNode({
   const isExpandable = node.type === 'object' || node.type === 'array';
   const isExpanded = node.expanded ?? false;
 
-  // Highlight search matches
   const matchesSearch =
     !searchTerm ||
     node.key.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (typeof node.value === 'string' && node.value.toLowerCase().includes(searchTerm.toLowerCase()));
 
-  // Format value for display
   const formatValue = (value: JsonValue, type: TreeNode['type']): string => {
     if (type === 'null') return 'null';
     if (type === 'string') return `"${value}"`;
@@ -106,7 +98,6 @@ function JsonTreeNode({
 
   const valueDisplay = formatValue(node.value, node.type);
 
-  // Get color for value type
   const getValueColor = (type: TreeNode['type']): string => {
     switch (type) {
       case 'string':
@@ -190,7 +181,6 @@ export function JsonViewer({
     if (typeof data === 'object' && data !== null) {
       return buildTree(data, 0, 'root');
     }
-    // Primitive value
     const type = getType(data);
     return [
       {
@@ -223,7 +213,6 @@ export function JsonViewer({
     });
   };
 
-  // Update node expanded state based on expandedNodes set
   const nodesWithExpandedState = useMemo(() => {
     return rootNodes.map((node) => ({
       ...node,

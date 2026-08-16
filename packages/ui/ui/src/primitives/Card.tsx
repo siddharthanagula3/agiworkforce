@@ -3,15 +3,7 @@
 import * as React from 'react';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
-
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
-  /**
-   * Semantic element to render. Use `'article'` for standalone content or
-   * `'section'` for a significant region; defaults to a layout `'div'`.
-   * Additive — existing callers keep the `<div>`. Accessible naming
-   * (`aria-label` / `aria-labelledby`) flows through via spread props.
-   */
   as?: 'article' | 'section' | 'div';
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -36,15 +28,7 @@ function CardHeader({ className, ref, ...props }: CardHeaderProps) {
 }
 CardHeader.displayName = 'CardHeader';
 
-// NOTE: ref type is `React.Ref<HTMLHeadingElement>` (matching the rendered <h3> and
-// the HTMLAttributes<HTMLHeadingElement> extends clause below). Desktop's copy of this
-// file had drifted to `React.Ref<HTMLParagraphElement>` (an apparent copy/paste from
-// CardDescriptionProps) — web's version is correct and is the canonical source here.
 interface CardTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {
-  /**
-   * Heading level to render for a correct document outline. Defaults to `h3`.
-   * Additive — existing callers keep the `<h3>`.
-   */
   as?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6';
   ref?: React.Ref<HTMLHeadingElement>;
 }

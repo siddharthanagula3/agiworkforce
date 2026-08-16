@@ -1,18 +1,3 @@
-/**
- * Pre-pair desktop setup checklist (PAR-M28).
- *
- * Before this existed the first Dispatch screen was a "Scan QR Code" primary
- * with the three prerequisites rendered *below* it under a "HOW IT WORKS"
- * divider — scan first, read later — and no way forward at all for a user who
- * has not installed Desktop yet. Pairing hands a remote computer the right to
- * run work sent from this phone, so the prerequisites, the download path and
- * the risk disclosure all have to come before the first pairing action.
- *
- * Shown once, on first entry to the Dispatch screen; `hasSeenDispatchSetup`
- * persists the dismissal the same way `useDemoStore.hasSeenDemo` persists the
- * walkthrough, and `DisconnectedView` takes over on every later visit (it
- * carries the same checklist and the same risk disclosure).
- */
 import { useCallback } from 'react';
 import { Alert, Linking, Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -27,10 +12,6 @@ import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { useThemeColors } from '@/src/ui/theme';
 import { PairingChecklist } from './ConnectionStateViews';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
-
-// ---------------------------------------------------------------------------
-// First-run flag
-// ---------------------------------------------------------------------------
 
 interface DispatchSetupState {
   hasSeenDispatchSetup: boolean;
@@ -48,7 +29,6 @@ export const useDispatchSetupStore = create<DispatchSetupState>()(
     {
       name: 'dispatch-setup-store',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE — same contract as companion-demo-store.
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[dispatch-setup-store] Hydration failed:', error);
@@ -59,18 +39,8 @@ export const useDispatchSetupStore = create<DispatchSetupState>()(
 
 rehydrateWhenMmkvReady(useDispatchSetupStore, 'dispatch-setup-store');
 
-// ---------------------------------------------------------------------------
-// Desktop download hand-off
-// ---------------------------------------------------------------------------
-
-/** Real route: `apps/web/app/download/page.tsx`. */
 export const DESKTOP_DOWNLOAD_URL = 'https://agiworkforce.com/download';
 
-/**
- * Builds the "email me the desktop app link" mailto. Pre-addressed to the
- * signed-in account when Clerk knows it, so the common case is one tap plus
- * Send.
- */
 export function buildDesktopLinkMailto(accountEmail: string | null): string {
   const subject = encodeURIComponent('AGI Workforce for desktop');
   const body = encodeURIComponent(
@@ -84,23 +54,12 @@ export function buildDesktopLinkMailto(accountEmail: string | null): string {
   return `mailto:${accountEmail ?? ''}?subject=${subject}&body=${body}`;
 }
 
-// ---------------------------------------------------------------------------
-// View
-// ---------------------------------------------------------------------------
-
 interface DesktopSetupChecklistViewProps {
-  /**
-   * Optional. Marking the flag seen is what advances the Dispatch screen to
-   * `DisconnectedView`, so the companion route needs no handler; this exists
-   * for callers that want to react to the gate being cleared.
-   */
   onContinue?: () => void;
 }
 
 export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistViewProps = {}) {
   const colors = useThemeColors();
-  // useAuthStore().user is always null in v1 — Clerk is the real signed-in user
-  // source (same pattern as ErrorView in ConnectionStateViews.tsx).
   const { user } = useUser();
   const accountEmail = user?.primaryEmailAddress?.emailAddress ?? null;
 
@@ -112,9 +71,6 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
   }, [markDispatchSetupSeen, onContinue]);
 
   const handleEmailDesktopLink = useCallback(async () => {
-    // A mailto: is a system-app hand-off, not an https: URL, so it cannot go
-    // through the openExternalUrl allowlist (lib/safeOpenURL.ts) — same
-    // exception About makes for Contact Support.
     const url = buildDesktopLinkMailto(accountEmail);
     try {
       const supported = await Linking.canOpenURL(url);

@@ -1,15 +1,8 @@
-/**
- * User Profile Store Tests
- *
- * Tests for user profile state management including
- * user data, profile updates, and billing information.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useUserProfileStore } from './user-profile-store';
 import type { UserProfile } from './user-profile-store';
 
-// Helper to create mock user profile
 const createMockUserProfile = (overrides: Partial<UserProfile> = {}): UserProfile => ({
   id: 'user-123',
   email: 'test@example.com',
@@ -47,7 +40,6 @@ const createMockUserProfile = (overrides: Partial<UserProfile> = {}): UserProfil
 
 describe('User Profile Store', () => {
   beforeEach(() => {
-    // Reset store before each test
     useUserProfileStore.getState().reset();
     vi.useFakeTimers();
   });
@@ -120,13 +112,12 @@ describe('User Profile Store', () => {
 
       const state = useUserProfileStore.getState();
       expect(state.user?.profile.company).toBe('New Company');
-      expect(state.user?.profile.firstName).toBe('Test'); // Unchanged
+      expect(state.user?.profile.firstName).toBe('Test');
     });
 
     it('should do nothing if user is null', () => {
       const { updateProfile } = useUserProfileStore.getState();
 
-      // Should not throw
       expect(() => {
         updateProfile({ firstName: 'Test' });
       }).not.toThrow();
@@ -333,7 +324,6 @@ describe('User Profile Store', () => {
       setUser(createMockUserProfile());
       updateProfile({ company: undefined });
 
-      // undefined should still be set
       expect(useUserProfileStore.getState().user?.profile.company).toBeUndefined();
     });
   });

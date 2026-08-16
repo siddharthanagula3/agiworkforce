@@ -43,7 +43,6 @@ import {
 import { QWEN_MODEL_CATALOG } from './catalog';
 import { QWEN_DEFAULT_BASE_URL } from './base-url';
 
-/** Hosts a `baseUrl` override is allowed to resolve to (SSRF allowlist). */
 const QWEN_ALLOWED_BASE_HOSTS: readonly string[] = [
   'dashscope.aliyuncs.com',
   'dashscope-intl.aliyuncs.com',
@@ -60,38 +59,14 @@ const QWEN_AUTH_METHODS: readonly AuthMethod[] = [
   },
 ];
 
-/** An alternate Qwen-compatible endpoint tried on primary-endpoint failure. */
 export interface QwenFallbackEndpoint {
-  /** OpenAI-compatible base URL. SSRF-validated like the primary. */
   baseUrl: string;
-  /**
-   * API key for this endpoint; falls back to the adapter's primary `apiKey`
-   * when omitted. Set it when the alternate endpoint authenticates
-   * differently from the primary.
-   */
   apiKey?: string;
 }
 
 export interface QwenAdapterConfig extends ProviderAdapterConfig {
-  /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
-  /**
-   * Ordered alternate endpoints, tried in order ONLY when the primary endpoint
-   * fails with a transient/availability error BEFORE any content is streamed
-   * (pre-first-byte), so a rotation can never duplicate output. No endpoint is
-   * configured since MuleRouter was dropped on 2026-07-27; the primitive stays
-   * because it is provider-agnostic and the next second-endpoint need will
-   * want it.
-   */
   fallbackEndpoints?: readonly QwenFallbackEndpoint[];
-  /**
-   * Extra hostnames a `baseUrl` override may resolve to, beyond
-   * `dashscope.aliyuncs.com` / `dashscope-intl.aliyuncs.com` /
-   * `localhost` / `127.0.0.1`. A `baseUrl` whose host
-   * isn't allowlisted falls back to the default base URL rather than being
-   * trusted unconditionally (SSRF guard implemented by
-   * `@agiworkforce/provider-runtime`).
-   */
   additionalAllowedBaseUrlHosts?: readonly string[];
 }
 
@@ -107,10 +82,6 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
     ...(config.fetch ? { fetch: config.fetch } : {}),
   });
 
-  // Pre-build the ordered fallback SDK clients once (reused across stream calls).
-  // Each base URL is SSRF-validated against the same host allowlist as the
-  // primary; a fallback that resolves to the primary base URL is dropped (no
-  // point retrying the identical host).
   const fallbackSdks = (config.fallbackEndpoints ?? [])
     .map((endpoint) => {
       const { url } = resolveValidatedBaseUrl(endpoint.baseUrl, QWEN_DEFAULT_BASE_URL, {
@@ -170,10 +141,6 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
         provider: 'qwen',
       });
 
-      // Ordered endpoint chain: primary first, then any validated fallbacks.
-      // Fail-over is PRE-FIRST-BYTE ONLY — once a chunk has been yielded we
-      // never re-issue the request, so a mid-stream failure can neither
-      // duplicate content nor re-run tool side effects.
       const endpoints = [sdk, ...fallbackSdks];
       let yielded = false;
 
@@ -194,8 +161,6 @@ export function createQwenAdapter(config: QwenAdapterConfig = {}): ProviderAdapt
           return;
         } catch (err) {
           const classified = classifyError(err);
-          // Rotate to the next endpoint only if nothing was streamed yet, the
-          // error is transient/availability-class, and an endpoint remains.
           if (!yielded && classified.retryable && attempt < endpoints.length - 1) {
             continue;
           }

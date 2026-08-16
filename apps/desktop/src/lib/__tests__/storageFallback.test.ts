@@ -1,8 +1,3 @@
-/**
- * H42 — storageFallback tests
- *
- * Verifies the no-op Storage implementation used in SSR / non-browser environments.
- */
 import { describe, it, expect } from 'vitest';
 import { storageFallback } from '../storageFallback';
 
@@ -16,7 +11,6 @@ describe('storageFallback', () => {
 
     it('returns null after a setItem call for the same key', () => {
       storageFallback.setItem('myKey', 'myValue');
-      // storageFallback is a no-op: stored value is discarded
       expect(storageFallback.getItem('myKey')).toBeNull();
     });
   });
@@ -104,7 +98,6 @@ describe('storageFallback', () => {
     });
 
     it('can be used as a Storage value directly', () => {
-      // Assigning to a Storage-typed variable should not cause type errors at runtime
       const storage: Storage = storageFallback;
       expect(storage.length).toBe(0);
       expect(storage.getItem('k')).toBeNull();

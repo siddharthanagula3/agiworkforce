@@ -1,17 +1,6 @@
-/**
- * E2B gate predicates — unit tests.
- *
- * Verifies that e2bCutoverEnabled() gates on the EXPLICIT FLAG only (never on
- * key presence alone), and that e2bExecutionEnabled() gates on key OR flag.
- *
- * These are the critical invariants: dropping E2B_API_KEY into prod without the
- * explicit flag must NOT open the managed-compute execution path.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// gate.ts is 'server-only'; stub that import so vitest doesn't fail in the test env.
 vi.mock('server-only', () => ({}));
-// Stub the managed-compute gate dependency.
 vi.mock('@/lib/managed-compute-gate', () => ({
   isManagedComputePrivateBetaEnabled: vi.fn(() => false),
 }));
@@ -53,7 +42,6 @@ describe('e2bCutoverEnabled', () => {
   });
 
   it('is false when AGI_E2B_EXECUTION=0 even with an API key present', async () => {
-    // Critical: key presence alone must NOT open the cut-over path.
     process.env[ENV_KEY] = '0';
     process.env[API_KEY] = 'sk-test-key';
     vi.resetModules();
@@ -62,7 +50,6 @@ describe('e2bCutoverEnabled', () => {
   });
 
   it('is false when only E2B_API_KEY is present (key alone is not cut-over consent)', async () => {
-    // This is the load-bearing rule: key-only must not activate managed compute for all users.
     process.env[API_KEY] = 'sk-test-key';
     vi.resetModules();
     const { e2bCutoverEnabled } = await import('../gate');

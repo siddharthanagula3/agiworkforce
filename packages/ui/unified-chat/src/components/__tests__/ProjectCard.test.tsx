@@ -1,17 +1,3 @@
-/**
- * Regression test for the invalid-HTML / hydration bug in ProjectCard.
- *
- * Live audit (2026-07-10, §9): the whole card was a native <button> that
- * contained a nested star-toggle <button> (and options <button>), which is
- * invalid HTML — a <button> may not contain another <button> — and React
- * logged a hydration warning twice per Projects render.
- *
- * The fix makes the card a role="button" div so the inner buttons are valid
- * siblings. These tests pin: (1) no <button> is nested inside another
- * <button>, and (2) card-open and star-toggle behave independently — clicking
- * the star toggles the favorite via stopPropagation and does NOT also open the
- * project.
- */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -79,7 +65,6 @@ describe('ProjectCard — independent click handlers', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /star project/i }));
 
-    // Star flips in the store, and the card-open handler is not triggered.
     expect(useProjectStore.getState().projects[0]!.starred).toBe(true);
     expect(onSelect).not.toHaveBeenCalled();
   });

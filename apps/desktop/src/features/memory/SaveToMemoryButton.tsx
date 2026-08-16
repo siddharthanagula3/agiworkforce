@@ -1,17 +1,3 @@
-/**
- * SaveToMemoryButton Component
- *
- * A small icon button that saves the content of a chat message to the
- * persistent memory store. Designed to sit in the MessageActions toolbar
- * alongside copy, bookmark, regenerate, etc.
- *
- * On click it calls memoryStore.remember() to persist the memory via the
- * Tauri backend (with automatic localStorage fallback), then shows a Sonner
- * toast confirming success.
- *
- * Usage:
- *   <SaveToMemoryButton content={message.content} />
- */
 
 import { memo, useCallback, useState } from 'react';
 import { Brain, BrainCog } from 'lucide-react';
@@ -22,9 +8,7 @@ import { useMemoryStore } from '@/stores/memoryStore';
 import { useIsMounted } from '@/hooks/useIsMounted';
 
 export interface SaveToMemoryButtonProps {
-  /** The text content to save */
   content: string;
-  /** Optional CSS overrides */
   className?: string;
 }
 
@@ -35,16 +19,12 @@ export const SaveToMemoryButton = memo(function SaveToMemoryButton({
   const remember = useMemoryStore((s) => s.remember);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  // Parent may clear the conversation while a save is in flight, unmounting
-  // this button mid-promise. Without the guard setSaved/setSaving below
-  // would fire on an unmounted component.
   const isMounted = useIsMounted();
 
   const handleSave = useCallback(async () => {
     if (saved || saving || !content.trim()) return;
     setSaving(true);
     try {
-      // Use 'context' category and derive a short topic from the first sentence
       const firstSentence = content.split(/[.!?\n]/)[0]?.slice(0, 80) ?? 'Conversation excerpt';
       await remember('context', firstSentence, content.trim(), 6);
       if (!isMounted.current) return;

@@ -1,21 +1,3 @@
-/**
- * Managed Cloud embeddings — `POST /api/llm/v1/embeddings`.
- *
- * OpenAI-compatible request and response shape so an existing client library
- * can point at this gateway. The catalog already carried an embedding model
- * (`modelType: 'embedding'`) with no route to reach it; `/v1/models` correctly
- * did NOT advertise it, so this adds a capability rather than repairing a false
- * claim.
- *
- * BILLING. Embeddings are a billable provider call, so this goes through the
- * same reserve → call → settle path as image generation
- * (`api/media/image/generate/route.ts`) rather than inventing a lighter one.
- * `Idempotency-Key` is required for exactly the reason it is on every other
- * managed surface: a retried request must settle once, not twice. Every exit
- * path settles — success, provider failure, and validation failure after the
- * reservation exists — because a reservation that is never finalized holds
- * quota the caller cannot use and cannot see.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -51,7 +33,6 @@ import {
 } from '@/lib/services/managed-usage-request-service';
 import { SubscriptionService } from '@/lib/services/subscription-service';
 
-/** Same shape as the image route's helper — one error contract for managed usage. */
 function managedUsageErrorResponse(
   request: NextRequest,
   error: ManagedUsageRequestError,
@@ -68,15 +49,11 @@ function managedUsageErrorResponse(
   );
 }
 
-/** Cost is charged per input token; embedding models produce no output tokens. */
 export function estimateEmbeddingCostCents(
   model: PricedModel,
   estimatedTokens: number,
   pricedAt: Date = new Date(),
 ): number {
-  // Resolve the same date and input-length layers as chat billing. A future
-  // tiered embedding model therefore becomes accurate through one catalog edit
-  // rather than a route-specific pricing branch.
   const inputRate = resolveEffectiveModelPricingForInputTokens(
     model,
     pricedAt,
@@ -86,20 +63,11 @@ export function estimateEmbeddingCostCents(
   return costDollars > 0 ? Math.max(1, Math.ceil(costDollars * 100)) : 0;
 }
 
-/**
- * Token estimate for reservation only.
- *
- * Deliberately a CHARACTER heuristic, not a tokenizer: the provider returns the
- * real count and settlement uses that. Over-reserving slightly is safe (the
- * difference is released); under-reserving would let a caller exceed their
- * quota, so this rounds up.
- */
 function estimateTokens(inputs: readonly string[]): number {
   const characters = inputs.reduce((total, input) => total + input.length, 0);
   return Math.max(1, Math.ceil(characters / 4));
 }
 
-/** The default embedding model: catalog order, so adding one cannot break this. */
 function resolveEmbeddingModel(requested: string | undefined): ModelMetadata {
   const embeddingModels = getModels({ modelTypes: ['embedding'] });
   if (embeddingModels.length === 0) {
@@ -110,8 +78,6 @@ function resolveEmbeddingModel(requested: string | undefined): ModelMetadata {
 
   const model = getModelMetadataById(requested);
   if (!model || model.modelType !== 'embedding') {
-    // Naming the available ids beats a bare "invalid model": the caller cannot
-    // discover them from `/v1/models`, which lists chat models only.
     throw createError.validation(
       `Unknown embedding model. Available: ${embeddingModels.map((entry) => entry.id).join(', ')}.`,
     );
@@ -123,20 +89,10 @@ interface GoogleEmbeddingResponse {
   embeddings?: Array<{ values?: number[] }>;
 }
 
-/**
- * Google `batchEmbedContents`.
- *
- * Ref: POST https://generativelanguage.googleapis.com/v1beta/models/{model}:batchEmbedContents
- * Auth: `x-goog-api-key`, matching the Veo call in `api/media/video/generate`.
- */
 async function embedWithGoogle(
   inputs: readonly string[],
   model: ModelMetadata,
 ): Promise<number[][]> {
-  // Same three-key chain as the media routes and
-  // `PROVIDER_API_KEY_ENV_KEYS.google`. Reading only GOOGLE_API_KEY made
-  // embeddings fail on any deployment credentialed with GEMINI_API_KEY —
-  // including local development, where `.env.local` carries that name.
   const apiKey =
     process.env['GOOGLE_API_KEY'] ??
     process.env['GOOGLE_AI_API_KEY'] ??
@@ -172,8 +128,6 @@ async function embedWithGoogle(
   const payload = (await response.json()) as GoogleEmbeddingResponse;
   const vectors = payload.embeddings?.map((entry) => entry.values ?? []) ?? [];
 
-  // A short or ragged batch would silently misalign vectors with inputs — the
-  // caller would associate embeddings with the wrong text and never find out.
   if (vectors.length !== inputs.length || vectors.some((vector) => vector.length === 0)) {
     throw createError.serviceUnavailable(
       'The embedding provider returned an incomplete result set.',
@@ -211,8 +165,6 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
   const model = resolveEmbeddingModel(parsed.data.model);
   const estimatedTokens = estimateTokens(inputs);
 
-  // Reserve BEFORE calling the provider, so a caller at their limit is stopped
-  // before spend rather than after.
   let reservation: ManagedUsageRequestReservation;
   try {
     const idempotencyKey = parseManagedUsageIdempotencyKey(request.headers.get('Idempotency-Key'));
@@ -221,9 +173,6 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
       throw new ManagedUsageRequestError('Managed usage tenant mismatch.', 403, 'tenant_mismatch');
     }
     const subscription = await SubscriptionService.getSubscription(userId);
-    // A missing subscription row is the free tier, not an error: the plan tier
-    // only selects the reservation policy, and defaulting to the most
-    // restrictive one is the safe direction.
     reservation = await reserveManagedUsageRequest({
       db: scoped.db,
       userId,
@@ -251,8 +200,6 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
   try {
     vectors = await embedWithGoogle(inputs, model);
   } catch (error) {
-    // Settle at zero so the reservation does not hold quota the caller cannot
-    // use and cannot see.
     await finalizeManagedUsageRequest({
       ...reservation,
       outcome: 'failed',
@@ -285,12 +232,6 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
       embedding,
     })),
     model: model.id,
-    /**
-     * The provider's batch endpoint does not return a token count, so this is
-     * the same estimate the reservation used. It is reported rather than
-     * omitted because callers meter against it — and it is the number this
-     * request was actually billed on, which makes it the honest one to show.
-     */
     usage: { prompt_tokens: estimatedTokens, total_tokens: estimatedTokens },
   };
 

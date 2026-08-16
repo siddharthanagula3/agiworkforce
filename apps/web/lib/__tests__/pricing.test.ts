@@ -1,18 +1,5 @@
-/**
- * Tests for lib/pricing.ts
- *
- * Covers:
- *   - STRIPE_PRICE_IDS includes pro and max keys (hobby removed)
- *   - getPlanFromPriceId returns the correct plan when a matching price ID is set
- *   - Missing env vars don't crash; validatePriceId returns undefined gracefully
- *   - arePriceIdsConfigured works with the current 2-plan structure
- */
 
 import { describe, it, expect, vi } from 'vitest';
-
-// ---------------------------------------------------------------------------
-// Mocks · set up before the module under test is imported
-// ---------------------------------------------------------------------------
 
 vi.mock('../logger', () => ({
   logger: {
@@ -22,10 +9,6 @@ vi.mock('../logger', () => ({
     debug: vi.fn(),
   },
 }));
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 async function importPricingWithEnv(
   overrides: Record<string, string | undefined> = {},
@@ -50,10 +33,6 @@ async function importPricingWithEnv(
   }
   return mod;
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('STRIPE_PRICE_IDS structure', () => {
   it('includes both Max usage tiers at the top level', async () => {
@@ -172,14 +151,8 @@ describe('PRICING_CONFIG.plans', () => {
     const { PRICING_CONFIG } = await importPricingWithEnv();
     const team = PRICING_CONFIG.plans.find((plan) => plan.id === 'team');
     expect(team).toBeDefined();
-    // Marked per-seat so no price renderer can mistake the unit amount for the
-    // whole organization's monthly bill. $25/seat per founder decision
-    // 2026-08-05 (Decision #22).
     expect(team).toHaveProperty('perSeat', true);
     expect(team?.price.monthly).toBe(25);
-    // Yearly is now published from the canonical catalog at $240/seat/yr
-    // (Decision #22). Live checkout still fails closed until the Stripe Price
-    // behind STRIPE_PRICE_TEAM_YEARLY_USD exists.
     expect(team?.price.yearly).toBe(240);
   });
 
@@ -201,11 +174,7 @@ describe('PRICING_CONFIG.plans', () => {
     expect(getConfiguredPriceId('team', 'monthly', 'usd')).toBe('price_team_usd');
     expect(getConfiguredPriceId('team', 'monthly', 'INR')).toBe('price_team_inr');
     expect(getConfiguredPriceId('team', 'monthly')).toBe('price_team_usd');
-    // Team yearly is wired (USD $240/seat/yr, Decision #22). A yearly lookup
-    // must resolve to the dedicated yearly Price, never reuse the monthly one.
     expect(getConfiguredPriceId('team', 'yearly', 'usd')).toBe('price_team_yearly_usd');
-    // No INR yearly Price exists (founder-undecided); an INR yearly request
-    // falls back to the USD yearly Price, mirroring monthlyInr -> monthlyUsd.
     expect(getConfiguredPriceId('team', 'yearly', 'inr')).toBe('price_team_yearly_usd');
     expect(getConfiguredPriceId('team', 'yearly')).toBe('price_team_yearly_usd');
     expect(PRICING_CONFIG.getPlanFromPriceId('price_team_yearly_usd')).toBe('team');
@@ -216,8 +185,6 @@ describe('PRICING_CONFIG.plans', () => {
       STRIPE_PRICE_TEAM_MONTHLY_USD: 'price_team_usd',
       STRIPE_PRICE_TEAM_YEARLY_USD: undefined,
     });
-    // Monthly still resolves; yearly refuses so an unconfigured deployment
-    // cannot start Team yearly checkout.
     expect(getConfiguredPriceId('team', 'monthly', 'usd')).toBe('price_team_usd');
     expect(getConfiguredPriceId('team', 'yearly', 'usd')).toBeUndefined();
     expect(getConfiguredPriceId('team', 'yearly', 'inr')).toBeUndefined();
@@ -236,7 +203,6 @@ describe('PRICING_CONFIG.plans', () => {
       STRIPE_PRICE_TEAM_MONTHLY_USD: undefined,
       STRIPE_PRICE_TEAM_MONTHLY_INR: undefined,
     });
-    // Fails CLOSED: an unconfigured deployment cannot start Team checkout.
     expect(getConfiguredPriceId('team', 'monthly', 'usd')).toBeUndefined();
   });
 

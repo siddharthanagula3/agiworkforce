@@ -1,28 +1,19 @@
-/**
- * Device Link API Tests
- *
- * Tests for device linking flow input validation
- * Note: Full integration tests require actual Neon connection
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
 
-// Clerk auth mock — hoisted so it survives clearAllMocks
 const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: () => mockClerkAuth(),
 }));
 
-// CSRF mock — bypass validation so tests focus on route logic
 vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn(() => null),
 }));
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -40,7 +31,6 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 
-// Mock environment variables
 vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
     if (key === 'NEON_DATABASE_URL') return 'https://localhost';
@@ -54,28 +44,16 @@ vi.mock('@shared/utils/env', () => ({
   }),
 }));
 
-// Mock Neon DB — the route calls db.execute() to insert/upsert device codes
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     execute: vi.fn().mockResolvedValue({}),
-    // assertAccountActive (getClerkAuthUser) reads account_status; an active row
-    // keeps the auth path passing. Without this the query would reject and auth
-    // now fails closed.
     query: vi.fn().mockResolvedValue([{ account_status: 'active' }]),
   })),
 }));
 
-// Import after mocks
 import { POST, OPTIONS } from '@/app/api/device/link/route';
 
-// Requests below carry no Authorization header — cookie-session auth via
-// the mocked @clerk/nextjs/server auth() above. This suite never mocks
-// @clerk/backend's verifyToken, so a placeholder Bearer header would be a
-// present-but-unverifiable credential — getClerkAuthUser now rejects that
-// outright rather than falling back to the mocked cookie session
-// (WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01).
 describe('Device Link API', () => {
-  // Use valid values per schema: device_fingerprint must be hex only
   const validRequest = {
     device_id: 'device-123',
     device_name: 'My Desktop',
@@ -86,7 +64,6 @@ describe('Device Link API', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Re-establish auth mock default after clearAllMocks
     mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
   });
 
@@ -157,7 +134,6 @@ describe('Device Link API', () => {
     });
   });
 
-  // H54 — crypto validation tests
   describe('H54 — Token generation and security validation', () => {
     describe('Token format validation', () => {
       it('generated link_code has non-zero length', async () => {
@@ -185,7 +161,6 @@ describe('Device Link API', () => {
         const response = await POST(request);
         const data = await response.json();
 
-        // Tokens should be URL-safe: letters, digits, hyphens, underscores
         expect(data.link_code).toMatch(/^[a-zA-Z0-9_-]+$/);
       });
 
@@ -208,7 +183,6 @@ describe('Device Link API', () => {
         const codes = [d1.link_code, d2.link_code, d3.link_code];
         const uniqueCodes = new Set(codes);
 
-        // All three link codes should be distinct
         expect(uniqueCodes.size).toBe(3);
       });
 
@@ -235,7 +209,6 @@ describe('Device Link API', () => {
         const response = await POST(request);
         const data = await response.json();
 
-        // expires_at is returned as Unix timestamp in seconds
         const expiresAtMs = data.expires_at * 1000;
         expect(expiresAtMs).toBeGreaterThan(Date.now());
       });
@@ -253,7 +226,6 @@ describe('Device Link API', () => {
         });
 
         const response = await POST(request);
-        // Zod schema validates hex-only; non-hex should produce 400
         expect(response.status).toBe(400);
       });
 
@@ -279,7 +251,6 @@ describe('Device Link API', () => {
         });
 
         const response = await POST(request);
-        // The schema limits device_name length — extremely long values must be rejected
         expect(response.status).toBe(400);
       });
     });
@@ -311,7 +282,6 @@ describe('Device Link API', () => {
 
         const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
 
-        // Even with identical input the link codes must differ (they include randomness)
         expect(d1.link_code).not.toBe(d2.link_code);
       });
 

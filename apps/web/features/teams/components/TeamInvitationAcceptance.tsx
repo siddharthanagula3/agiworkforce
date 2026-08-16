@@ -42,8 +42,6 @@ export function TeamInvitationAcceptance() {
     const fragmentToken = fragment.get('token');
     if (fragmentToken && fragmentToken.length >= 20 && fragmentToken.length <= 512) {
       window.sessionStorage.setItem(INVITATION_TOKEN_STORAGE_KEY, fragmentToken);
-      // Fragments are not sent to the server, and removing it after capture
-      // keeps the bearer token out of screenshots and casual copy/paste.
       window.history.replaceState(null, '', '/invite');
     }
 
@@ -158,9 +156,6 @@ export function TeamInvitationAcceptance() {
                 </p>
               </div>
               {completion.action === 'accept' ? (
-                // Acceptance also changes the durable active workspace. Use a
-                // document navigation so chat/project/query state from the old
-                // Personal scope cannot survive into the new organization.
                 <a
                   href="/settings/team"
                   className="agi-fl-cta agi-fl-cta--primary"

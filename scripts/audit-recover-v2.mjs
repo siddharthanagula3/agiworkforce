@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Replay v2 for under-recovered batches: simulate the PostToolUse prettier
-// hook between operations so Edit old_strings anchored to formatted content
-// match. Fallback: salvage the novel portion of unmatched Edits by appending.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -17,7 +14,7 @@ const RUNS = [
   'wf_290632cc-937',
   'wf_dc996cce-d03',
 ];
-const TARGETS = new Set(process.argv.slice(2)); // batch ids like 037
+const TARGETS = new Set(process.argv.slice(2));
 const partRe = /AUDIT_PARTS\/batch-(\d{3})\.md/;
 
 function prettier(content, id) {
@@ -29,8 +26,7 @@ function prettier(content, id) {
   return r.status === 0 && r.stdout ? r.stdout : content;
 }
 
-// collect ops per batch in chronological order
-const ops = new Map(); // id -> [{kind, input}]
+const ops = new Map();
 for (const run of RUNS) {
   const dir = path.join(WF_BASE, run);
   for (const f of fs
@@ -81,7 +77,6 @@ for (const [id, list] of [...ops.entries()].sort()) {
         if (fmt.includes(old_string)) {
           cur = apply(fmt);
         } else {
-          // salvage: append the novel portion of new_string
           let added = new_string;
           if (old_string && new_string.includes(old_string)) {
             added = new_string.replace(old_string, '');
@@ -93,7 +88,7 @@ for (const [id, list] of [...ops.entries()].sort()) {
         }
       }
     }
-    cur = prettier(cur, id); // simulate hook after every op
+    cur = prettier(cur, id);
   }
   fs.writeFileSync(path.join(ROOT, 'AUDIT_PARTS', `batch-${id}.md`), cur);
   const n = (s) => (cur.match(new RegExp(`^### \\[${s}\\]`, 'gm')) || []).length;

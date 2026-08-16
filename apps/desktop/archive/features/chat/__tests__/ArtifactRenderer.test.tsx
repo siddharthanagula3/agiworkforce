@@ -1,14 +1,3 @@
-/**
- * Desktop ArtifactRenderer routing tests.
- *
- * Parity guard for the desktop wrapper around the shared unified-chat
- * artifact components: `table`/`csv` must route through the shared
- * SpreadsheetArtifact tabular path (CSV/TSV AND legacy JSON array-of-objects
- * content), and `email` must route to the shared EmailArtifact — the same
- * routing the shared ArtifactRenderer uses (commit 04fec03b5). Before this
- * suite, real CSV content in a `table` artifact rendered "Invalid table
- * data" via a JSON.parse-only local TableArtifact (since deleted).
- */
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -55,7 +44,6 @@ describe('ArtifactRenderer (desktop wrapper) tabular routing', () => {
     expect(screen.getByText('Charlie')).toBeTruthy();
     expect(screen.getByText('Alice')).toBeTruthy();
 
-    // Sortable: clicking the "score" header cycles to ascending sort.
     fireEvent.click(screen.getByTitle('Sort by score'));
     const scoreHeader = screen.getByTitle('Sort by score').closest('th');
     expect(scoreHeader?.getAttribute('aria-sort')).toBe('ascending');

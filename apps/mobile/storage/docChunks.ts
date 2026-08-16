@@ -72,8 +72,6 @@ export async function getDocChunksByIds(ids: string[]): Promise<DocChunk[]> {
     ids,
   );
   const chunks = rows.map(row2chunk);
-  // Preserve the caller's ordering (vector-search relevance). SQLite's IN (...)
-  // does not guarantee row order, and ORDER BY chunk_index discarded the ranking.
   const byId = new Map(chunks.map((c) => [c.id, c]));
   return ids.map((id) => byId.get(id)).filter((c): c is DocChunk => c != null);
 }

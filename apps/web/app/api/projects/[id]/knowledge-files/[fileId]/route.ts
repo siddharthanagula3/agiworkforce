@@ -1,11 +1,3 @@
-/**
- * Knowledge File · soft-delete endpoint.
- *
- * DELETE /api/projects/[id]/knowledge-files/[fileId]
- *
- * Sets deleted_at to current timestamp (soft-delete). File must belong
- * to the project, which must belong to the authenticated user.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -84,12 +76,6 @@ async function handleGetKnowledgeFile(request: NextRequest, context: RouteContex
   if (!objectKey) throw createError.notFound('Knowledge file not found');
   const object = await getProjectKnowledgeObject(objectKey);
   if (!object) throw createError.notFound('Knowledge file not found');
-  // `.html`, `.xml` and `.svg` are all accepted knowledge-file types, and this
-  // response is served from the app's own origin — echoing the stored type
-  // with `inline` made an uploaded document execute as script against the
-  // uploader's session on a top-level navigation. `servedByteHeaders` demotes
-  // markup to an opaque download. It also covers rows registered BEFORE ingest
-  // scanning existed, which cannot be rescanned.
   const wantsDownload = request.nextUrl.searchParams.get('download') === 'true';
   const served = servedByteHeaders({
     contentType: object.contentType || file.mimeType,

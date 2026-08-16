@@ -1,20 +1,3 @@
-/**
- * Proof that runToolLoop's Anthropic dispatch (tool-loop-anthropic.ts, task
- * #34's tool-loop slice) actually works -- NOT a byte-parity test against the
- * old `LLMProviderFactory.streamRequest('anthropic', ...)` dispatch, because
- * there is no correct legacy baseline to match here: `collectProviderStream`
- * only ever understood OpenAI-shaped `.choices[0].delta` events, and
- * Anthropic's raw wire (what the old dispatch handed it) is natively shaped
- * `content_block_delta`/`message_delta`/etc -- a genuinely different, never-
- * correctly-parsed shape. This suite is a forward correctness proof: it only
- * passes because `buildAnthropicToolLoopStream` reshapes the adapter's
- * `StreamChunk`s into the OpenAI-shaped bytes `collectProviderStream` (kept
- * unchanged -- see tool-loop-anthropic.ts's docstring) already knows how to
- * read. Structurally, it also cannot pass against the OLD dispatch: these
- * tests mock `@agiworkforce/providers-anthropic`'s `createAnthropicAdapter`,
- * not `@/lib/llm-providers/factory`'s `streamRequest` -- the old code path
- * would never call the mocked adapter at all.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -40,9 +23,6 @@ vi.mock('@agiworkforce/providers-anthropic', () => ({
   })),
 }));
 
-// The Anthropic branch must never fall through to the legacy factory --
-// throwing here turns an accidental fallthrough into a hard test failure
-// instead of a silent real network call.
 vi.mock('@/lib/llm-providers/factory', () => ({
   LLMProviderFactory: {
     streamRequest: vi.fn(() => {
@@ -75,8 +55,6 @@ import type { ProcessedRequest } from './request-processor';
 
 const ANTHROPIC_MODEL = requireProviderDefaultModel('anthropic');
 
-/** Turn an array of canonical StreamChunks into an async generator, matching
- *  `ProviderAdapter.stream()`'s signature (req, signal) => AsyncIterable. */
 function fakeAdapterStream(chunks: unknown[]) {
   return async function* () {
     for (const chunk of chunks) yield chunk;
@@ -130,11 +108,6 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
   });
 
   it('extracts and executes two vendor-indexed tool calls from a single Anthropic step', async () => {
-    // Step 1: two tool_use blocks in the SAME message, non-zero and non-
-    // sequential vendorIndex (4 and 7) -- proves collectProviderStream's
-    // index-keyed accumulator (which reads tc.index off the wire, whatever
-    // value it is) doesn't collide or corrupt args across two concurrent
-    // tool calls, the exact risk flagged for this migration.
     mockAnthropicStream
       .mockImplementationOnce(
         fakeAdapterStream([
@@ -183,9 +156,6 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     const processed = makeProcessed();
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
 
-    // Both tools actually dispatched, with the RIGHT args -- proves the
-    // vendor-indexed accumulator kept the two tool calls' argument fragments
-    // separate instead of interleaving/overwriting them.
     expect(mockExecuteWebMcpTool).toHaveBeenCalledWith('search', 'web_search', {
       query: 'weather today',
     });
@@ -193,21 +163,13 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
       url: 'https://example.com',
     });
 
-    // The provider was re-invoked for step 2 with BOTH tool results appended,
-    // each carrying its own correct tool_call_id (not swapped or merged).
     expect(mockAnthropicStream).toHaveBeenCalledTimes(2);
     const secondStepChatRequest = mockAnthropicStream.mock.calls[1]?.[0] as {
       messages: Array<{ role: string; content: unknown }>;
     };
     const toolMessages = secondStepChatRequest.messages.filter((m) => m.role === 'user');
-    // openAIWireRequestToChatRequest folds role:'tool' messages into role:'user'
-    // messages carrying a tool_result block (see openai-wire-compat.ts) -- assert
-    // on the ORIGINAL OpenAI-shaped messages array tool-loop.ts built instead,
-    // which is simpler and is the thing this migration is actually responsible for.
     expect(toolMessages.length).toBeGreaterThan(0);
 
-    // Client-visible SSE reflects both tool calls by name and status, and the
-    // final model answer, ending in a clean [DONE].
     expect(output).toContain('"name":"mcp__search__web_search"');
     expect(output).toContain('"name":"mcp__search__web_fetch"');
     expect(output).toContain('"status":"completed"');
@@ -232,9 +194,6 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
       )
       .mockImplementationOnce(
         fakeAdapterStream([
-          // A DIFFERENT vendorIndex (0) on step 2 -- if the assembler carried
-          // stale state from step 1, this could be mis-keyed against call_1's
-          // now-stale index-2 slot instead of getting its own.
           {
             type: 'tool-use-start',
             toolUseId: 'call_2',
@@ -276,10 +235,6 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     expect(output).not.toContain('"content":"\\n\\nError:');
     expect(output).toContain('"type":"error"');
     expect(output).toContain('rate limited');
-    // A mid-loop provider error is a terminal exit like any other (see
-    // flushTerminal()'s doc comment): it still owes the client any files
-    // generated by earlier steps' execution tools, plus a closing [DONE], so
-    // both are present here. What must NOT happen is a second provider call.
     expect(output).toContain('[DONE]');
     expect(mockAnthropicStream).toHaveBeenCalledTimes(1);
   });
@@ -376,11 +331,6 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     );
   });
 
-  // ─── TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01 ───────────────────────────
-  // Extended thinking + tool_use in the same turn: the signed thinking block
-  // must survive the tool-loop round-trip and be replayed to Anthropic before
-  // the tool_use blocks, WITHOUT any literal <thinking> tag text.
-
   it('replays the signed thinking block before tool_use on the follow-up request, with tag-free text', async () => {
     mockAnthropicStream
       .mockImplementationOnce(
@@ -412,8 +362,6 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
     const processed = makeProcessed();
     const output = await drain(runToolLoop(processed, { approvalMode: 'auto' }));
 
-    // Follow-up (step 2) request carries the reconstructed signed thinking
-    // block FIRST, then the tag-free assistant text, then the tool_use block.
     expect(mockAnthropicStream).toHaveBeenCalledTimes(2);
     const step2 = mockAnthropicStream.mock.calls[1]?.[0] as {
       messages: Array<{ role: string; content: unknown }>;
@@ -424,23 +372,15 @@ describe('runToolLoop Anthropic dispatch (mocked adapter)', () => {
       { type: 'text', text: 'Let me check.' },
       { type: 'tool_use', id: 'call_1', name: 'mcp__clock__get_time', input: {} },
     ]);
-    // No literal <thinking> tag text replayed into the assistant content.
     expect(JSON.stringify(assistant?.content)).not.toContain('<thinking>');
 
-    // Client-facing SSE is unchanged: the thinking is still rendered inline as
-    // <thinking>/</thinking> content deltas (locked public wire contract), and
-    // the loop completes with the final answer + a clean [DONE].
     expect(output).toContain('<thinking>');
     expect(output).toContain('It is noon.');
     expect(output).toContain('data: [DONE]');
-    // The signature never reaches the client wire.
     expect(output).not.toContain('sig-live-001');
   });
 
   it('does not attach thinking continuity when the thinking turn has no tool_use', async () => {
-    // Thinking but no tool call: the loop terminates on end_turn and never
-    // pushes an assistant message, so there is nothing to reconstruct — and a
-    // single provider call, exactly as before this fix.
     mockAnthropicStream.mockImplementationOnce(
       fakeAdapterStream([
         { type: 'thinking-delta', delta: 'pondering' },

@@ -1,11 +1,3 @@
-/**
- * Onboarding Wizard — single-step mode selection flow
- *
- * One screen: Local Mode, BYOK, and Cloud Mode with inline API key paste and
- * Ollama auto-detection. Cloud is the only path that asks for AGI account auth.
- *
- * Persisted via useSimpleModeStore (onboardingCompleted flag in ui.ts).
- */
 import React, { useCallback, useEffect, useState } from 'react';
 import { Cloud, HardDrive, X, CheckCircle2, ChevronRight, Key } from 'lucide-react';
 import { useSimpleModeStore } from '../../stores/ui';
@@ -13,10 +5,6 @@ import { useAppModeStore } from '../../stores/appModeStore';
 import { invoke } from '../../lib/tauri-mock';
 import { cn } from '../../lib/utils';
 import { OllamaClient } from '../../api/ollama';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 interface OnboardingWizardProps {
   onComplete: () => void;
@@ -30,25 +18,14 @@ interface OllamaStatus {
   checked: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// BYOK key prefix detection
-// ---------------------------------------------------------------------------
-
 interface DetectedProvider {
   name: string;
-  /**
-   * Canonical provider id recognized by `Provider::from_string` on the Rust
-   * side. Must match what `save_api_key`/`llm_configure_provider` expect —
-   * NOT an arbitrary secret-store key name (see `handleByokSubmit`).
-   */
   providerId: string;
 }
 
 function detectProvider(apiKey: string): DetectedProvider | null {
   const trimmed = apiKey.trim();
 
-  // First-party providers we recognize by key prefix.
-  // Order matters: Anthropic must be checked before generic `sk-`.
   if (trimmed.startsWith('sk-ant-')) {
     return { name: 'Anthropic', providerId: 'anthropic' };
   }
@@ -62,22 +39,13 @@ function detectProvider(apiKey: string): DetectedProvider | null {
     return { name: 'Perplexity', providerId: 'perplexity' };
   }
   if (trimmed.startsWith('sk-or-')) {
-    // OpenRouter — handled as OpenAI-compatible BYOK
     return { name: 'OpenRouter', providerId: 'open_router' };
   }
-  // DeepSeek, Moonshot/Kimi, Qwen, Zhipu/GLM all use opaque tokens that look
-  // like generic `sk-...`. We can't disambiguate by prefix alone, so they
-  // fall through to the OpenAI bucket here. Users who need a specific
-  // provider can configure it explicitly in Settings → Models & Keys.
   if (trimmed.startsWith('sk-')) {
     return { name: 'OpenAI', providerId: 'openai' };
   }
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Main OnboardingWizard
-// ---------------------------------------------------------------------------
 
 export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   onComplete,
@@ -87,20 +55,17 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const completeOnboarding = useSimpleModeStore((s) => s.completeOnboarding);
   const setMode = useAppModeStore((s) => s.setMode);
   const setHasSelectedMode = useAppModeStore((s) => s.setHasSelectedMode);
-  // Ollama detection
   const [ollama, setOllama] = useState<OllamaStatus>({
     available: false,
     modelCount: 0,
     checked: false,
   });
 
-  // BYOK paste field
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [secretError, setSecretError] = useState<string | null>(null);
   const detected = apiKey.trim().length > 8 ? detectProvider(apiKey) : null;
 
-  // Detect Ollama on mount
   useEffect(() => {
     let cancelled = false;
     OllamaClient.isReadyForUse()
@@ -148,13 +113,6 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     setSaving(true);
     setSecretError(null);
     try {
-      // Must go through `save_api_key` — the same command Settings → Models &
-      // Keys uses — so the encrypted key lands in `settings_v2` and is
-      // registered on the LLM router immediately. `secret_manager_set` writes
-      // to an unrelated secrets store (JWT/DB-encryption keys, and per-tool
-      // credentials like the Research settings' Perplexity key) that nothing
-      // in the chat/provider-routing path ever reads back, so the key would
-      // be accepted here with no error yet silently never work for chat.
       await invoke('save_api_key', {
         provider: detected.providerId,
         key: apiKey.trim(),

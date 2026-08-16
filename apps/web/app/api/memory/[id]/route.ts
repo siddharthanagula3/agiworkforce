@@ -1,10 +1,3 @@
-/**
- * Single Memory API
- *
- * GET /api/memory/[id] - Get a single memory by ID
- * PUT /api/memory/[id] - Update memory content
- * DELETE /api/memory/[id] - Soft delete a memory
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -52,7 +45,6 @@ async function handleGetMemory(request: NextRequest, context: RouteContext) {
 }
 
 async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
-  // AUDIT-008-006: CSRF protection for state-changing PUT endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -103,7 +95,6 @@ async function handleUpdateMemory(request: NextRequest, context: RouteContext) {
 }
 
 async function handleDeleteMemory(request: NextRequest, context: RouteContext) {
-  // AUDIT-008-006: CSRF protection for state-changing DELETE endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 

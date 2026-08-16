@@ -1,49 +1,6 @@
-/**
- * @file Canonical connector capability registry.
- *
- * ONE OWNER for the question "what is this connector, really?". Every other
- * connector surface — the directory catalog copy
- * (`features/connectors/data/connectors.ts`), the availability the API reports
- * (`app/api/connectors/route.ts`), the ids that route accepts, and the tests —
- * derives from this file instead of keeping its own list.
- *
- * WHY THIS EXISTS (audit CRIT-001). The catalog advertised 89 branded
- * connectors in present tense ("Search, read, send, and draft email across your
- * Gmail inbox") while exactly ONE of them — github — has an adapter in this
- * repository. Every other id was reachable only if a deployment operator
- * happened to register an OAuth application (`CONNECTOR_OAUTH_PROVIDERS_JSON`)
- * or map a remote MCP endpoint (`CONNECTOR_MCP_SERVERS_JSON`), and otherwise
- * produced a `501` from `POST /api/connectors` after a Connect button that
- * looked live. Three separate lists decided which ids were "real": the catalog
- * array, a hand-maintained `VALID_CONNECTOR_IDS` set of 34 ids inside the API
- * route, and the runtime configuration sources. They disagreed.
- *
- * This module is deliberately plain data with no `server-only` marker: the
- * facts here (implementation state, auth scheme, risk class, release state) are
- * not secrets, and the client directory needs exactly the same answers the
- * server gives. Secrets stay in `oauth-registry.ts`, which IS server-only.
- *
- * STATIC vs RUNTIME. This registry answers "what did we build?" — it never
- * answers "can I click Connect right now?". That second question is per
- * deployment and is answered by `getAvailableConnectorIds()` in the API route
- * from real configuration. `resolveConnectorHealth()` below combines the two,
- * and is the only sanctioned way to turn both facts into one user-facing state.
- */
 
-/**
- * What actually exists in this repository for a connector.
- *
- * - `first-party`            — a shipped adapter with named actions in this repo.
- * - `operator-configurable`  — no adapter; the id becomes usable only when this
- *                              deployment's operator registers an OAuth app or
- *                              maps a remote MCP endpoint for it.
- * - `device-local`           — owned by the Desktop Local trust boundary. The
- *                              managed cloud cannot reach the user's machine, so
- *                              this id is never connectable from the web API.
- */
 export type ConnectorImplementation = 'first-party' | 'operator-configurable' | 'device-local';
 
-/** How a credential is obtained. `device-local` never leaves the user's machine. */
 export type ConnectorAuthScheme =
   | 'github-app'
   | 'oauth2'
@@ -52,9 +9,7 @@ export type ConnectorAuthScheme =
   | 'pat'
   | 'device-local';
 
-/** Where the scope list for a connection comes from. */
 export type ConnectorScopeSource =
-  /** Declared by a first-party adapter in this repo (`scopes` is populated). */
   | 'first-party'
   /**
    * Supplied by the deployment operator at runtime — the provider descriptor in
@@ -69,20 +24,8 @@ export type ConnectorScopeSource =
 
 export type ConnectorSurface = 'cloud-web' | 'desktop-local';
 
-/**
- * The CEILING of what a working credential for this provider could do — not
- * what the (mostly unbuilt) adapter happens to do today. An unclassified
- * connector resolves to the higher class, never the lower one.
- */
 export type ConnectorRiskClass = 'read-only' | 'read-write' | 'high-impact';
 
-/**
- * What we are allowed to tell a user about this connector.
- *
- * - `generally-available` — works in every deployment with no operator setup.
- * - `operator-enabled`    — can only work where an operator configured it.
- * - `desktop-only`        — not part of the managed cloud product at all.
- */
 export type ConnectorReleaseState = 'generally-available' | 'operator-enabled' | 'desktop-only';
 
 export interface ConnectorCapabilityRecord {
@@ -90,9 +33,7 @@ export interface ConnectorCapabilityRecord {
   readonly implementation: ConnectorImplementation;
   readonly authScheme: ConnectorAuthScheme;
   readonly scopeSource: ConnectorScopeSource;
-  /** Non-empty ONLY when `scopeSource === 'first-party'`. */
   readonly scopes: readonly string[];
-  /** Named actions a shipped adapter exposes. Empty for everything unbuilt. */
   readonly supportedActions: readonly string[];
   readonly surfaces: readonly ConnectorSurface[];
   readonly riskClass: ConnectorRiskClass;
@@ -1084,18 +1025,6 @@ export function getConnectorCapability(connectorId: string): ConnectorCapability
   return CONNECTOR_CAPABILITIES[connectorId] ?? null;
 }
 
-/**
- * Ids the managed-cloud connector API may act on at all.
- *
- * Replaces the hand-maintained `VALID_CONNECTOR_IDS` set that used to live in
- * `app/api/connectors/route.ts` and covered 34 of the 89 catalog entries, so an
- * operator who configured any of the other 55 got an id the API advertised as
- * available and then rejected as invalid.
- *
- * Device-local ids are deliberately INCLUDED: the route still has to recognise
- * them in order to answer "connect this from Desktop instead" rather than
- * "unknown connector". `isDeviceLocalConnector()` is what gates persistence.
- */
 export function isKnownConnectorId(connectorId: string): boolean {
   return connectorId in CONNECTOR_CAPABILITIES;
 }
@@ -1104,38 +1033,10 @@ export function isDeviceLocalConnector(connectorId: string): boolean {
   return getConnectorCapability(connectorId)?.implementation === 'device-local';
 }
 
-/**
- * True when present-tense capability copy is permitted for this connector.
- *
- * Only a shipped first-party adapter earns it. Everything else must be
- * described with the non-claiming copy the catalog generates, which is what the
- * repository guard in
- * `features/connectors/data/__tests__/connector-capability-copy.test.ts`
- * enforces.
- */
 export function allowsPresentTenseCopy(connectorId: string): boolean {
   return getConnectorCapability(connectorId)?.implementation === 'first-party';
 }
 
-/**
- * One user-facing state per connector, combining the static registry with this
- * deployment's real runtime configuration.
- *
- * - `unsupported-here`       — the cloud product cannot ever connect it (device-local).
- * - `needs-reauthorization`  — connected, but the stored grant can no longer be renewed.
- * - `connected`              — a real credential/enablement exists right now.
- * - `connectable`            — not connected, but Connect would genuinely start something.
- * - `not-configured`         — nothing in this deployment can connect it.
- *
- * FAIL-CLOSED RULE: absence of evidence, not absence of a catalog entry. A
- * connector with no runtime evidence resolves to `not-configured`, and a
- * device-local record is `unsupported-here` no matter what the caller passes.
- * But an id this registry has never heard of — an operator-registered OAuth
- * provider outside the 89-entry directory, for instance — still reports the
- * state the SERVER proved: refusing to call a live grant `connected` because
- * marketing never listed it would be a lie in the other direction. `available`
- * and `connected` are computed server-side and are never client input.
- */
 export type ConnectorHealth =
   | 'connected'
   | 'connectable'

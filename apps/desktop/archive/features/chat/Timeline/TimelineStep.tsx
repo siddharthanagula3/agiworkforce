@@ -9,24 +9,9 @@ export type StepVariant = 'thinking' | 'tool' | 'done';
 export interface TimelineStepProps {
   variant: StepVariant;
   label: string;
-  /**
-   * Lucide icon NAME for the tool step (from `getToolIconName` in
-   * @agiworkforce/types). Resolved to a lucide-react component here so the same
-   * registry drives desktop/web and mobile. Ignored for thinking/done variants.
-   */
   iconName?: string;
-  /**
-   * One-letter integration source badge (Claude-style "F" mark) for MCP/connector
-   * tools, from `getToolSourceBadge`. Rendered before the label; omit for native
-   * tools.
-   */
   sourceBadge?: string | null;
-  /**
-   * Short type/arg chip rendered on its own line under the label (Claude inline
-   * tool-call style — e.g. a filename `build_resume.js`, a query, or `Script`).
-   */
   chip?: string;
-  /** Tool request/args, shown as a labelled "Request" block in the expand. */
   request?: string;
   result?: string;
   isError?: boolean;
@@ -51,7 +36,6 @@ export function TimelineStep({
   const [resultOpen, setResultOpen] = useState(false);
   const [textExpanded, setTextExpanded] = useState(false);
 
-  // "Show more" for long thinking blocks (Claude inline reasoning style, ref 386).
   const THINKING_TRUNCATE = 240;
   const isLongThinking = variant === 'thinking' && label.length > THINKING_TRUNCATE;
   const shownLabel =
@@ -69,8 +53,6 @@ export function TimelineStep({
       );
     }
     if (variant === 'tool') {
-      // Per-tool icon resolved from the shared cross-surface registry, replacing
-      // the previous single generic icon used for every tool.
       const ToolIcon = lucideToolIcon(iconName ?? 'Wrench');
       return (
         <ToolIcon
@@ -81,7 +63,6 @@ export function TimelineStep({
         />
       );
     }
-    // done
     return <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-500" />;
   })();
 

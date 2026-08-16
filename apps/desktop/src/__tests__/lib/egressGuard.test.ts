@@ -1,25 +1,5 @@
-/**
- * Egress Guard spy tests.
- *
- * Verifies the zero-leak chokepoint: in Local/BYOK trust boundaries the guard
- * must throw BEFORE any network call when the target is one of OUR cloud hosts,
- * while still allowing BYOK client-direct streaming to the user's own provider.
- * In Managed Cloud mode our-cloud egress is allowed. Fail-closed: an unreadable
- * store is treated as Local.
- *
- * The guard branches on the canonical 3-tier `selectPrivacyMode`
- * ('local' | 'byok' | 'managed'), NOT the binary AppMode — because BYOK runs
- * under appMode 'cloud'. These tests mock `selectPrivacyMode` directly so the
- * guard's mapping (block unless 'managed') is exercised deterministically,
- * independent of selectPrivacyMode's internal settingsStore lookup.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the app-mode store. `selectPrivacyMode` mirrors the real selector by
-// returning the privacyMode we drive per test via `getState`.
-// `vi.hoisted` is required because `vi.mock` is hoisted above module-body
-// declarations — a plain `const getStateMock = vi.fn()` would not be
-// initialized when the mock factory runs, throwing a TDZ ReferenceError.
 const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }));
 vi.mock('../../stores/appModeStore', () => ({
   useAppModeStore: { getState: getStateMock },
@@ -35,7 +15,6 @@ let fetchSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   getStateMock.mockReset();
-  // Inject a spy global fetch that resolves to a sentinel Response.
   fetchSpy = vi.fn().mockResolvedValue(new Response('ok', { status: 200 }));
   vi.stubGlobal('fetch', fetchSpy);
 });
@@ -74,14 +53,10 @@ describe('isOurCloudHost', () => {
     expect(OUR_CLOUD_HOSTS).toContain('agiworkforce.com');
     expect(OUR_CLOUD_HOSTS).toContain('vercel.app');
     expect(OUR_CLOUD_HOSTS).toContain('neon.tech');
-    // Provider hosts must never be on the denylist.
     expect(OUR_CLOUD_HOSTS).not.toContain('api.anthropic.com');
   });
 
   it('DRIFT REGRESSION: classifies the Clerk hosts desktop used to miss as ours', () => {
-    // These two Clerk domains were on mobile's denylist but NOT desktop's, so
-    // desktop Local mode wouldn't have blocked them. After reconciling to the
-    // shared union they must classify as ours on both surfaces.
     expect(OUR_CLOUD_HOSTS).toContain('clerk.dev');
     expect(OUR_CLOUD_HOSTS).toContain('clerk.services');
     expect(isOurCloudHost('clerk.dev')).toBe(true);
@@ -92,9 +67,6 @@ describe('isOurCloudHost', () => {
 });
 
 describe('guardedFetch — DRIFT REGRESSION (Clerk hosts desktop missed are now blocked in Local mode)', () => {
-  // Before the shared-policy reconcile, desktop's denylist omitted clerk.dev and
-  // clerk.services, so Local mode would have LEAKED account/auth traffic to them.
-  // These assert the guard now throws BEFORE any network call for those hosts.
   const PREVIOUSLY_LEAKED = [
     'https://foo.clerk.dev/v1/client',
     'https://frontend-api.clerk.services/v1/environment',
@@ -135,9 +107,6 @@ describe('guardedFetch — privacy mode "local"', () => {
 });
 
 describe('guardedFetch — privacy mode "byok" (REGRESSION: must block our-cloud)', () => {
-  // BYOK runs under appMode 'cloud' but is a Local trust boundary. A naive
-  // `mode !== 'cloud'` check would WRONGLY allow our-cloud egress here. This
-  // suite is the regression guard for that exact leak.
   beforeEach(() => {
     getStateMock.mockReturnValue({ privacyMode: 'byok' });
   });
@@ -199,11 +168,7 @@ describe('guardedFetch — fail-closed', () => {
 });
 
 describe('guardedFetch — desktop P0 endpoints stay behind the chokepoint', () => {
-  // The three desktop call sites wired through guardedFetch in the egress
-  // chokepoint fix (built from WEB_APP_URL / API_BASE_URL — both agiworkforce.com
   // hosts). The matching eslint rule blocks the raw-fetch form at lint time;
-  // these tests lock the RUNTIME behavior so a denylist gap or a future bypass
-  // re-trips this guard. The Share endpoint is the headline P0 (full chat content).
   const P0_ENDPOINTS = [
     'https://agiworkforce.com/api/shared', // ShareConversationDialog — full conversation
     'https://www.agiworkforce.com/api/models', // App.tsx model-catalog fallback

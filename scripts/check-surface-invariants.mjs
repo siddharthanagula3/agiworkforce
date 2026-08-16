@@ -1,28 +1,4 @@
 #!/usr/bin/env node
-/* global console */
-/**
- * Per-surface wiring invariants (SIX-32 step 1, guardrail cluster).
- *
- * These are the cheap structural checks the 2026-08-01 six-app sweep proved
- * were missing. Each one turns a defect class that shipped into a build
- * failure:
- *
- *   settings-section-registered  a settings section exists but no settings
- *                                modal can render it (dead control)
- *   route-has-navigation         a router route exists but nothing navigates
- *                                to it (unreachable screen)
- *   persisted-field-has-reader   a store persists a field to disk that no
- *                                consumer ever reads (fake preference)
- *   collection-has-reader        a Map/Set/storage key is written and never
- *                                read (silently discarded work)
- *   keybinding-tolerates-no-args a keybinding invokes a handler with a
- *                                required argument (silent no-op keypress)
- *
- * Every exception must be declared in
- * `scripts/config/surface-invariants-allowlist.json` with a reason and an
- * owning tracker id. Entries that stop matching fail as stale so the lists
- * only ratchet down.
- */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -52,10 +28,6 @@ function productFiles(relativeRoot) {
 function readSource(relativePath) {
   return stripComments(fs.readFileSync(absolute(relativePath), 'utf8'));
 }
-
-// ---------------------------------------------------------------------------
-// settings-section-registered
-// ---------------------------------------------------------------------------
 
 const SETTINGS_REGISTRIES = [
   {
@@ -112,10 +84,6 @@ export function checkSettingsSectionsRegistered(workspaceAliases) {
   return violations;
 }
 
-// ---------------------------------------------------------------------------
-// route-has-navigation
-// ---------------------------------------------------------------------------
-
 const ROUTE_SURFACES = [
   {
     surface: 'mobile',
@@ -124,7 +92,6 @@ const ROUTE_SURFACES = [
   },
 ];
 
-/** Normalise a route or navigation target: drop query, hash and group segments. */
 export function normalizeRoutePath(value) {
   const segments = value
     .split('?')[0]
@@ -141,14 +108,11 @@ export function routePathForFile(relativeRouteFile) {
   return normalizeRoutePath(`/${route}`);
 }
 
-/** Collect every route-shaped string and template prefix in a source file. */
 export function collectRouteLiterals(source) {
   const literals = [];
   for (const match of source.matchAll(/['"](\/[^'"\n]*)['"]/g)) {
     literals.push({ value: normalizeRoutePath(match[1]), dynamic: false });
   }
-  // A template such as `/settings/permissions/${kind}` navigates to the dynamic
-  // child, so its static prefix counts as a call site for `[permission].tsx`.
   for (const match of source.matchAll(/`(\/[^`\n$]*)(\$\{)?/g)) {
     literals.push({ value: normalizeRoutePath(match[1]), dynamic: Boolean(match[2]) });
   }
@@ -209,7 +173,6 @@ export function checkRoutesHaveNavigation() {
       const routeRelative = path.relative(routeRootAbsolute, file).split(path.sep).join('/');
       if (isTestPath(routeRelative)) continue;
       const basename = path.basename(routeRelative);
-      // `_layout` is structure, `+not-found` / `+html` are framework specials.
       if (basename.startsWith('_') || basename.startsWith('+')) continue;
       routes.push({
         surface: surface.surface,
@@ -247,10 +210,6 @@ export function checkRoutesHaveNavigation() {
   return violations;
 }
 
-// ---------------------------------------------------------------------------
-// persisted-field-has-reader
-// ---------------------------------------------------------------------------
-
 const PERSISTED_STORE_ZONES = [
   {
     surface: 'desktop',
@@ -264,15 +223,6 @@ const PERSISTED_STORE_ZONES = [
   },
 ];
 
-/**
- * Field names a store writes to disk, taken from every `partialize` body.
- *
- * A persisted field is any `name: state.…` (or `base.…`) property inside the
- * body. Matching on the value expression rather than on brace depth means
- * `windowPreferences: { theme: state.windowPreferences.theme }` contributes the
- * leaf `theme` — the granularity a user actually experiences — and no depth
- * heuristic can drift when a store wraps its return in a branch.
- */
 export function extractPersistedKeys(source) {
   const keys = new Set();
   let cursor = source.indexOf('partialize');
@@ -298,10 +248,6 @@ export function extractPersistedKeys(source) {
     }
 
     const body = source.slice(open + 1, end);
-    // Walk property keys without consuming their values, so the leaves of a
-    // nested wrapper are still visited. A field is persisted when its value
-    // expression derives from store state; a value that opens a nested object
-    // or array is a wrapper, and its own properties are matched separately.
     for (const match of body.matchAll(/([A-Za-z_$][\w$]*)\s*:/g)) {
       const valueStart = match.index + match[0].length;
       const value = body.slice(valueStart).split('\n')[0].split(',')[0].trim();
@@ -369,10 +315,6 @@ export function checkPersistedFieldsHaveReaders() {
   return violations;
 }
 
-// ---------------------------------------------------------------------------
-// collection-has-reader
-// ---------------------------------------------------------------------------
-
 const COLLECTION_ROOTS = [
   'apps/desktop/src',
   'apps/web/features',
@@ -387,12 +329,6 @@ const COLLECTION_ROOTS = [
 const COLLECTION_DECLARATION =
   /(?:\b(?:const|let|var)\s+|\b(?:private|public|protected)\s+(?:readonly\s+)?|\breadonly\s+)([A-Za-z_$][\w$]*)\s*(?::\s*[^=;\n]+?)?\s*=\s*new\s+(Map|Set|WeakMap|WeakSet)\b/g;
 
-/**
- * A collection is write-only when every mention of its name is either a
- * declaration or a mutating call. Counting occurrences rather than pattern
- * matching each read form keeps `for (const x of this.listeners)` and
- * `{...state, items: next}` from being misreported.
- */
 export function findWriteOnlyCollections(relativePath, source) {
   const violations = [];
   const seen = new Set();
@@ -404,12 +340,6 @@ export function findWriteOnlyCollections(relativePath, source) {
     if (seen.has(name)) continue;
     seen.add(name);
 
-    // Full regex escape, not just `$`. Escaping one metacharacter happens to
-    // suffice while COLLECTION_DECLARATION only captures JS identifiers (where
-    // `$` is the sole regex-special character that can appear) — but that is a
-    // property of the CAPTURE, not of this line, so widening the pattern later
-    // would silently produce a malformed RegExp or a wrong match count.
-    // (js/incomplete-sanitization)
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const occurrences = (source.match(new RegExp(`\\b${escaped}\\b`, 'g')) ?? []).length;
     const declarations = (
@@ -461,7 +391,6 @@ export function checkCollectionsHaveReaders() {
     for (const relative of productFiles(root)) sources.set(relative, readSource(relative));
   }
 
-  // Storage keys are read across module boundaries, so index reads repo-wide first.
   const storageReadIndex = new Set();
   for (const source of sources.values()) {
     for (const match of source.matchAll(
@@ -478,10 +407,6 @@ export function checkCollectionsHaveReaders() {
   }
   return violations;
 }
-
-// ---------------------------------------------------------------------------
-// keybinding-tolerates-no-args
-// ---------------------------------------------------------------------------
 
 const KEYBINDING_SURFACES = [
   {
@@ -524,7 +449,6 @@ export function splitParameters(text) {
   return parameters;
 }
 
-/** Number of leading parameters a caller must supply. */
 export function requiredArity(parameterText) {
   let count = 0;
   for (const parameter of splitParameters(parameterText)) {
@@ -535,7 +459,6 @@ export function requiredArity(parameterText) {
   return count;
 }
 
-/** Map command id -> { arity, shape } for every registration in a source tree. */
 export function collectCommandArities(sources) {
   const arities = new Map();
 
@@ -634,10 +557,6 @@ export function checkKeybindingsTolerateNoArgs() {
 
   return violations;
 }
-
-// ---------------------------------------------------------------------------
-// Driver
-// ---------------------------------------------------------------------------
 
 export function readAllowlist(rawJson) {
   const allowlist = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;

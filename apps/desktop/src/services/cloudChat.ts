@@ -14,13 +14,6 @@ import {
   createManagedCloudPaginationGuard,
 } from './managedCloudPagination';
 
-/**
- * Compatibility projection consumed by Desktop's mature host chat store.
- *
- * Managed Cloud persistence itself is owned by the shared cloud-contracts
- * client. Rust `cloud_*` commands are intentionally fail-closed and must never
- * sit on the Desktop Cloud path.
- */
 export interface CloudConversation {
   id: string;
   user_id: string;
@@ -113,12 +106,6 @@ function throwIfAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw abortError(signal);
 }
 
-/**
- * Give every caller an independently cancellable view of a shared idempotent
- * create. The transport is cancelled only after all current waiters stop, so
- * stopping one overlapping turn cannot break another turn joining the same
- * optimistic conversation create.
- */
 function joinPendingConversationCreate(
   pending: PendingConversationCreate,
   signal?: AbortSignal,
@@ -223,21 +210,12 @@ export async function waitForCloudConversationReady(
   assertCloudConversationBoundary(boundary);
 }
 
-/**
- * Create the exact client-owned UUID once and let concurrent first-message
- * sends join the same request. The Web route is idempotent for this UUID.
- */
 export async function ensureCloudConversation(
   conversationId: string,
   title = 'New chat',
   model?: string,
   projectId?: string | null,
   signal?: AbortSignal,
-  // Temporary chats are excluded from history and purged by the retention cron
-  // (`/api/cron/purge-temporary-chats`). The field was declared on the wire
-  // type and hardcoded `false` at both construction sites, so desktop could
-  // never actually start one — the capability existed everywhere except the one
-  // place that decides.
   isTemporary = false,
 ): Promise<CloudConversation> {
   throwIfAborted(signal);
@@ -270,10 +248,6 @@ export async function ensureCloudConversation(
     return joinPendingConversationCreate(existing, signal);
   }
   if (existing) {
-    // The last prior waiter stopped, but the transport may not have observed
-    // its abort and settled yet. Do not make a new turn join that doomed
-    // operation; controller identity keeps its eventual cleanup from deleting
-    // the replacement entry below.
     pendingConversationCreates.delete(key);
   }
 

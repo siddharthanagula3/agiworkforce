@@ -4,23 +4,8 @@ import * as React from 'react';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import { cn } from '../cn';
 
-/**
- * Drift resolution: merged both real differences rather than picking one side.
- * - `aria-label="Slider thumb"` (desktop) is a real accessibility fix — web's thumb
- *   had no accessible name at all. Ported forward.
- * - Thumb border color: kept web's solid `border-primary` over desktop's
- *   `border-primary/50`. No comment or design-token rationale for the reduced
- *   opacity was found on desktop; it looks like an unrelated, accidental restyle
- *   that rode along with the aria-label fix rather than a deliberate change.
- */
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface SliderProps extends React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root> {
-  /**
-   * Human-readable description of the current value, announced by screen
-   * readers via `aria-valuetext` on the thumb. Additive and opt-in.
-   */
   valueLabel?: string;
-  /** Accessible name for the slider thumb. Defaults to a generic label. */
   thumbAriaLabel?: string;
   ref?: React.Ref<React.ElementRef<typeof SliderPrimitive.Root>>;
 }

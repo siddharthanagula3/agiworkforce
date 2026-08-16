@@ -4,7 +4,6 @@ import * as React from 'react';
 import * as AvatarPrimitive from '@radix-ui/react-avatar';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface AvatarProps extends React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> {
   ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Root>>;
 }

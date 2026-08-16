@@ -1,9 +1,3 @@
-/**
- * ThinkingMessageBlock Component
- *
- * Renders a message with thinking/reasoning content, including
- * the reasoning accordion and remaining content.
- */
 
 import 'katex/dist/katex.min.css';
 import React, { memo } from 'react';
@@ -56,16 +50,12 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
   const steps = thinkingMeta?.steps;
   const isStreaming = Boolean(message.metadata?.streaming);
 
-  // Prefer server-reported duration (seconds). When absent and thinking is complete,
-  // estimate from message timestamp so the accordion can show "Thought for Xs".
   const duration: number | undefined = (() => {
     if (thinkingMeta?.duration !== undefined) {
       return thinkingMeta.duration;
     }
-    // Only compute fallback when not streaming (thinking finished)
     if (!isStreaming && message.timestamp instanceof Date) {
       const elapsedSeconds = Math.round((Date.now() - message.timestamp.getTime()) / 1000);
-      // Guard against unreasonably large values (e.g. old messages loaded from history)
       return elapsedSeconds > 0 && elapsedSeconds < 3600 ? elapsedSeconds : undefined;
     }
     return undefined;
@@ -74,7 +64,6 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
   const thinkingBlock = thinkingMatch.content;
   const widgets = getMessageWidgets(message);
 
-  // Use first sentence of thinking as summary when no explicit one is set (Claude pattern)
   const derivedSummary = (() => {
     if (summary) return summary;
     const firstSentence = thinkingBlock.split(/[.!?]\s+/)[0]?.trim();
@@ -82,7 +71,6 @@ const ThinkingMessageBlockComponent: React.FC<ThinkingMessageBlockProps> = ({
     return firstSentence.length > 80 ? firstSentence.slice(0, 77) + '...' : firstSentence;
   })();
 
-  // Remove all thinking-related tags from the remaining content
   const remainingContent = message.content
     .replace(/<thinking>[\s\S]*?(?:<\/thinking>|$)/gi, '')
     .replace(/<antthinking>[\s\S]*?(?:<\/antthinking>|$)/gi, '')

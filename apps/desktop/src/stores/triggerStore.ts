@@ -1,54 +1,14 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Trigger Store — state management for event-triggered agent automation.
- *
- * Wires the trigger CRUD Tauri commands:
- *   list_triggers, register_trigger, unregister_trigger, toggle_trigger,
- *   get_trigger_executions
- *
- * All invoke() params are camelCase per Tauri IPC rules.
- */
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../lib/tauri-mock';
 
-// ── Types ────────────────────────────────────────────────────────────────────
-//
 // TODO(types-agent): These local type definitions diverge from the canonical
-// contracts in `@agiworkforce/types` (`EventTriggerDefinition`, `TriggerExecution`,
-// `TriggerConfig`, `TriggerAction`, `TriggerType`). This store should be
-// refactored to import from `@agiworkforce/types` and remove the duplicates.
-//
-// Key divergences to resolve before that refactor:
-//   1. Timestamp format: this store uses Unix epoch milliseconds (`number`),
-//      while `@agiworkforce/types` uses ISO 8601 strings (`string`).
-//      Align on ISO 8601 — convert at the Tauri IPC boundary if needed.
-//   2. `TriggerType` here omits 'slack' | 'github' | 'linear' variants.
-//   3. `TriggerExecutionStatus` uses 'success' here vs 'completed' in the
-//      canonical `TriggerExecution.status` union.
-//   4. `TriggerAction` here omits the `type` discriminant ('agent' | 'workflow'
-//      | 'notification') and the optional `workflowId` field.
 
 export type TriggerType = 'cron' | 'webhook' | 'file_watcher';
 
 export type TriggerExecutionStatus = 'success' | 'failed' | 'running';
-
-// ── Wire contract ────────────────────────────────────────────────────────────
-//
-// These MUST match `core/agent/triggers.rs`, which declares
-// `#[serde(tag = "type", rename_all = "camelCase")]` on `TriggerConfig`. Until
-// 2026-08-06 they did not, and every create/update failed serde deserialization
-// on the Rust side before doing anything:
-//
-//   - no `type` discriminant was sent at all (serde needs it to pick a variant)
-//   - `authEnabled: boolean`  vs  `authToken: string | null`
-//   - `directory` / `globPattern`  vs  `watchPath` / `glob`
-//   - `TriggerAction` never sent its required `type` field
-//
-// The bug was invisible because `AutomationBuilder` — the only caller — was
-// never mounted. Keep these shapes pinned to the Rust enum, not to whatever is
-// convenient for the form.
 
 export interface CronConfig {
   type: 'cron';
@@ -59,7 +19,6 @@ export interface CronConfig {
 export interface WebhookConfig {
   type: 'webhook';
   path: string;
-  /** Bearer token the caller must present; null means an unauthenticated hook. */
   authToken?: string | null;
 }
 
@@ -110,27 +69,15 @@ export type CreateTriggerInput = Omit<
   'id' | 'createdAt' | 'updatedAt' | 'triggerCount' | 'lastTriggeredAt'
 >;
 
-// ── IPC Conversion Shims ──────────────────────────────────────────────────────
-//
-// Rust serializes timestamps as ISO 8601 strings and execution status as
-// 'completed' (canonical type).  This store uses Unix epoch milliseconds and
-// 'success' internally.  The shims below normalize at the IPC boundary so the
-// store internals remain consistent.
-//
 // TODO(types-agent): Once @agiworkforce/types EventTriggerDefinition and
-// TriggerExecution are adopted here, remove these shims and import from the
-// package directly.
 
-/** Normalize a timestamp that may be ISO 8601 (from Rust) or already a number. */
 function normalizeTimestamp(raw: string | number | null | undefined): number | null {
   if (raw === null || raw === undefined) return null;
   if (typeof raw === 'number') return raw;
-  // ISO 8601 → Unix epoch ms
   const ms = Date.parse(raw);
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** Normalize execution status: Rust sends 'completed', store expects 'success'. */
 function normalizeExecutionStatus(raw: string): TriggerExecutionStatus {
   if (raw === 'completed') return 'success';
   if (raw === 'success' || raw === 'failed' || raw === 'running') {
@@ -139,7 +86,6 @@ function normalizeExecutionStatus(raw: string): TriggerExecutionStatus {
   return 'failed';
 }
 
-/** Normalize a raw IPC trigger response to the store's EventTriggerDefinition shape. */
 function normalizeTrigger(raw: Record<string, unknown>): EventTriggerDefinition {
   return {
     ...(raw as unknown as EventTriggerDefinition),
@@ -149,7 +95,6 @@ function normalizeTrigger(raw: Record<string, unknown>): EventTriggerDefinition 
   };
 }
 
-/** Normalize a raw IPC execution response to the store's TriggerExecution shape. */
 function normalizeExecution(raw: Record<string, unknown>): TriggerExecution {
   return {
     ...(raw as unknown as TriggerExecution),
@@ -158,8 +103,6 @@ function normalizeExecution(raw: Record<string, unknown>): TriggerExecution {
     completedAt: normalizeTimestamp(raw['completedAt'] as string | number | null),
   };
 }
-
-// ── Store ────────────────────────────────────────────────────────────────────
 
 interface TriggerState {
   triggers: EventTriggerDefinition[];
@@ -280,7 +223,6 @@ export const useTriggerStore = create<TriggerState>()(
           try {
             await invoke('unregister_trigger', { triggerId: id });
           } catch (err) {
-            // log but still remove locally so UI stays consistent
             console.error('[triggerStore] Failed to unregister trigger on backend:', err);
           }
           set(
@@ -297,7 +239,6 @@ export const useTriggerStore = create<TriggerState>()(
         },
 
         toggleTrigger: async (id, enabled) => {
-          // Optimistic update
           set(
             (state) => {
               const trig = state.triggers.find((t) => t.id === id);
@@ -312,7 +253,6 @@ export const useTriggerStore = create<TriggerState>()(
           try {
             await invoke('toggle_trigger', { triggerId: id, enabled });
           } catch (err) {
-            // Roll back
             set(
               (state) => {
                 const trig = state.triggers.find((t) => t.id === id);
@@ -350,7 +290,6 @@ export const useTriggerStore = create<TriggerState>()(
       })),
       {
         name: 'trigger-store',
-        // Only persist the trigger definitions, not transient loading/error state
         partialize: (state) => ({ triggers: state.triggers }),
       },
     ),

@@ -1,12 +1,3 @@
-/**
- * Single Conversation API
- *
- * GET /api/chat/conversations/[id] - Get conversation with messages (paginated)
- *   Query params: limit (1-500, default 100), offset (default 0)
- *   Response: { conversation, messages, total, hasMore }
- * PUT /api/chat/conversations/[id] - Update conversation metadata
- * DELETE /api/chat/conversations/[id] - Soft delete conversation
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { ManagedCloudMessageWireSchema } from '@agiworkforce/cloud-contracts';
@@ -37,7 +28,6 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
   const userId = await requireCurrentUserId(request);
   const { id } = await context.params;
 
-  // Parse and clamp pagination parameters
   const url = new URL(request.url);
   const rawLimit = parseInt(url.searchParams.get('limit') ?? '100', 10);
   const rawOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
@@ -86,9 +76,6 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 
     return NextResponse.json({
       conversation,
-      // The driver returns `created_at` as a JS Date; the wire schema requires an
-      // ISO string, so normalize before validating or the parse throws a ZodError
-      // ("expected string, received Date") -> 500 on every conversation open.
       messages: withIsoTimestamps(messages).map((message) =>
         ManagedCloudMessageWireSchema.parse(message),
       ),
@@ -104,7 +91,6 @@ async function handleGetConversation(request: NextRequest, context: RouteContext
 async function handleUpdateConversation(request: NextRequest, context: RouteContext) {
   const userId = await requireCurrentUserId(request);
 
-  // AUDIT-008-006: CSRF protection for state-changing PUT endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -120,7 +106,6 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
     throw createError.validation('Invalid JSON in request body');
   }
 
-  // AUDIT-008-002: Validate input with Zod schema (title max 500 chars, model enum)
   const validationResult = UpdateConversationSchema.safeParse(rawBody);
   if (!validationResult.success) {
     throw createError.validation('Invalid request body', validationResult.error);
@@ -140,18 +125,9 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
   if (hasStarredUpdate) updates['starred'] = body['starred'];
   const hasArchivedUpdate = Object.prototype.hasOwnProperty.call(body, 'archived');
   if (hasArchivedUpdate) updates['archived'] = body['archived'];
-  // AUDIT-FIX CMP-3: the temporary-chat privacy flag is writable after
-  // creation. `request-processor.ts` reads `is_temporary` from this row to skip
-  // memory extraction and persistence, so this is the write that makes the
-  // composer's "Temporary chat" toggle mean anything.
   const hasIsTemporaryUpdate = Object.prototype.hasOwnProperty.call(body, 'isTemporary');
   if (hasIsTemporaryUpdate) updates['isTemporary'] = body['isTemporary'];
 
-  // Moving a conversation into a project must verify the destination project is
-  // owned by this user and live — otherwise the client could tag the thread to a
-  // foreign, deleted, or non-existent project UUID, leaving a dangling reference
-  // that scopes nothing. (Clearing the project — projectId null — is always
-  // allowed.) Mirrors the ownership check the create route already enforces.
   const targetProjectId = updates['projectId'];
   if (hasProjectIdUpdate && typeof targetProjectId === 'string' && targetProjectId.length > 0) {
     let ownedProject: { id: string } | undefined;
@@ -219,7 +195,6 @@ async function handleUpdateConversation(request: NextRequest, context: RouteCont
 async function handleDeleteConversation(request: NextRequest, context: RouteContext) {
   const userId = await requireCurrentUserId(request);
 
-  // AUDIT-008-006: CSRF protection for state-changing DELETE endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -250,14 +225,9 @@ async function handleDeleteConversation(request: NextRequest, context: RouteCont
   }
 
   if (!deletedConversation) {
-    // Unknown, foreign, wrong-workspace, and already-deleted rows deliberately
-    // share one response. A client must never clear a durable tombstone for a
-    // no-op that the server previously reported as success.
     throw createError.notFound('Conversation not found');
   }
 
-  // Release any paused E2B sandbox bound to this conversation. Best-effort: the
-  // conversation is already soft-deleted regardless of this outcome, and Redis's own
   // TTL (session-store.ts) is the safety net if this ever throws.
   try {
     await killE2BSession(managedCloudE2BSessionScope(userId, id));

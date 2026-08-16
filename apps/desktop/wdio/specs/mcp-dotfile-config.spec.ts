@@ -1,24 +1,3 @@
-// Live-interaction, real-native-WebDriver verification for
-// DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01 (see docs/agent-context/known-flaws.md).
-//
-// Before the fix: adding an MCP server via Settings -> Developer
-// (DotfileSettings.tsx, backed by ~/.agiworkforce/mcp.json) showed a success
-// toast, but the live MCP client (core/mcp/config.rs, backed by a totally
-// different app-data JSON file) never read that file, so the server never
-// connected and exposed zero tools.
-//
-// This spec drives the real Settings -> Developer -> "MCP Servers" -> Add
-// flow with a REAL, runnable MCP stdio server
-// (`@modelcontextprotocol/server-everything`, the official MCP SDK reference/
-// test server) and asserts, via the app's own live Tauri IPC bridge (not just
-// a toast), that the server actually connects and its real tools (e.g.
-// "echo") are discoverable through `mcp_list_servers` / `mcp_list_tools` --
-// the exact same commands the live chat tool-loop uses. It then removes the
-// server and confirms it is disconnected and the dotfile is restored.
-//
-// Uses a highly-unique server name and restores `~/.agiworkforce/mcp.json`
-// to its prior state in an `after()` hook so this test is safe to run
-// against a real developer machine's real dotfile / app-data.
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -51,14 +30,6 @@ interface McpToolInfo {
 
 type InvokeOutcome<T> = { ok: true; value: T } | { ok: false; error: string };
 
-/**
- * Calls a real Tauri command via the app's own IPC bridge
- * (`window.__TAURI_INTERNALS__.invoke`, the same primitive
- * `@tauri-apps/api/core`'s `invoke()` uses) and polls for the async result.
- * Avoids relying on `executeAsync` (protocol support varies across
- * WebDriver backends); only needs synchronous `execute`, which this harness
- * already relies on elsewhere in this repo.
- */
 async function invokeTauri<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const resultKey = `__wdio_invoke_${cmd}_${Math.random().toString(36).slice(2)}`;
 
@@ -129,7 +100,6 @@ async function removeTestServerIfPresent() {
     console.log('CLEANUP — mcp_list_servers check failed (non-fatal):', err);
   }
 
-  // Best-effort: remove from the dotfile UI if the Remove button is present.
   try {
     const removed = await browser.execute((name: string) => {
       const button = document.querySelector<HTMLButtonElement>(
@@ -149,9 +119,6 @@ async function removeTestServerIfPresent() {
     console.log('CLEANUP — UI removal attempt failed (non-fatal):', err);
   }
 
-  // Absolute fallback: scrub the dotfile directly on disk so a failed test
-  // never leaves permanent cruft in the developer's real
-  // ~/.agiworkforce/mcp.json.
   try {
     if (fs.existsSync(DOTFILE_MCP_JSON)) {
       const raw = JSON.parse(fs.readFileSync(DOTFILE_MCP_JSON, 'utf-8')) as {
@@ -195,7 +162,6 @@ describe('MCP dotfile config actually connects (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-
 
     await browser.saveScreenshot(`${SCREEN_DIR}/00-developer-tab.png`);
 
-    // Open the "Add" form inside the MCP Servers section.
     const clickedAdd = await clickButtonWithText('body', 'Add');
     console.log('Clicked Add (MCP Servers section):', clickedAdd);
     expect(clickedAdd).toBe(true);
@@ -217,7 +183,6 @@ describe('MCP dotfile config actually connects (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-
     console.log('Clicked "Add Server" submit:', clickedAddServer);
     expect(clickedAddServer).toBe(true);
 
-    // Real toast confirmation (sonner) — the pre-fix "fake success" symptom.
     const toast = await $(`*=Added MCP server: ${SERVER_NAME}`);
     const toastAppeared = await toast
       .waitForDisplayed({ timeout: 10000 })
@@ -226,9 +191,6 @@ describe('MCP dotfile config actually connects (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-
     console.log('Success toast appeared:', toastAppeared);
     await browser.saveScreenshot(`${SCREEN_DIR}/02-after-add-toast.png`);
 
-    // The write-to-disk half already worked before this fix. Confirm it here
-    // as a baseline, then prove the previously-broken half: the LIVE MCP
-    // client actually connecting this server and discovering its tools.
     const dotfileContent = JSON.parse(fs.readFileSync(DOTFILE_MCP_JSON, 'utf-8')) as {
       mcpServers: Record<string, unknown>;
     };
@@ -238,8 +200,6 @@ describe('MCP dotfile config actually connects (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-
     );
     expect(SERVER_NAME in dotfileContent.mcpServers).toBe(true);
 
-    // Give the spawned `npx -y @modelcontextprotocol/server-everything`
-    // process time to install/start and complete the MCP handshake.
     let servers: McpServerInfo[] = [];
     let connected = false;
     const deadline = Date.now() + 90000;
@@ -264,21 +224,7 @@ describe('MCP dotfile config actually connects (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-
     expect(ourTools.length).toBeGreaterThan(0);
     expect(ourTools.some((t) => t.name === 'echo')).toBe(true);
 
-    // Best-effort: also try a real tool call end-to-end through the same
-    // registry the chat tool-loop uses. Pre-seed an "always-allow"
-    // permission for this (server, tool) pair first — the same
-    // persisted-permission mechanism ConnectorDetailView's dropdown writes
-    // to — so the call doesn't block on the interactive per-tool approval
-    // dialog. This is NOT asserted as a hard pass/fail: a separate, deliberate
-    // "Agent mode: Safe" guardrail (see mcp_call_tool's
-    // request_tool_confirmation vs. mcp_connect_server's
-    // request_tool_confirmation_no_mode_gate) blocks direct/non-conversational
-    // tool invocation outside a real chat agent loop, which is exactly what
-    // driving `mcp_call_tool` straight over the raw IPC bridge from a test
     // does — an orthogonal, working-as-designed safety gate, not a defect in
-    // this fix. The load-bearing assertion for
-    // DESKTOP-MCP-DOTFILE-CONFIG-FAKE-SUCCESS-01 is the tool-discovery check
-    // above (real, connected, tools discoverable via the live registry).
     const echoTool = ourTools.find((t) => t.name === 'echo');
     expect(echoTool).toBeDefined();
     try {
@@ -304,8 +250,6 @@ describe('MCP dotfile config actually connects (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-
 
     await browser.saveScreenshot(`${SCREEN_DIR}/03-server-connected.png`);
 
-    // Now remove it and confirm the live client actually disconnects it too
-    // (not just the file write).
     const removedViaUi = await browser.execute((name: string) => {
       const button = document.querySelector<HTMLButtonElement>(
         `button[aria-label="Remove MCP server ${name}"]`,
@@ -319,10 +263,6 @@ describe('MCP dotfile config actually connects (DESKTOP-MCP-DOTFILE-CONFIG-FAKE-
     console.log('Clicked Remove for test server:', removedViaUi);
     expect(removedViaUi).toBe(true);
 
-    // dotfile_remove_mcp_server's reload_active_config disconnects and
-    // reconnects every configured server (same as mcp_update_config), so
-    // give it time to cycle through the developer machine's other real
-    // servers (filesystem, git, etc.) rather than a fixed short pause.
     let serversAfterRemoval: McpServerInfo[] = [];
     let stillPresent = true;
     const removalDeadline = Date.now() + 30000;

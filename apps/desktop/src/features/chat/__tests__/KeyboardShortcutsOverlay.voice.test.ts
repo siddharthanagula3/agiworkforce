@@ -1,11 +1,3 @@
-/**
- * The shortcuts cheatsheet must never advertise a voice key nothing handles.
- *
- * `hooks/useVoiceHotkey.ts` listens for exactly four configurable combos on the
- * document. The overlay previously hard-coded "Push to talk: Space" and
- * "Toggle voice mode: Cmd+Shift+V" — neither is a real handler (there is no
- * Space listener at all, and ctrl+shift+v is hold-to-talk, not a toggle).
- */
 import { describe, expect, it } from 'vitest';
 import { voiceInlineSection } from '../KeyboardShortcutsOverlay';
 import type { VoiceInputHotkey } from '../../../stores/settingsStore';
@@ -42,7 +34,6 @@ describe('voiceInlineSection', () => {
       const entry = voiceInlineSection(hotkey).shortcuts[0];
       expect(entry?.keys).not.toEqual(['Space']);
       expect(entry?.description).not.toMatch(/system-wide|global/i);
-      // Dictation is in-app only until the system path ships.
       expect(entry?.description).toMatch(/in app/i);
     }
   });

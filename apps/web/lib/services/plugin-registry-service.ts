@@ -18,36 +18,11 @@ import {
   type PluginVersionRef,
 } from '@agiworkforce/types';
 
-/**
- * Hosted plugin registry reads (CAP-046 slice 2).
- *
- * Mechanics only: this module turns `public.plugin_registry_entries` rows
- * (db/neon/0096_plugin_registry.sql) into the `PluginRegistryEntry` contract
- * and nothing else. Policy — who may read, what a rate limit is, what an empty
- * catalogue means for the page — lives in the route and the UI.
- *
- * There is deliberately NO write path here. Migration 0096 grants the
- * non-privileged `app_rls` role SELECT only, and third-party submission is a
- * pending founder decision; a write function would be machinery for a flow that
- * does not exist.
- *
- * Every row is re-validated against the contract on the way out. The database
- * CHECKs already reject most malformed values, but a row written before a
- * constraint existed (or by a future admin path) must never be cast blindly
- * into the union types the CLI trusts.
- */
-
-// ─── Bounds ───────────────────────────────────────────────────────────────────
-
-/** Default page size for the public list endpoint. */
 export const PLUGIN_REGISTRY_DEFAULT_LIMIT = 50;
-/** Hard ceiling so one request cannot pull the whole table. */
 export const PLUGIN_REGISTRY_MAX_LIMIT = 100;
 
 const MAX_ARRAY_ITEMS = 50;
 const MAX_ITEM_CHARS = 200;
-
-// ─── Row shape ────────────────────────────────────────────────────────────────
 
 interface PluginRegistryRow {
   id: string;
@@ -77,7 +52,6 @@ interface PluginRegistryRow {
   updated_at: string | Date;
 }
 
-/** Raised when a stored row cannot be represented by the contract. */
 export class PluginRegistryDataError extends Error {
   constructor(message: string) {
     super(message);
@@ -86,25 +60,18 @@ export class PluginRegistryDataError extends Error {
 }
 
 export interface ListPluginRegistryEntriesOptions {
-  /** Exact category match (case-insensitive). */
   category?: string | undefined;
-  /** Exact availability match. */
   status?: PluginRegistryStatus | undefined;
-  /** Exact provenance match. */
   source?: PluginSourceKind | undefined;
   /** Page size, clamped to {@link PLUGIN_REGISTRY_MAX_LIMIT}. */
   limit?: number | undefined;
-  /** Zero-based offset. */
   offset?: number | undefined;
 }
 
 export interface ListPluginRegistryEntriesResult {
   entries: PluginRegistryEntry[];
-  /** Matching rows before `limit`/`offset` were applied. */
   total: number;
 }
-
-// ─── Normalization ────────────────────────────────────────────────────────────
 
 function toIso(value: string | Date | null): string {
   if (value === null) return new Date(0).toISOString();
@@ -112,7 +79,6 @@ function toIso(value: string | Date | null): string {
   return Number.isNaN(date.getTime()) ? new Date(0).toISOString() : date.toISOString();
 }
 
-/** jsonb columns arrive as parsed values on Neon, but a string is possible. */
 function toArray(value: unknown): unknown[] {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string') {
@@ -135,7 +101,6 @@ function toObject(value: unknown): unknown {
   }
 }
 
-/** Non-empty strings only, bounded in count and length. */
 function normalizeStringList(value: unknown): string[] {
   return toArray(value)
     .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
@@ -143,16 +108,10 @@ function normalizeStringList(value: unknown): string[] {
     .slice(0, MAX_ARRAY_ITEMS);
 }
 
-/** Unknown capability strings are dropped, never passed through as a claim. */
 function normalizeCapabilities(value: unknown): PluginCapability[] {
   return toArray(value).filter(isPluginCapability).slice(0, MAX_ARRAY_ITEMS);
 }
 
-/**
- * Keep only version refs that carry a real semantic version. A ref whose
- * digest is not a valid SHA-256 keeps the version but drops the digest: a
- * malformed digest must never be presented as an integrity claim.
- */
 function normalizeVersions(value: unknown): PluginVersionRef[] {
   const out: PluginVersionRef[] = [];
   for (const item of toArray(value)) {
@@ -172,11 +131,6 @@ function normalizeVersions(value: unknown): PluginVersionRef[] {
   return out;
 }
 
-/**
- * Distribution exists only when the row really has an artifact URL. A
- * `published` row without one violates a DB CHECK, so reaching here means the
- * row predates the constraint — report it rather than inventing a URL.
- */
 function normalizeDistribution(row: PluginRegistryRow): PluginDistribution | null {
   const url = row.manifest_url?.trim();
   if (!url) return null;
@@ -213,8 +167,6 @@ function rowToEntry(row: PluginRegistryRow): PluginRegistryEntry {
     publisher: {
       id: row.publisher_id,
       name: row.publisher_name,
-      // The DB CHECK pins this to first-party today; anything else is treated
-      // as third-party rather than silently upgraded to first-party trust.
       kind: row.publisher_kind === 'first-party' ? 'first-party' : 'third-party',
       url: row.publisher_url,
     },
@@ -229,7 +181,6 @@ function rowToEntry(row: PluginRegistryRow): PluginRegistryEntry {
     distribution,
     integrity: {
       sha256: isPluginSha256(row.sha256) ? row.sha256 : null,
-      // Never surfaced as populated until a verifier exists (0096 CHECK).
       signature: null,
       signatureAlgorithm: null,
     },
@@ -242,19 +193,9 @@ function rowToEntry(row: PluginRegistryRow): PluginRegistryEntry {
 function rowToManifest(row: PluginRegistryRow): PluginManifest | null {
   const manifest = toObject(row.manifest);
   if (manifest === null || manifest === undefined) return null;
-  // A stored manifest that does not satisfy the contract is dropped, not
-  // repaired: the CLI would otherwise install a shape it cannot load.
   return isPluginManifest(manifest) ? manifest : null;
 }
 
-// ─── Reads ────────────────────────────────────────────────────────────────────
-
-/**
- * List catalogue entries, newest-status-agnostic and ordered for stable paging.
- *
- * Filters are exact matches on indexed columns. `total` is the count before
- * paging so a client can tell "no matches" from "end of page".
- */
 export async function listPluginRegistryEntries(
   db: DatabaseAdapter,
   options: ListPluginRegistryEntriesOptions = {},
@@ -285,8 +226,6 @@ export async function listPluginRegistryEntries(
     try {
       entries.push(rowToEntry(row));
     } catch (error) {
-      // One malformed row must not take down the whole catalogue; it is
-      // omitted (fail closed for that entry) and reported for repair.
       if (!(error instanceof PluginRegistryDataError)) throw error;
     }
   }
@@ -296,13 +235,6 @@ export async function listPluginRegistryEntries(
   return { entries, total: Number.isFinite(total) ? total : entries.length };
 }
 
-/**
- * Fetch one entry plus its manifest.
- *
- * Returns null when the id does not exist OR is not a well-formed plugin id —
- * an unknown id and a malformed id are the same 404 to the caller, so the
- * endpoint cannot be probed for id-shape feedback.
- */
 export async function getPluginRegistryEntry(
   db: DatabaseAdapter,
   id: string,

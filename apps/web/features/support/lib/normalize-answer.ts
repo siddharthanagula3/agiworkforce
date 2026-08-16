@@ -1,24 +1,3 @@
-/**
- * The single choke point every support reply passes through before a component
- * can see it.
- *
- * Founder decision 4: "abstain and escalate; ALWAYS cite." That rule is not
- * enforceable in a card component — a card renders what it is handed. So it is
- * enforced here, once, on the boundary:
- *
- *   - `kind:'answer'` with zero usable citations is COERCED to an abstention,
- *     and the answer prose is DISCARDED. Rendering the prose under an
- *     "I'm not certain" header would still be publishing an unsourced claim.
- *   - A citation whose URL is not a same-origin path or an http(s) URL is
- *     dropped before it can become an href. Model output and retrieved
- *     documents are both untrusted; `javascript:` and `data:` never reach the
- *     DOM.
- *   - An unrecognised payload (contract drift from another builder, a 500 page,
- *     an HTML error body) becomes an abstention with a handoff offer, never a
- *     blank bubble and never a confident-looking reply.
- *
- * Deleting this module does not "reduce polish" — it removes the guarantee.
- */
 
 import {
   SUPPORT_ABSTENTION_REASONS,
@@ -66,30 +45,9 @@ function hasUnsafeCitationCharacter(value: string): boolean {
   return false;
 }
 
-/**
- * A citation URL may be:
- *   - a same-origin path: `/docs/byok`, `/help#faq` (but never `//evil.example`
- *     which the browser reads as protocol-relative and resolves off-origin), or
- *   - an absolute `http:`/`https:` URL.
- * Everything else — `javascript:`, `data:`, `vbscript:`, `file:`, mailto,
- * whitespace-obfuscated schemes — is refused.
- */
 export function isSafeCitationUrl(url: string): boolean {
   const trimmed = url.trim();
   if (trimmed.length === 0) return false;
-  // Two distinct attacks, closed by the same deny-list:
-  //
-  //  1. SCHEME SMUGGLING. Browsers strip C0/C1 controls and zero-width marks
-  //     while parsing a scheme, so `java\tscript:` and `javascript\u200b:` are
-  //     live `javascript:` URLs that a naive prefix check waves through.
-  //  2. DISPLAY SPOOFING. Bidi overrides and isolates (U+202A-U+202E,
-  //     U+2066-U+2069) reorder the RENDERED text without changing the
-  //     resolved href, so a citation's visible label and its actual target can
-  //     be made to disagree. Citation text comes from retrieved documents,
-  //     which are untrusted, so this is reachable input.
-  //
-  // Refuse outright rather than strip-and-hope. A dropped citation degrades to
-  // an abstention, which is the safe direction to fail in.
   if (hasUnsafeCitationCharacter(trimmed)) {
     return false;
   }
@@ -99,7 +57,6 @@ export function isSafeCitationUrl(url: string): boolean {
   return /^https?:\/\/[^\s/$.?#][^\s]*$/i.test(cleaned);
 }
 
-/** True when the href points inside this app (so it can use client navigation). */
 export function isInternalCitationUrl(url: string): boolean {
   return url.startsWith('/');
 }
@@ -108,8 +65,6 @@ let citationCounter = 0;
 
 function normalizeCitation(raw: unknown): SupportCitation | null {
   if (!isRecord(raw)) return null;
-  // The answer engine spells these title/url; the account-context builder
-  // spells them label/href. Accept both rather than silently dropping half.
   const title = firstString(raw['title'], raw['label'], raw['name']);
   const url = firstString(raw['url'], raw['href'], raw['path']);
   if (!title || !url) return null;
@@ -147,7 +102,6 @@ function normalizeReason(raw: unknown): SupportAbstentionReason {
   return 'unrecognized_response';
 }
 
-/** Plain-language copy used when the server supplied no text for an abstention. */
 export const ABSTENTION_FALLBACK_TEXT: Record<SupportAbstentionReason, string> = {
   no_relevant_source:
     'I could not find anything in the documentation that answers this, so I am not going to guess.',
@@ -171,7 +125,6 @@ export const ABSTENTION_FALLBACK_TEXT: Record<SupportAbstentionReason, string> =
   not_available: 'The support assistant is not switched on for this site yet.',
 };
 
-/** Headings that name the refusal category, per the founder's hard-abstain rule. */
 export const ABSTENTION_HEADING: Record<SupportAbstentionReason, string> = {
   no_relevant_source: "I don't have a source for this",
   hard_abstain_billing: 'Billing — a person handles this',
@@ -209,18 +162,12 @@ function normalizeActionId(raw: unknown): string | null {
   return ACTION_ID_RE.test(raw) ? raw : null;
 }
 
-/**
- * Turn whatever `POST /api/support/ask` returned into something a component is
- * allowed to render.
- */
 export function normalizeAnswer(raw: unknown): SupportReplyView {
   if (!isRecord(raw)) return makeAbstention('unrecognized_response');
 
   const kind = raw['kind'];
 
   if (kind === 'abstention') {
-    // The answer engine names these `authoritativeLinks`; accept `citations`
-    // too so a rename on their side does not silently strip the links.
     const citations = [
       ...normalizeCitations(raw['authoritativeLinks']),
       ...normalizeCitations(raw['citations']),
@@ -242,9 +189,6 @@ export function normalizeAnswer(raw: unknown): SupportReplyView {
     const citations = normalizeCitations(raw['citations']);
     const text = firstString(raw['text'], raw['answer']);
 
-    // THE RULE. No source ⇒ not an answer. The prose is dropped on purpose:
-    // showing it under a softer header would still be publishing an unsourced
-    // claim, which is exactly what the abstain-and-cite decision forbids.
     if (citations.length === 0 || !text) {
       return makeAbstention('no_source');
     }

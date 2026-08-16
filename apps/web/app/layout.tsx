@@ -26,8 +26,6 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-// Newsreader: variable serif (opsz axis 6–72) carrying display + body for Tier A/B.
-// Subset to Latin only to control payload (~110KB → ~45KB).
 const newsreader = Newsreader({
   subsets: ['latin'],
   weight: ['300', '400', '500', '700', '800'],
@@ -36,7 +34,6 @@ const newsreader = Newsreader({
   display: 'swap',
 });
 
-// JetBrains Mono: UI chrome for slugs, datelines, marginalia, and CTAs.
 const jetbrainsMono = JetBrains_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
@@ -65,22 +62,6 @@ const clerkLocalization = {
   },
 };
 
-/**
- * AUDIT-FIX GOV-39: mobile viewport contract for the chat surface.
- *
- * `viewportFit: 'cover'` paints the app under the iOS home indicator and the
- * notch. That is only safe when the layout also honours the safe-area insets —
- * without them, `cover` makes the omission WORSE than the default, and the
- * composer's send button sat underneath the home indicator.
- * `.safe-area-bottom` in globals.css supplies the padding.
- *
- * `interactiveWidget: 'resizes-content'` is the other half: by default the
- * on-screen keyboard only shrinks the VISUAL viewport, so a `position: sticky;
- * bottom: 0` composer stays pinned to the (unchanged) layout viewport and ends
- * up behind the keyboard. Resizing the layout viewport instead keeps the
- * composer directly above the keyboard with no `visualViewport` JS, which is
- * the behaviour apps/mobile already gets from KeyboardAvoidingView.
- */
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
@@ -153,11 +134,9 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Read the per-request nonce set by the proxy for CSP compliance
   const headersList = await headers();
   const nonce = headersList.get('x-nonce') ?? '';
 
-  // Only wire GA4 when the tracking ID env var is set
   const gaTrackingId = process.env['NEXT_PUBLIC_GA_TRACKING_ID'];
 
   return (

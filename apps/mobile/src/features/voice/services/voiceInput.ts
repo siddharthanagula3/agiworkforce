@@ -1,17 +1,3 @@
-// AUDIT-FIX: STT-WIRE
-/**
- * On-device voice input (STT) — backed by `expo-speech-recognition`.
- *
- * iOS:     SFSpeechRecognizer + microphone (on-device when supported).
- * Android: SpeechRecognizer + microphone (com.google.android.googlequicksearchbox
- *          recognition service by default; on-device on Android 12+ when the
- *          locale offline pack is installed).
- *
- * Audio bytes do not leave the device when `requiresOnDeviceRecognition: true`
- * AND the device reports on-device support for the requested locale.
- *
- * Cloud Whisper / Deepgram paths live in services/voice.ts behind FEATURES.cloudChat.
- */
 
 import { Platform } from 'react-native';
 import * as Localization from 'expo-localization';
@@ -44,14 +30,11 @@ export class VoiceCaptureError extends Error {
 
 export interface OnDeviceTranscriptResult {
   text: string;
-  /** true when the result was produced by on-device inference (no cloud round-trip) */
   isOnDevice: true;
-  /** Per-segment confidence average; -1 when unavailable */
   confidence: number;
 }
 
 export interface VoiceInputMeteringEvent {
-  /** Normalised dB-style value: -160..0 (mapped from native -2..10 scale) */
   metering: number;
   durationMillis: number;
 }
@@ -105,14 +88,12 @@ function settleError(err: VoiceCaptureError): void {
   rejecter?.(err);
 }
 
-/** Returns the canonical platform STT backend identifier. */
 export function getPlatformSTTBackend(): 'ios-speech' | 'android-speech-recognizer' | 'expo-av' {
   if (Platform.OS === 'ios') return 'ios-speech';
   if (Platform.OS === 'android') return 'android-speech-recognizer';
   return 'expo-av';
 }
 
-/** Request both microphone and speech-recognition permissions. */
 export async function requestMicPermission(): Promise<boolean> {
   try {
     const status = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -122,7 +103,6 @@ export async function requestMicPermission(): Promise<boolean> {
   }
 }
 
-/** Returns true if a recognition session is currently active. */
 export function isCapturing(): boolean {
   return _active;
 }
@@ -205,7 +185,6 @@ export async function startCaptureSession(
     _listeners.push(
       ExpoSpeechRecognitionModule.addListener('end', () => {
         if (!_active) return;
-        // Recognizer ended without isFinal: surface the latest partial as the final.
         settleSuccess(_latestPartial, _latestConfidence);
       }),
     );
@@ -226,7 +205,6 @@ export async function startCaptureSession(
     if (onMetering) {
       _listeners.push(
         ExpoSpeechRecognitionModule.addListener('volumechange', (ev) => {
-          // Map native -2..10 to -160..0 dB-style scale used by the rest of the UI.
           const normalized = Math.max(-160, Math.min(0, ev.value * 16 - 160));
           onMetering({ metering: normalized, durationMillis: Date.now() - _startedAt });
         }),
@@ -262,7 +240,6 @@ export async function startCapture(
   return session.result;
 }
 
-/** Stop recognition and return the final transcript via the original startCapture promise. */
 export async function stopCapture(): Promise<void> {
   if (!_active) return;
   try {
@@ -272,7 +249,6 @@ export async function stopCapture(): Promise<void> {
   }
 }
 
-/** Cancel recognition immediately. The pending startCapture promise rejects with 'aborted'. */
 export async function cancelCapture(): Promise<void> {
   if (!_active) return;
   try {
@@ -283,21 +259,10 @@ export async function cancelCapture(): Promise<void> {
   settleError(new VoiceCaptureError('aborted', 'Capture cancelled'));
 }
 
-/**
- * Returns the latest partial transcript. Useful for screens that want to show
- * a live preview without subscribing to the `result` event.
- */
 export function getLatestPartial(): string {
   return _latestPartial;
 }
 
-/**
- * Compatibility wrapper retained for callers that previously received a URI
- * and called transcribeOnDevice() on it. With ExpoSpeechRecognition the
- * transcript is delivered through the live event stream, so this path no
- * longer makes a second pass over the audio; instead it returns whatever
- * was last surfaced by the recognizer.
- */
 export async function transcribeOnDevice(uri: string): Promise<OnDeviceTranscriptResult> {
   void uri;
   return { text: _latestPartial, confidence: _latestConfidence, isOnDevice: true };

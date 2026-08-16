@@ -134,7 +134,6 @@ describe('assertSafeMetadataXml', () => {
   });
 
   it('rejects an oversized payload measured in bytes, not characters', () => {
-    // Multi-byte characters must not slip past a length check.
     const oversized = `<EntityDescriptor>${'é'.repeat(260_000)}</EntityDescriptor>`;
     expect(oversized.length).toBeLessThan(500_000);
     expect(() => assertSafeMetadataXml(oversized)).toThrow(/at most 500000 bytes/);

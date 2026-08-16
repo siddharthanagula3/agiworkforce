@@ -58,19 +58,9 @@ const COMPANY = [
   { href: '/acceptable-use', label: 'Acceptable use' },
   { href: '/agent-permissions', label: 'Agent permissions' },
   { href: '/security', label: 'Security' },
-  // Cookie policy is expected in the footer in the EU, and /legal is the index a
-  // procurement or security reviewer starts from — it links the DPA,
-  // subprocessors, SLA, refunds, accessibility and the EU-representative
-  // statement, none of which were reachable from the footer before.
   { href: '/cookies', label: 'Cookies' },
-  // A product that hosts user uploads and publishes artifacts at shareable URLs
-  // needs a reachable notice-and-takedown route, and one that routes to
-  // several third-party and open-weight models needs its licence terms stated.
   { href: '/copyright', label: 'Copyright' },
   { href: '/model-licenses', label: 'Model licences' },
-  // India. DPDP requires the notice and the grievance route to be findable
-  // without already being a customer, so both are footer links rather than
-  // sections buried inside /privacy.
   { href: '/privacy/india', label: 'India — DPDP notice' },
   { href: '/privacy/requests', label: 'Data rights & consent' },
   { href: '/legal', label: 'All legal docs' },

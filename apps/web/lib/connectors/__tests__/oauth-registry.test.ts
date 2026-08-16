@@ -1,11 +1,3 @@
-/**
- * The registry is the ONLY thing standing between "Coming soon" and a live
- * Connect button, so these tests pin the fail-closed rules:
- *   - no descriptor, no credentials, or no callback origin ⇒ not available;
- *   - a malformed env value yields ZERO providers, never a partial set;
- *   - the broker owns the security-carrying authorization parameters;
- *   - the redirect URI comes from configuration, never from a request.
- */
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -79,7 +71,6 @@ describe('connector OAuth registry — availability is earned, not assumed', () 
 
     process.env['CONNECTOR_OAUTH_LINEAR_CLIENT_ID'] = 'client-id-value';
     __resetConnectorOAuthRegistryCacheForTests();
-    // A confidential client still needs its secret.
     expect([...getOAuthConfiguredConnectorIds()]).toEqual([]);
 
     setCredentials();
@@ -112,7 +103,6 @@ describe('connector OAuth registry — availability is earned, not assumed', () 
     __resetConnectorOAuthRegistryCacheForTests();
     expect([...getOAuthConfiguredConnectorIds()]).toEqual([]);
 
-    // One bad entry must not let the good ones through either.
     setProviders(describeProvider(), { connectorId: 'broken' });
     expect([...getOAuthConfiguredConnectorIds()]).toEqual([]);
   });
@@ -224,7 +214,6 @@ describe('connector OAuth registry — authorization URL', () => {
     expect(url.searchParams.get('code_challenge')).toBe('challenge-value');
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('prompt')).toBe('consent');
-    // The client secret must never appear in a browser-visible URL.
     expect(url.toString()).not.toContain('client-secret-value');
   });
 
@@ -248,8 +237,6 @@ describe('sanitizeConnectorReturnPath', () => {
     expect(sanitizeConnectorReturnPath('/\\evil.test')).toBe('/connectors');
     expect(sanitizeConnectorReturnPath('https://evil.test')).toBe('/connectors');
     expect(sanitizeConnectorReturnPath(null)).toBe('/connectors');
-    // Bare "/" fails migration 0097's return_path CHECK, so it must not be
-    // handed to the insert.
     expect(sanitizeConnectorReturnPath('/')).toBe('/connectors');
   });
 

@@ -2,10 +2,6 @@ import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import type { ParamsDictionary } from 'express-serve-static-core';
 import type { ParsedQs } from 'qs';
 
-/**
- * Type for async route handler functions.
- * Generic parameters allow typed request params, body, query, and response.
- */
 type AsyncRouteHandler<
   P = ParamsDictionary,
   ResBody = unknown,

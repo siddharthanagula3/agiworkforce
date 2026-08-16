@@ -1,18 +1,4 @@
-/**
- * Chat Store Module
- *
- * This module provides a modular store architecture for chat-related state.
- * The stores are split by domain for better maintainability:
- *
- * - chatStore: Conversations, messages, citations, token usage
- * - agentStore: Agent status, background tasks, action trail
- * - toolStore: Tool executions, file operations, terminal commands, approvals
- * - sidecarStore: Sidecar panel state, sidebar state (now consolidated in ui.ts)
- *
- * For backwards compatibility, we also export a unified hook that combines all stores.
- */
 
-// Export all stores
 export { useChatStore, useChatMessageStore } from './chatStore';
 export { useChatViewStore } from './chatViewStore';
 export { useChatExecutionStore } from './chatExecutionStore';
@@ -26,7 +12,6 @@ export { useToolStore, initializeToolEventListener } from './toolStore';
 // Sidecar store is now part of unified UI store, re-exported for backwards compatibility
 export { useUIStore as useSidecarStore } from '../ui';
 
-// Export all types from types.ts
 export type {
   MessageMetadata,
   Attachment,
@@ -45,7 +30,6 @@ export type {
   ConversationMode,
 } from './types';
 
-// Export types from individual stores
 export type {
   ChatState,
   ChatSearchResult,
@@ -95,7 +79,6 @@ export type {
   UIState as SidecarStoreState,
 } from '../ui';
 
-// Export selectors from all stores
 export {
   selectConversations,
   selectActiveConversationId,

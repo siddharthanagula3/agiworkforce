@@ -1,13 +1,3 @@
-/**
- * ProjectHeader (Mobile) — RN-native mirror of the shared web ProjectHeader.
- *
- * Both consume `ProjectHeaderPresentation` from `@agiworkforce/types` so the
- * accent palette, chip set, surface ordering, and imported-from labelling
- * stay aligned across Web / Desktop / Mobile without sharing JSX (React DOM
- * vs React Native).
- *
- * Round-10 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import { View } from 'react-native';
 import { Cloud, Folder, Lock, Users } from 'lucide-react-native';

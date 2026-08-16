@@ -1,4 +1,3 @@
-/** Writing-style choices exposed by the shared composer. */
 export type WritingStyle = 'formal' | 'casual' | 'concise' | 'detailed';
 
 const WRITING_STYLE_INSTRUCTIONS: Readonly<Record<WritingStyle, string>> = Object.freeze({
@@ -8,13 +7,6 @@ const WRITING_STYLE_INSTRUCTIONS: Readonly<Record<WritingStyle, string>> = Objec
   detailed: 'Give a thorough answer with useful context, concrete examples, and clear structure.',
 });
 
-/**
- * Resolve a UI-owned style choice into a trusted system instruction.
- *
- * The request path accepts only this closed union. Keeping the instruction in
- * code prevents user-controlled labels or arbitrary menu values from entering
- * the system-instruction channel.
- */
 export function getWritingStyleInstruction(style?: WritingStyle): string | null {
   return style ? WRITING_STYLE_INSTRUCTIONS[style] : null;
 }

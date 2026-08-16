@@ -47,8 +47,6 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
   const [parallelAgents, setParallelAgents] = useState(DEFAULT_PARALLEL_AGENTS);
   const [executionMode, setExecutionMode] = useState<ExecutionMode>('auto');
   const [submitting, setSubmitting] = useState(false);
-  // Task creator panel may close mid-submit (user closes the panel or
-  // parent re-renders); guard finally setState.
   const isMounted = useIsMounted();
   const [swarmRecommended, setSwarmRecommended] = useState(false);
   const [accessibilityState, setAccessibilityState] = useState<TaskAutomationState>(
@@ -88,7 +86,6 @@ export function AgentTaskCreator({ onTaskCreated }: AgentTaskCreatorProps) {
     }
   }, []);
 
-  // Check if swarm is recommended when goal changes
   useEffect(() => {
     const trimmed = goal.trim();
     if (trimmed.length < 20) {

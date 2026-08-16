@@ -12,13 +12,11 @@ export interface MemoryDecayConfig {
 export interface MemoryRelevanceInput {
   lexicalSimilarity: number;
   embeddingSimilarity?: number;
-  /** Lexical share of retrieval relevance when an embedding is available. */
   lexicalWeight?: number;
   importance: number;
   daysSinceAccess: number;
 }
 
-/** Max characters of a captured self-disclosure clause kept as a fact. */
 const MAX_EXTRACTED_CLAUSE_CHARS = 120;
 const MIN_EXTRACTED_CLAUSE_CHARS = 2;
 
@@ -62,12 +60,6 @@ function isTrailingNoise(ch: string): boolean {
 }
 
 function cleanMemoryClause(value: string): string {
-  // Was `.replace(/[.!?,;:\s]+$/u, '')`. An anchored `+` over a repeated
-  // character class backtracks quadratically: on a clause ending in a long run
-  // of punctuation or whitespace the engine retries from every position before
-  // it can fail. Memory clauses come from model output, so a degenerate run is
-  // cheap for the model to emit and costly for us to reject
-  // (js/polynomial-redos). One backward scan does the same job in O(n).
   const trimmed = value.trim();
   let end = trimmed.length;
   while (end > 0 && isTrailingNoise(trimmed[end - 1]!)) {
@@ -83,11 +75,6 @@ function splitMemorySentences(value: string): string[] {
     .filter(Boolean);
 }
 
-/**
- * Conservatively extract durable first-person self-disclosures from one user
- * message. Precision wins over recall: questions, long clauses, and messages
- * without an explicit supported pattern produce no facts.
- */
 export function extractCandidateMemoryFacts(message: string): string[] {
   if (!message || typeof message !== 'string') return [];
 

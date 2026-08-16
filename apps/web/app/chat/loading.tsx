@@ -1,9 +1,3 @@
-/**
- * GOV-25: route-level loading state for the chat segment.
- *
- * The chat bundle is a `ssr: false` dynamic import, so a cold load previously
- * painted nothing at all until the client chunk arrived.
- */
 export default function ChatLoading() {
   return (
     <div

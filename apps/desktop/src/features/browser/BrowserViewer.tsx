@@ -25,14 +25,6 @@ interface BrowserViewerProps {
   tabId?: string;
 }
 
-/**
- * Show the backend's own message instead of a generic failure.
- *
- * When no supported browser is installed, the Rust launcher reports every
- * install location it probed plus the `AGIWORKFORCE_BROWSER_EXECUTABLE`
- * override. That text is the only thing that tells a user on a stock machine
- * what to do, so it has to reach the screen verbatim.
- */
 function describeRuntimeError(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
@@ -107,14 +99,12 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     .filter((s) => s.tabId === currentTabId)
     .sort((a, b) => b.timestamp - a.timestamp)[0];
 
-  // Sync URL bar with active tab
   useEffect(() => {
     if (activeTab) {
       setUrlBarValue(activeTab.url);
     }
   }, [activeTab?.url, activeTab]);
 
-  // Fetch real title from backend when tab changes
   useEffect(() => {
     if (!currentTabId) return;
     let cancelled = false;
@@ -165,7 +155,6 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     };
   }, [currentTabId, isStreaming, startStreaming, stopStreaming, updateImageDims]);
 
-  // Calculate scaled bounds for the highlight overlay
   const scaledBounds = useMemo(() => {
     if (!highlightedElement || !imageDims || imageDims.naturalWidth === 0) return null;
 
@@ -263,13 +252,10 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     if (!currentTabId || !urlBarValue.trim() || isNavigating) return;
 
     let targetUrl = urlBarValue.trim();
-    // Auto-prefix https:// if no protocol
     if (!/^https?:\/\//i.test(targetUrl)) {
-      // If it looks like a domain (has a dot), add protocol
       if (targetUrl.includes('.')) {
         targetUrl = `https://${targetUrl}`;
       } else {
-        // Otherwise treat as search (navigate to a search URL)
         targetUrl = `https://www.google.com/search?q=${encodeURIComponent(targetUrl)}`;
       }
     }
@@ -279,7 +265,6 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
       await navigateTab(currentTabId, targetUrl);
       setUrlBarValue(targetUrl);
 
-      // Refresh the URL from backend after navigation settles
       try {
         const realUrl = await getUrl(currentTabId);
         setUrlBarValue(realUrl);
@@ -293,16 +278,6 @@ export function BrowserViewer({ className, tabId }: BrowserViewerProps) {
     }
   };
 
-  /**
-   * Start the browser-control runtime.
-   *
-   * `browserStore.launchBrowser` -> `browser_launch` -> `PlaywrightBridge`
-   * executable discovery had no caller anywhere in the desktop UI, so the
-   * platform-specific discovery could not be reached by a user at all. This is
-   * that entry point: it starts the runtime, opens a first tab so the address
-   * bar and live view come alive, and renders the launcher's diagnostic when
-   * no supported browser can be found.
-   */
   const handleStartRuntime = async () => {
     if (runtimeBusy) return;
     setRuntimeBusy(true);

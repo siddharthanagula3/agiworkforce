@@ -76,7 +76,6 @@ test('a lexical sweep and a reachability walk disagree, and the walk is the corr
   const root = makeTree({
     'src/main.tsx': "import './used';\n",
     'src/used.ts': "export const used = 'yes';\n",
-    // Imported only by an orphan; a lexical sweep would still see its contents.
     'src/orphan.ts': "import './only-reachable-from-orphan';\nexport const orphan = 1;\n",
     'src/only-reachable-from-orphan.ts': 'export const deep = 1;\n',
   });

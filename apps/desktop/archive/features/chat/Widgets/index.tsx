@@ -10,10 +10,6 @@
 import React from 'react';
 import { FileText } from 'lucide-react';
 
-// ============================================================================
-// Import WidgetRegistry first to avoid circular dependency issues
-// ============================================================================
-
 import {
   WidgetRegistry,
   useWidgetRegistry,
@@ -25,10 +21,6 @@ import {
   type RegisteredWidget,
   type WidgetData,
 } from './WidgetRegistry';
-
-// ============================================================================
-// Re-export from WidgetRegistry
-// ============================================================================
 
 export {
   WidgetRegistry,
@@ -42,22 +34,12 @@ export {
   type WidgetData,
 };
 
-// ============================================================================
-// Action Event Types
-// ============================================================================
-
-/**
- * Action event emitted by widgets
- */
 export interface WidgetActionEvent {
   widgetId: string;
   action: string;
   payload?: unknown;
 }
 
-/**
- * Common widget renderer props for unified rendering
- */
 export interface WidgetRendererProps<T = unknown> {
   widget: T;
   messageId?: string;
@@ -65,10 +47,6 @@ export interface WidgetRendererProps<T = unknown> {
   readOnly?: boolean;
   className?: string;
 }
-
-// ============================================================================
-// Form Widget Types (INT-003)
-// ============================================================================
 
 export type FormFieldType = 'text' | 'number' | 'select' | 'checkbox' | 'date' | 'file';
 
@@ -122,10 +100,6 @@ export interface FormWidgetData {
   interactive?: boolean;
 }
 
-// ============================================================================
-// Data Table Widget Types
-// ============================================================================
-
 export interface DataTableColumn {
   key: string;
   label: string;
@@ -145,10 +119,6 @@ export interface DataTableWidgetData {
   pageSize?: number;
   totalRows?: number;
 }
-
-// ============================================================================
-// Chart Widget Types
-// ============================================================================
 
 export type ChartType = 'bar' | 'line' | 'pie' | 'area';
 
@@ -171,10 +141,6 @@ export interface ChartWidgetData {
   showValues?: boolean;
 }
 
-// ============================================================================
-// Diff Viewer Widget Types
-// ============================================================================
-
 export interface DiffViewerWidgetData {
   id: string;
   type: 'diff-viewer';
@@ -190,14 +156,8 @@ export interface DiffViewerWidgetData {
   createdAt?: string;
 }
 
-// ============================================================================
-// Legacy Widget Registry (for compatibility with DataTableWidget/ChartWidget)
-// ============================================================================
-
-// Use the already-imported WidgetRegistry (aliased as Registry for clarity)
 const Registry = WidgetRegistry;
 
-// Alias for components that use the old `widgetRegistry` name
 export const widgetRegistry = {
   register: <T,>(
     type: string,
@@ -205,14 +165,6 @@ export const widgetRegistry = {
     displayName: string,
     _icon?: React.ComponentType<{ className?: string; size?: number }>,
   ): void => {
-    // AUDIT-P3-TYPE: Legacy API bridge between two different widget prop interfaces.
-    // WidgetRendererProps<T> (runtime): { widget, messageId, onAction, readOnly, className }
-    // BaseWidgetProps (registry): { config, onSubmit, onCancel, readOnly, ... }
-    // The cast through unknown is required because these are intentionally different
-    // interfaces serving different purposes:
-    // - BaseWidgetProps is the "official" registration interface
-    // - WidgetRendererProps is what WidgetRenderer actually passes at runtime
-    // This mismatch is a known design debt tracked for future refactoring.
     const definition: WidgetDefinition = {
       type,
       displayName,
@@ -225,19 +177,12 @@ export const widgetRegistry = {
   getAll: Registry.getAll.bind(Registry),
 };
 
-// ============================================================================
-// Widget Data Factories
-// ============================================================================
-
 let widgetIdCounter = 0;
 
 function generateWidgetId(): string {
   return `widget-${Date.now()}-${++widgetIdCounter}`;
 }
 
-/**
- * Create a form widget data object
- */
 export function createFormWidget(
   config: FormWidgetConfig,
   options?: {
@@ -256,9 +201,6 @@ export function createFormWidget(
   };
 }
 
-/**
- * Create a data table widget data object
- */
 export function createDataTableWidget(
   columns: DataTableColumn[],
   rows: Record<string, unknown>[],
@@ -283,9 +225,6 @@ export function createDataTableWidget(
   };
 }
 
-/**
- * Create a chart widget data object
- */
 export function createChartWidget(
   chartType: ChartType,
   title: string,
@@ -312,9 +251,6 @@ export function createChartWidget(
   };
 }
 
-/**
- * Create a diff viewer widget data object
- */
 export function createDiffViewerWidget(
   oldContent: string,
   newContent: string,
@@ -345,40 +281,24 @@ export function createDiffViewerWidget(
   };
 }
 
-// ============================================================================
-// Component Exports
-// ============================================================================
-
-// Export FormWidget
 export { FormWidget, type FormWidgetProps } from './FormWidget';
 
-// Export DataTableWidget
 export { DataTableWidget } from './DataTableWidget';
 
-// Export ChartWidget
 export { ChartWidget } from './ChartWidget';
 
-// Export DiffWidget
 export { DiffWidget } from './DiffWidget';
 
-// Export ConfirmationWidget
 export {
   ConfirmationWidget,
   createConfirmationWidget,
   type ConfirmationWidgetData,
 } from './ConfirmationWidget';
 
-// Export WidgetRenderer
 export { WidgetRenderer } from './WidgetRenderer';
 
-// ============================================================================
-// Widget Registration
-// ============================================================================
-
-// Import and register widgets (done after exports to avoid circular deps)
 import { FormWidget } from './FormWidget';
 
-// Register FormWidget with the main registry
 Registry.register({
   type: 'form',
   displayName: 'Form',
@@ -389,4 +309,3 @@ Registry.register({
   icon: FileText,
 });
 
-// Note: DataTableWidget and ChartWidget register themselves in their own files

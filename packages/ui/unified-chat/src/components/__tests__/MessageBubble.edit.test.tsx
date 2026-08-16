@@ -1,11 +1,3 @@
-/**
- * DESK-202: the user turn's edit affordance.
- *
- * The E2E suite drove `data-testid="message-item"`, a per-message edit control
- * and `textarea[data-editing="true"]` for months while none of the three
- * existed in any source file. These cover the built behaviour, including the
- * cases where the control must NOT appear.
- */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -36,8 +28,6 @@ describe('MessageBubble edit affordance', () => {
   });
 
   it('never offers to edit an assistant turn, even with a handler wired', () => {
-    // Rewriting a reply would let the transcript claim the model said something
-    // it never said. Copy stays available; Edit does not appear.
     render(
       <MessageBubble message={{ ...userMessage, id: 'a1', role: 'assistant' }} onEdit={vi.fn()} />,
     );
@@ -76,8 +66,6 @@ describe('MessageBubble edit affordance', () => {
   });
 
   it('an unchanged body is a no-op, not a resend', async () => {
-    // editAndResend deletes the exchange and re-runs the turn, so committing an
-    // identical body would burn a request and discard a good answer.
     const onEdit = vi.fn();
     const user = userEvent.setup();
     render(<MessageBubble message={userMessage} onEdit={onEdit} />);
@@ -89,7 +77,6 @@ describe('MessageBubble edit affordance', () => {
   });
 
   it('an emptied body is treated as a cancel', async () => {
-    // Blanking the turn would leave a reply with no question above it.
     const onEdit = vi.fn();
     const user = userEvent.setup();
     render(<MessageBubble message={userMessage} onEdit={onEdit} />);

@@ -8,8 +8,6 @@ const SSE = ['data: {"choices":[{"delta":{"content":"ok"}}]}', '', 'data: [DONE]
 
 async function loadStreamingService() {
   jest.resetModules();
-  // A stale build-time flag must not route a paid mobile turn around the
-  // managed chat reservation/finalization contract.
   process.env.EXPO_PUBLIC_USE_PROVIDER_STREAM = '1';
 
   streamFromProviderMock.mockReset();

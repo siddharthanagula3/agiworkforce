@@ -1,28 +1,4 @@
 #!/usr/bin/env node
-/**
- * Verify every `--features "crate/feature"` a workflow passes to cargo names a
- * feature that actually exists.
- *
- * WHY. `Clippy (all features)` passed `agiworkforce-desktop/sentry`, and that
- * feature does not exist. Cargo rejects an unknown feature during argument
- * parsing:
- *
- *   error: none of the selected packages contains this feature:
- *          agiworkforce-desktop/sentry
- *
- * so the lane failed on every commit while linting ZERO lines. It stayed
- * invisible for weeks because the job only runs after `check` passes, and
- * `check` was red from 2026-07-21 until it was fixed.
- *
- * That is the shape worth guarding: a gate that dies during argument parsing
- * is indistinguishable from one that has nothing to report. Neither ever says
- * "I linted nothing" — one is simply red, and a permanently red lane stops
- * being read.
- *
- * This is a text check on purpose. It costs milliseconds and needs no cargo,
- * no toolchain and no network, so it runs in the ordinary guard chain rather
- * than only where Rust is installed.
- */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -31,7 +7,6 @@ const root = process.cwd();
 const WORKFLOWS = path.join(root, '.github/workflows');
 const SKIP_DIRS = new Set(['node_modules', 'target', 'dist', '.git', '.next']);
 
-/** crate name -> Set of declared feature names, from every Cargo.toml. */
 function crateFeatures() {
   const manifests = new Map();
 
@@ -58,11 +33,6 @@ function crateFeatures() {
         const name = /^name\s*=\s*"([^"]+)"/m.exec(src)?.[1];
         if (!name) continue;
         const features = new Set();
-        // Capture to the NEXT section header, or end of file. An earlier
-        // version ended the capture at /^\[|\s*$/m, whose second alternative
-        // matches at the first line end under the m flag — so it captured
-        // nothing and every real feature was reported missing. Caught by
-        // running this guard against the known-good config before trusting it.
         const block = /^\[features\]\r?\n([\s\S]*?)(?=^\[[A-Za-z]|$(?![\s\S]))/m.exec(src);
         if (block) {
           for (const line of block[1].split('\n')) {
@@ -70,8 +40,6 @@ function crateFeatures() {
             if (key) features.add(key);
           }
         }
-        // An optional dependency implicitly declares a feature of the same
-        // name, so `dep:foo`-style features are not the only valid values.
         for (const dep of src.matchAll(/^([A-Za-z0-9_-]+)\s*=\s*\{[^}]*optional\s*=\s*true/gm)) {
           features.add(dep[1]);
         }
@@ -105,7 +73,7 @@ for (const file of workflowFiles) {
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)) {
-      if (!spec.includes('/')) continue; // bare feature: belongs to the current crate
+      if (!spec.includes('/')) continue;
       referenceCount += 1;
       const [crate, feature] = spec.split('/');
       const declared = manifests.get(crate);
@@ -128,25 +96,11 @@ for (const file of workflowFiles) {
   }
 }
 
-// Same failure shape, different cause: a step that dies during argument
-// parsing lints nothing while looking like an ordinary red build.
-//
-// A `#` comment cannot sit between a line-continuation backslash and the line
-// it continues. The shell strips `\<newline>` before tokenising, so the comment
-// swallows the remainder of the command, and every following line becomes a
-// separate command. `Clippy (all features)` shipped exactly that: the NB3
-// rationale was pasted mid-command, which silently reduced the gate to
-// `cargo clippy --workspace --lib` (no features, no `-D warnings`) and then
-// exited 127 on `--features: command not found`.
-//
-// Text check, not a shell parse: `bash -n` accepts the broken form — it is
-// valid syntax, just not the command anyone wrote.
 let continuationChecked = 0;
 for (const file of workflowFiles) {
   const lines = fs.readFileSync(path.join(WORKFLOWS, file), 'utf8').split('\n');
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i].replace(/\s+$/, '');
-    // `\\` is an escaped backslash, not a continuation.
     if (!line.endsWith('\\') || line.endsWith('\\\\')) continue;
     continuationChecked += 1;
     let next = i + 1;

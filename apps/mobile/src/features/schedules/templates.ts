@@ -10,11 +10,6 @@ export interface ScheduleTemplate {
     Partial<Pick<Schedule, 'daysOfWeek' | 'dayOfMonth'>>;
 }
 
-/**
- * Starter tasks that work without assuming access to email, commerce, calendar,
- * or any other connector. The create route accepts only these IDs, then resolves
- * the full prompt locally so arbitrary route data cannot populate the form.
- */
 export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
   {
     id: 'daily-focus',

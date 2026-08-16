@@ -1,25 +1,7 @@
-/**
- * Unit tests: POST /api/github/webhook
- *
- * Coverage targets:
- * - Missing or invalid HMAC-SHA256 signature → 401
- * - Event type !== issue_comment → no-op 200
- * - Bot self-reply guard skips processing
- * - Installation over monthly quota → 200 without calling LLM
- * - Valid mention within debounce window (pending status) is skipped
- * - Valid signed request with bot mention triggers processReview (non-PR → no-op)
- *
- * The route fires processReview() asynchronously (fire-and-forget) after
- * immediately returning 200. For spend-cap and debounce tests we need to
- * observe the DB calls made by processReview. We use vi.waitFor to let the
- * micro-task queue drain before asserting on mock calls.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHmac } from 'crypto';
 import { NextRequest } from 'next/server';
-
-// ── Boundary mocks ────────────────────────────────────────────────────────────
 
 vi.mock('server-only', () => ({}));
 
@@ -27,12 +9,9 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-// Rate limit: always pass through
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
-
-// ── DB mock: query/execute controlled per-test ────────────────────────────────
 
 const mockDbQuery = vi.fn();
 const mockDbExecute = vi.fn();
@@ -46,12 +25,6 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-// ── GitHub App library mocks ──────────────────────────────────────────────────
-
-// Use a hoisting-safe literal — vi.mock factories are hoisted to the top of
-// the module before any const declarations, so referencing a variable defined
-// below the factory causes a TDZ ReferenceError.  The literal below is the
-// shared secret used both in the mock export and in the signPayload helper.
 const SECRET = 'test-webhook-secret-abc123';
 
 const mockVerifySignature = vi.fn();
@@ -64,21 +37,10 @@ vi.mock('@/lib/github-app', () => ({
   getInstallationAccessToken: (...args: unknown[]) => mockGetInstallationAccessToken(...args),
   getPrDiff: (...args: unknown[]) => mockGetPrDiff(...args),
   postIssueComment: (...args: unknown[]) => mockPostIssueComment(...args),
-  // Export the same literal so the route's module-level GITHUB_WEBHOOK_SECRET
-  // matches what signPayload() uses to produce valid signatures in tests.
   GITHUB_WEBHOOK_SECRET: 'test-webhook-secret-abc123',
 }));
 
-// ── Types catalog mock (model ID lookups) ────────────────────────────────────
-
 vi.mock('@agiworkforce/types', async () => {
-  // Spread the real module rather than listing exports. A factory mock replaces
-  // the module wholesale, so every symbol the route reaches transitively has to
-  // be present or Vitest throws at first read and the suite dies at LOAD, with
-  // no assertion having run. Listing them one at a time just moves the error to
-  // the next missing name (CAPABILITY_LAYERS, then SYNCED_APP_SURFACES, ...).
-  // Only the two model resolvers below are actually being stubbed, so only they
-  // are overridden — same pattern as __tests__/api/media-image-generate.test.ts.
   const actual = await vi.importActual<typeof import('@agiworkforce/types')>('@agiworkforce/types');
   return {
     ...actual,
@@ -87,10 +49,7 @@ vi.mock('@agiworkforce/types', async () => {
   };
 });
 
-// Route under test — imported AFTER all vi.mock() calls
 import { POST } from '@/app/api/github/webhook/route';
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function signPayload(body: string, secret: string): string {
   const hmac = createHmac('sha256', secret);
@@ -133,16 +92,12 @@ function makeBotMentionPayload(overrides?: Partial<WebhookPayload>): WebhookPayl
   };
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 describe('POST /api/github/webhook', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: signature verification passes
     mockVerifySignature.mockReturnValue(true);
 
-    // Default: installation found and PR review enabled
     mockDbQuery.mockResolvedValue([{ user_id: 'u1', pr_review_enabled: true, review_model: null }]);
     mockDbExecute.mockResolvedValue(undefined);
     mockDbTransaction.mockImplementation(
@@ -153,8 +108,6 @@ describe('POST /api/github/webhook', () => {
     mockGetPrDiff.mockResolvedValue('diff --git a/foo.ts b/foo.ts\n+const x = 1;');
     mockPostIssueComment.mockResolvedValue(undefined);
   });
-
-  // ── 1. Missing signature → 401 ───────────────────────────────────────────
 
   it('returns 401 when x-hub-signature-256 header is absent', async () => {
     mockVerifySignature.mockReturnValue(false);
@@ -177,8 +130,6 @@ describe('POST /api/github/webhook', () => {
     expect(json.error).toMatch(/invalid signature/i);
   });
 
-  // ── 2. Wrong/tampered signature → 401 ────────────────────────────────────
-
   it('returns 401 when signature does not match payload', async () => {
     mockVerifySignature.mockReturnValue(false);
 
@@ -191,8 +142,6 @@ describe('POST /api/github/webhook', () => {
     const json = (await response.json()) as { error: string };
     expect(json.error).toMatch(/invalid signature/i);
   });
-
-  // ── 3. Non-issue_comment event → no-op 200 ───────────────────────────────
 
   it('returns 200 immediately for non-issue_comment events without processing', async () => {
     const pushPayload = { ref: 'refs/heads/main', commits: [] };
@@ -212,7 +161,6 @@ describe('POST /api/github/webhook', () => {
     const json = (await response.json()) as { received: boolean };
     expect(json.received).toBe(true);
 
-    // No downstream calls should be made for non-comment events
     expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
   });
 
@@ -280,8 +228,6 @@ describe('POST /api/github/webhook', () => {
     expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
   });
 
-  // ── 4. Bot self-reply guard skips processing ──────────────────────────────
-
   it('returns 200 without invoking LLM when sender is the bot itself', async () => {
     const payload = makeBotMentionPayload({
       sender: { type: 'Bot', login: 'agi-workforce[bot]' },
@@ -300,29 +246,21 @@ describe('POST /api/github/webhook', () => {
     const response = await POST(request);
     expect(response.status).toBe(200);
 
-    // Let the async processReview fire-and-forget micro-task drain
     await vi.waitFor(
       () => {
-        // Bot guard fires before token retrieval — no installation token call
         expect(mockGetInstallationAccessToken).not.toHaveBeenCalled();
       },
       { timeout: 500 },
     );
   });
 
-  // ── 5. Monthly quota exceeded → 200, LLM skipped ─────────────────────────
-
   it('skips LLM call and returns 200 when installation is over monthly quota', async () => {
-    // DB setup:
-    //   1st call (debounce check): no recent pending attempt for this PR
-    //   2nd call (quota check): count = 100 (at cap)
     mockDbQuery
       .mockResolvedValueOnce([
-        // installation record
         { user_id: 'u1', pr_review_enabled: true, review_model: null },
       ])
-      .mockResolvedValueOnce([]) // debounce: no in-flight attempt
-      .mockResolvedValueOnce([{ cnt: '100' }]); // quota: at cap (default = 100)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ cnt: '100' }]);
 
     const payload = makeBotMentionPayload();
     const body = JSON.stringify(payload);
@@ -339,28 +277,19 @@ describe('POST /api/github/webhook', () => {
     const response = await POST(request);
     expect(response.status).toBe(200);
 
-    // Wait for the background processReview task to complete
     await vi.waitFor(
       () => {
-        // Quota exceeded path posts a comment explaining the cap
-        // postIssueComment(token, owner, repo, issueNumber, body) — body is at index 4
         expect(mockPostIssueComment).toHaveBeenCalledOnce();
         const commentBody = mockPostIssueComment.mock.calls[0]?.[4] as string;
         expect(commentBody).toMatch(/monthly review quota/i);
 
-        // LLM fetch (getPrDiff) must NOT have been called
         expect(mockGetPrDiff).not.toHaveBeenCalled();
       },
       { timeout: 2000 },
     );
   });
 
-  // ── 6. Debounce: pending attempt in flight → skip ─────────────────────────
-
   it('skips processing when a pending attempt exists within debounce window', async () => {
-    // DB setup:
-    //   installation query returns enabled record
-    //   debounce query returns a 'pending' row (in-flight)
     mockDbQuery
       .mockResolvedValueOnce([{ user_id: 'u1', pr_review_enabled: true, review_model: null }])
       .mockResolvedValueOnce([
@@ -369,7 +298,7 @@ describe('POST /api/github/webhook', () => {
           attempted_at: new Date().toISOString(),
           status: 'pending',
         },
-      ]); // debounce: another attempt is in flight
+      ]);
 
     const payload = makeBotMentionPayload();
     const body = JSON.stringify(payload);
@@ -388,26 +317,20 @@ describe('POST /api/github/webhook', () => {
 
     await vi.waitFor(
       () => {
-        // Debounce path inserts a 'skipped_debounce' record.
-        // The SQL uses a $5 placeholder; 'skipped_debounce' is in the params array (c[1]).
         expect(mockDbExecute).toHaveBeenCalled();
         const insertCall = mockDbExecute.mock.calls.find(
           (c) => Array.isArray(c[1]) && (c[1] as unknown[]).includes('skipped_debounce'),
         );
         expect(insertCall).toBeDefined();
 
-        // LLM and upstream GitHub diff must not be fetched
         expect(mockGetPrDiff).not.toHaveBeenCalled();
       },
       { timeout: 2000 },
     );
   });
 
-  // ── 7. issue_comment without pull_request key is ignored ─────────────────
-
   it('ignores issue comments on plain issues (not PRs)', async () => {
     const payload = makeBotMentionPayload({
-      // No pull_request key on the issue → plain issue, not a PR
       issue: { number: 10 }, // no pull_request property
     });
     const body = JSON.stringify(payload);

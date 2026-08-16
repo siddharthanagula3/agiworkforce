@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * An abstention.
- *
- * This is structurally a different thing from an answer, not a restyled one:
- * a bordered notice with its own heading element, its own `data-support-message`
- * value, a warning mark, and an escalation control attached. A user skimming the
- * panel must not be able to mistake it for a confident reply, and an automated
- * check must be able to tell them apart without inspecting CSS.
- *
- * For the four hard-abstain categories the heading NAMES the category, because
- * "I won't answer billing questions" is more useful — and more honest — than a
- * generic hedge.
- */
-
 import type { SupportAbstentionView } from '../lib/contract';
 import { ABSTENTION_HEADING } from '../lib/normalize-answer';
 import { renderSupportText } from '../lib/render-text';

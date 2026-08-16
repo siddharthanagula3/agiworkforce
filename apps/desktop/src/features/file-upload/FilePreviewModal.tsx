@@ -55,7 +55,6 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           setPreviewContent(file.content);
         }
       } else if (file.type === 'application/pdf') {
-        // PDF will be handled by the PDFViewer component
         if (file.path) {
           setPreviewContent(convertFileSrc(file.path));
         } else if (file.content) {

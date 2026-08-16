@@ -65,11 +65,6 @@ async function findIdempotentBranch(
   return conversation ?? null;
 }
 
-/**
- * Return only the fork groups relevant to the displayed conversation. A direct
- * child maps its parent's fork-point id through the relational copy map, so the
- * navigator is mounted beside the corresponding local message.
- */
 export async function listConversationBranchGroups(
   db: DatabaseAdapter,
   userId: string,
@@ -176,11 +171,6 @@ export async function listConversationBranchGroups(
   });
 }
 
-/**
- * Fork a conversation atomically at a real owned message. The target keeps
- * the source privacy/project/model boundary, receives fresh message ids, and
- * records a source/target id map for later branch navigation.
- */
 export async function forkConversation(
   db: DatabaseAdapter,
   userId: string,

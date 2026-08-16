@@ -20,7 +20,6 @@ const reportRoots = [
 ];
 
 const requiredMarkers = ['Status:', 'Owner:', 'Purpose:', 'Retention:'];
-// Lighter contract for allowlisted root control docs: must be owned + status-tracked.
 const controlDocMarkers = ['Status:', 'Owner:'];
 
 function exists(relativePath) {
@@ -56,9 +55,6 @@ function childEntries(relativeRoot) {
 
 for (const reportRoot of reportRoots) {
   if (!exists(reportRoot.path)) {
-    // Report roots are removed by scripts/clean-repo.mjs and treated as disposable
-    // evidence per the agi-alpha policy. When absent there is nothing to retain, so
-    // skip rather than fail; retention rules still apply if the root is recreated.
     continue;
   }
 

@@ -1,24 +1,3 @@
-/**
- * Cloud plugins.
- *
- * This section used to open `/settings/plugins` in a Desktop-owned child
- * window. That path does not exist on the web app — `apps/web/app/settings/`
- * has no `plugins` route, and web's own settings modal routes its Plugins item
- * to the public `/apps` page instead — so the button reliably produced a
- * `/login` redirect (`apps/web/proxy.ts` protects `/settings(.*)`) followed by
- * a 404. It was a dead control, not a bridge.
- *
- * There is no account plugin contract to render inline either: web's Plugins
- * panel is fed a STATIC catalogue (`apps/web/features/plugins/data/plugins.ts`)
- * with `plugins: []` and every row labelled "Catalogue preview", and there is
- * no `/api/plugins` route on any surface. So this section states that plainly
- * and points at the two account-owned extension surfaces that ARE wired in this
- * modal — Connectors and Skills — plus the public catalogue page, opened in the
- * system browser rather than a cookie-gated webview.
- *
- * Local Mode extensions are a different trust boundary and stay in Local
- * settings; nothing here reads or writes them.
- */
 
 import { useState } from 'react';
 
@@ -27,7 +6,6 @@ import { openExternalUrl } from '../../../utils/navigation';
 import { SECONDARY_BUTTON, SectionHeading } from './sectionChrome';
 
 export interface CloudPluginsSectionProps {
-  /** Lets the caller move the user to a section that is actually wired. */
   onOpenSection?: (section: string) => void;
 }
 

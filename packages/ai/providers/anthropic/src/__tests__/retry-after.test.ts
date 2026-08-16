@@ -1,10 +1,3 @@
-/**
- * P1-4: parseRetryAfter — RFC 7231 §7.1.3 conformance.
- *
- * Adapters parse the upstream `Retry-After` header on 429/503 responses
- * and surface the suggested wait via `StreamChunkError.retryAfterSeconds`.
- * The header may be either a delta-seconds integer or an HTTP-date.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -25,8 +18,6 @@ describe('parseRetryAfter — delta-seconds form', () => {
   });
 
   it('returns undefined for negative values', () => {
-    // Regex rejects the leading minus sign; falls through to Date.parse(),
-    // which fails too — undefined is the correct outcome.
     expect(parseRetryAfter(new Headers({ 'Retry-After': '-5' }))).toBeUndefined();
   });
 });

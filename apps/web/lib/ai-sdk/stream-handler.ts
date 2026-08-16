@@ -1,12 +1,5 @@
 import 'server-only';
 
-/**
- * AI SDK v6 Stream Handler
- *
- * Wraps `streamText` from the Vercel AI SDK v6 to produce a Next.js-compatible
- * streaming Response. Uses `toTextStreamResponse()` for compatibility.
- */
-
 import {
   streamText,
   jsonSchema,
@@ -23,10 +16,6 @@ import {
   type AiSdkChunkLike,
 } from './event-adapter';
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
 export interface AiSdkTool {
   description?: string;
   parameters: ReturnType<typeof jsonSchema>;
@@ -41,7 +30,6 @@ export interface StreamHandlerOptions {
   temperature?: number;
   topP?: number;
   tools?: ToolSet;
-  /** AI SDK v6 provider-specific options (e.g. thinking, effort, contextManagement). */
   providerOptions?: ProviderOptions;
   onToolCall?: (params: {
     toolCallId: string;
@@ -71,10 +59,6 @@ export interface StreamHandlerOptions {
   }) => void;
   abortSignal?: AbortSignal;
 }
-
-// ---------------------------------------------------------------------------
-// Stream handler
-// ---------------------------------------------------------------------------
 
 export async function createAiSdkStream(options: StreamHandlerOptions): Promise<Response> {
   const {
@@ -112,11 +96,9 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
         onAgiEvent(agiChunk);
       }
 
-      // AI SDK v6: text-delta chunk has `.text` property
       if (chunk.type === 'text-delta' && onChunk) {
         onChunk(chunk.text);
       }
-      // AI SDK v6: reasoning chunk is `reasoning-delta` with `.text`
       if (chunk.type === 'reasoning-delta' && onReasoning) {
         onReasoning(chunk.text);
       }
@@ -140,7 +122,6 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
       }
 
       if (onFinish) {
-        // AI SDK v6: reasoning is ReasoningOutput (array) - join text parts
         let reasoningText: string | undefined;
         if (reasoning) {
           if (Array.isArray(reasoning)) {
@@ -155,7 +136,6 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
         onFinish({
           text,
           reasoning: reasoningText,
-          // AI SDK v6: LanguageModelUsage uses inputTokens/outputTokens
           usage: usage
             ? {
                 promptTokens: usage.inputTokens ?? 0,
@@ -171,7 +151,6 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
     },
   });
 
-  // If a tool-call handler is provided, consume the full stream to invoke it.
   if (onToolCall) {
     void (async () => {
       try {
@@ -183,7 +162,6 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
             }
 
             try {
-              // AI SDK v6: tool call args are in `input` property
               const toolArgs =
                 (part as unknown as { input?: unknown; args?: unknown }).input ??
                 (part as unknown as { args?: unknown }).args ??
@@ -214,7 +192,6 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
     })();
   }
 
-  // AI SDK v6 uses toTextStreamResponse()
   return result.toTextStreamResponse({
     headers: {
       'Cache-Control': 'no-cache',
@@ -222,10 +199,6 @@ export async function createAiSdkStream(options: StreamHandlerOptions): Promise<
     },
   });
 }
-
-// ---------------------------------------------------------------------------
-// Message conversion helpers
-// ---------------------------------------------------------------------------
 
 export function toCoreMessages(
   messages: Array<{
@@ -261,7 +234,6 @@ export function toCoreMessages(
                 type: 'tool-call' as const,
                 toolCallId: tc.id,
                 toolName: tc.function.name,
-                // AI SDK v6 ToolCallPart uses `input` not `args`
                 input: (() => {
                   try {
                     return JSON.parse(tc.function.arguments) as Record<string, unknown>;
@@ -280,7 +252,6 @@ export function toCoreMessages(
 
       case 'tool':
         if (msg.tool_call_id) {
-          // AI SDK v6 ToolResultPart uses `output: { type: 'text', value }` not `content`
           coreMessages.push({
             role: 'tool',
             content: [
@@ -316,7 +287,6 @@ export function toAiSdkTools(tools?: OpenAIToolDefinition[]): ToolSet | undefine
   for (const toolDef of tools) {
     if (toolDef.type === 'function' && toolDef.function) {
       const { name, description, parameters } = toolDef.function;
-      // AI SDK v6: Tool uses `inputSchema` not `parameters`
       sdkTools[name] = tool({
         description,
         inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),

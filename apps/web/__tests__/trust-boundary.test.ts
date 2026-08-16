@@ -1,20 +1,5 @@
-/**
- * Web surface trust-boundary tests.
- *
- * Verifies that the API layer enforces isolation between:
- *   - Local/BYOK sessions (no managed-cloud billing, no credit allocation)
- *   - BYOK tier (user-supplied keys, not AGI-funded compute)
- *   - Managed cloud (waitlist-gated, subscription-required)
- *
- * These are unit tests of the business logic rules, not integration tests
- * against live Stripe or Neon. Each gate function mirrors the production code.
- */
 
 import { describe, it, expect } from 'vitest';
-
-// ---------------------------------------------------------------------------
-// Upgrade tier ordering — mirrors apps/web/app/api/upgrade/route.ts
-// ---------------------------------------------------------------------------
 
 const TIER_ORDER: Record<string, number> = {
   free: 0,
@@ -65,10 +50,6 @@ describe('upgrade tier ordering', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Credit-based proration logic — mirrors the proration calculation in route.ts
-// ---------------------------------------------------------------------------
-
 const calculateCreditAmountCents = (
   oldPlanPriceCents: number,
   creditsRemaining: number,
@@ -93,7 +74,6 @@ describe('credit-based proration calculation', () => {
   });
 
   it('result is floored (no fractional cents)', () => {
-    // 2001 * (1/3) = 667.0 → floor = 667
     expect(calculateCreditAmountCents(2001, 1, 3)).toBe(667);
   });
 
@@ -111,15 +91,10 @@ describe('credit-based proration calculation', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Stripe customer balance semantics
-// A negative Stripe balance = credit that auto-applies to next invoice.
-// ---------------------------------------------------------------------------
-
 describe('Stripe customer balance credit semantics', () => {
   it('applying credit reduces balance (more negative)', () => {
-    const existingBalance = -500; // $5.00 credit already on account
-    const newCredit = -1000; // $10.00 additional credit
+    const existingBalance = -500;
+    const newCredit = -1000;
     const resultBalance = existingBalance + newCredit;
     expect(resultBalance).toBe(-1500);
     expect(resultBalance).toBeLessThan(existingBalance);
@@ -129,7 +104,6 @@ describe('Stripe customer balance credit semantics', () => {
     const originalBalance = -500;
     const appliedCredit = -1000;
     const balanceAfterApply = originalBalance + appliedCredit;
-    // On failure, restore: subtract the credit (add its absolute value back)
     const restoredBalance = balanceAfterApply - appliedCredit;
     expect(restoredBalance).toBe(originalBalance);
   });
@@ -141,13 +115,8 @@ describe('Stripe customer balance credit semantics', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Trust-boundary: BYOK vs managed-cloud billing isolation
-// ---------------------------------------------------------------------------
-
 describe('billing trust-boundary isolation', () => {
   it('CRITICAL: BYOK users must not consume AGI compute credits', () => {
-    // preferCloudCredits is only true for managed tier
     const preferCloudCredits = (privacyMode: string) => privacyMode === 'managed';
     expect(preferCloudCredits('byok')).toBe(false);
     expect(preferCloudCredits('local')).toBe(false);
@@ -155,7 +124,6 @@ describe('billing trust-boundary isolation', () => {
   });
 
   it('CRITICAL: upgrade endpoint requires an active paid subscription (not free)', () => {
-    // Route validates hasActivePaidPlan before allowing mid-cycle upgrade
     const canUpgradeMidCycle = (plan: string, status: string) =>
       plan !== 'free' && ['active', 'trialing'].includes(status);
 
@@ -166,16 +134,11 @@ describe('billing trust-boundary isolation', () => {
   });
 
   it('rate limit: upgrade endpoint is capped at 5 requests per minute', () => {
-    // Mirrors the rateLimitConfigs.upgrade entry in rate-limit.ts
     const upgradeRateLimit = { limit: 5, window: '1 m', failClosed: false };
     expect(upgradeRateLimit.limit).toBe(5);
     expect(upgradeRateLimit.window).toBe('1 m');
   });
 });
-
-// ---------------------------------------------------------------------------
-// Webhook event filtering — only subscribed events trigger DB changes
-// ---------------------------------------------------------------------------
 
 describe('stripe webhook event filtering', () => {
   const HANDLED_EVENTS = new Set([

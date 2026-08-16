@@ -26,8 +26,6 @@ export function useVoiceHotkey() {
   const stopListening = useVoiceInputStore((s) => s.stopListening);
   const hotkey = useVoiceInputStore((s) => s.hotkey);
 
-  // Track whether we started listening via the keyboard so we only
-  // call stopListening once.
   const isListeningViaKeyboard = useRef(false);
 
   useEffect(() => {
@@ -42,7 +40,6 @@ export function useVoiceHotkey() {
         return (e.ctrlKey || e.metaKey) && e.code === 'Space' && !e.shiftKey && !e.altKey;
       if (isCtrlShiftV)
         return (e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'v';
-      // Caps Lock: match only the CapsLock key itself, without other modifiers
       if (isCapsLock)
         return e.code === 'CapsLock' && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey;
       return false;
@@ -52,7 +49,6 @@ export function useVoiceHotkey() {
       if (!matchesHotkey(e)) return;
 
       if (isCapsLock) {
-        // Toggle mode: if already listening, stop; otherwise start.
         e.preventDefault();
         if (isListeningViaKeyboard.current) {
           isListeningViaKeyboard.current = false;
@@ -71,11 +67,9 @@ export function useVoiceHotkey() {
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-      // Caps Lock is toggle-based — keyup has no release semantics here.
       if (isCapsLock) return;
 
       if (!isListeningViaKeyboard.current) return;
-      // For option key, fire on any keyup that releases Alt
       const releaseMatches =
         (isOptionHotkey && !e.altKey) ||
         (isCtrlSpace && (e.code === 'Space' || (!e.ctrlKey && !e.metaKey))) ||

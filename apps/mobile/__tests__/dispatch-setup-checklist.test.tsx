@@ -27,9 +27,6 @@ jest.mock('@/lib/safeOpenURL', () => ({
   isAllowedExternalUrl: jest.requireActual('../lib/safeOpenURL').isAllowedExternalUrl,
 }));
 
-// jest-expo already stubs the TurboModule, so spying beats re-mocking
-// react-native (which trips the TurboModule invariant) — same approach as
-// __tests__/coverage-wave2-content-report.test.ts.
 const canOpenURLSpy = jest.spyOn(Linking, 'canOpenURL');
 const openURLSpy = jest.spyOn(Linking, 'openURL');
 
@@ -109,7 +106,6 @@ import { isAllowedExternalUrl } from '../lib/safeOpenURL';
 
 const WEB_APP_ROOT = path.resolve(__dirname, '../../web/app');
 
-/** Text nodes in render order, so "above the CTA" is a real assertion. */
 function textsInOrder(node: unknown, acc: string[] = []): string[] {
   if (typeof node === 'string') {
     acc.push(node);
@@ -205,7 +201,6 @@ describe('PAR-M28 — PairingRiskDisclosure', () => {
     fireEvent.press(screen.getByText('Learn how to use this safely'));
 
     await waitFor(() => expect(mockOpenExternalUrl).toHaveBeenCalledWith(DISPATCH_SAFETY_URL));
-    // Never raw Linking — that would bypass the allowlist chokepoint.
     expect(openURLSpy).not.toHaveBeenCalled();
   });
 
@@ -240,7 +235,6 @@ describe('PAR-M28 — DisconnectedView (returning users)', () => {
 
     expect(lastStep).toBeGreaterThanOrEqual(0);
     expect(cta).toBeGreaterThan(lastStep);
-    // The "scan first, read later" divider is gone.
     expect(indexOfMatch(texts, /HOW IT WORKS/)).toBe(-1);
   });
 });

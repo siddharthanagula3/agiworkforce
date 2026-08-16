@@ -26,22 +26,6 @@ import { isSupportedChatAttachment, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
-/**
- * Presigned-upload API · client code never imports the R2/S3 SDK or holds
- * credentials. It asks this route for a short-lived PUT URL, uploads bytes
- * directly to R2 via `fetch`, then registers the resulting object locator with
- * the owning resource. Chat attachments and project knowledge receive only an
- * opaque key and land in private storage; public URLs remain limited to
- * resource types that intentionally use them.
- *
- * A server proxy route can't be used here: Vercel serverless functions cap
- * request bodies at ~4.5MB, well under the knowledge-file size cap, so the
- * browser must PUT directly to R2.
- *
- * Chat attachments use the same direct-to-R2 boundary, then call the
- * owner-scoped completion route to verify bytes and register media metadata.
- */
-
 const PresignRequestSchema = z.object({
   kind: z.enum(['avatar', 'knowledge-file', 'chat-attachment']),
   fileName: z.string().min(1).max(255),
@@ -59,11 +43,6 @@ const CleanupRequestSchema = z.object({
     .regex(/^[A-Za-z0-9][A-Za-z0-9._/-]*$/),
 });
 
-/**
- * Avatars are rendered at ~40px. The 25 MiB attachment ceiling is sized for
- * project knowledge documents, not for a profile picture, and every avatar
- * lands in the public bucket permanently.
- */
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 function extOf(name: string): string {
@@ -106,10 +85,6 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
   if (!validation.ok) {
     throw createError.validation(validation.message);
   }
-  // Per-kind narrowing on top of the shared contract. Every kind gets a cap and
-  // a type roster here: the presigned PUT stamps the object with the caller's
-  // declared Content-Type. Avatars still use public storage; private chat and
-  // project-knowledge uploads are inspected again before registration.
   if (kind === 'chat-attachment') {
     if (byteCount > MAX_CHAT_ATTACHMENT_BYTES) {
       throw createError.validation('Chat attachments are limited to 12 MiB.');

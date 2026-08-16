@@ -19,14 +19,6 @@ export interface LeaveOrganizationInput {
   successorUserId?: string;
 }
 
-/**
- * Remove the authenticated account from its current organization.
- *
- * This deliberately does not require an active paid entitlement: leaving is an
- * exit right, not an organization-administration capability. The user-scoped
- * lock is shared with workspace creation and invitation acceptance so the
- * membership change and resulting active-workspace selection stay ordered.
- */
 export async function leaveOrganization(
   db: DatabaseAdapter,
   input: LeaveOrganizationInput,
@@ -87,10 +79,6 @@ export async function leaveOrganization(
         }
         successorPreviousRole = successor.role;
 
-        // The single-owner unique index is immediate, while the at-least-one
-        // owner trigger is deferred. Demote first, promote second, then delete
-        // the departing member; the transaction can only commit with exactly
-        // one owner.
         await tx.execute(
           `update public.organization_members
               set role = 'admin'

@@ -64,12 +64,7 @@ import { CloudRuntime } from './CloudRuntime';
 import { TauriRuntime } from './TauriRuntime';
 import { WebRuntime } from './WebRuntime';
 
-// ============================================================================
-// Per-conversation session labeling
-// ============================================================================
-
 export interface DesktopSessionLabelInput {
-  /** The conversation id this session represents (frontend uuid or backend numeric id, stringified). */
   id: string;
   ownerUserId: string;
   chatExecutionMode: ChatExecutionMode;
@@ -79,21 +74,9 @@ export interface DesktopSessionLabelInput {
 
 const PENDING_CAPABILITY_HANDSHAKE_VERSION = 'unversioned-pending-capability-handshake';
 
-/**
- * Builds and validates the `AppSession` record for a desktop conversation
- * from its real `ChatExecutionMode`. Throws (via `assertSessionInvariants`)
- * if the constructed session violates a cross-field invariant — call sites
- * gate this on `import.meta.env.DEV` so it never changes production flow.
- */
 export function labelDesktopSession(input: DesktopSessionLabelInput): AppSession {
   const now = input.createdAt ?? new Date().toISOString();
   const updatedAt = input.updatedAt ?? now;
-  // capabilityDocument is a REF (CapabilityDocumentRef), not the full
-  // EffectiveCapabilityDocument — desktop does not run the capability
-  // handshake (packages/contracts/types/src/capability-handshake/, sibling-owned) yet,
-  // so `version` is an explicit, clearly-named placeholder rather than a
-  // fabricated version string. Replace with the real handshake ref once
-  // desktop consumes it.
   const policySnapshot = {
     capabilityDocument: {
       sessionId: input.id,
@@ -119,8 +102,6 @@ export function labelDesktopSession(input: DesktopSessionLabelInput): AppSession
       hostRequirement: { required: true, liveness: 'online' },
       policySnapshot,
       retentionPolicy: { deletionPolicy: 'user_deletable' },
-      // Local -> BYOK fork is a real, live feature (Sidebar.tsx "Fork to BYOK");
-      // Local is never itself a handoff *target*.
       handoff: { canBeHandoffSource: true, canBeHandoffTarget: false },
       createdAt: now,
       updatedAt,
@@ -144,7 +125,6 @@ export function labelDesktopSession(input: DesktopSessionLabelInput): AppSession
       hostRequirement: { required: true, liveness: 'online' },
       policySnapshot,
       retentionPolicy: { deletionPolicy: 'user_deletable' },
-      // BYOK conversations receive the Local->BYOK fork; not a further source yet.
       handoff: { canBeHandoffSource: false, canBeHandoffTarget: true },
       createdAt: now,
       updatedAt,
@@ -153,7 +133,6 @@ export function labelDesktopSession(input: DesktopSessionLabelInput): AppSession
     return session;
   }
 
-  // 'cloud_managed'
   const session: CloudChatSession = {
     id: input.id,
     kind: 'cloud_chat',
@@ -176,12 +155,6 @@ export function labelDesktopSession(input: DesktopSessionLabelInput): AppSession
   return session;
 }
 
-/**
- * Resolves and validates the `ExecutionProfile` for a desktop conversation's
- * `ChatExecutionMode`. `local_only`/`byok` both resolve under the `local`
- * toggle (BYOK is a sub-mode — see `packages/contracts/types/src/sessions/
- * execution-profile.ts` module doc); only `cloud_managed` resolves `cloud`.
- */
 export function desktopExecutionProfileFor(mode: ChatExecutionMode): ExecutionProfile {
   const profile =
     mode === 'cloud_managed'
@@ -194,24 +167,6 @@ export function desktopExecutionProfileFor(mode: ChatExecutionMode): ExecutionPr
   return profile;
 }
 
-// ============================================================================
-// Composition-root agreement check
-// ============================================================================
-
-/**
- * Asserts that the concrete `ChatRuntime` instance actually returned by the
- * composition root agrees with the given `ExecutionProfile`'s toggle:
- *   - `local`  => must NOT be `CloudRuntime` (the only desktop runtime that
- *     calls `getDesktopCloudChatPersistenceClient()`).
- *   - `cloud`  => must be `CloudRuntime` or `WebRuntime` (both cloud/SSE
- *     runtimes; `WebRuntime` — the embedded non-Tauri build — always behaves
- *     cloud-like regardless of `appMode`, per its own module doc comment).
- *
- * Checks the actual returned object's class identity (`instanceof`), not a
- * second derivation from the same `(isTauriHost, appMode)` inputs used to
- * select it — so this catches a real wiring bug (e.g. a factory swapped to
- * construct the wrong runtime class), not just re-deriving the same branch.
- */
 export function assertDesktopRuntimeAgreesWithExecutionProfile(
   profile: ExecutionProfile,
   runtime: ChatRuntime,
@@ -236,20 +191,11 @@ export function assertDesktopRuntimeAgreesWithExecutionProfile(
   }
 }
 
-/** The toggle implied by the composition root's own selection inputs — mirrors, does not alter, `createDesktopChatRuntime`'s branch order. */
 function impliedToggleFor(environment: DesktopChatRuntimeEnvironment): ExecutionProfileToggle {
-  if (!environment.isTauriHost) return 'cloud'; // WebRuntime — always cloud-like.
+  if (!environment.isTauriHost) return 'cloud';
   return environment.appMode === 'cloud' ? 'cloud' : 'local';
 }
 
-/**
- * Additive wrapper around `createDesktopChatRuntime`: calls the real,
- * unmodified composition root, then — in dev/test only — resolves the
- * implied `ExecutionProfile` and asserts it agrees with the concrete runtime
- * class actually returned. Use this at the real app bootstrap call site
- * instead of `createDesktopChatRuntime` directly; the wrapped function's
- * selection behavior is byte-for-byte identical.
- */
 export function createDesktopChatRuntimeWithLabeling(
   environment: DesktopChatRuntimeEnvironment,
   factories?: DesktopChatRuntimeFactories,

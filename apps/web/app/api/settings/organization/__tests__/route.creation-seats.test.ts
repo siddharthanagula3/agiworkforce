@@ -57,7 +57,6 @@ function createRequest() {
   }) as never;
 }
 
-/** The subscription row a Team buyer already has when they create their org. */
 function subscriptionRow(overrides: Record<string, unknown> = {}) {
   return {
     plan_tier: 'team',
@@ -68,10 +67,6 @@ function subscriptionRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-/**
- * Answers by statement rather than by call order, so a route that stops reading
- * the subscription fails on the seat assertion instead of on a shifted queue.
- */
 function stubQueries(subscription: Record<string, unknown>) {
   mockQuery.mockImplementation(async (sql: unknown) => {
     const text = String(sql);
@@ -112,9 +107,6 @@ describe('POST /api/settings/organization — purchased seats', () => {
     const [sql, params] = insertCall() ?? [];
     expect(String(sql)).toContain('licensed_seats');
     expect(params).toEqual(['Demo Team', 'demo-team', 'team-owner', 5, 'team']);
-    // The Stripe anchors stay with the webhook: writing stripe_subscription_id
-    // here can trip idx_organizations_stripe_subscription, which this route
-    // reports as a slug conflict the buyer cannot fix by renaming.
     expect(String(sql)).not.toContain('stripe_subscription_id');
     expect(String(sql)).not.toContain('stripe_customer_id');
   });
@@ -141,18 +133,11 @@ describe('POST /api/settings/organization — purchased seats', () => {
 
     const response = await POST(createRequest());
 
-    // Creating it anyway would cap the organization at the default seat, and
-    // `licensed_seats` is not writable from the product afterwards.
     expect(response.status).toBe(503);
     expect(mockTransaction).not.toHaveBeenCalled();
     expect(insertCall()).toBeUndefined();
   });
 
-  // KNOWN GAP, not a desired outcome: `requireTeamAdminAccess` admits
-  // 'enterprise' too, but enterprise is contract-sold and carries no per-seat
-  // Stripe quantity, so an enterprise buyer still lands on the default seat and
-  // cannot invite anyone until billing writes `licensed_seats`. This asserts
-  // only that the route does not FABRICATE a number it has no source for.
   it('does not invent seats for a plan that is not sold by the seat', async () => {
     stubQueries(subscriptionRow({ plan_tier: 'enterprise' }));
 

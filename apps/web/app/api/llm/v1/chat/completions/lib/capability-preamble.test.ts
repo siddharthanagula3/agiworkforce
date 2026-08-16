@@ -49,7 +49,6 @@ describe('capability preamble', () => {
 
   it('does not present the UTC calendar date as the user’s local date', () => {
     const preamble = buildCapabilityPreamble({
-      // Still July 25 in America/Chicago even though UTC has crossed midnight.
       now: new Date('2026-07-26T02:19:00.000Z'),
       timeZone: 'America/Chicago',
       tools: [{ type: 'function', function: { name: 'web_search' } }],
@@ -111,9 +110,6 @@ describe('capability preamble', () => {
     for (const format of formats) {
       expect(officeLine).toContain(`.${format}`);
     }
-    // The tool rejects anything outside its enum, so the preamble must not
-    // advertise another Office format — the model would call it and get
-    // `invalid_office_file_request`.
     for (const format of ['docx', 'xlsx', 'pptx']) {
       if (formats.includes(format)) continue;
       expect(officeLine).not.toContain(`.${format}`);

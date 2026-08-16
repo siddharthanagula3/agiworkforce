@@ -1,10 +1,4 @@
 import { resolveScreenDir } from '../support/dom';
-// AI Response Rendering QA — drives a real Local-mode (Ollama) chat send with
-// a prompt that forces a deterministic, markdown-rich reply, then inspects the
-// real rendered DOM (not source-reading) for: headings, bold/italic, inline
-// code, fenced code block + language label + syntax highlighting, tables,
-// blockquotes, lists, and incremental/streaming render behavior. Part of the
-// Application checklist row #7 (docs/agent-context/desktop-qa-checklist.md).
 
 const SCREEN_DIR = resolveScreenDir('desktop-qa');
 
@@ -57,8 +51,6 @@ describe('AGI Desktop AI response rendering (real Ollama send, real DOM inspecti
     if (pickerVisible) {
       await modelPicker.click();
       await browser.pause(500);
-      // A renderer E2E may pin a locally installed model through the test
-      // environment. The repository does not own that runtime model ID.
       const preferredModel = process.env['AGI_WDIO_MARKDOWN_MODEL_ID'];
       const clicked = await browser.execute((modelName) => {
         if (!modelName) return false;
@@ -91,10 +83,6 @@ describe('AGI Desktop AI response rendering (real Ollama send, real DOM inspecti
     await browser.pause(1000);
     await browser.saveScreenshot(`${SCREEN_DIR}/ai-render-post-send.png`);
 
-    // Wait for a NEW assistant bubble (count increases past preSendCount), not
-    // just any element matching the selector — this app persists conversations
-    // across relaunches, so a stale assistant bubble from a prior run/turn can
-    // already be present and must not be mistaken for the new response.
     await browser.waitUntil(
       async () => {
         const count = await browser.execute(
@@ -122,17 +110,11 @@ describe('AGI Desktop AI response rendering (real Ollama send, real DOM inspecti
         return last ? last.innerText || last.textContent || '' : '';
       });
 
-    // Mid-stream screenshot: verify no raw unrendered markdown flash / layout break.
     await browser.pause(2000);
     await browser.saveScreenshot(`${SCREEN_DIR}/ai-render-mid-stream.png`);
     const midStreamHtml = await getLastAssistantHtml();
     console.log('MID_STREAM_HTML_LENGTH', midStreamHtml ? midStreamHtml.length : 0);
 
-    // Poll until streaming stabilizes: require a long (30s) quiet period with
-    // no growth before concluding generation is done. A reasoning-capable
-    // local model can have long legitimate gaps between tokens, so a short
-    // stability window here previously produced false "done" reads on a
-    // still-in-flight response (captured only "#" of a much longer reply).
     let lastLen = -1;
     let stableCount = 0;
     for (let i = 0; i < 90 && stableCount < 10; i++) {
@@ -175,8 +157,6 @@ describe('AGI Desktop AI response rendering (real Ollama send, real DOM inspecti
     console.log('STRUCTURAL_CHECKS', JSON.stringify(structuralChecks));
 
     expect(structuralChecks).not.toBeNull();
-    // DESKTOP-MARKDOWN-NO-HEADING-01: the shared renderer must preserve ATX
-    // headings as semantic h1/h2/h3 elements, not visual-only generic divs.
     expect(structuralChecks!.hasHeading).toBe(true);
     expect(structuralChecks!.hasBold).toBe(true);
     expect(structuralChecks!.hasItalic).toBe(true);

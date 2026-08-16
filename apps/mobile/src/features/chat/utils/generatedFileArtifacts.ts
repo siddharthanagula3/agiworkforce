@@ -33,14 +33,12 @@ const GENERATED_FILE_KINDS: ReadonlySet<string> = new Set([
   'other',
 ]);
 
-/** Last descriptor wins so reconnect/replay cannot duplicate one file card. */
 export function dedupeGeneratedFileWire(files: GeneratedFileWire[]): GeneratedFileWire[] {
   const byId = new Map<string, GeneratedFileWire>();
   for (const file of files) byId.set(file.id, file);
   return [...byId.values()];
 }
 
-/** Web-compatible, bounded metadata projection used by Cloud transcript sync. */
 export function generatedFileMetadataFromWire(
   files: GeneratedFileWire[],
 ): PersistedGeneratedFileMetadata[] {
@@ -57,11 +55,6 @@ export function generatedFileMetadataFromWire(
   }));
 }
 
-/**
- * Revalidate persisted camel-case descriptors through the shared wire schema.
- * This keeps pulled metadata untrusted until the same contract that validates
- * live SSE descriptors has accepted it.
- */
 export function generatedFileWireFromMetadata(metadata: unknown): GeneratedFileWire[] {
   if (!Array.isArray(metadata)) return [];
   return parseGeneratedFilesDelta({
@@ -83,7 +76,6 @@ export function generatedFileWireFromMetadata(metadata: unknown): GeneratedFileW
   });
 }
 
-/** Map validated Cloud file descriptors to the rich Mobile artifact card shape. */
 export function generatedFileArtifactsFromWire(
   files: GeneratedFileWire[],
   createdAt: string,
@@ -96,10 +88,6 @@ export function generatedFileArtifactsFromWire(
       id: file.id,
       computeSessionId: '',
       ownerUserId: '',
-      // This projection is created by the Mobile client for a file emitted in
-      // its own Managed Cloud turn. The route is hosted by the web app, but the
-      // user-facing source surface is Mobile — “Source: Web” was transport
-      // topology leaking into the file card.
       sourceSurface: 'mobile',
       privacyMode: 'managed',
       providerMode: 'ManagedGateway',
@@ -119,10 +107,6 @@ export function generatedFileArtifactsFromWire(
       content: '',
       generatedFile,
       metadata: {
-        // x_generated_files is emitted only after the owner-scoped file row is
-        // durable, so the descriptor is ready even though Mobile has no local
-        // ComputeSession object. Feed this into the shared presentation helper
-        // rather than showing the user an “Unknown” status.
         status: 'completed',
         surface: file.surface,
         previewable: file.previewable,
@@ -138,12 +122,6 @@ export function generatedFileArtifactsFromMetadata(
   return generatedFileArtifactsFromWire(generatedFileWireFromMetadata(metadata), createdAt);
 }
 
-/**
- * Prefer the durable generated-file card when the answer also repeats that
- * file as a fenced data block. Without this reconciliation, a CSV turn showed
- * two cards: a derived snippet titled with its first raw row and the real
- * downloadable `report.csv` card. Unrelated code blocks remain visible.
- */
 export function mergeDerivedAndGeneratedFileArtifacts(
   derived: Artifact[],
   generated: Artifact[],

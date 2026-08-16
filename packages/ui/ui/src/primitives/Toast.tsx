@@ -1,22 +1,5 @@
 'use client';
 
-/**
- * Drift resolution: classified 'drifted' on two independent points:
- *
- * 1. z-index — desktop migrated `ToastViewport` to `--z-notification` (400 in
- *    apps/desktop's globals.css), the topmost layer on desktop's own scale, so
- *    toasts still correctly render above dialogs/popovers there; web's hardcoded
- *    `z-[100]` was also its own topmost layer. Ported desktop's token with an
- *    inline fallback (`z-[var(--z-notification,400)]`) so it also works in apps
- *    that don't define the variable, and kept 400 as the fallback so it stays
- *    above this package's Dialog (`--z-modal`, fallback 300) and Popover
- *    (`--z-popover`, fallback 350).
- * 2. attribute naming — web's `ToastClose` rendered a bare `toast-close=""`
- *    attribute; desktop renders `data-toast-close=""`. Neither app's code reads
- *    this attribute today (grepped both), so it's inert either way, but custom
- *    non-standard HTML attributes should use the `data-` prefix — kept desktop's
- *    `data-toast-close` as the canonical form.
- */
 import * as React from 'react';
 import * as ToastPrimitives from '@radix-ui/react-toast';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -26,7 +9,6 @@ import { useUiTranslation } from '../i18n';
 
 const ToastProvider = ToastPrimitives.Provider;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface ToastViewportProps extends React.ComponentPropsWithoutRef<
   typeof ToastPrimitives.Viewport
 > {
@@ -66,7 +48,6 @@ const toastVariants = cva(
   },
 );
 
-/** Icon component for toast variants */
 const ToastIcon: React.FC<{
   variant?: 'default' | 'destructive' | 'success' | 'warning' | 'info' | null;
 }> = ({ variant }) => {

@@ -25,19 +25,6 @@ const startupStateUnavailable: StartupRecoveryInfo = {
   dataPreserved: true,
 };
 
-/**
- * How long to wait for `startup_get_recovery_state` before treating the native
- * side as unresponsive.
- *
- * The command itself only reads a mutex-guarded Option, so a healthy backend
- * answers in microseconds; anything approaching this bound means the response
- * is not coming back at all. Without a bound, a promise that never settles
- * (rather than rejecting) leaves the user on an unrecoverable "Opening
- * encrypted local data…" spinner with no retry, no diagnostics, and no quit —
- * observed in a `tauri dev` session whose backend was provably idle in its
- * event loop. STARTUP_STATE_UNAVAILABLE was written for exactly this case but
- * was only reachable on rejection.
- */
 const STARTUP_STATE_TIMEOUT_MS = 10_000;
 
 interface StartupRecoveryBootstrapProps {
@@ -94,9 +81,6 @@ export function StartupRecoveryBootstrap({
     const previousHtmlBackground = document.documentElement.style.backgroundColor;
     const previousBodyBackground = document.body.style.backgroundColor;
     document.title = 'AGI — Local data recovery';
-    // WebKit's native screenshot surface can include the WebView overscroll
-    // gutter beyond the React root. Cover the document itself so recovery
-    // never flashes the normal light theme around the full-height screen.
     document.documentElement.style.backgroundColor = '#080b10';
     document.body.style.backgroundColor = '#080b10';
     return () => {

@@ -1,6 +1,3 @@
-/**
- * Screen capture types for the web app
- */
 
 export interface CaptureResult {
   id?: string;

@@ -5,17 +5,6 @@ import { isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import type { ToolSearchResult } from '@/types/chat';
 
-/**
- * Five accent tokens, so a domain keeps a stable badge colour that still tracks
- * the active theme — the previous fixed hex palette read as a foreign,
- * over-saturated set of hues against the dark surfaces.
- *
- * Five, not six: the palette must stay distinct in BOTH themes, and the theme
- * has only five separated hues. `purple` is deliberately excluded — it is
- * '#a78bfa' in the dark palette, byte-identical to `agentThinking`, so
- * including it would collapse two badge slots onto one colour in dark mode.
- * Anything added here must differ from every other entry in both palettes.
- */
 function badgePalette(colors: ColorScheme): readonly string[] {
   return [
     colors.agentActive,
@@ -41,13 +30,6 @@ function badgeColorFor(hostname: string, colors: ColorScheme): string {
   return palette[hash % palette.length]!;
 }
 
-/**
- * Inline web-search result row (favicon-style initial badge + title + domain),
- * matching the reference Claude UI's search-result cards. Renders a colored
- * initial badge rather than fetching a real favicon — pulling per-domain
- * favicons from a third-party CDN would be a new, undocumented egress path
- * for a chat surface that's otherwise careful about what leaves the device.
- */
 export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
   const colors = useThemeColors();
   const hostname = hostnameOf(result.url);
@@ -62,12 +44,6 @@ export function WebSearchResultCard({ result }: { result: ToolSearchResult }) {
   };
 
   return (
-    // No `style` prop on Pressable — see MOBILE-PRESSABLE-CSSINTEROP-FLEXDIR-01
-    // (docs/agent-context/known-flaws.md): a function-style `style` prop
-    // silently drops flexDirection/alignItems/padding in this stack, which
-    // would stack the badge above the title instead of beside it.
-    // `children`-as-function keeps pressed state while every real style
-    // lives on a plain View.
     <Pressable
       onPress={handlePress}
       accessibilityRole="link"

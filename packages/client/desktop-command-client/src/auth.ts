@@ -1,10 +1,5 @@
-/**
- * Auth API — typed wrappers for auth_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Commands ----
 
 export async function authStoreSession(session: string): Promise<void> {
   return command<void>('auth_store_session', { session });
@@ -17,8 +12,6 @@ export async function authRetrieveSession(): Promise<string> {
 export async function authRemoveSession(): Promise<void> {
   return command<void>('auth_remove_session');
 }
-
-// ---- Account / Device Management ----
 
 export interface ConnectedDevice {
   id: string;

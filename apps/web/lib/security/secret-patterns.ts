@@ -1,23 +1,3 @@
-/**
- * The single registry of secret-shaped patterns for the web surface.
- *
- * There used to be two: `lib/leak-detector.ts` (6 patterns, throwing, live on
- * the support paths) and `lib/security/secrets-audit.ts` (19 patterns,
- * non-throwing, zero importers). Two divergent lists is precisely how a key
- * eventually slips through — one list gets a new pattern and the other does
- * not. Both modules now derive from this file, so a pattern is added once.
- *
- * `assertable` selects the conservative subset that `assertNoLeaks` THROWS on.
- * It is deliberately narrow: that guard aborts a live user request, so a loose
- * pattern there (e.g. `secret[=:]...`, `password[=:]...`) would reject a
- * support escalation whose author merely typed the word "password". Everything
- * else is still detected and redacted by the scanning API, which warns rather
- * than throws.
- *
- * Patterns are stored WITHOUT the `g` flag. A global regex carries mutable
- * `lastIndex` state, so sharing one across call sites produces
- * position-dependent misses. Consumers that need `g` rebuild it themselves.
- */
 
 export type SecretSeverity = 'critical' | 'high' | 'medium';
 
@@ -25,15 +5,10 @@ export interface SecretPattern {
   name: string;
   pattern: RegExp;
   severity: SecretSeverity;
-  /** Included in the throwing `assertNoLeaks` guard. */
   assertable: boolean;
 }
 
 export const SECRET_PATTERN_REGISTRY: readonly SecretPattern[] = Object.freeze([
-  // ── Assertable: high-confidence credential shapes ─────────────────────────
-  // These six reproduce the historical `leak-detector` list exactly, including
-  // its looser bounds (e.g. `sk-` at 32+ rather than 48+). Do not tighten them
-  // without checking the support-agent guard that depends on them.
   {
     name: 'Anthropic/OpenAI API Key',
     pattern: /sk-[A-Za-z0-9_-]{32,}/,
@@ -71,7 +46,6 @@ export const SECRET_PATTERN_REGISTRY: readonly SecretPattern[] = Object.freeze([
     assertable: true,
   },
 
-  // ── Scan-only: detected and redacted, never throws ────────────────────────
   {
     name: 'Google API Key',
     pattern: /AIza[0-9A-Za-z_-]{35}/,
@@ -143,12 +117,10 @@ export const SECRET_PATTERN_REGISTRY: readonly SecretPattern[] = Object.freeze([
   },
 ]);
 
-/** The conservative subset that `assertNoLeaks` throws on. */
 export const ASSERTABLE_SECRET_PATTERNS: readonly RegExp[] = Object.freeze(
   SECRET_PATTERN_REGISTRY.filter((entry) => entry.assertable).map((entry) => entry.pattern),
 );
 
-/** Rebuild one registry pattern with the `g` flag for exec/replace loops. */
 export function globalize(pattern: RegExp): RegExp {
   return new RegExp(
     pattern.source,

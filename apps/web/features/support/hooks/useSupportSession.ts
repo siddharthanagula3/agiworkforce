@@ -1,22 +1,5 @@
 'use client';
 
-/**
- * All widget state in one place: the transcript, the per-turn action flow, and
- * the handoff lifecycle.
- *
- * Three invariants live here rather than in components:
- *
- *  1. Every assistant turn is a `SupportReplyView` produced by `normalizeAnswer`.
- *     There is no code path that puts raw server JSON into the transcript, so a
- *     component can never be handed an uncited "answer".
- *  2. An action never runs from a state transition. `prepareAction` is a user
- *     click, `confirmProposal` is a second, different user click, and nothing
- *     else calls `confirmAction`.
- *  3. A `waiting` handoff always has a deadline, and the deadline is enforced
- *     client-side in addition to server-side. When it elapses the state becomes
- *     `timed_out` regardless of what the poll returns.
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   SUPPORT_MAX_QUESTION_LENGTH,
@@ -37,12 +20,6 @@ import {
   proposeAction,
 } from '../lib/support-client';
 
-/**
- * `actionId` is present on EVERY variant, not just the early ones. It is what
- * lets `buildAttemptedActions` tell a human "the agent tried to revoke a
- * connector and was refused" instead of "something was attempted" — and the
- * escalation is worth least at exactly the moment the action went wrong.
- */
 export type SupportActionFlow =
   | { phase: 'offered'; actionId: string }
   | { phase: 'preparing'; actionId: string }
@@ -89,9 +66,6 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
 
   const turnsRef = useRef<SupportTurn[]>([]);
   turnsRef.current = turns;
-  // Mirrored into a ref so `startHandoff` reads the flows as they are AT
-  // ESCALATION TIME without taking them as a dependency — otherwise the
-  // callback identity would change on every action state transition.
   const actionFlowsRef = useRef<Record<string, SupportActionFlow>>({});
   actionFlowsRef.current = actionFlows;
   const mounted = useRef(true);
@@ -115,7 +89,6 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
       void askSupport({
         message: trimmed,
         surface,
-        // History excludes the message being asked; the server gets it as `message`.
         turns: turnsRef.current,
       }).then((reply) => {
         if (!mounted.current) return;
@@ -147,11 +120,6 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
     [surface],
   );
 
-  /**
-   * The ONLY caller of `confirmAction`. Reached exclusively from the confirm
-   * button's own click handler, and only when the flow is already showing the
-   * server's plain-language description of what will happen.
-   */
   const confirmProposal = useCallback((turnId: string) => {
     setActionFlows((prev) => {
       const current = prev[turnId];
@@ -184,10 +152,6 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
           ? firstUserTurn.text.slice(0, 1000)
           : 'A visitor asked for a person.';
 
-      // What the agent already tried travels with the escalation, so the human
-      // does not retread it. `buildAttemptedActions` reads outcome kinds and
-      // messages only — it never reads `outcome.secret`, so a regenerated API
-      // key cannot ride along into the email.
       const attemptedActions = buildAttemptedActions(actionFlowsRef.current);
 
       const input: Parameters<typeof createHandoff>[0] = {
@@ -221,16 +185,10 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
     setHandoffPending(false);
   }, []);
 
-  /* -------------------------------------------------------------- *
-   * Waiting-state enforcement
-   * -------------------------------------------------------------- */
-
   const sessionId = handoff && handoff.kind === 'waiting' ? handoff.sessionId : null;
   const pollIntervalMs = handoff && handoff.kind === 'waiting' ? handoff.pollIntervalMs : 0;
   const waitExpiresAt = handoff && handoff.kind === 'waiting' ? handoff.waitExpiresAt : null;
 
-  // Poll while waiting. The server performs the timeout transition on read, so
-  // a poll that crosses the deadline comes back already resolved.
   useEffect(() => {
     if (!sessionId || pollIntervalMs <= 0) return;
     const timer = window.setInterval(() => {
@@ -246,8 +204,6 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
     };
   }, [sessionId, pollIntervalMs]);
 
-  // Independent client deadline. Even if every poll fails and the server is
-  // wedged, the waiting UI ends here — no indefinite "connecting…" is possible.
   useEffect(() => {
     if (!sessionId || !waitExpiresAt) return;
     const parsed = Date.parse(waitExpiresAt);
@@ -288,7 +244,6 @@ export function useSupportSession(surface: SupportSurface): SupportSessionState 
   };
 }
 
-/** Exposed so the panel can turn a hard-abstain into a pre-labelled escalation. */
 export function handoffReasonForReply(reply: SupportTurn | undefined): HandoffReason {
   if (!reply || reply.role !== 'assistant') return 'user_requested';
   if (reply.reply.kind === 'answer') return 'user_requested';

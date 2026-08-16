@@ -25,10 +25,6 @@ describe('WebChatPage message projection', () => {
     expect(toChatMessage(message, 'conversation-id').attachments).toEqual(message.attachments);
   });
 
-  // Regression: `messages.input_tokens` / `output_tokens` were persisted by the
-  // server and returned by the load path, but nothing lifted them into
-  // metadata — so `tokensUsed` had no producer and every per-message cost
-  // surface rendered empty, including the otherwise-complete TokenUsageDisplay.
   it('lifts persisted per-turn usage into metadata', () => {
     const message: Message = {
       id: 'assistant-message',
@@ -48,8 +44,6 @@ describe('WebChatPage message projection', () => {
   });
 
   it('leaves usage absent rather than reporting zero when the row has none', () => {
-    // A turn with no recorded usage must show nothing. Zeros would read as a
-    // free turn, which is a different and false claim.
     const message: Message = {
       id: 'assistant-no-usage',
       role: 'assistant',

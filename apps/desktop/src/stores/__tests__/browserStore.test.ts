@@ -12,7 +12,6 @@ type InvokeMock = Mock<(cmd: string, args?: Record<string, unknown>) => Promise<
 
 async function getInvokeMock(): Promise<InvokeMock> {
   const { invoke } = await import('../../lib/tauri-mock');
-  // AUDIT-P3-TEST-TYPE: Cast is necessary here as the mock module returns vi.fn()
   return invoke as InvokeMock;
 }
 
@@ -101,7 +100,7 @@ describe('browserStore', () => {
     await useBrowserStore.getState().launchBrowser('Chromium', false);
 
     invokeMock.mockResolvedValueOnce('tab-1');
-    await useBrowserStore.getState().openTab('https://example.com'); //example.com');//example.com');
+    await useBrowserStore.getState().openTab('https://example.com');
 
     invokeMock.mockResolvedValueOnce(undefined);
     await useBrowserStore.getState().closeTab('tab-1');
@@ -132,9 +131,9 @@ describe('browserStore', () => {
     await useBrowserStore.getState().launchBrowser('Webkit', true);
 
     invokeMock.mockResolvedValueOnce('tab-1');
-    await useBrowserStore.getState().openTab('https://example.com'); //example.com');//example.com');
+    await useBrowserStore.getState().openTab('https://example.com');
 
-    const newUrl = 'https://example.com/new'; //example.com/new';
+    const newUrl = 'https://example.com/new';
     invokeMock.mockResolvedValueOnce(undefined);
     await useBrowserStore.getState().navigateTab('tab-1', newUrl);
 

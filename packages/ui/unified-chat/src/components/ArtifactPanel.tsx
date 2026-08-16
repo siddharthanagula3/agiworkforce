@@ -29,18 +29,8 @@ import { Button } from '@agiworkforce/ui';
 import type { Artifact } from '../lib/types';
 import { ReactPreview } from './artifact-components/ReactPreview';
 import { ArtifactSandboxFrame } from './artifact-components/ArtifactSandboxFrame';
-// AUDIT-FIX ART-17 / ART-18: reuse the sibling renderer's audited SVG allowlist
-// and its mermaid renderer instead of re-answering the same questions here.
 import { MermaidArtifact, sanitizeSvg } from './ArtifactRenderer';
 
-/**
- * AUDIT-FIX ART-24: one guarded clipboard write for the whole panel.
- *
- * `navigator.clipboard` is undefined in an insecure context and `writeText`
- * rejects on a denied permission or an unfocused document. Every call site here
- * used to swallow that into an empty catch, so the user saw nothing at all —
- * no tick, no error, no clue. Returning the outcome lets each caller say so.
- */
 async function writeToClipboard(text: string): Promise<boolean> {
   try {
     if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return false;
@@ -51,15 +41,6 @@ async function writeToClipboard(text: string): Promise<boolean> {
   }
 }
 
-/**
- * AUDIT-FIX ART-25: download a Blob reliably.
- *
- * The previous inline version created an anchor, never attached it to the
- * document, clicked it, and revoked the object URL on the very next statement.
- * Firefox ignores clicks on unattached anchors, and revoking synchronously can
- * race the browser's fetch of the blob. Attach → click → detach → revoke on a
- * later tick, which is what `ArtifactRenderer.handleDownload` already did.
- */
 function downloadBlob(blob: Blob, fileName: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -71,16 +52,6 @@ function downloadBlob(blob: Blob, fileName: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-// ---------------------------------------------------------------------------
-// Publish result contract
-//
-// Mirrors the discriminated union in @agiworkforce/artifacts.
-// Defined inline so this panel has no hard dep on the artifacts package — the
-// host injects the concrete implementation via `publishArtifact` prop (DI).
-// Update both contracts if the shape changes.
-// ---------------------------------------------------------------------------
-
-/** Publish succeeded locally — file:// URL is available immediately. */
 export interface ArtifactLocalPublishResult {
   kind: 'local';
   shareUrl: string;
@@ -88,32 +59,18 @@ export interface ArtifactLocalPublishResult {
   publishedAt: string;
 }
 
-/**
- * Cloud publish succeeded — the artifact is reachable at a hosted URL.
- *
- * AUDIT-FIX ART-27: mirrors `CloudPublishResult` in @agiworkforce/artifacts.
- */
 export interface ArtifactCloudPublishResult {
   kind: 'cloud';
   shareUrl: string;
   publishedAt: string;
 }
 
-/**
- * Cloud publish could not run because this host injected no cloud publisher.
- *
- * AUDIT-FIX ART-27: mirrors `CloudUnavailablePublishResult` in
- * @agiworkforce/artifacts. This is a capability statement about the host, NOT
- * a launch gate — managed cloud has been open by default since the founder
- * decision of 2026-06-27.
- */
 export interface ArtifactCloudUnavailablePublishResult {
   kind: 'unavailable';
   shareUrl: null;
   reason: string;
 }
 
-/** Discriminated union of possible publish outcomes. */
 export type ArtifactPublishResult =
   | ArtifactLocalPublishResult
   | ArtifactCloudPublishResult
@@ -124,23 +81,8 @@ export interface ArtifactPanelProps {
   viewMode: 'preview' | 'code';
   onViewModeChange: (mode: 'preview' | 'code') => void;
   onClose: () => void;
-  /**
-   * Optional version history for the current artifact. When provided with
-   * more than one entry, the header renders a prev/next stepper so the user
-   * can navigate edits. Round-2 audit P0 #9 (Artifacts versioning,
-   * 2026-05-21). Host apps build this from the artifactStore by grouping
-   * artifacts that share a `title` (or a stable group id) per conversation.
-   */
   versions?: Artifact[];
-  /** Called when the user picks a different version from the stepper. */
   onSelectVersion?: (artifact: Artifact) => void;
-  /**
-   * Optional edit-in-place callback. When supplied, the toolbar shows an
-   * Edit button alongside the existing Code/Preview toggles. The host is
-   * responsible for either mutating the existing artifact in-place or
-   * persisting a new version — the panel only forwards the edited content.
-   * Round-2 audit P0 #9 (Artifacts edit-in-place, 2026-05-21 final quadrant).
-   */
   onSaveEdit?: (artifactId: string, content: string) => void | Promise<void>;
   /**
    * Optional publish callback. Injected by the host (e.g. Desktop adapter
@@ -199,29 +141,15 @@ function getTypeCategory(artifact: Artifact): string {
   }
 }
 
-/**
- * AUDIT-FIX ART-28: how many lines CodeView will mount at once.
- *
- * CodeView is the fallback body for every non-previewable artifact type, and it
- * emitted one `<tr>` with two `<td>`s per line unconditionally — a 20k-line
- * artifact meant ~60k DOM nodes built synchronously the moment the panel
- * opened. The window keeps the first chunk instant and lets the user pull in
- * more explicitly; the Copy button always copies the FULL content, so nothing
- * is hidden from the clipboard or from Download.
- */
 const CODE_VIEW_LINE_WINDOW = 1000;
 
 function CodeView({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
-  // AUDIT-FIX ART-24: a failed clipboard write is shown, not swallowed.
   const [copyFailed, setCopyFailed] = useState(false);
 
   const lines = useMemo(() => content.split('\n'), [content]);
-  // AUDIT-FIX ART-28: grows by one window per "Show more" click.
   const [visibleLines, setVisibleLines] = useState(CODE_VIEW_LINE_WINDOW);
 
-  // Reset the window when the artifact body changes, so switching from a huge
-  // artifact to a small one does not leave an expanded window behind.
   useEffect(() => {
     setVisibleLines(CODE_VIEW_LINE_WINDOW);
   }, [content]);
@@ -230,7 +158,6 @@ function CodeView({ content }: { content: string }) {
   const hiddenLineCount = lines.length - shownLines.length;
 
   async function handleCopy() {
-    // Always copies the whole artifact, never just the visible window.
     if (await writeToClipboard(content)) {
       setCopyFailed(false);
       setCopied(true);
@@ -384,52 +311,22 @@ export function ArtifactPanel({
   publishArtifact: publishArtifactProp,
 }: ArtifactPanelProps) {
   const [headerCopied, setHeaderCopied] = useState(false);
-  // Run/Stop control for HTML preview. Defaults to running; pausing strips
-  // the iframe and re-mounts on resume. The toggle only appears when the
-  // current artifact is HTML — React previews own their own reload UX, and
-  // layout-only artifact types (markdown, document, svg, image) never run
-  // scripts so a pause control would be misleading.
   const [htmlPreviewRunning, setHtmlPreviewRunning] = useState(true);
-  // Edit-in-place state. `isEditing` toggles between CodeView and an
-  // editable textarea. `editDraft` holds the working copy; the source of
-  // truth remains the supplied artifact until Save fires onSaveEdit. We
-  // also auto-exit edit mode when the active artifact changes so the user
-  // doesn't accidentally save text from another artifact's body.
   const [isEditing, setIsEditing] = useState(false);
   const [editDraft, setEditDraft] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-  // Publish state — tracks in-flight publish and the last result so the
-  // panel can show the share URL or honest host-unavailable state without a sonner dep.
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<ArtifactPublishResult | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
-  // Ref for the share-URL copy button feedback (avoids extra useState).
   const shareUrlCopiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shareUrlCopied, setShareUrlCopied] = useState(false);
-  // AUDIT-FIX ART-24: last clipboard failure, rendered in the notification bar.
   const [copyError, setCopyError] = useState<string | null>(null);
-  // AUDIT-FIX ART-15: bumped by the toolbar Retry button to force a fresh
-  // preview mount (new iframe / new ReactPreview instance).
   const [previewNonce, setPreviewNonce] = useState(0);
-  // DES-C15: a same-document (`srcdoc`) preview inherits the embedder's CSP.
-  // Inside the packaged desktop app that policy forbids inline scripts, so an
-  // interactive HTML artifact renders its markup and then does nothing at all.
-  // Measure it instead of guessing, and say so rather than showing a dead box.
   const scriptSupport = useSameDocumentScriptSupport();
-  // DES-C15, second half: when a dedicated artifact ORIGIN exists the preview is
-  // not a same-document frame at all — it is a cross-origin document with its
-  // own CSP, so the inherited-policy restriction simply does not apply and the
-  // warning above would be a lie. `null` on any surface without one (web with
-  // NEXT_PUBLIC_SANDBOX_ORIGIN unset, plain browser dev, jsdom).
   const artifactSandboxOrigin = getArtifactSandboxOrigin();
-  // Set when the sandbox origin exists but never completed its handshake, so the
-  // preview degraded to the same-document path. From that moment the
-  // same-document truth applies again.
   const [sandboxDegraded, setSandboxDegraded] = useState(false);
   const sandboxPreviewActive = artifactSandboxOrigin !== null && !sandboxDegraded;
   const [htmlPreviewError, setHtmlPreviewError] = useState<string | null>(null);
-  // Stable identity: `ArtifactSandboxFrame` keys its handshake deadline on this
-  // callback, so a fresh closure every render would keep restarting the timer.
   const handleSandboxDegraded = useCallback(() => setSandboxDegraded(true), []);
 
   useEffect(() => {
@@ -441,25 +338,18 @@ export function ArtifactPanel({
     setIsEditing(false);
     setEditDraft('');
     setIsSavingEdit(false);
-    // Reset publish state when the artifact changes so stale results don't
-    // show for the wrong artifact.
     setPublishResult(null);
     setPublishError(null);
     setShareUrlCopied(false);
-    // AUDIT-FIX ART-24: a copy failure belongs to the artifact it happened on.
     setCopyError(null);
   }, [artifact?.id]);
 
-  // Cleanup share-URL copy timer on unmount.
   useEffect(() => {
     return () => {
       if (shareUrlCopiedTimerRef.current) clearTimeout(shareUrlCopiedTimerRef.current);
     };
   }, []);
 
-  // The host supplies versions ordered oldest-first; the stepper trusts
-  // that ordering and maps array indices to "v1 / v2 / ..." labels. When
-  // the host omits versions or supplies only one entry, the stepper hides.
   const sortedVersions = useMemo<Artifact[]>(() => {
     if (!versions || versions.length === 0) return [];
     return versions;
@@ -482,7 +372,6 @@ export function ArtifactPanel({
 
   async function handleCopyContent() {
     if (!artifact) return;
-    // AUDIT-FIX ART-24: report the failure instead of leaving the button inert.
     if (await writeToClipboard(artifact.content)) {
       setCopyError(null);
       setHeaderCopied(true);
@@ -531,7 +420,6 @@ export function ArtifactPanel({
                 : artifact.type === 'document'
                   ? 'md'
                   : (artifact.language ?? 'txt');
-    // AUDIT-FIX ART-25: see downloadBlob — attach/click/detach/late-revoke.
     downloadBlob(
       new Blob([artifact.content], { type: 'text/plain' }),
       `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}.${ext}`,
@@ -542,7 +430,6 @@ export function ArtifactPanel({
     if (!artifact) return;
     setPublishError(null);
 
-    // --- Service path: host injected publishArtifact ---
     if (publishArtifactProp) {
       setIsPublishing(true);
       try {
@@ -556,11 +443,6 @@ export function ArtifactPanel({
       return;
     }
 
-    // --- Fallback: clipboard markdown snapshot (no host adapter) ---
-    // Round-2 audit P0 #9 (2026-05-21). Cloud-side artifact publishing
-    // arrives with Cloud Managed; until then "Publish" copies a portable
-    // self-contained snapshot to the clipboard so the user can paste it
-    // into a doc, chat thread, or GitHub gist as a fallback.
     const snapshot = [
       `# ${artifact.title ?? 'Untitled artifact'}`,
       `Type: ${getTypeLabel(artifact)}${artifact.language ? ` (${artifact.language})` : ''}`,
@@ -569,17 +451,11 @@ export function ArtifactPanel({
       artifact.content,
       '```',
     ].join('\n');
-    // AUDIT-FIX ART-24: explicit success/failure instead of a bare try/catch.
     if (await writeToClipboard(snapshot)) {
-      // Reuse the existing copied-state feedback channel so the toolbar
-      // briefly shows the check.
       setHeaderCopied(true);
       setTimeout(() => setHeaderCopied(false), 1500);
       return;
     }
-    // Clipboard unavailable (insecure context, denied permission) — fall back
-    // to a download so the user still gets the bytes.
-    // AUDIT-FIX ART-25: reliable anchor lifecycle, see downloadBlob.
     downloadBlob(
       new Blob([snapshot], { type: 'text/markdown' }),
       `${(artifact.title ?? 'artifact').replace(/\s+/g, '-').toLowerCase()}-snapshot.md`,
@@ -587,10 +463,8 @@ export function ArtifactPanel({
   }, [artifact, publishArtifactProp]);
 
   const handleCopyShareUrl = useCallback(async () => {
-    // AUDIT-FIX ART-27: 'cloud' results carry a share URL too.
     if (!publishResult) return;
     if (publishResult.kind !== 'local' && publishResult.kind !== 'cloud') return;
-    // AUDIT-FIX ART-24: surface the failure rather than dropping it.
     if (await writeToClipboard(publishResult.shareUrl)) {
       setCopyError(null);
       setShareUrlCopied(true);
@@ -601,14 +475,6 @@ export function ArtifactPanel({
     setCopyError('Could not copy the share URL to the clipboard.');
   }, [publishResult]);
 
-  /**
-   * AUDIT-FIX ART-15: the toolbar Retry button had an aria-label, a disabled
-   * guard, hover styling — and no onClick at all. It has been a decorative
-   * no-op for every user who ever pressed it. It now re-mounts the live
-   * preview (fresh iframe / fresh ReactPreview) and clears the transient
-   * failures the panel is showing, which is the only "retry" this component
-   * owns; artifact content itself is the host's to re-fetch.
-   */
   const handleRetryPreview = useCallback(() => {
     if (!artifact) return;
     setPublishError(null);
@@ -617,18 +483,6 @@ export function ArtifactPanel({
     setPreviewNonce((n) => n + 1);
   }, [artifact]);
 
-  /**
-   * AUDIT-FIX ART-18: `mermaid` is now previewable here.
-   *
-   * `getTypeLabel` happily labelled mermaid / json / code / research, so those
-   * artifacts got a type badge next to a Preview toggle that was permanently
-   * disabled at opacity-40 — a control that exists, is described, and can never
-   * do anything. Meanwhile the sibling `ArtifactRenderer` in this very package
-   * rendered mermaid diagrams fine. The two now agree: mermaid renders through
-   * the same `MermaidArtifact`, and for the genuinely non-previewable types
-   * (json / code / research) the Preview toggle is not rendered at all rather
-   * than rendered dead.
-   */
   const canPreview =
     artifact?.type === 'html' ||
     artifact?.type === 'react' ||
@@ -638,17 +492,6 @@ export function ArtifactPanel({
     artifact?.type === 'document' ||
     artifact?.type === 'image';
 
-  /**
-   * AUDIT-FIX ART-17: SVG previews are sanitized here with the same allowlist
-   * the sibling `ArtifactRenderer.SvgArtifact` uses, and encoded with
-   * `encodeURIComponent` instead of `btoa`.
-   *
-   * `btoa(artifact.content)` ran inline during render with no try/catch and
-   * throws `InvalidCharacterError` on any code point above U+00FF — a CJK
-   * label, a Cyrillic caption, an em-dash or an emoji inside the SVG took down
-   * the whole panel subtree with no error boundary in sight. A percent-encoded
-   * `utf8` data URL has no such limit and needs no base64 step.
-   */
   const svgPreview = useMemo<{ src: string; error: string | null }>(() => {
     if (!artifact || artifact.type !== 'svg') return { src: '', error: null };
     const sanitized = sanitizeSvg(artifact.content);
@@ -661,16 +504,6 @@ export function ArtifactPanel({
     };
   }, [artifact]);
 
-  /**
-   * Pre-build the sandboxed HTML once per artifact swap. Empty when paused.
-   *
-   * AUDIT-FIX ART-16: a `buildSandboxedHtml` throw used to be swallowed into
-   * `''`, and the body branch was `htmlPreviewRunning && srcDoc ? iframe :
-   * <Run preview>` — so a BUILD FAILURE rendered an inert "Run preview" button,
-   * i.e. the panel presented its own failure as a pause the user had chosen.
-   * Clicking it did nothing because the state was already `running`. Failure
-   * and paused are now distinct states.
-   */
   const htmlPreview = useMemo<{ srcDoc: string; error: string | null }>(() => {
     if (!artifact || artifact.type !== 'html') return { srcDoc: '', error: null };
     if (!htmlPreviewRunning) return { srcDoc: '', error: null };
@@ -684,16 +517,6 @@ export function ArtifactPanel({
     }
   }, [artifact, htmlPreviewRunning]);
 
-  /**
-   * Wire payload for the cross-origin renderer.
-   *
-   * Deliberately the SAME shape web builds in
-   * `apps/web/features/chat/components/artifacts/ArtifactPreview.tsx`: the fully
-   * wrapped document as `html`, plus `runScripts: true`. The renderer assigns
-   * `html` with `innerHTML`, which never executes `<script>`; `runScripts` is
-   * what makes it re-create the script elements, and without it an interactive
-   * artifact would be just as inert on the sandbox origin as it was in srcdoc.
-   */
   const htmlSandboxPayload = useMemo<ArtifactRenderPayload>(
     () => ({
       type: 'render',
@@ -896,10 +719,6 @@ export function ArtifactPanel({
             No artifact selected
           </div>
         ) : isEditing ? (
-          // Edit-in-place: show a plain textarea bound to the draft buffer.
-          // We deliberately keep the editor minimal — host apps that want a
-          // real code editor (Monaco, CodeMirror) can swap onSaveEdit for
-          // their own modal flow. Round-2 audit P0 #9 final quadrant.
           <div className="flex h-full flex-col" data-testid="artifact-panel-edit-mode">
             <textarea
               value={editDraft}
@@ -910,8 +729,6 @@ export function ArtifactPanel({
             />
           </div>
         ) : viewMode === 'preview' && artifact.type === 'svg' ? (
-          // SVG: render as <img> to prevent script execution — no allow-scripts.
-          // AUDIT-FIX ART-17: sanitized + percent-encoded (see svgPreview).
           <div className="flex h-full items-center justify-center overflow-auto p-4 bg-white">
             {svgPreview.error ? (
               <p
@@ -930,11 +747,6 @@ export function ArtifactPanel({
             )}
           </div>
         ) : viewMode === 'preview' && artifact.type === 'mermaid' ? (
-          // AUDIT-FIX ART-18: mermaid renders through the same component the
-          // sibling ArtifactRenderer uses, instead of falling through to raw
-          // source behind a disabled Preview toggle. `isDark` is fixed to true
-          // because this panel's surface tokens (`--chat-surface-*`) are the
-          // dark chat shell; the panel takes no theme prop to thread through.
           <div className="h-full overflow-auto p-4" data-testid="artifact-panel-mermaid-preview">
             <MermaidArtifact key={previewNonce} artifact={artifact} isDark />
           </div>
@@ -954,10 +766,6 @@ export function ArtifactPanel({
             </article>
           </div>
         ) : viewMode === 'preview' && artifact.type === 'react' ? (
-          // React: delegate to the in-package ReactPreview, which spins up a
-          // sandboxed iframe with Babel + React from CDN and posts back ready/
-          // error events. Round-2 audit P0 #9 live React preview.
-          // AUDIT-FIX ART-15: `previewNonce` re-mounts it when Retry is pressed.
           <ReactPreview
             key={previewNonce}
             code={artifact.content}
@@ -966,9 +774,6 @@ export function ArtifactPanel({
             onViewSource={() => onViewModeChange('code')}
           />
         ) : viewMode === 'preview' && artifact.type === 'html' ? (
-          // HTML: sandboxed iframe with CSP meta injection + Run/Stop control.
-          // Uses the shared `buildSandboxedHtml` so the security envelope cannot
-          // drift between ArtifactPanel and ArtifactRenderer.HtmlArtifact.
           <div className="flex h-full flex-col" data-testid="artifact-panel-html-preview">
             <div className="flex items-center gap-2 border-b border-[var(--chat-border)] bg-[var(--chat-surface-overlay)] px-3 py-1.5">
               <Globe size={12} className="text-[var(--chat-text-muted)]" />
@@ -1036,11 +841,6 @@ export function ArtifactPanel({
                 </button>
               </div>
             ) : htmlPreviewRunning ? (
-              // Prefers the dedicated artifact ORIGIN, which is the only place an
-              // interactive artifact can actually run inside the packaged desktop
-              // app; falls back to the identical srcDoc document (same CSP, same
-              // sandbox attribute) everywhere there is no such origin, so no
-              // surface loses behaviour it already had.
               <ArtifactSandboxFrame
                 key={previewNonce}
                 payload={htmlSandboxPayload}
@@ -1064,8 +864,6 @@ export function ArtifactPanel({
             )}
           </div>
         ) : viewMode === 'preview' && canPreview ? (
-          // Fallback for any future preview-able artifact types not handled
-          // above. Layout-only sandbox: no scripts, no modals, no forms.
           <iframe
             srcDoc={artifact.content}
             sandbox=""

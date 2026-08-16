@@ -48,7 +48,6 @@ async function authorizeMutation(request: NextRequest) {
 }
 
 async function handleGetSchedule(request: NextRequest, context: RouteContext) {
-  // GOV-16: authenticate first so the bucket is `user:<id>`, not the shared IP.
   const { db, userId } = await getUserScopedDb(request);
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -61,7 +60,6 @@ async function handleGetSchedule(request: NextRequest, context: RouteContext) {
 }
 
 async function handleUpdateSchedule(request: NextRequest, context: RouteContext) {
-  // GOV-16: user-keyed rate limit (authenticate before bucketing).
   const { db, userId, csrfError } = await authorizeMutation(request);
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -78,7 +76,6 @@ async function handleUpdateSchedule(request: NextRequest, context: RouteContext)
 }
 
 async function handleDeleteSchedule(request: NextRequest, context: RouteContext) {
-  // GOV-16: user-keyed rate limit (authenticate before bucketing).
   const { db, userId, csrfError } = await authorizeMutation(request);
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
@@ -93,7 +90,6 @@ async function handleDeleteSchedule(request: NextRequest, context: RouteContext)
 }
 
 async function handleToggleSchedule(request: NextRequest, context: RouteContext) {
-  // GOV-16: user-keyed rate limit (authenticate before bucketing).
   const { db, userId, csrfError } = await authorizeMutation(request);
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;

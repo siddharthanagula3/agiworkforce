@@ -1,21 +1,5 @@
 'use client';
 
-/**
- * WelcomeBanner · first-run experience for new web users
- *
- * Shows a progress checklist of key onboarding steps:
- *   1. Account created (always checked)
- *   2. First chat started
- *   3. Billing set up
- *   4. Desktop connected
- *   5. Team invited
- *
- * Persisted in localStorage via a simple key. Dismisses when all items are
- * completed OR when the user clicks "Got it".
- *
- * Designed to match the DashboardHome glassmorphism card style.
- */
-
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -31,10 +15,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface ChecklistItem {
   id: string;
   label: string;
@@ -47,13 +27,8 @@ interface ChecklistItem {
 interface OnboardingProgress {
   dismissed: boolean;
   completed: Record<string, boolean>;
-  /** ISO timestamp of first banner render · used to suppress for older accounts */
   shownAt: string;
 }
-
-// ---------------------------------------------------------------------------
-// Checklist definition
-// ---------------------------------------------------------------------------
 
 const CHECKLIST: ChecklistItem[] = [
   {
@@ -99,11 +74,7 @@ const CHECKLIST: ChecklistItem[] = [
 ];
 
 const STORAGE_KEY = 'agw_onboarding_progress';
-const ACCOUNT_AGE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const ACCOUNT_AGE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 
 function loadProgress(): OnboardingProgress {
   if (typeof window === 'undefined') {
@@ -117,7 +88,6 @@ function loadProgress(): OnboardingProgress {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as OnboardingProgress;
-      // Always mark account_created as done
       parsed.completed['account_created'] = true;
       return parsed;
     }
@@ -140,14 +110,8 @@ function saveProgress(progress: OnboardingProgress): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 interface WelcomeBannerProps {
-  /** User display name for the greeting */
   displayName?: string;
-  /** If true the banner is suppressed (e.g. user signed up > 7 days ago) */
   suppress?: boolean;
 }
 
@@ -156,10 +120,8 @@ export function WelcomeBanner({ displayName, suppress }: WelcomeBannerProps) {
   const [progress, setProgress] = useState<OnboardingProgress | null>(null);
   const [expanded, setExpanded] = useState(false);
 
-  // Hydrate from localStorage only on client
   useEffect(() => {
     const loaded = loadProgress();
-    // Suppress if the banner was shown more than 7 days ago (returning user)
     const shownAge = Date.now() - new Date(loaded.shownAt).getTime();
     if (shownAge > ACCOUNT_AGE_THRESHOLD_MS) {
       loaded.dismissed = true;
@@ -182,20 +144,17 @@ export function WelcomeBanner({ displayName, suppress }: WelcomeBannerProps) {
 
   const handleItemClick = useCallback(
     (item: ChecklistItem) => {
-      // Mark as completed when the user navigates to the action
       updateProgress({ completed: { [item.id]: true } });
       router.push(item.href);
     },
     [router, updateProgress],
   );
 
-  // Don't render until hydrated, suppressed, or dismissed
   if (!progress || progress.dismissed || suppress) return null;
 
   const completedCount = CHECKLIST.filter((c) => progress.completed[c.id]).length;
   const allDone = completedCount === CHECKLIST.length;
 
-  // Auto-dismiss if all items done
   if (allDone) {
     saveProgress({ ...progress, dismissed: true });
     return null;

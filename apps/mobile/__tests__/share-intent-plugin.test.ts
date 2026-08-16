@@ -1,11 +1,3 @@
-/**
- * Tests for the withAGIShareIntent config plugin's MainActivity.kt patch.
- *
- * android/ is a GENERATED directory (gitignored): the ACTION_SEND /
- * ACTION_PROCESS_TEXT → deep-link rewrite only survives `expo prebuild` if
- * this plugin re-applies it. These tests pin the string transform against a
- * representative stock Expo-template MainActivity.
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 
@@ -75,9 +67,7 @@ describe('withAGIShareIntent patchMainActivity', () => {
     expect(out).toContain('Intent.ACTION_SEND');
     expect(out).toContain('Intent.ACTION_PROCESS_TEXT');
     expect(out).toContain('agiworkforce');
-    // Payload is bounded to the share-preview cap.
     expect(out).toContain('MAX_SHARED_TEXT_CHARS = 100 * 1024');
-    // Inserted before the getMainComponentName block, inside the class body.
     expect(out.indexOf('rewriteShareIntent(intent: Intent)')).toBeLessThan(
       out.indexOf('override fun getMainComponentName'),
     );

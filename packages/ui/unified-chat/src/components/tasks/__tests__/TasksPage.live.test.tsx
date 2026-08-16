@@ -1,12 +1,3 @@
-/**
- * CAP-048 slice 3 — the two /tasks gaps that made a live or failed run
- * unreadable:
- *
- *   1. An open detail panel froze at whatever the run had done when it was
- *      opened. A running task looked stalled forever.
- *   2. A failed run showed a red "Failed" badge and nothing else, even though
- *      the journal already carried the engine's `error` event.
- */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
@@ -85,9 +76,6 @@ describe('Tasks — in-flight journal auto-refresh', () => {
       completedAt: '2026-08-01T12:05:00.000Z',
     });
 
-    // Poll 1 sees the same running snapshot; poll 2 sees the finished run with a
-    // new journal entry; anything after that would be a poll that should never
-    // have been issued.
     const getRun = vi
       .fn()
       .mockResolvedValueOnce({
@@ -129,17 +117,13 @@ describe('Tasks — in-flight journal auto-refresh', () => {
     expect(screen.getByTestId('task-auto-refreshing')).toBeTruthy();
     expect(getRun).toHaveBeenCalledTimes(1);
 
-    // Poll 1 — still running, so the loop must arm itself again.
     await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS + 1);
     await waitFor(() => expect(getRun).toHaveBeenCalledTimes(2));
 
-    // Poll 2 — the run finished. The new entry lands without a manual refresh.
     await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS + 1);
     expect(await screen.findByText('Wrote the summary')).toBeTruthy();
     expect(getRun).toHaveBeenCalledTimes(3);
 
-    // Terminal: the live badge is gone and no further request is issued, however
-    // long the panel stays open.
     await waitFor(() => expect(screen.queryByTestId('task-auto-refreshing')).toBeNull());
     await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS * 5);
     expect(getRun).toHaveBeenCalledTimes(3);
@@ -186,8 +170,6 @@ describe('Tasks — in-flight journal auto-refresh', () => {
     await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS + 1);
     await waitFor(() => expect(getRun).toHaveBeenCalledTimes(2));
 
-    // The poll resumed from the sequence already held, and the delta was
-    // appended rather than replacing what was on screen.
     expect(getRun).toHaveBeenNthCalledWith(
       2,
       RUN_ID,
@@ -256,8 +238,6 @@ describe('Tasks — in-flight journal auto-refresh', () => {
     await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS + 1);
     expect(await screen.findByText(/Live updates stopped/)).toBeTruthy();
 
-    // The failure is reported once, not retried behind the user's back, and the
-    // already-loaded journal is not thrown away.
     await vi.advanceTimersByTimeAsync(TASK_JOURNAL_POLL_INTERVAL_MS * 4);
     expect(getRun).toHaveBeenCalledTimes(2);
     expect(screen.getByText('Gathering the source data')).toBeTruthy();

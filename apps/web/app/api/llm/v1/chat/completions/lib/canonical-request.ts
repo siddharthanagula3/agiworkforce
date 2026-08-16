@@ -15,28 +15,8 @@ import type { ChatRequest, Effort, ThinkingConfig } from '@agiworkforce/types';
 import { openRouterFailoverSlugFor, openRouterSlugFor } from '@/lib/services/aggregator-routing';
 import type { ProcessedRequest } from './request-processor';
 
-/**
- * Bridges `request-processor.ts`'s already-policy-resolved `llmRequest`
- * (routing/billing/quota decisions applied) onto the canonical `ChatRequest`
- * consumed by `packages/ai/providers/*` adapters (restructure Wave 2 step 5).
- *
- * Provider adapters consume these canonical requests through
- * `adapter-providers.ts`. Reasoning effort remains model-specific and is
- * validated against the canonical registry before translation.
- */
-
 type InternalMessage = ProcessedRequest['llmRequest']['messages'][number];
 
-/** A client-defined function tool (`ToolDefinitionSchema` wire shape). Every
- *  entry in `ChatCompletionRequestSchema.tools` matches this shape exactly.
- *  Server-injected native tools (Anthropic `web_search_20260209`, Google
- *  `{google_search:{}}`, OpenAI Responses `{type:'web_search'}`, Anthropic
- *  `code_execution_*`) never have a `.function` key, so this check cleanly
- *  partitions request-processor.ts's merged `tools` array without needing to
- *  know every native tool shape by name. E2B execution tools also match here
- *  (they're `{type:'function', function:{...}}` per route.ts's isExecutionTool
- *  comment) — correct, since they run through the same model-calls-a-function
- *  protocol as MCP tools, not provider-side execution. */
 function isFunctionToolDef(tool: unknown): tool is OpenAIWireToolDefinition {
   return (
     !!tool &&
@@ -50,26 +30,14 @@ function isFunctionToolDef(tool: unknown): tool is OpenAIWireToolDefinition {
 function toWireMessage(msg: InternalMessage): OpenAIWireMessage {
   const wire: OpenAIWireMessage = {
     role: msg.role,
-    // multimodal_content, when present, IS an OpenAIWireMessage['content'] array
-    // (request-processor.ts copies chatRequest.messages[i].content verbatim into
-    // it when the client sent an array) -- no reshaping needed.
     content: (msg.multimodal_content as OpenAIWireMessage['content'] | undefined) ?? msg.content,
   };
   if (msg.tool_call_id !== undefined) wire.tool_call_id = msg.tool_call_id;
   if (msg.tool_calls !== undefined) wire.tool_calls = msg.tool_calls as OpenAIWireToolCall[];
-  // Forward the tool-loop's internal signed-thinking side-channel so
-  // openAIWireRequestToChatRequest can reconstruct real ThinkingBlocks before
-  // the tool_use blocks (known-flaw TOOLLOOP-ANTHROPIC-THINKING-CONTINUITY-01).
-  // Absent on every client-supplied message, so non-tool-loop callers are
-  // unaffected.
   if (msg.__canonicalThinking !== undefined) wire.__canonicalThinking = msg.__canonicalThinking;
   return wire;
 }
 
-/** Split request-processor.ts's merged `tools` array into client function
- *  tools (translated via the proven openai-wire-compat path) and provider-
- *  native payloads (passed through verbatim via `ChatRequest.rawVendorTools`,
- *  exactly the field it exists for -- see provider-adapter.ts:163-171). */
 function splitTools(tools: unknown[] | undefined): {
   functionTools: OpenAIWireToolDefinition[];
   rawVendorTools: unknown[];
@@ -83,45 +51,9 @@ function splitTools(tools: unknown[] | undefined): {
   return { functionTools, rawVendorTools };
 }
 
-/**
- * Convert a `ProcessedRequest` into the canonical `ChatRequest`.
- *
- * Reuses `openAIWireRequestToChatRequest` for message/tool-call/image
- * conversion -- the same function services/api-gateway's llm.ts relies on,
- * so this stays consistent with the one already-shipped consumer of this
- * conversion path.
- *
- * Does NOT set `thinking`/`effort` -- request-processor.ts computes
- * `thinking_mode`/`thinking`/`effort` per-provider (see buildThinkingConfig)
- * and callers must resolve those separately via `toCanonicalThinking` (and,
- * for Anthropic's independent `output_config.effort`, `llmRequest.effort`
- * directly) since they aren't part of `ProcessedRequest['llmRequest']` in a
- * form this function's message/tool conversion touches.
- *
- * Sets `model` to the provider `apiModelId` through the shared
- * `toProviderApiModelId` boundary, not to `llmRequest.model` verbatim. Callers
- * building the OpenAI-wire response must keep sourcing the response `model`
- * field from `ProcessedRequest` (`requestedModel` / `chatRequest.model`),
- * never from the returned `ChatRequest.model`.
- */
-/**
- * The model id to put on the wire.
- *
- * Normally the catalog's `apiModelId`. But MiniMax, Qwen and Zhipu are served
- * through OpenRouter for now, and OpenRouter publishes them under its own
- * namespace. `resolveProviderFromModel` has already pointed the request at the
- * OpenRouter adapter; without the catalog-owned matching slug it would arrive
- * asking for a model OpenRouter does not have.
- *
- * Keyed off `processed.provider` rather than re-deriving the routing decision,
- * so the id can never disagree with the adapter actually constructed.
- */
 function wireModelId(modelId: string, provider: string | undefined): string {
   const apiModelId = toProviderApiModelId(modelId);
   if (provider !== 'openrouter' && provider !== 'open_router') return apiModelId;
-  // Two ways to be on OpenRouter: routed there permanently, or failed over
-  // there from a direct provider that was unavailable. The slug is needed
-  // either way, and the maps are separate because the reasons are.
   return openRouterSlugFor(apiModelId) ?? openRouterFailoverSlugFor(apiModelId) ?? apiModelId;
 }
 
@@ -146,25 +78,6 @@ export function toCanonicalChatRequest(processed: ProcessedRequest): ChatRequest
   return chatRequest;
 }
 
-/**
- * Map the enabled/disabled/adaptive thinking shape request-processor.ts
- * builds for Anthropic models onto the canonical `ThinkingConfig`.
- *
- * `{type:'adaptive'}` (anthropicUsesAdaptiveThinking models) maps straight
- * through -- `ThinkingConfig` gained an `'adaptive'` variant and
- * packages/ai/providers/anthropic/src/translate.ts translates it back to
- * `{type:'adaptive'}` on the wire (Option A, addendum item 2, see task #34).
- * This used to throw before that extension landed; keep it mapping, not
- * throwing, now that the canonical layer supports it.
- *
- * Returns undefined for OpenAI on purpose, even when request-processor.ts
- * resolved an effort: the canonical OpenAI translate.ts re-derives
- * `reasoning_effort` from `budgetTokens` via thresholds that disagree with
- * the existing OPENAI_REASONING_EFFORT table on 3 of 4 tiers (escalated gap,
- * still open -- needs packages/ai/providers/openai, not yet granted). Sending
- * no reasoning_effort (model default) is a smaller behavior delta than
- * sending the wrong tier.
- */
 export function toCanonicalThinking(
   provider: string,
   thinking: ProcessedRequest['llmRequest']['thinking'],
@@ -180,18 +93,6 @@ export function toCanonicalThinking(
   return { type: 'disabled' };
 }
 
-/**
- * Map `llmRequest.effort` onto the canonical `ChatRequest.effort`, gated to
- * Anthropic only (mirrors `toCanonicalThinking`'s provider gate).
- *
- * Anthropic sends `thinking` and `output_config.effort` independently (old
- * anthropic.ts:245,425 -- addendum item 3); `ChatRequest.effort` exists
- * specifically so `packages/ai/providers/anthropic/src/translate.ts` can
- * reproduce that independence (see effort-thinking.test.ts). Callers set
- * both `chatRequest.thinking` (via `toCanonicalThinking`) and
- * `chatRequest.effort` (via this function) from the same `llmRequest` --
- * they are not mutually exclusive.
- */
 export function toCanonicalEffort(
   provider: string,
   effort: ProcessedRequest['llmRequest']['effort'],
@@ -200,66 +101,12 @@ export function toCanonicalEffort(
   return effort as Effort | undefined;
 }
 
-/**
- * Reproduces `apps/web/lib/llm-providers/google.ts`'s `GOOGLE_THINKING_
- * BUDGET`/`getGoogleThinkingBudget` exactly: `low`/`medium`/`high` -> a fixed
- * token budget; any other tier ('xhigh', 'max', or unset) -> no thinking
- * config at all (Google's legacy provider never sent `thinkingConfig` for
- * those tiers -- a pre-existing gap in the LEGACY code, not something this
- * migration introduces or should silently "fix" by inventing a budget for
- * tiers Google's own logic never mapped).
- *
- * FOUND while wiring Google into route.ts (task #34's Google slice, response-
- * side byte-diff can't see this -- it's request-direction): `llmRequest.
- * effort` IS populated for Google by request-processor.ts (`modelSupports
- * Effort` explicitly includes 'google'; `llmRequest.effort` is the raw tier
- * string for every provider except OpenAI's special-cased remap). But
- * `packages/ai/providers/google/src/translate.ts`'s `translateChatRequest` only
- * reads `ChatRequest.thinking` (Gemini's `generationConfig.thinkingConfig`)
- * -- it does not read `ChatRequest.effort` at all, unlike Anthropic's
- * independent thinking/effort pair. And `toCanonicalThinking` above is
- * Anthropic-gated (it reads `llmRequest.thinking`, which request-processor.ts
- * NEVER populates for Google -- `buildThinkingConfig` returns undefined for
- * every non-Anthropic provider). Without this function, a Google request
- * with extended thinking enabled would silently lose it when routed through
- * the adapter -- not a wire-shape difference, a dropped capability.
- *
- * FOUND AND FIXED IN THE SAME PASS (request-direction, not caught by the
- * response-side byte-diff): `translateChatRequest` sets
- * `thinkingConfig.includeThoughts: true` unconditionally whenever
- * `req.thinking?.type === 'enabled'` (translate.ts). Legacy `google.ts`
- * (lines 395, 589) only ever sent `{thinkingConfig:{thinkingBudget}}` --
- * budget only, no `includeThoughts`. Before this function existed,
- * `chatRequest.thinking` was always undefined for Google, so that branch
- * never fired and the gap was moot; restoring the budget alone would have
- * tripped it, making Gemini return `part.thought` content (which
- * `translateGeminiStream` turns into `thinking-delta` chunks, which the
- * legacy-web wire assembler renders as `<thinking>...</thinking>`) for any
- * Google request with `effort` set -- new response content the legacy
- * Google wire never produced, on the one contract (byte-stability) this
- * migration exists to hold. `ThinkingConfig` gained an optional
- * `includeThoughts` field (defaults to `true`, so every OTHER caller of
- * `translateChatRequest` -- e.g. services/api-gateway's `/api/v1/providers/
- * :providerId/stream`, which takes a caller-supplied `ChatRequest.thinking`
- * directly and is not part of this byte-stability contract -- keeps today's
- * behavior with zero change) specifically so this function can opt OUT
- * for the web v1 route without touching any other consumer. Whether Gemini
- * reasoning visibility should ship as a product improvement is a real
- * question, but it's team-lead's call, not one to bake into a "keep the
- * wire byte-stable" migration -- see canonical-request.test.ts's
- * 'buildGoogleChatRequest -> translateChatRequest wire' test, which pins
- * the outgoing Gemini body has NO `includeThoughts` key at all, exactly
- * matching legacy.
- */
 export function toCanonicalGoogleThinking(
   provider: string,
   effort: ProcessedRequest['llmRequest']['effort'],
   model?: string,
 ): ThinkingConfig | undefined {
   if (provider !== 'google') return undefined;
-  // Use the model registry's declared provider wire path. Model-family names
-  // are not a contract: an unknown future/custom model must not inherit a
-  // request shape merely because its ID resembles a known release family.
   if (usesGoogleThinkingLevel(model)) {
     const thinkingLevel = GOOGLE_THINKING_LEVEL[effort as 'minimal' | 'low' | 'medium' | 'high'];
     if (thinkingLevel === undefined) return undefined;
@@ -283,11 +130,6 @@ const GOOGLE_THINKING_BUDGET: Readonly<Record<'low' | 'medium' | 'high', number>
   high: 24576,
 };
 
-/**
- * Registry-declared thinking-level effort map. The UI only sends
- * low/medium/high for Gemini (xhigh/max are unsupported and dropped upstream),
- * mirroring the legacy budget map's tier coverage.
- */
 const GOOGLE_THINKING_LEVEL: Readonly<
   Record<'minimal' | 'low' | 'medium' | 'high', 'minimal' | 'low' | 'medium' | 'high'>
 > = {
@@ -297,18 +139,6 @@ const GOOGLE_THINKING_LEVEL: Readonly<
   high: 'high',
 };
 
-/**
- * Compose the canonical `ChatRequest` for an Anthropic dispatch, folding in
- * `thinking`/`effort` on top of `toCanonicalChatRequest`'s base conversion.
- *
- * Shared by route.ts's standard-path Anthropic branch and tool-loop.ts's
- * per-step Anthropic dispatch (task #34) -- both need the exact same
- * composition, and tool-loop.ts calls this once per agentic step with a
- * step-scoped `ProcessedRequest` (same `processed` spread with `llmRequest`
- * replaced by that step's request, so `computeAnthropicCacheConfig`-style
- * tools-presence checks and message history reflect the current step, not
- * just the turn's original request).
- */
 export function buildAnthropicChatRequest(processed: ProcessedRequest): ChatRequest {
   const chatRequest = toCanonicalChatRequest(processed);
   const thinking = toCanonicalThinking(processed.provider, processed.llmRequest.thinking);
@@ -318,13 +148,6 @@ export function buildAnthropicChatRequest(processed: ProcessedRequest): ChatRequ
   return chatRequest;
 }
 
-/**
- * Compose the canonical `ChatRequest` for a Google dispatch. Google's
- * sibling of `buildAnthropicChatRequest` -- same `toCanonicalChatRequest`
- * base, but folds in `toCanonicalGoogleThinking` (effort-tier -> budget)
- * instead of `toCanonicalThinking`/`toCanonicalEffort` (which are Anthropic-
- * gated and would both return undefined here).
- */
 export function buildGoogleChatRequest(processed: ProcessedRequest): ChatRequest {
   const chatRequest = toCanonicalChatRequest(processed);
   const thinking = toCanonicalGoogleThinking(
@@ -336,12 +159,6 @@ export function buildGoogleChatRequest(processed: ProcessedRequest): ChatRequest
   return chatRequest;
 }
 
-/**
- * Preserve a requested OpenAI effort only when the selected model's canonical
- * registry entry supports it. This exact-tier behavior avoids silently changing
- * the requested inference budget while allowing newly cataloged effort levels
- * to propagate without another application-owned map.
- */
 export function resolveWebOpenAIReasoningEffort(
   provider: string,
   effort: ProcessedRequest['llmRequest']['effort'],
@@ -357,18 +174,6 @@ export function resolveWebOpenAIReasoningEffort(
   return supported ? (normalized as Effort) : undefined;
 }
 
-/**
- * Compose the canonical `ChatRequest` for an OpenAI dispatch. OpenAI's sibling of
- * `buildAnthropicChatRequest`/`buildGoogleChatRequest` -- same `toCanonicalChatRequest`
- * base, but sets `chatRequest.effort` (not `thinking`: legacy `openai.ts` only ever sent a
- * categorical `reasoning_effort` string, never a budget/thinking object) from
- * `resolveWebOpenAIReasoningEffort`. `packages/ai/providers/openai/src/translate.ts`'s
- * `translateChatRequest` reads `ChatRequest.effort` directly when present, bypassing its
- * own `thinking.budgetTokens`-derived heuristic (task #34's OpenAI slice) -- since
- * `resolveWebOpenAIReasoningEffort` already applied exact model-gating, the value
- * set here is passed straight through by `resolveOpenAIReasoningEffortForModel`'s "already
- * supported" fast path with no further remapping.
- */
 export function buildOpenAIChatRequest(processed: ProcessedRequest): ChatRequest {
   const chatRequest = toCanonicalChatRequest(processed);
   const effort = resolveWebOpenAIReasoningEffort(
@@ -385,34 +190,6 @@ export type AnthropicCacheConfig = {
   cacheRetention: 'short' | 'long' | 'none';
 };
 
-/**
- * Per-request Anthropic cache_control configuration, computed the same way
- * `apps/web/lib/llm-providers/anthropic.ts` does today (NOT reused directly
- * -- that file is slated for deletion in step 6, and this logic is small
- * enough to keep self-contained here rather than leave a step-5 dependency
- * on the doomed directory).
- *
- * Old behavior, verified against the current source (not re-derived from
- * scratch): `request.cacheRetention` on `LLMProviderRequest` is never
- * populated by request-processor.ts, so `resolveCacheRetention`'s explicit-
- * override branch is dead code on this path -- for the direct 'anthropic'
- * provider it always resolves to 'short'. That makes `highReusePrefix`
- * (anthropic.ts:215-217) unconditionally true whenever caching is on AND
- * tools are present, which is what `hasTools` below reproduces.
- *
- * `!!anthropicTools` in the old code is a truthiness check (an explicit
- * empty `tools: []` from the client would still count as "has tools"), not
- * a length check. `hasTools` matches that exactly for parity, not because
- * the truthiness quirk is desirable.
- *
- * KNOWN GAP (disclosed, not blocking): the canonical Anthropic payload
- * policy (`applyAnthropicPayloadPolicyToParams`) only tags `system` and the
- * last message -- it has no equivalent of the old code's tools-array cache
- * breakpoint (`applyToolsCacheControl`). Retention choice (short vs 1h) is
- * still correct; the tools block itself won't be cached until the canonical
- * policy adds that. Cost impact only (more cache writes than before on
- * tool-heavy sessions) -- does not affect wire bytes.
- */
 export function computeAnthropicCacheConfig(processed: ProcessedRequest): AnthropicCacheConfig {
   const { llmRequest } = processed;
   if (!llmRequest.usePromptCache) {

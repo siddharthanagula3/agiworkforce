@@ -13,12 +13,7 @@ import { preprocessMath } from './preprocessMath';
 import type { Components } from 'react-markdown';
 import { Button } from '@agiworkforce/ui';
 import { Copy, Check, ImageOff } from 'lucide-react';
-// KaTeX CSS must be loaded alongside rehype-katex so rendered math is styled.
 import 'katex/dist/katex.min.css';
-// AUDIT-FIX ART-9: rehype-highlight only emits `hljs-*` class names; no theme
-// stylesheet was ever imported and no `.hljs*` rule exists in the app CSS, so
-// syntax highlighting produced no colour at all. github-dark is chosen to pair
-// with the pinned dark `.code-block-body` background (ART-8, apps/web globals.css).
 import 'highlight.js/styles/github-dark.css';
 
 const CodeBlock = ({ className, children }: { className?: string; children: React.ReactNode }) => {
@@ -69,41 +64,6 @@ const CodeBlock = ({ className, children }: { className?: string; children: Reac
   );
 };
 
-/**
- * Inline markdown image (`![alt](src)`) renderer — the raster-image path for
- * tool-returned and model-referenced images embedded in assistant markdown.
- *
- * claude.ai parity:
- *  - a real `<img>` preview (not a link/icon), capped to a readable size and
- *    responsive (never overflows a 375px column),
- *  - a loading shimmer until the bytes decode,
- *  - a graceful broken-image fallback (never a browser "broken image" glyph or
- *    a fabricated placeholder) when the source fails to load,
- *  - click-to-expand: opens the full-resolution image in a new tab. Rich
- *    zoom/pan is provided by `ImageLightbox` on the attachment path; markdown
- *    images intentionally reuse the browser's native full view here rather than
- *    pulling an app-layer lightbox into this shared package.
- *
- * `data:`/`blob:` sources survive sanitization (see markdownSanitizeSchema.ts);
- * any other scheme is left to the sanitizer's http(s) allow-list, so no
- * arbitrary/off-origin fetch is introduced here.
- *
- * AUDIT-FIX BUG-26: the click-to-expand anchor is gated on the source scheme.
- * `markdownSanitizeSchema.ts` deliberately widens `protocols.src` to `data:`
- * and `blob:` while keeping `href` on the strict default list, with a comment
- * stating that links must not smuggle `data:` payloads. Wrapping every image in
- * `<a href={src}>` routed exactly those widened sources back into an href and
- * broke that invariant — a `blob:` URL holding HTML navigates same-origin and
- * executes in the app's origin. Non-navigable sources now render the image with
- * no link rather than a link the sanitizer would never have allowed.
- */
-
-/**
- * True when `src` is safe to put in an `href`: an http(s) URL, or a
- * scheme-less relative/protocol-relative reference (e.g. `/api/files/123`).
- * Anything carrying its own scheme — `data:`, `blob:`, `javascript:`,
- * `filesystem:` — is rejected.
- */
 function isNavigableImageSource(src: string): boolean {
   const trimmed = src.trim();
   const scheme = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed);
@@ -157,10 +117,6 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
     </>
   );
 
-  // AUDIT-FIX BUG-26: no anchor for `data:`/`blob:` (or any other non-http)
-  // source. The image still renders at full size inline; what is dropped is an
-  // affordance that would have violated the sanitizer's href invariant, not
-  // any content.
   if (!navigable) {
     return (
       <span className="relative my-2 inline-block max-w-full align-top" title={title || alt}>
@@ -214,21 +170,10 @@ const markdownComponents: Components = {
   ),
 };
 
-// Hoisted so the three arrays are built once rather than on every render of
-// every visible message. react-markdown rebuilds its unified processor per
-// render either way (`createProcessor` is not memoized upstream), so stability
-// here buys the allocations back, not the parse — the memo boundary below is
-// what keeps the parse itself off the streaming path.
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks] satisfies React.ComponentProps<
   typeof ReactMarkdown
 >['remarkPlugins'];
 
-// Order: raw HTML parsed -> sanitized -> math rendered as KaTeX spans
-// (rehype-katex must run before rehype-highlight so highlight never sees
-// language-math code blocks, which would otherwise produce block-level div/pre
-// nodes and trigger a p > div hydration error when math appears inline) ->
-// syntax highlighted. rehypeRaw without a sanitizer is an XSS hazard on this
-// live path.
 const REHYPE_PLUGINS = [
   rehypeRaw,
   [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA],
@@ -267,10 +212,6 @@ export interface MarkdownContentProps {
  * genuinely changes on every token, so it re-parses either way.
  */
 function MarkdownContentImpl({ content, isStreaming }: MarkdownContentProps) {
-  // Convert \[...\] and \(...\) to $$...$$/$...$ before remark-math runs,
-  // since remark-math only recognises dollar-sign delimiters by default.
-  // Keyed on `content` alone so a bare isStreaming flip (caret on/off at the
-  // end of a turn) does not rescan the whole answer.
   const processedContent = useMemo(() => preprocessMath(content), [content]);
   return (
     <>
@@ -288,9 +229,5 @@ function MarkdownContentImpl({ content, isStreaming }: MarkdownContentProps) {
   );
 }
 
-/**
- * Both props are primitives, so React's default shallow comparison is exactly
- * the right identity: re-parse only when the text or the caret state changes.
- */
 export const MarkdownContent = React.memo(MarkdownContentImpl);
 MarkdownContent.displayName = 'MarkdownContent';

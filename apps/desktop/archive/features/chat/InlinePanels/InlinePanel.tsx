@@ -1,9 +1,3 @@
-/**
- * InlinePanel Component
- *
- * Base container component for inline panels that display command outputs
- * (terminal, browser, code, database) directly within chat messages.
- */
 
 import React, { memo } from 'react';
 import { ChevronDown, X } from 'lucide-react';

@@ -125,27 +125,12 @@ export interface SendMessageOptions {
   mode?: ChatMode;
   style?: ChatStyle;
   taskInstruction?: string;
-  /** Exact Managed Cloud catalog name; ignored by the Local execution path. */
   skillName?: string;
-  /**
-   * Fired the moment the user message is accepted (committed to the
-   * transcript, all pre-flight gates passed). The composer clears its draft on
-   * this signal — never optimistically on tap — so a send blocked by a
-   * pre-flight gate (auth, egress, upload consent, content filter) keeps the
-   * user's text intact.
-   */
   onAccepted?: () => void;
 }
 
 interface ExecutionState {
   isStreaming: boolean;
-  /**
-   * Conversation ids with a live stream — the reactive mirror of the
-   * module-level `streamingConversations` set. Screens must key their
-   * composer streaming state off THIS (scoped to their conversation), not the
-   * global `isStreaming`, or switching conversations mid-stream shows a stop
-   * button for a conversation that isn't streaming.
-   */
   streamingConversationIds: string[];
   streamingContent: string;
   streamingReasoning: string;
@@ -154,7 +139,6 @@ interface ExecutionState {
   retryAttempts: Record<string, number>;
   isEditing: boolean;
 
-  /** Resolves true once the message was accepted into the transcript, false when a pre-flight gate blocked it. */
   sendMessage: (
     conversationId: string,
     content: string,
@@ -166,18 +150,9 @@ interface ExecutionState {
   retryMessage: (conversationId: string, messageId: string) => void;
   editMessage: (conversationId: string, messageId: string, newContent: string) => void;
   clearError: () => void;
-  /** Surface a send failure in the SendErrorBanner — for callers whose own
-   *  catch would otherwise swallow the error with no UI. */
   setSendError: (message: string) => void;
   clearPaywallError: () => void;
   setPaywallError: (paywallError: PaywallErrorState) => void;
-  /**
-   * Record the user's approve/reject decision for one pending MCP/connector
-   * tool call and, once every call in the suspended turn is decided, resume
-   * the turn via `POST /api/llm/v1/chat/completions/approve`. No-op if
-   * `assistantMessageId` has no pending turn (already resolved, or the turn
-   * never suspended) or `toolCallId` isn't one of its pending calls.
-   */
   resolveToolApproval: (
     conversationId: string,
     assistantMessageId: string,
@@ -189,40 +164,25 @@ interface ExecutionState {
 const abortControllers = new Map<string, AbortController>();
 const MAX_ABORT_CONTROLLERS = 50;
 const streamingConversations = new Set<string>();
-/** Streaming conversations whose bytes and callbacks belong to Managed Cloud. */
 const cloudStreamingConversations = new Set<string>();
-/** Invalidated synchronously on account teardown, including auth-disabled test/dev turns. */
 let cloudExecutionGeneration = 0;
-/** Server-owned Cloud run currently projected into each streaming conversation. */
 const activeCloudRuns = new Map<string, ManagedCloudAgentRunReference>();
 
-/** One tool call the server suspended for user approval (`x_tool_approval_request`). */
 interface PendingApprovalCall {
   toolCallId: string;
   name: string;
 }
 
-/**
- * Client projection of a server-owned approval checkpoint. The process map is
- * only a responsive cache; `isApprovalTurnLive` can rebuild it from the Cloud
- * message's persisted run reference and approval cards after a cold start.
- */
 interface PendingApprovalTurn {
   runId: string;
   conversationId: string;
   calls: PendingApprovalCall[];
   decisions: Map<string, 'approved' | 'rejected'>;
-  /** Set once the resume request has been dispatched, to prevent double-submit. */
   resolving: boolean;
 }
 
 const pendingApprovalTurns = new Map<string, PendingApprovalTurn>();
 
-/**
- * Whether a suspended turn has a valid durable checkpoint. Rehydrate the
- * process cache from persisted Cloud state when necessary; Local messages are
- * never scanned because managed approvals cannot cross that trust boundary.
- */
 export function isApprovalTurnLive(assistantMessageId: string): boolean {
   if (pendingApprovalTurns.has(assistantMessageId)) return true;
 
@@ -260,21 +220,12 @@ export function isApprovalTurnLive(assistantMessageId: string): boolean {
   return false;
 }
 
-/** TEST-ONLY: clear the module-level pending-approval registry between tests. */
 export function __resetPendingApprovalTurnsForTests(): void {
   pendingApprovalTurns.clear();
   activeCloudRuns.clear();
   cloudStreamingConversations.clear();
 }
 
-/**
- * Abort only Managed Cloud execution state during sign-out/account switch.
- * Local model streams are device-owned and deliberately continue untouched.
- *
- * Generation is incremented before aborting so synchronous abort callbacks
- * cannot project account-A deltas/errors back into stores that teardown is
- * clearing for account B.
- */
 export function clearCloudExecutionState(): void {
   cloudExecutionGeneration += 1;
   const cloudConversationIds = Array.from(cloudStreamingConversations);
@@ -299,9 +250,6 @@ export function clearCloudExecutionState(): void {
   });
 }
 
-/** Reactive streaming flags derived from the module-level set — spread into
- *  every `set()` that follows a `streamingConversations` add/delete so the
- *  per-conversation `streamingConversationIds` state never drifts. */
 function streamingFlags(): { isStreaming: boolean; streamingConversationIds: string[] } {
   return {
     isStreaming: streamingConversations.size > 0,
@@ -309,11 +257,6 @@ function streamingFlags(): { isStreaming: boolean; streamingConversationIds: str
   };
 }
 
-// Foreground stall recovery: local streams have no server journal, so abort a
-// stale local reader when iOS resumes. Managed Cloud runs deliberately stay
-// alive here: services/streaming.ts's resumed stall timer switches those runs
-// to durable journal follow. Aborting their caller signal would incorrectly
-// look like an explicit user Stop and strand real server work.
 AppState.addEventListener('change', (nextState) => {
   if (nextState !== 'active') return;
   const now = Date.now();
@@ -324,16 +267,10 @@ AppState.addEventListener('change', (nextState) => {
     }
   }
 });
-/** Tracks conversation IDs that were cancelled before streaming started. */
 const cancelledBeforeStream = new Set<string>();
 const MAX_RETRY_ATTEMPTS = 3;
 const thinkingStartTimes = new Map<string, number>();
-/** First moment display content grew AFTER reasoning started — "Thought for Xs"
- *  measures the thinking phase only, not the whole answer stream. */
 const thinkingEndTimes = new Map<string, number>();
-/** Last wall-clock time a delta arrived per streaming conversation — the
- *  foreground stall check below uses it to abort streams iOS silently killed
- *  while the app was suspended. */
 const lastDeltaTimes = new Map<string, number>();
 const MAX_UPLOAD_RETRIES = 2;
 const DEFAULT_LOCAL_SYSTEM_PROMPT =
@@ -408,9 +345,6 @@ function normalizeLocalMessageContent(
 }
 
 function ensureLocalSystemPrompt(messages: LocalLlmMessage[]): LocalLlmMessage[] {
-  // Always lead with the base identity prompt. Other system messages (persona,
-  // memory, project instructions) are additive context, not a replacement — so
-  // we only skip prepending when the base prompt itself is already present.
   const hasBase = messages.some(
     (message) =>
       message.role === 'system' && message.content.trim() === DEFAULT_LOCAL_SYSTEM_PROMPT,
@@ -567,7 +501,6 @@ async function uploadWithRetry(
   return null;
 }
 
-/** Retrieve message store state lazily to avoid circular imports at module load time. */
 function getMsgStore() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   const { useChatMessageStore } =
@@ -584,32 +517,21 @@ function getCloudStore() {
   return useChatCloudMessageStore;
 }
 
-/**
- * Deterministic transcript ordering for cloud conversations: by `createdAt`,
- * then by the stable server `id` for equal timestamps. Shared by the cloud
- * mirror + LLM-history paths below, and identical to the cross-device puller in
- * cloudSyncEngine.ts — so the SAME transcript renders/feeds in ONE order no
- * matter which path last wrote `setCloudMessages`. (`createdAt` is a free-form
- * ISO string with no uniqueness constraint, so ties are reachable.)
- */
 export function compareCloudMessagesByCreatedAtThenId(a: ChatMessage, b: ChatMessage): number {
   const at = a.createdAt ?? '';
   const bt = b.createdAt ?? '';
   return at === bt ? a.id.localeCompare(b.id) : at.localeCompare(bt);
 }
 
-/** Queue messages already written to the Cloud repository for cross-device sync. */
 function queueCloudTurnForSync(conversationId: string, messages: ChatMessage[]): void {
   markConversationForSync(conversationId);
   for (const m of messages) {
-    // Only user/assistant/system rows are part of the synced transcript.
     if (m.role === 'user' || m.role === 'assistant' || m.role === 'system') {
       markMessageForSync(conversationId, m.id);
     }
   }
 }
 
-/** Queue one finalized Cloud assistant update and request an immediate push. */
 function pushCloudAssistantUpdate(
   conversationId: string,
   messages: ChatMessage[],
@@ -623,7 +545,6 @@ function pushCloudAssistantUpdate(
   void syncNow();
 }
 
-/** Close a durable canonical run when Mobile ends it without a server stop envelope. */
 function settleMessageAgentActivity(
   message: ChatMessage,
   status: 'failed' | 'cancelled',
@@ -645,12 +566,6 @@ function settleMessageAgentActivity(
   };
 }
 
-/**
- * Build the prior-turn history the LLM sees for a conversation (P2 cross-device).
- *
- * Cloud history comes only from the Cloud repository (including turns pulled
- * from web/desktop); Local history comes only from the Local repository.
- */
 function historyMessagesForConversation(
   conversationId: string,
   executionMode: ConversationExecutionMode,
@@ -660,28 +575,8 @@ function historyMessagesForConversation(
   return executionMode === 'cloud' ? [...owned].sort(compareCloudMessagesByCreatedAtThenId) : owned;
 }
 
-/**
- * Dark-mode accent palette used when persisting artifacts to the store.
- * Sourced from the shared design-token package so no hex values are hardcoded.
- * The gallery re-derives the live color from useThemeColors() at render time,
- * so the persisted value is only a stable fallback.
- */
 const _artifactThemeColors = agiNativeColors.dark;
 
-/**
- * Extract fenced code blocks from a completed assistant response and push any
- * qualifying ones to the artifact store.
- *
- * Kept non-blocking: any failure is swallowed so artifact capture never
- * interrupts the chat flow. Called after onDone / local finalContent — not
- * per-token.
- */
-/**
- * Derive chat-message artifacts (the shapes InlineArtifactCard renders) from a
- * completed assistant response. Non-mobile-renderable types (html, mermaid,
- * react…) map to 'code' — mobile deliberately shows raw source, never executes
- * model output. Non-blocking: failures return [] so chat flow never breaks.
- */
 function deriveChatMessageArtifacts(
   content: string,
   conversationId: string,
@@ -712,25 +607,8 @@ function deriveChatMessageArtifacts(
   }
 }
 
-/**
- * Map the server's x_generated_files wire descriptors (files the model
- * created in the E2B sandbox) onto generated-file artifacts so
- * InlineArtifactCard / ArtifactFullScreen / GeneratedFileCard render a
- * downloadable file card on the message.
- *
- * Wire `uri` is the RELATIVE authed route `/api/files/{id}` on the cloud
- * origin (see the generated-files cloud contract) — resolve it against
- * API_URL here so every downstream consumer (download, share, preview) holds
- * a fetchable absolute URL. Auth (Bearer) is attached at fetch time by
- * `downloadGeneratedFile` in services/fileCreation.ts.
- */
 export { generatedFileArtifactsFromWire } from '@/src/features/chat/utils/generatedFileArtifacts';
 
-/**
- * Derive inline answer citations from the turn's accumulated web-search tool
- * results, so CitationChip / CollapsibleSources render sources on the prose
- * (ChatGPT-style) instead of only inside the collapsed tool timeline.
- */
 export function citationsFromToolCalls(
   toolCalls: ToolCall[],
 ): NonNullable<ChatMessage['citations']> {
@@ -801,8 +679,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   setPaywallError: (paywallError) => set({ paywallError }),
 
   sendMessage: async (conversationId, content, model, attachments, options) => {
-    // Enforce both mandatory minor-safe filtering and the adult opt-in before
-    // the prompt reaches ANY local or cloud model.
     const minorMode = isMinorMode();
     const reduceSensitiveContent = useSettingsStore.getState().reduceSensitiveContent;
     if (minorMode || reduceSensitiveContent) {
@@ -837,7 +713,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       existingController.abort();
       abortControllers.delete(conversationId);
     }
-    // Clear any stale cancellation flag from a previous stop-before-stream for this conversation.
     cancelledBeforeStream.delete(conversationId);
 
     let uploadedAttachments: MessageAttachment[] | undefined;
@@ -853,9 +728,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       : executionModeForModel(requestedModel);
     const provider = providerForExecutionMode(executionMode);
     const shouldUseLocalRuntime = executionMode === 'local' && isSelectableModelId(requestedModel);
-    // Boundary mismatches are independent of Cloud authentication. Report the
-    // actionable mode error before requiring an account epoch so a Local-model
-    // send in a Cloud-owned thread cannot be misdiagnosed as merely signed out.
     if (executionMode === 'local' && isCloudModel) {
       set({
         error: 'This is a Local Mode chat. Start a separate AGI Cloud chat to use Cloud models.',
@@ -896,11 +768,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       (turnCloudExecutionGeneration === cloudExecutionGeneration &&
         isCloudAccountEpochCurrent(cloudAccountEpoch));
     if (__DEV__) {
-      // W5 stage-2 session labeling — additive, dev/test-only (see
-      // src/features/chat/utils/sessionLabeling.ts module doc). Does not
-      // change routing, persistence, or any value used below; only asserts
-      // this conversation's AppSession/ExecutionProfile are internally
-      // consistent and agree with the real Local/Cloud trust boundary.
       labelMobileSession({
         id: conversationId,
         ownerUserId:
@@ -911,9 +778,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     let executionModel = requestedModel;
     let routingReason: string | undefined;
-    // C1: Cloud auth gate — checked before invite/paywall gates so "sign in"
-    // takes priority. isClerkLoaded guard prevents false-rejection during the
-    // ~200ms cold-start window where isClerkSignedIn is false for signed-in users.
     if (FEATURES.auth && executionMode === 'cloud') {
       const { isClerkLoaded, isClerkSignedIn } = useAuthStore.getState();
       if (isClerkLoaded && !isClerkSignedIn) {
@@ -942,10 +806,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       return false;
     }
     if (executionMode === 'cloud') {
-      // Join the Cloud-mode-entry `/api/me` refresh before resolving Auto and
-      // per-turn tools. Without this join, a fast first send used default Free
-      // metadata and could omit generic Web Search even though the deployment
-      // and account grant it. Local sends never call this helper or cross egress.
       await ensureCloudEntitlementsReadyForRequest();
       if (!isTurnAccountCurrent()) return false;
 
@@ -953,10 +813,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         selection: requestedModel,
         message: content,
         subscriptionTier: useTierStore.getState().tier,
-        // PRIOR turns only: the current user message is not written to the
-        // store until after this dispatch (first setState below), so this is
-        // the same "history excludes the outgoing turn" contract the web
-        // router uses. Enables the shared sticky-pivot/long-context continuity.
         history: historyMessagesForConversation(conversationId, executionMode).map((message) => ({
           role: message.role,
           content: message.content,
@@ -1007,9 +863,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         reusableCloudAttachments.length > 0 ? reusableCloudAttachments : undefined;
 
       if (attachmentsNeedingUpload.length > 0) {
-        // LOCAL-DATA-TO-CLOUD FIX: local files must not be uploaded to the cloud
-        // API without explicit user consent. Existing owner-scoped Cloud assets
-        // do not leave the account boundary again and bypass this upload path.
         const fileNames = attachmentsNeedingUpload.map((a) => a.fileName).join(', ');
         const userConsented = await new Promise<boolean>((resolve) => {
           Alert.alert(
@@ -1025,9 +878,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         if (!isTurnAccountCurrent()) return false;
 
         if (!userConsented) {
-          // User declined — send message without attachments (or abort).
-          // We abort the whole send to avoid silently dropping files the user
-          // thought were attached; they can choose to re-send without files.
           set({
             error: 'File upload cancelled. Re-send without files or tap Upload & Send to confirm.',
             paywallError: null,
@@ -1048,8 +898,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             .filter((x) => x.result !== null);
 
           if (successful.length > 0) {
-            // STB-4: keep the server-confirmed asset id, mime type, and name —
-            // the completion route is authoritative for all three.
             uploadedAttachments = [
               ...reusableCloudAttachments,
               ...successful.map(({ result }) => ({
@@ -1062,10 +910,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ];
           }
         } catch (err) {
-          // AUTH-ERROR-FIX: 401 / session-expired errors must be surfaced to user, not silently swallowed.
-          // uploadWithRetry intentionally throws on auth errors so we can distinguish them from
-          // transient network errors (which return null after retries). User must be notified that
-          // attachments failed to upload due to auth, not connection issues.
           const error = err instanceof Error ? err : new Error(String(err));
           if (error.message.includes('session expired') || error.message.includes('401')) {
             set({
@@ -1082,8 +926,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     }
 
-    // Cloud conversations need globally-unique, time-ordered ids (UUIDv7) so messages
-    // can be pushed/merged across devices; local chats keep the lightweight local id.
     const newMessageId = () => (executionMode === 'cloud' ? uuidv7() : generateId());
 
     const userMessage: ChatMessage = {
@@ -1125,8 +967,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         : {}),
     };
 
-    // P2: for cloud chats, history merges in turns pulled from other devices so a
-    // conversation started on web/desktop continues seamlessly here.
     const existingMessages = historyMessagesForConversation(conversationId, executionMode);
 
     const historyMessages: Array<{
@@ -1164,14 +1004,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const imageUploads = uploadedAttachments?.filter((a) => a.mimeType.startsWith('image/'));
     const fileUploads = uploadedAttachments?.filter((a) => !a.mimeType.startsWith('image/'));
 
-    // STB-4: an attachment with an `assetId` lives in managed-cloud storage and is
-    // hydrated server-side from that id (see the completions route's
-    // chat-attachment hydration). Only attachments still sitting on this device
-    // — Local mode, or an upload that did not complete — carry a readable
-    // `file://` url and need on-device extraction / OCR. Mixing the two would
-    // hand the on-device parser an `/api/files/{id}` path it cannot read and
-    // produce a "content could not be extracted" stub for a document the server
-    // can read perfectly well.
     const remoteUploads: string[] =
       uploadedAttachments?.flatMap((a) => (a.assetId ? [a.assetId] : [])) ?? [];
     const localImageUploads = imageUploads?.filter((a) => !a.assetId) ?? [];
@@ -1206,9 +1038,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       historyMessages.push({ role: 'user', content: messageContent });
     }
 
-    // Project custom instructions — separate stores per trust boundary
-    // (useProjectStore is local-only, useCloudProjectStore is cloud-only;
-    // never cross-read one from the other's conversation.projectId).
     const activeProjectId = conversation?.projectId ?? null;
     if (activeProjectId) {
       const activeProject =
@@ -1222,19 +1051,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       }
     }
 
-    // Composer view preferences — mode chips, the "Choose Style" sheet and the
-    // task chips. These apply to EVERY execution mode.
-    //
-    // 9c71195b9 ("keep local and cloud data separate") wrapped this block in an
-    // `executionMode === 'local'` guard while splitting the project stores by
-    // trust boundary. Project instructions genuinely needed that split (they are
-    // user content owned by two different stores, resolved per boundary just
-    // above). `chatMode`/`chatStyle`/`taskInstruction` are not: they are closed
-    // unions of UI choices whose prompt text lives in this file, so there is no
-    // local data to leak into a cloud turn. The guard made the mobile style
-    // sheet, mode chips and task chips dead controls on the Cloud path — the
-    // shipping default — because nothing else in the cloud request carries them
-    // (`streamChat` sends no style/mode field and the server never infers one).
     const chatViewState = useChatViewStore.getState();
     const viewSystemPrompt = buildChatViewSystemPrompt(
       options?.mode ?? chatViewState.chatMode,
@@ -1245,9 +1061,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       historyMessages.unshift({ role: 'system', content: viewSystemPrompt });
     }
 
-    // Resolve per-conversation reasoning effort for the remote API path.
-    // Local model execution ignores this value because mobile local runtimes do
-    // not expose an equivalent effort axis.
     const agentControl = useAgentControlStore.getState().resolve(conversationId, activeProjectId);
 
     const memorySettings =
@@ -1255,17 +1068,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         ? useCloudSettingsStore.getState()
         : useLocalSettingsStore.getState();
     const isTemporaryChat = useSettingsStore.getState().isTemporaryChat;
-    // The device master switch wins over the mode-scoped sub-preference. A Cloud
-    // settings pull from another device can set `referencePastChats` back to
-    // true; a user who turned memory off on THIS device must still never have
-    // saved memories or past-chat excerpts injected into their turn.
     const memoryContextEnabled =
       memorySettings.memoryEnabled && memorySettings.referencePastChats && !isTemporaryChat;
 
-    // Inject personalization plus explicitly enabled, mode-scoped memory context.
-    // Local reads stay on device. Cloud history search and saved memories stay
-    // inside the authenticated account boundary. Prior chat excerpts are rendered
-    // as bounded, untrusted data; any failure must never block the turn.
     try {
       const [memFacts, pastChatContext] = memoryContextEnabled
         ? await Promise.all([
@@ -1286,8 +1091,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (pastChatContext) {
         blocks.push({ role: 'system', content: pastChatContext });
       }
-      // Unshift in reverse so the final order is
-      // [persona, saved memory, past-chat excerpts, ...existing].
       for (let i = blocks.length - 1; i >= 0; i -= 1) {
         historyMessages.unshift(blocks[i]);
       }
@@ -1296,11 +1099,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     }
     if (!isTurnAccountCurrent()) return false;
 
-    // Snapshot the Local auto-memory policy at turn admission, but do not write
-    // anything yet. Persistence belongs to the successful Local terminal branch
-    // below: a pre-stream cancellation, model/setup failure, abort, or incomplete
-    // stream must never teach durable memory merely because the user pressed Send.
-    // Cloud remains server-owned (`recordManagedAutoMemoryTurn`, completed only).
     const shouldCaptureCompletedLocalTurn = shouldConsolidateMemoryOnClient({
       executionMode,
       isTemporaryChat,
@@ -1339,21 +1137,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       ),
     }));
 
-    // Cloud write-through: persist+queue the user message now so an aborted or failed
-    // turn still syncs it (the assistant reply is mirrored on stream completion).
     if (executionMode === 'cloud') {
       queueCloudTurnForSync(conversationId, [userMessage]);
     }
 
-    // The user message is now committed to the transcript — every pre-flight
-    // gate passed. Signal the composer so it clears its draft NOW (not on tap,
-    // not at stream end).
     options?.onAccepted?.();
 
-    // Guard: if stopStreaming was called before we reached this point, bail out.
-    // Remove the just-inserted empty assistant placeholder — it was committed
-    // above with isStreaming:true and stopStreaming's message sweep ran BEFORE
-    // it existed, so leaving it would strand a spinner bubble forever.
     if (cancelledBeforeStream.has(conversationId)) {
       cancelledBeforeStream.delete(conversationId);
       msgStore.setState((state) => ({
@@ -1380,15 +1169,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     if (executionMode === 'cloud') {
       cloudStreamingConversations.add(conversationId);
     }
-    // Seed the delta clock at stream start so the foreground stall check never
-    // aborts a stream that simply hasn't produced its first token yet.
     lastDeltaTimes.set(conversationId, Date.now());
 
-    // Clear any stale error from a previous turn/conversation/mode — `error` is
-    // a single shared field, not scoped per-conversation, so without this a
-    // banner like "Local Mode is active, but no on-device model is ready yet"
-    // survives a New Chat + mode switch and shows on top of a message that just
-    // streamed successfully in Cloud mode.
     set({ ...streamingFlags(), streamingContent: '', streamingReasoning: '', error: null });
 
     try {
@@ -1404,7 +1186,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         );
         const localRef = await resolveLocalModelRef(requestedModel);
         let localStreamingRaw = '';
-        // Measure on-device decode rate (tokens/sec) from first token to done.
         let localTokenCount = 0;
         let localFirstTokenAt = 0;
         const updateLocalStream = (parsed: ParsedLocalThinking) => {
@@ -1426,8 +1207,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     ...m.metadata,
                     localMode: true,
                     localModelId: localRef.modelId,
-                    // Live thinking-timer anchor: ThinkingChip ticks elapsed
-                    // seconds from this while the reply streams.
                     ...(thinkingStartedAt !== undefined ? { thinkingStartedAt } : {}),
                   },
                 }
@@ -1476,7 +1255,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         const thinkingDuration = startedAt ? (Date.now() - startedAt) / 1000 : undefined;
         thinkingStartTimes.delete(conversationId);
 
-        // On-device decode rate: tokens emitted / wall-clock since the first token.
         const decodeMs = localFirstTokenAt > 0 ? Date.now() - localFirstTokenAt : 0;
         const tokensPerSecond =
           decodeMs > 0 && localTokenCount > 1
@@ -1514,7 +1292,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         abortControllers.delete(conversationId);
         streamingConversations.delete(conversationId);
 
-        // Extract code-block artifacts from the completed local response.
         const localConvTitle =
           currentMsgStore.getState().conversations.find((c) => c.id === conversationId)?.title ??
           '';
@@ -1551,33 +1328,15 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           paywallError: null,
         });
 
-        // Best-effort and deliberately after the assistant reply is finalized.
-        // The service dedupes and bounds inserts; memory failure must not turn a
-        // successful chat response into a failed send.
         if (parsedFinal.content.trim()) {
           captureCompletedLocalMemory();
         }
         return true;
       }
 
-      // Per-turn agentic tool-call accumulator. The server streams tool steps
-      // (web_search / code execution / MCP) as SSE deltas; we fold them into the
-      // assistant message's toolCalls so ToolCallTimeline renders them live.
       const toolAcc = createToolCallAccumulator();
-      // MCP/connector tool calls this turn suspended on for user approval
-      // (x_tool_approval_request). Registered into `pendingApprovalTurns` in
-      // onDone so `resolveToolApproval` can rebuild the resume request.
       const turnPendingApprovals: PendingApprovalCall[] = [];
 
-      // Automatic web search, gated by the user's own Capabilities preference
-      // (`features.webSearch`). Search stays ambient — there is no per-turn
-      // composer toggle — but a user who turned it off in Settings must never
-      // have a cloud turn silently search the web on their behalf; that is a
-      // privacy control, not a convenience. When the preference is on, the
-      // deployment flag, the account capability grant and the model capability
-      // clamp still apply, so an unsupported model never receives a cosmetic
-      // flag. The server streams results back as x_search_results deltas, which
-      // the tool-call accumulator already renders.
       const executionModelMetadata = getModelMetadataById(executionModel);
       const entitlementState = useTierStore.getState();
       const webSearchEnabled =
@@ -1590,14 +1349,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           modelSupportsTools: executionModelMetadata?.capabilities.tools,
           genericBackendConfigured: entitlementState.genericWebSearchAvailable,
         });
-      // Deep Research: multi-turn cited synthesis. Re-verified per-send (not just
-      // at the AddToChatSheet UI) so the toggle is never cosmetic — the SELECTED
-      // model must declare BOTH the `research` capability AND native `search`
-      // (the server's research loop requires web search: request-processor gates
-      // researchMode on `search`, and the model must be a real deep-research
-      // model), and the account must be PAID (the server rejects research for
-      // free-trial requests). Free UI + wire request stay aligned; the server
-      // still enforces the entitlement.
       const researchEnabled =
         FEATURES.research &&
         useChatViewStore.getState().features.research &&
@@ -1605,34 +1356,12 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         executionModelMetadata?.capabilities?.search === true &&
         isCapabilityRequestable('canUseDeepResearch');
 
-      // Per-turn code execution: mirrors webSearchEnabled above, with two extra
-      // honesty checks so the toggle is never cosmetic — re-verified here (not
-      // just at the AddToChatSheet UI layer) in case the user switched models
-      // after enabling it: the SELECTED MODEL must actually support server-side
-      // code execution (models.json capabilities.codeExecution), and THIS
-      // DEPLOYMENT must have the E2B execution loop reachable
-      // (`/api/me` feature_flags.code_execution, cached in useTierStore).
       const codeExecutionEnabled =
         FEATURES.codeExecution &&
         executionModelMetadata?.capabilities?.codeExecution === true &&
         entitlementState.codeExecutionAvailable &&
         isCapabilityRequestable('canUseCloudExecution') &&
         useChatViewStore.getState().features.codeExecution;
-      /**
-       * Office/file creation — the same user switch as code execution.
-       *
-       * Mobile never sent this field at all (`office_creation` had zero
-       * occurrences in apps/mobile), which is why "create a CSV file" came back
-       * as "I do not have file creation tools available" no matter what the user
-       * enabled. Web sends it at useChatStream.ts:2175 gated on
-       * `isAutoSelected || caps.tools`.
-       *
-       * It is deliberately NOT a second toggle: the capability reference pairs
-       * them under one control — "Code execution and file creation … execute code
-       * and create and edit docs, spreadsheets, presentations, PDFs, and data
-       * reports" — and a separate switch would let a user enable file creation
-       * while the sandbox that produces the files is off.
-       */
       const officeCreationEnabled =
         FEATURES.codeExecution &&
         executionModelMetadata?.capabilities?.tools === true &&
@@ -1640,65 +1369,21 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         isCapabilityRequestable('canUseCloudExecution') &&
         useChatViewStore.getState().features.codeExecution;
       const requestedWorkMode = useChatViewStore.getState().workMode;
-      // The server is authoritative, but do not replay a persisted paid mode
-      // after a cached subscription downgrade. This keeps the Free UI and wire
-      // request aligned while the server still enforces the entitlement.
       const workMode = canUseBillingPlanCapability(entitlementState.tier, 'agi_work')
         ? requestedWorkMode
         : 'chat';
 
-      // Raw content accumulator for cloud streams — separate from streamingContent
-      // (which must hold only display-clean text). The server intentionally emits
-      // Anthropic extended-thinking as literal `<thinking>...</thinking>` markers
-      // inline in delta.content (apps/web .../stream-transform.ts), using the same
-      // tag convention parseLocalThinking already parses for local models. Before
-      // this fix, cloud deltas were appended to streamingContent unparsed, so
-      // Claude thinking-model replies rendered raw `<thinking>` tag soup as the
-      // visible message instead of routing to the reasoning/ThinkingChip UI.
       let cloudContentRaw = '';
-      // Files the model generated in the E2B sandbox this turn — the server
-      // emits one x_generated_files delta (durable media URLs) before [DONE];
-      // onDone maps them to generated-file artifacts so GeneratedFileCard /
-      // InlineArtifactCard render a downloadable file card.
       const turnGeneratedFiles: GeneratedFileWire[] = [];
-      // Interactive cards emitted by server tools this turn (map search today).
       const turnInteractiveCards: InteractiveCard[] = [];
-      // How this turn ended (OpenAI-wire finish_reason, last one seen) and
-      // whether the provider failed mid-stream (additive `x_stream_error` —
-      // finish_reason alone can't reliably say 'error', see
-      // packages/ui/unified-chat's hasStreamError doc comment). Previously
-      // parsed off the wire in services/streaming.ts but never read here at
-      // all — a mid-stream provider failure rendered as a clean completion
-      // with zero indication, worse than web/desktop (which at least
-      // persisted finishReason even before this fix). `code`/`retryable`
-      // ride along when the provider adapter supplied them.
       let turnFinishReason: string | undefined;
       let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
       let agentActivity: AgentActivityState | undefined;
       let cloudAgentRun: ManagedCloudAgentRunReference | undefined;
-      // Ordinary SSE answer text can arrive immediately before its canonical
-      // text event. Retain it until the journal acknowledges the same public
-      // text so reconnect replay never duplicates an already-visible prefix.
       let unacknowledgedPublicText = '';
 
-      // Honor the user's per-model Thinking toggle — the same state behind the
-      // ModelPickerSheet "With thinking" switch and the composer model label's
-      // effort suffix. Hardcoding `thinking: true`
-      // here made that toggle a dead control (thinking ran on every cloud turn
-      // regardless of choice) and broke free-trial sends on non-thinking
-      // models, which the server rejects when thinking/effort is requested
-      // without the capability. Effort rides along only when thinking is on.
       const thinkingEnabled =
         useModelStore.getState().thinkingEnabledPerModel[executionModel] ?? false;
-      // Reasoning effort (fixes the silently-dropped-effort bug). The picker offers
-      // effort rungs from the SELECTED model's `reasoning.supportedEfforts`, so:
-      //  - only send an effort the CURRENT model actually supports (the per-turn
-      //    value may have been chosen for a previously-selected model);
-      //  - for `effort_levels` models effort IS the native reasoning control, so it
-      //    is sent regardless of the Thinking toggle (which defaults off); for
-      //    toggle-based models effort still rides with thinking, as before;
-      //  - `none`/`minimal` are forwarded when supported (the server accepts any
-      //    effort string and validates it per model) instead of being dropped.
       const modelReasoning = executionModelMetadata?.reasoning;
       const turnEffort = resolveTurnEffort({
         selectedEffort: agentControl.effort,
@@ -1719,11 +1404,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           ...(researchEnabled ? { research: true } : {}),
           ...(codeExecutionEnabled ? { code_execution: true } : {}),
           ...(officeCreationEnabled ? { office_creation: true } : {}),
-          // Advertise the card kinds this app can render. The server attaches a
-          // card-producing tool only when the caller proves it can display the
-          // result, so without this mobile never gets offered `search_maps` and
-          // the model falls back to pasting a link. `canRespond: false` because
-          // mobile renders cards but has no response affordance yet.
           x_interactive_cards: { supported: ['map-search.v1'], canRespond: false },
           ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
           ...(options?.skillName ? { skill_name: options.skillName } : {}),
@@ -1756,13 +1436,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }));
           },
           onDelta: (delta: StreamDelta) => {
-            // Regression: a chunk already in flight when the user taps Stop would
-            // still land here and unconditionally set isStreaming:true below,
-            // clobbering the false stopStreaming() had just set. Because an abort
-            // never fires onDone, nothing ever flipped it back — the Stop button
-            // and composer got stuck permanently in the "still generating" state.
-            // Every other delta-handling callback in this file already guards on
-            // this; this one didn't.
             if (controller.signal.aborted || !isTurnAccountCurrent()) return;
 
             const state = get();
@@ -1809,10 +1482,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (parsedTags.hasReasoning && !thinkingStartTimes.has(conversationId)) {
               thinkingStartTimes.set(conversationId, Date.now());
             }
-            // "Thought for Xs" measures the THINKING phase: mark its end the
-            // first time answer content grows after reasoning began. Without
-            // this the duration ran to end-of-stream, over-counting a 3s think
-            // + 30s answer as "Thought for 33s".
             if (
               contentChunk &&
               thinkingStartTimes.has(conversationId) &&
@@ -1827,11 +1496,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             accumulateToolCallDelta(toolAcc, delta);
             const toolCalls = toolCallList(toolAcc);
 
-            // Manual-approval suspend: record the pending call's AUTHORITATIVE
-            // args from the validated event itself (not the accumulator's
-            // stringified `input`, whose provenance may be raw streamed
-            // fragments) so the resume request rebuilds `function.arguments`
-            // exactly as the server sent it.
             const approvalReq = delta.x_tool_approval_request;
             if (
               approvalReq?.tool_call_id &&
@@ -1844,36 +1508,21 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }
 
             if (delta.x_generated_files) {
-              // Validate against the shared cloud contract; malformed
-              // descriptors are dropped per-file instead of trusted blindly.
               turnGeneratedFiles.push(...parseGeneratedFilesDelta(delta.x_generated_files));
             }
 
             if (delta.x_interactive_card) {
-              // `parseInteractiveCardDelta` NEVER throws: an unknown kind or a
-              // body that fails validation degrades to `recognized: false`,
-              // which the renderer shows as the card's authored fallback text.
-              // A card is therefore never silently dropped from the answer.
               const card = parseInteractiveCardDelta(delta.x_interactive_card);
               if (card) {
                 const existing = turnInteractiveCards.findIndex((c) => c.cardId === card.cardId);
-                // Cards restream on retry; replace by id rather than append so a
-                // resumed turn cannot show the same map twice.
                 if (existing >= 0) turnInteractiveCards[existing] = card;
                 else turnInteractiveCards.push(card);
               }
             }
 
-            // Keep the LAST finish_reason seen (server tool loops emit
-            // intermediate 'tool_calls' before the final reason) — mirrors
-            // web/desktop's "keep the last reason" handling.
             if (typeof delta.finish_reason === 'string' && delta.finish_reason) {
               turnFinishReason = delta.finish_reason;
             }
-            // Sticky: keep the FIRST error payload seen, it identifies the
-            // actual failure (unlike finish_reason, which legitimately
-            // changes as the turn progresses). Accepts a bare string
-            // defensively too, though the wire only ever sends the object.
             if (!turnStreamError) {
               const rawStreamError = delta.x_stream_error as unknown;
               if (
@@ -1908,8 +1557,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                     reasoning: newReasoning || undefined,
                     isStreaming: true,
                     ...(toolCalls.length > 0 ? { toolCalls } : {}),
-                    // Live thinking-timer anchor: ThinkingChip ticks elapsed
-                    // seconds from this while reasoning streams.
                     ...(thinkingStartedAt !== undefined || agentActivity || cloudAgentRun
                       ? {
                           metadata: {
@@ -1940,20 +1587,11 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             thinkingStartTimes.delete(conversationId);
             thinkingEndTimes.delete(conversationId);
 
-            // Finalize accumulated tool calls directly on the owning repository.
             const finalToolCalls = toolCallList(toolAcc);
 
             const currentMsgStore = getConversationMessageStore(conversationId);
             const msgs = currentMsgStore.getState().messages[conversationId] ?? [];
-            // Read the finalized content from THIS turn's message, not the
-            // global streamingContent — under concurrent streams the global
-            // buffer holds whichever conversation last emitted a delta.
             const finalContent = msgs.find((m) => m.id === assistantMessageId)?.content ?? '';
-            // A provider stream can close cleanly without ever producing public
-            // text (for example a hosted-tool turn that never reaches answer
-            // synthesis). Never commit that as a successful blank bubble. The
-            // existing stream-error surface keeps the turn visible and retryable
-            // without inventing an answer or hiding the provider failure.
             if (
               !finalContent.trim() &&
               finalToolCalls.length === 0 &&
@@ -1971,8 +1609,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             const convTitle =
               currentMsgStore.getState().conversations.find((c) => c.id === conversationId)
                 ?.title ?? '';
-            // Attach fenced-code artifacts to the message so InlineArtifactCard
-            // renders in cloud chat (was local-only), and feed the gallery.
             const generatedFilesMetadata = generatedFileMetadataFromWire(turnGeneratedFiles);
             const messageArtifacts = mergeDerivedAndGeneratedFileArtifacts(
               deriveChatMessageArtifacts(
@@ -1981,10 +1617,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 assistantMessageId,
                 completedAt,
               ),
-              // E2B sandbox files (durable download URLs from x_generated_files).
               generatedFileArtifactsFromWire(turnGeneratedFiles, completedAt),
             );
-            // Inline answer citations from this turn's web-search results.
             const finalCitations = citationsFromToolCalls(finalToolCalls);
             captureArtifactsFromMessage(
               finalContent,
@@ -2015,11 +1649,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                         : {}),
                       ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
                       ...(turnFinishReason !== undefined ? { finishReason: turnFinishReason } : {}),
-                      // Mid-stream provider failure: the turn otherwise looks
-                      // like a clean completion (server still sends a normal
-                      // stream end) — this is the only persisted signal that
-                      // tells MessageBubble to show the incomplete-response
-                      // notice + retry affordance instead.
                       ...(turnStreamError !== undefined ? { streamError: turnStreamError } : {}),
                       ...(agentActivity ? { agentActivity } : {}),
                       ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
@@ -2052,14 +1681,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ),
             }));
 
-            // Cloud write-through: mirror the finalized assistant reply into the cloud
-            // store, queue it, and push immediately (don't wait for the sync interval).
             if (executionMode === 'cloud') {
               pushCloudAssistantUpdate(conversationId, updatedMsgs, assistantMessageId);
 
-              // Manual-approval suspend: register only the durable server-owned
-              // run handle plus the projected cards. The server checkpoint owns
-              // the trusted transcript, arguments, policy and continuation cursor.
               if (turnPendingApprovals.length > 0 && cloudAgentRun?.runId) {
                 pendingApprovalTurns.set(assistantMessageId, {
                   runId: cloudAgentRun.runId,
@@ -2079,9 +1703,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               streamingReasoning: '',
             });
 
-            // Local-mode BYOK streams use this transport too. Capture only a
-            // clean terminal response; Cloud is excluded by the policy snapshot,
-            // and an x_stream_error completion is still a failed turn.
             if (turnStreamError === undefined && finalContent.trim()) {
               captureCompletedLocalMemory();
             }
@@ -2140,10 +1761,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               return;
             }
 
-            // Diagnostics go to the console only — never into the user-facing
-            // assistant bubble or retry banner. Rendering `error.message`/`[DIAG]`
-            // to the UI leaks internal strings (e.g. "The request timed out…") and
-            // breaks the clean, consistent failure copy users expect.
             if (__DEV__) {
               console.warn(`[chat-stream] onError ${error?.name}: ${error?.message}`);
             }
@@ -2182,11 +1799,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ...streamingFlags(),
               streamingContent: '',
               streamingReasoning: '',
-              // Surface the prominent one-tap retry (SendErrorBanner) for stream /
-              // timeout failures too — not just pre-flight errors. Every failed cloud
-              // send now gets an obvious Retry affordance, consistent with the
-              // in-thread "Something went wrong" bubble. Cleared on the next send
-              // (error: null at turn start) or via the banner's dismiss/retry.
               error: 'Something went wrong. Please try again.',
             });
           },
@@ -2309,12 +1921,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       });
       return true;
     } finally {
-      // Structural guarantee against the stuck-composer bug class (Claude's
-      // own iOS app ships this bug): no matter which path the turn took —
-      // clean done, error, abort, or a stream that ended without ever firing
-      // onDone/onError — this turn's bookkeeping is released, the assistant
-      // bubble stops spinning, and the send button returns to rest. All
-      // operations here are idempotent re-runs of what the happy paths do.
       thinkingStartTimes.delete(conversationId);
       thinkingEndTimes.delete(conversationId);
       lastDeltaTimes.delete(conversationId);
@@ -2400,13 +2006,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       pushCloudAssistantUpdate(conversationId, projectedMessages, assistantMessageId);
     };
 
-    // Persist each local choice while a multi-call checkpoint waits for all
-    // decisions. Keep the approval gate visible until the complete decision
-    // set can be submitted atomically.
     patchToolCall({ approvalDecision: decision, requiresApproval: true });
 
-    // Wait until every pending call in this turn is decided before resuming —
-    // a multi-tool suspend needs one resume request carrying every decision.
     if (turn.decisions.size < turn.calls.length) return;
     turn.resolving = true;
 
@@ -2469,17 +2070,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       },
     }));
 
-    // Seed from the message's existing tool cards (the just-decided ones) so
-    // the continuation's deltas EXTEND the same timeline instead of a fresh
-    // accumulator dropping them.
     const toolAcc = seedToolCallAccumulator(seedToolCalls);
     let cloudContentRaw = assistantContent;
-    // Seed from any reasoning the model already produced before the tool call
-    // (thinking is force-disabled server-side for the resume itself, but the
-    // ORIGINAL pre-suspend stream may have streamed real reasoning text) — an
-    // empty seed would overwrite it with `undefined` the instant the first
-    // resume delta lands, since every onDelta below replaces `reasoning`
-    // wholesale rather than appending.
     const priorReasoning = currentMessage?.reasoning ?? '';
     const turnGeneratedFiles: GeneratedFileWire[] = [
       ...generatedFileWireFromMetadata(currentMessage?.metadata?.generatedFiles),
@@ -2489,10 +2081,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         readPersistedInteractiveCards(currentMessage?.metadata)),
     ];
     const turnPendingApprovals: PendingApprovalCall[] = [];
-    // See the sendMessage onDelta/onDone pair above for why these are
-    // captured and persisted (finish_reason previously parsed off the wire
-    // but never read; x_stream_error is the additive mid-stream-failure
-    // marker finish_reason alone can't reliably carry).
     let turnFinishReason: string | undefined;
     let turnStreamError: { message: string; code?: string; retryable?: boolean } | undefined;
     let agentActivity = readAgentActivityState(currentMessage?.metadata?.agentActivity);
@@ -2673,10 +2261,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             innerMsgStore.setState((s) => ({
               messages: { ...s.messages, [conversationId]: updatedMsgs },
-              // messageCount is deliberately NOT incremented here: the initial
-              // suspend's onDone already counted the user+assistant pair. This
-              // resume continuation extends the SAME assistant message — it
-              // creates no new transcript rows.
               conversations: s.conversations.map((c) =>
                 c.id === conversationId
                   ? { ...c, lastMessage: preview, updatedAt: new Date().toISOString() }
@@ -2685,9 +2269,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }));
 
             if (turnPendingApprovals.length > 0) {
-              // The same server-owned run advanced to a new approval
-              // checkpoint. Keep only its handle plus the newly projected cards;
-              // genuine tool output stays private and authoritative on-server.
               pendingApprovalTurns.set(assistantMessageId, {
                 runId: turn.runId,
                 conversationId,
@@ -2756,10 +2337,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
         controller.signal,
       );
     } catch (caughtErr) {
-      // Defensive fallback only: streamToolApprovalResume never rethrows (it
-      // routes every failure through onError above), so this branch is not
-      // expected to run in practice — kept for structural parity with
-      // sendMessage's stuck-composer guarantee.
       if (__DEV__ && isApprovalAccountCurrent()) {
         console.warn('[chat-stream] resolveToolApproval unexpected throw:', caughtErr);
       }
@@ -2833,10 +2410,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   stopStreaming: () => {
     const currentId = getMsgStore().getState().currentConversationId;
 
-    // #16: only the CURRENT conversation may be stopped. Do NOT fall back to an
-    // arbitrary streaming conversation — the global isStreaming flag can surface
-    // the Stop button while the user views a non-streaming screen, and aborting a
-    // random background stream is wrong.
     const targetId = currentId && streamingConversations.has(currentId) ? currentId : null;
 
     if (!targetId) {
@@ -2849,9 +2422,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             set({ error: 'Could not stop the Cloud task. Check its activity before retrying.' });
           });
         }
-        // Mark as cancelled so a sendMessage coroutine that hasn't added to
-        // streamingConversations yet (still awaiting pre-stream async ops) will
-        // bail out when it reaches the isStreaming=true set point.
         cancelledBeforeStream.add(cid);
         const ownerStore = getConversationMessageStore(cid);
         const msgs = ownerStore.getState().messages[cid] ?? [];
@@ -2886,8 +2456,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           }
         }
       }
-      // Reflect whatever is still actually streaming — background conversations
-      // must keep running and keep the global flag accurate.
       set({
         ...streamingFlags(),
         streamingContent: '',
@@ -2952,8 +2520,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
   retryMessage: (conversationId, messageId) => {
     const state = get();
-    // Scope to THIS conversation — a background stream elsewhere must not
-    // block retrying here.
     if (streamingConversations.has(conversationId)) return;
 
     const msgStore = getConversationMessageStore(conversationId);
@@ -2963,9 +2529,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     const msgIndex = msgs.findIndex((m) => m.id === messageId);
     if (msgIndex < 0) return;
 
-    // Resolve the (user, optional assistant) pair from EITHER id. The message
-    // action sheet passes the ASSISTANT id; the send-failure banner passes the
-    // last USER id (a pre-stream failure may never create an assistant message).
     const target = msgs[msgIndex];
     if (!target) return;
     let userMsg: (typeof msgs)[number] | null = null;
@@ -3004,10 +2567,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
     set((s) => ({ retryAttempts: { ...s.retryAttempts, [messageId]: nextAttempt } }));
 
     const removedCount = msgs.length - userIndex;
-    // #23: only the finalize/success path increments messageCount (+2). An
-    // assistant-targeted regenerate replaces a counted exchange (subtract the
-    // removed messages); a banner retry of a FAILED send was never counted
-    // (subtract 0). sendMessage re-adds +2 on success, keeping the count accurate.
     const countedRemoved = target.role === 'assistant' ? removedCount : 0;
     const trimmedMsgs = msgs.slice(0, userIndex);
     const conversation = msgStore
@@ -3052,9 +2611,6 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
   editMessage: (conversationId, messageId, newContent) => {
     const state = get();
 
-    // Scope to THIS conversation — a background stream in another chat must not
-    // block editing here (mirrors retryMessage; the global isStreaming check
-    // wrongly blocked edits in an idle conversation whenever any chat streamed).
     if (streamingConversations.has(conversationId)) {
       Alert.alert(
         'Cannot Edit',

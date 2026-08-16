@@ -4,18 +4,6 @@ vi.mock('server-only', () => ({}));
 
 import { extractJsonObject, wantsJsonObject } from './json-object-mode';
 
-/**
- * `response_format: { type: 'json_object' }` used to be validated by the request
- * schema and read nowhere else: a caller could ask for JSON, receive 200 OK,
- * and get prose, so their parser failed downstream with no indication why.
- *
- * The system-prompt directive is only half the fix — models wrap output in code
- * fences and add prose regardless. These cover the half that makes the promise
- * real, and in particular the line that must NOT be crossed: unwrapping is
- * allowed, REPAIRING malformed JSON is not, because a guessed brace hands the
- * caller a document the model never produced.
- */
-
 describe('wantsJsonObject', () => {
   it('is true only for json_object', () => {
     expect(wantsJsonObject({ type: 'json_object' })).toBe(true);
@@ -38,7 +26,6 @@ describe('extractJsonObject — accepts', () => {
     const result = extractJsonObject('```json\n{"a": 1}\n```');
 
     expect(result.ok).toBe(true);
-    // Re-serialized, so the caller never receives the fence.
     expect(result.content).toBe('{"a":1}');
   });
 
@@ -77,8 +64,6 @@ describe('extractJsonObject — rejects', () => {
   });
 
   it('a JSON array', () => {
-    // `json_object` names an object. Widening it here would make the mode mean
-    // something different than it does everywhere else it is used.
     const result = extractJsonObject('[1, 2, 3]');
 
     expect(result.ok).toBe(false);
@@ -92,9 +77,6 @@ describe('extractJsonObject — rejects', () => {
   });
 
   it('malformed JSON rather than repairing it', () => {
-    // The critical case: a missing brace must NOT be guessed. Returning a
-    // repaired document would hand the caller something the model never
-    // produced, which is worse than an honest error.
     const result = extractJsonObject('{"a": 1');
 
     expect(result.ok).toBe(false);
@@ -102,8 +84,6 @@ describe('extractJsonObject — rejects', () => {
   });
 
   it('two objects concatenated', () => {
-    // Slicing first-brace-to-last-brace spans both; that is not valid JSON and
-    // must fail rather than silently returning one of them.
     expect(extractJsonObject('{"a":1}\n{"b":2}').ok).toBe(false);
   });
 });

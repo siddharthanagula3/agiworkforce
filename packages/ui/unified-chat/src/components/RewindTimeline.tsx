@@ -1,37 +1,8 @@
-/**
- * RewindTimeline
- *
- * Displays a vertical timeline of coding checkpoints and allows rewinding
- * to any saved checkpoint.
- *
- * Ported from apps/desktop/src/components/UnifiedAgenticChat/RewindTimeline.tsx
- *
- * Breaking changes vs source:
- *  - `listen` (Tauri IPC) removed. Real-time updates are handled via the
- *    `onToolEvent` prop — hosts pass a subscription callback that fires
- *    whenever a tool completes. When omitted, checkpoints refresh only on
- *    mount and after rewind.
- *  - `codeEditing` (@agiworkforce/desktop-command-client) removed. Hosts pass `fetchCheckpoints`
- *    and `rewindCheckpoint` async callbacks so this component has zero backend
- *    coupling and can be tested in isolation.
- *
- * Phase A Slice 3 additions:
- *  - Optional `conversationId` prop: when provided the component enriches each
- *    `CodingCheckpoint` entry with a `label` sourced from the
- *    `useCheckpointStore` (conversation-keyed checkpoint store). This enables
- *    the "deep" checkpoint-aware variant without breaking the Slice 2 API.
- *  - `RewindTimelineContainer` — store-connected wrapper that provides a
- *    `conversationId` and a store-connected `label` lookup to `RewindTimeline`.
- */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { History, RotateCcw, RefreshCw } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useCheckpointStore, selectCheckpoints } from '../stores/checkpointStore';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface CodingCheckpoint {
   id: string;
@@ -42,41 +13,11 @@ export interface CodingCheckpoint {
 }
 
 export interface RewindTimelineProps {
-  /**
-   * Called on mount (and after each rewind) to load the checkpoint list.
-   * Must return an array of CodingCheckpoint objects.
-   */
   fetchCheckpoints: () => Promise<CodingCheckpoint[]>;
-  /**
-   * Called when the user confirms a rewind.
-   * Should throw on failure so RewindTimeline can display an error.
-   */
   rewindCheckpoint: (checkpointId: string) => Promise<void>;
-  /**
-   * Optional: host passes a function that takes a `listener` callback and
-   * returns an unlisten/unsubscribe function. When a tool completes
-   * (payload.type === "completed"), the listener is invoked and the
-   * checkpoint list refreshes.
-   *
-   * Example:
-   *   onToolEvent={(listener) => {
-   *     const unsub = eventBus.on('tool:event', listener);
-   *     return unsub;
-   *   }}
-   */
   onToolEvent?: (listener: (payload: { type: string }) => void) => () => void;
-  /**
-   * Phase A Slice 3 — optional conversation scope. When provided, checkpoint
-   * entries are enriched with labels from `useCheckpointStore` (the store
-   * keyed by conversationId). This is the "deep checkpoint-aware" variant.
-   * When omitted, the component behaves exactly as the Slice 2 shell.
-   */
   conversationId?: string;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function getRelativeTime(ms: number): string {
   const diffMs = Date.now() - ms;
@@ -99,23 +40,14 @@ interface RewindConfirmState {
   label: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function RewindTimeline({
   fetchCheckpoints,
   rewindCheckpoint,
   onToolEvent,
   conversationId,
 }: RewindTimelineProps) {
-  // Phase A Slice 3: read conversation-scoped checkpoints from the store to
-  // enrich CodingCheckpoint entries with human labels when conversationId is
-  // supplied. The hook call is always made (Rules of Hooks) but the lookup is
-  // only applied when conversationId is defined.
   const storeCheckpoints = useCheckpointStore(selectCheckpoints(conversationId ?? '__none__'));
 
-  // Build a label map: CodingCheckpoint.id → label from the store (if any).
   const labelMap = useMemo<Record<string, string>>(() => {
     if (!conversationId) return {};
     const map: Record<string, string> = {};
@@ -144,12 +76,10 @@ export function RewindTimeline({
     }
   }, [fetchCheckpoints]);
 
-  // Fetch on mount
   useEffect(() => {
     void loadCheckpoints();
   }, [loadCheckpoints]);
 
-  // Subscribe to tool events for real-time refresh (optional)
   useEffect(() => {
     if (!onToolEvent) return;
 
@@ -269,9 +199,6 @@ export function RewindTimeline({
             {checkpoints.map((checkpoint, index) => {
               const isRewinding = rewinding === checkpoint.id;
               const fileLabel = checkpoint.filePath ? getFileBasename(checkpoint.filePath) : null;
-              // Phase A Slice 3: prefer label from conversation-scoped store, fall
-              // back to toolName so Slice 2 behaviour is unchanged when no store
-              // label is present.
               const storeLabel = labelMap[checkpoint.id];
 
               return (
@@ -354,18 +281,10 @@ export function RewindTimeline({
 
 export default RewindTimeline;
 
-// ── Store-connected container ─────────────────────────────────────────────────
-
 export interface RewindTimelineContainerProps extends Omit<RewindTimelineProps, 'conversationId'> {
-  /** Required for store-connected variant. */
   conversationId: string;
 }
 
-/**
- * RewindTimelineContainer — thin wrapper that forces `conversationId` to be
- * required, so callers can't accidentally omit the scope when using the
- * deep checkpoint-aware variant.
- */
 export function RewindTimelineContainer(props: RewindTimelineContainerProps) {
   return <RewindTimeline {...props} />;
 }

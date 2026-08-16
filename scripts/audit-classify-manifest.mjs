@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-// Audit helper: classify AUDIT_MANIFEST.txt into the 18 priority categories
-// (plus 19 = generated/vendored artifacts) and emit 20-file batches.
-// Outputs: AUDIT_MANIFEST_ORDERED.txt (cat<TAB>path) and AUDIT_BATCHES/batch-NNN.txt
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -17,21 +14,18 @@ const TESTISH =
   /(__tests__|__mocks__|\.test\.|\.spec\.|\/e2e\/|\/tests?\/|\/fixtures\/|playwright)/i;
 
 function categorize(p) {
-  // p starts with './'
   const f = p.toLowerCase();
   if (GENERATED.test(f)) return 19;
   const isMd = f.endsWith('.md');
   if (isMd) return 18;
   if (TESTISH.test(f)) return 16;
 
-  // 1-2: Tauri Rust backend core / IPC commands
   if (f.includes('apps/desktop/src-tauri/')) {
     if (f.includes('/sys/commands/') || f.includes('tauri.conf') || f.includes('/capabilities/'))
       return 2;
     if (f.endsWith('.rs')) return 1;
-    return 2; // other src-tauri config/toml/json travels with IPC tier
+    return 2;
   }
-  // 3: LLM provider integrations
   if (
     f.includes('packages/ai/providers/') ||
     f.includes('packages/ai/provider-protocol/') ||
@@ -45,9 +39,7 @@ function categorize(p) {
     (/(provider|models)/.test(f) && /\.(ts|tsx|rs|js)$/.test(f))
   )
     return 3;
-  // 4: auth/token/session/permissions
   if (/(auth|oauth|token|session|permission|clerk|csrf|secret)/.test(f)) return 4;
-  // 5: API routes, middleware, backend services
   if (
     f.includes('/app/api/') ||
     f.includes('/pages/api/') ||
@@ -58,9 +50,7 @@ function categorize(p) {
     f.includes('apps/web/handlers/')
   )
     return 5;
-  // 6: DB schema/migrations/queries
   if (/(\/db\/|\/neon\/|migration|schema|drizzle|\/data-layer\/)/.test(f)) return 6;
-  // 7: shared contracts & types
   if (
     f.includes('packages/contracts/types/') ||
     f.includes('packages/client/desktop-command-client/') ||
@@ -71,22 +61,18 @@ function categorize(p) {
     f.includes('packages/')
   )
     return 7;
-  // 10-13: other surfaces (before generic frontend rules so cli/ext/mobile win)
   if (f.includes('apps/cli/') || f.startsWith('./crates/')) return 10;
   if (f.includes('apps/extension-vscode/')) return 11;
   if (f.includes('apps/extension/')) return 12;
   if (f.includes('apps/mobile/') || f.startsWith('./ios/')) return 13;
-  // 8: frontend service/API-client layer (desktop+web TS)
   if (
     /(\/services\/|\/api\/|client|\/lib\/|\/stores?\/|\/hooks\/|\/core\/|\/utils\/)/.test(f) &&
     /\.(ts|js)$/.test(f) &&
     (f.includes('apps/desktop/src/') || f.includes('apps/web/'))
   )
     return 8;
-  // 9: frontend components/UI
   if ((f.includes('apps/desktop/src/') || f.includes('apps/web/')) && /\.(tsx|jsx|ts|js)$/.test(f))
     return 9;
-  // 14: CI/CD + infra
   if (
     f.startsWith('./.github/') ||
     f.includes('dockerfile') ||
@@ -94,7 +80,6 @@ function categorize(p) {
     /\.(yml|yaml)$/.test(f)
   )
     return 14;
-  // 15: scripts, hooks, build tools, agent config dirs
   if (
     f.startsWith('./scripts/') ||
     f.includes('/scripts/') ||
@@ -111,7 +96,6 @@ function categorize(p) {
     f.startsWith('./reports/')
   )
     return 15;
-  // 17: configs and everything else
   return 17;
 }
 

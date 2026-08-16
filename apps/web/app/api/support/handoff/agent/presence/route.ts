@@ -1,20 +1,3 @@
-/**
- * POST /api/support/handoff/agent/presence — a human agent goes online/offline
- *                                            and heartbeats.
- * GET  /api/support/handoff/agent/presence — what this deployment currently
- *                                            resolves to, for the agent console.
- *
- * ADMIN ONLY (`requireAdmin`, Clerk publicMetadata.role ∈ {admin, owner}).
- *
- * The `agentUserId` is taken from the VERIFIED session, never from the body — an
- * admin cannot mark somebody else online, which would be a way to make the
- * widget promise a human who has no idea they were volunteered.
- *
- * A row alone does not make an agent available. Presence resolution also
- * requires `last_heartbeat_at` inside AGI_SUPPORT_AGENT_HEARTBEAT_TTL_SECONDS,
- * so an agent who closes the tab decays to unavailable on its own. Clients must
- * re-POST at `heartbeatIntervalMs`.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -33,7 +16,6 @@ import type { HandoffPresenceState } from '@/lib/support/handoff/types';
 
 const PresenceSchema = z.object({
   status: z.enum(['online', 'offline']),
-  /** First name only. Shown to end users, so it must not be an email or an id. */
   displayName: z.string().trim().min(1).max(60),
   maxConcurrentSessions: z.number().int().min(0).max(50).optional(),
 });
@@ -61,8 +43,6 @@ async function handleSetPresence(request: NextRequest) {
   });
   if (!row) throw createError.internal('Could not update presence');
 
-  // AUDIT-DEP: record `support_agent_presence_changed` once the concurrent
-  // audit-logging service lands.
   clearAvailabilityCache();
 
   const heartbeat = heartbeatIntervalMs(config);
@@ -81,7 +61,6 @@ async function handleSetPresence(request: NextRequest) {
   };
 
   if (!config.liveHandoffEnabled) {
-    // Do not let an agent believe they are reachable when gate 1 is off.
     return NextResponse.json({
       presence: state,
       warning:

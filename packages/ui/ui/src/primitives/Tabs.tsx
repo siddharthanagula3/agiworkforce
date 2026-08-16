@@ -4,10 +4,8 @@ import * as React from 'react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { cn } from '../cn';
 
-// Identical across web/desktop (mechanical diffs only: 'use client' + import path).
 const Tabs = TabsPrimitive.Root;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface TabsListProps extends React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> {
   ref?: React.Ref<React.ElementRef<typeof TabsPrimitive.List>>;
 }

@@ -69,7 +69,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
   const isManualStop = useRef(false);
   const isMountedRef = useRef(true);
 
-  // Use refs to avoid recreating recognition on callback changes
   const onResultRef = useRef(onResult);
   const onErrorRef = useRef(onError);
   const onEndRef = useRef(onEnd);
@@ -88,8 +87,6 @@ export function useVoiceInput(options: UseVoiceInputOptions = {}) {
     setState((prev) => ({ ...prev, isSupported }));
 
     if (isSupported) {
-      // Abort and nullify any existing instance before creating a new one,
-      // so the guard below doesn't prevent recreation after cleanup.
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();

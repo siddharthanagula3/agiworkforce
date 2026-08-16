@@ -1,23 +1,8 @@
-/**
- * Permission Detail Screen
- *
- * Shows the 4-state (or applicable subset) enum selector for one permission.
- * Handles:
- *   - Tapping a higher level → requestPermissionsAsync() if undetermined,
- *     or opens Settings if already denied (canAskAgain = false)
- *   - Tapping a lower level → opens Settings with an explanatory message
- *     (iOS/Android cannot programmatically revoke a granted permission)
- *
- * Props arrive via router params: `kind: MobilePermissionKind`.
- */
 import { useCallback, useState } from 'react';
 import { View, ScrollView, Linking, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: duplicate copies of the navigation package
-// make the raw hook throw "Couldn't find a navigation object".
 import { useFocusEffect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft } from 'lucide-react-native';
@@ -38,17 +23,8 @@ function isMobilePermissionKind(value: string | undefined): value is MobilePermi
   return typeof value === 'string' && value in PERMISSION_REGISTRY;
 }
 
-// ---------------------------------------------------------------------------
-// Level radio row
-// ---------------------------------------------------------------------------
-
 interface LevelRowProps {
   level: MobilePermissionLevel;
-  /**
-   * Title for this level. Comes from the registry's per-kind override when it
-   * has one, so this screen never disagrees with the label the permissions
-   * list renders for the same state.
-   */
   label: string;
   isSelected: boolean;
   isLast: boolean;
@@ -109,10 +85,6 @@ function LevelRow({ level, label, isSelected, isLast, onSelect }: LevelRowProps)
   );
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function openAppSettings() {
   Linking.openSettings().catch(() => {
     Alert.alert('Could not open Settings', 'Please open your device Settings app manually.');
@@ -125,10 +97,6 @@ function alertOpenSettings(message: string) {
     { text: 'Open Settings', onPress: openAppSettings },
   ]);
 }
-
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
 
 export default function PermissionDetailScreen() {
   const router = useRouter();
@@ -147,7 +115,6 @@ export default function PermissionDetailScreen() {
     permState?.lastObservedStatus ?? 'undetermined',
   );
 
-  // Read OS status on focus (no prompt)
   useFocusEffect(
     useCallback(() => {
       const registryEntry = entry;
@@ -168,16 +135,9 @@ export default function PermissionDetailScreen() {
     }, [entry, kind, setObservedStatus]),
   );
 
-  // The level currently reflecting OS truth (may differ from userIntent if OS
-  // was changed externally via the system Settings app)
   const currentLevel = entry ? osStatusToLevel(osStatus, kind) : 'denied';
   const selectedLevel = permState?.userIntent ?? currentLevel;
 
-  // Pop the real stack. A hard navigate to the Permissions list dropped anyone
-  // who reached a permission detail from somewhere else (an onboarding prompt,
-  // a deep link, Capabilities) onto a screen they never came from; the list
-  // stays only as the no-history fallback. Same contract as
-  // `SettingsScreenShell` in ../common.tsx.
   const handleBack = useCallback(() => {
     if (router.canGoBack()) {
       router.back();
@@ -192,7 +152,6 @@ export default function PermissionDetailScreen() {
       if (!entry) return;
 
       if (level === 'denied') {
-        // Downgrade: cannot revoke programmatically — open Settings
         setUserIntent(kind, level);
         alertOpenSettings(
           `To deny ${entry.label} access, go to Settings and change the permission there.`,
@@ -200,11 +159,7 @@ export default function PermissionDetailScreen() {
         return;
       }
 
-      // Requesting a grant
       if (alreadyGranted) {
-        // Already granted — downgrade requested (same path as denied above) or
-        // requesting a different grant level (e.g. while-using → always)
-        // Either way, the OS controls this from Settings
         setUserIntent(kind, level);
         if (level !== currentLevel) {
           alertOpenSettings(
@@ -214,18 +169,15 @@ export default function PermissionDetailScreen() {
         return;
       }
 
-      // OS is undetermined or denied — attempt a request
       if (osStatus === 'undetermined') {
         setUserIntent(kind, level);
         const newStatus = await entry.requestPermission();
         setOsStatus(newStatus);
         setObservedStatus(kind, newStatus);
-        // If still denied after prompt, reflect that
         if (newStatus === 'denied') {
           setUserIntent(kind, 'denied');
         }
       } else {
-        // OS denied (canAskAgain = false) — cannot re-prompt
         setUserIntent(kind, level);
         alertOpenSettings(
           `${entry.label} access was previously denied. To allow it, open Settings.`,
@@ -236,7 +188,6 @@ export default function PermissionDetailScreen() {
   );
 
   if (!entry) {
-    // Guard: invalid kind param
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
         <StatusBar style={statusBarStyle} />

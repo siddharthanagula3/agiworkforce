@@ -1,8 +1,6 @@
 export interface GitHubRestPage<T> {
   items: readonly T[];
-  /** Optional collection total used when GitHub omits a Link header. */
   totalCount?: number;
-  /** Raw RFC 8288 Link header. A present header is authoritative. */
   linkHeader?: string | null;
 }
 
@@ -32,11 +30,6 @@ function linkHeaderHasNext(linkHeader: string): boolean {
   );
 }
 
-/**
- * Search a GitHub REST collection page by page without collecting the entire
- * result in memory. Pagination is bounded and prefers GitHub's Link header,
- * falling back to the validated total and page size for endpoints that omit it.
- */
 export async function findInGitHubRestPages<T>(
   options: FindInGitHubRestPagesOptions<T>,
 ): Promise<T | null> {

@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { redactSecrets, scanSecrets } from '../logger';
 
-/**
- * Parity suite for the TS redactor against the Rust CLI reference at
- * `apps/cli/src/secret_redaction.rs`. The TS port guards the Local→BYOK
- * handoff preview, so a pattern the CLI catches and this side misses is a
- * credential that crosses the trust boundary in cleartext.
- */
 describe('secret redaction parity with the Rust CLI', () => {
   it('redacts PEM private key blocks across newlines', () => {
     const pem = [
@@ -43,8 +37,6 @@ describe('secret redaction parity with the Rust CLI', () => {
   });
 
   it('redacts the dash-spelled, JSON-quoted and short AWS secret assignments', () => {
-    // The CLI writes `aws_`, the SDK env vars and most YAML write `aws-`, and
-    // a JSON config puts a quote between the name and the colon.
     const dashed = 'aws-secret-access-key = wJalrXUtnFEMI/K7MDENG+bPxRfiCY';
     const json = '{"aws_session_token": "FwoGZXIvYXdzEBYaDGxhbXBs"}';
     const short = 'aws_secret_access_key=shortish12';
@@ -66,7 +58,6 @@ describe('secret redaction parity with the Rust CLI', () => {
   });
 
   it('redacts variable-length AIza Google keys that do not use the Sy infix', () => {
-    // Real keys are AIza + 35 chars; the infix is not always "Sy".
     const nonSy = 'AIzaB1cD3fG5hJ7kL9mN2pQ4rS6tU8vW0xY1zA3';
     const sy = 'AIzaSyD3fG5hJ7kL9mN2pQ4rS6tU8vW0xY1zA3b';
 
@@ -75,8 +66,6 @@ describe('secret redaction parity with the Rust CLI', () => {
   });
 
   it('redacts AIza keys whose body is not exactly 35 characters', () => {
-    // A fixed quantifier misses the short one outright and leaves the tail of
-    // the long one in the preview, which is the worse of the two failures.
     expect(redactSecrets(`AIza${'a'.repeat(30)}`)).toBe('[REDACTED_GOOGLE_KEY]');
     expect(redactSecrets(`AIza${'b'.repeat(45)}`)).toBe('[REDACTED_GOOGLE_KEY]');
   });
@@ -94,9 +83,6 @@ describe('secret redaction parity with the Rust CLI', () => {
   });
 
   it('redacts DB passwords that carry base64 punctuation, not just word characters', () => {
-    // Generated passwords are base64, so `/` and `+` are routine. A password
-    // class that excluded them read as a widening and was a live leak on the
-    // Local -> BYOK handoff preview.
     expect(redactSecrets('postgres://alice:hun/ter2@db.example.com:5432/app')).toBe(
       'postgres://[CREDENTIALS_REDACTED]@db.example.com:5432/app',
     );
@@ -113,8 +99,6 @@ describe('secret redaction parity with the Rust CLI', () => {
   });
 
   it('redacts a bracketed named-secret value but leaves a placeholder alone', () => {
-    // Rust admits `[` and `]` in the value class, so `token=[abc…]` is a
-    // secret like any other; only a `[REDACTED…]` placeholder is exempt.
     expect(redactSecrets('token=[abcdefghij12345]')).toBe('token=[REDACTED]');
     expect(redactSecrets('aws_session_token=[FwoGZXIvYXdzEBYaDGxhbXBs]')).not.toContain(
       'FwoGZXIvYXdzEBYaDGxhbXBs',
@@ -125,15 +109,12 @@ describe('secret redaction parity with the Rust CLI', () => {
     expect(redactSecrets('secret=abcdefghij12')).toBe('secret=[REDACTED]');
     expect(redactSecrets('token: abcdefghij12')).toBe('token=[REDACTED]');
     expect(redactSecrets('{"api_key": "abcdefghij123456"}')).not.toContain('abcdefghij123456');
-    // Short bearer tokens count too — the Rust rule stops at 8 characters.
     expect(redactSecrets('Authorization: Bearer abcdefghij123')).toBe(
       'Authorization: Bearer [REDACTED_TOKEN]',
     );
   });
 
   it('does not re-redact a placeholder an earlier rule already substituted', () => {
-    // Rule order means the vendor rules fire first; the named-secret rule then
-    // sees `NAME=[REDACTED_*]` and must leave the attribution intact.
     expect(redactSecrets('OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456')).toBe(
       'OPENAI_API_KEY=[REDACTED_API_KEY]',
     );
@@ -143,8 +124,6 @@ describe('secret redaction parity with the Rust CLI', () => {
   });
 
   it('does not redact epoch-millisecond timestamps as payment cards', () => {
-    // Regression: a generic 13-19 digit run swallowed every ms timestamp,
-    // which made real logs unreadable. Fixed in the Rust desktop redactor.
     expect(redactSecrets('ts=1721469876543')).toBe('ts=1721469876543');
     expect(scanSecrets('ts=1721469876543')).toEqual([]);
     expect(redactSecrets('{"startedAt":1721469876543,"endedAt":1721469999001}')).toBe(
@@ -156,7 +135,6 @@ describe('secret redaction parity with the Rust CLI', () => {
     expect(redactSecrets('4111 1111 1111 1111')).toBe('[REDACTED]');
     expect(redactSecrets('4111-1111-1111-1111')).toBe('[REDACTED]');
     expect(redactSecrets('3782 822463 10005')).toBe('[REDACTED]');
-    // Contiguous run with a plausible issuer identification number.
     expect(redactSecrets('4111111111111111')).toBe('[REDACTED]');
   });
 });

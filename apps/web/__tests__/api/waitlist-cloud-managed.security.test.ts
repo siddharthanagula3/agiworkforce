@@ -1,24 +1,8 @@
-/**
- * Threat model: POST /api/waitlist/cloud-managed must:
- * - Reject requests without a valid CSRF token (403)
- * - Return 429 when the rate limiter signals exceeded
- * - Reject malformed or missing email with 400
- * - NOT leak internal state (table name, cloud database errors, stack traces) in
- *   responses, even on error paths
- *
- * Storage contract:
- * - Normalized email is persisted because launch operations must be able to
- *   send invite/release emails to waitlisted visitors.
- * - RLS posture: waitlist rows are account-bound. Public callers must be
- *   authenticated, and durable storage includes the owning Clerk user id.
- * - Rate limit uses the dedicated 'waitlist' config (5/hour/IP), not 'default'.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
-// ─── Baseline mocks ───────────────────────────────────────────────────────────
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/logger', () => ({
@@ -48,13 +32,11 @@ vi.mock('@/lib/csrf', () => ({
   getSessionIdFromRequest: vi.fn(() => Promise.resolve('session-123')),
 }));
 
-// ─── Rate-limit mock ──────────────────────────────────────────────────────────
 const mockWithRateLimit = vi.fn().mockResolvedValue(null);
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: (...args: unknown[]) => mockWithRateLimit(...args),
 }));
 
-// ─── Neon DB mock ─────────────────────────────────────────────────────────────
 const mockExecute = vi.fn().mockResolvedValue(1);
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
@@ -71,10 +53,8 @@ vi.mock('@/lib/server/neon-chat', () => ({
   requireCurrentUserId: () => mockRequireCurrentUserId(),
 }));
 
-// ─── Import route under test ──────────────────────────────────────────────────
 import { POST, OPTIONS } from '@/app/api/waitlist/cloud-managed/route';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 function makePostRequest(body: unknown, extra?: RequestInit['headers']): NextRequest {
   return new NextRequest('http://localhost/api/waitlist/cloud-managed', {
     method: 'POST',
@@ -101,18 +81,15 @@ function rateLimitExceededResponse(): NextResponse {
   );
 }
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
 describe('POST /api/waitlist/cloud-managed — security tests', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: CSRF passes, rate limit passes, execute succeeds
     mockRequireCsrfToken.mockResolvedValue(null);
     mockWithRateLimit.mockResolvedValue(null);
     mockExecute.mockResolvedValue(1);
     mockRequireCurrentUserId.mockResolvedValue('user-test-id');
   });
 
-  // ─── CSRF protection ────────────────────────────────────────────────────────
   describe('(a) CSRF enforcement', () => {
     it('returns 403 with CSRF_VALIDATION_FAILED when CSRF token is missing', async () => {
       mockRequireCsrfToken.mockResolvedValueOnce(csrfBlockedResponse());
@@ -148,7 +125,6 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       const request = makePostRequest({ email: 'test@example.com', source: 'byok' });
       await POST(request);
 
-      // DB should not have been touched when CSRF fails
       expect(mockExecute).not.toHaveBeenCalled();
     });
 
@@ -186,7 +162,6 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     });
   });
 
-  // ─── Rate limiting ──────────────────────────────────────────────────────────
   describe('(b) Rate limit enforcement', () => {
     it('returns 429 when rate limiter signals exceeded', async () => {
       mockWithRateLimit.mockResolvedValueOnce(rateLimitExceededResponse());
@@ -223,7 +198,6 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     });
   });
 
-  // ─── Input validation — no PII/state leak on validation errors ─────────────
   describe('(c) Input validation error paths', () => {
     it('returns 400 for missing email, body contains no Neon details', async () => {
       const request = makePostRequest({ source: 'byok' });
@@ -231,7 +205,6 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
 
       expect(response.status).toBe(400);
       const body = await response.text();
-      // Internal table name must not appear in user-facing error
       expect(body).not.toContain('cloud_managed_waitlist');
       expect(body).not.toContain('42P01');
       expect(body).not.toContain('stack');
@@ -244,7 +217,7 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     });
 
     it('returns 400 for email exceeding 254 chars', async () => {
-      const longEmail = 'a'.repeat(250) + '@x.co'; // 257 chars
+      const longEmail = 'a'.repeat(250) + '@x.co';
       const request = makePostRequest({ email: longEmail, source: 'byok' });
       const response = await POST(request);
       expect(response.status).toBe(400);
@@ -255,7 +228,6 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       const response = await POST(request);
 
       expect(response.status).toBe(200);
-      // source defaults to 'other' — verify execute was called with source 'other' in params
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('cloud_managed_waitlist'),
         expect.arrayContaining(['other']),
@@ -289,7 +261,6 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     });
   });
 
-  // ─── DB error paths — no internal state leaked ───────────────────────────
   describe('(d) DB error paths — no internal state in response', () => {
     it('fails closed when table does not exist (42P01)', async () => {
       const pgErr = Object.assign(new Error('table not found'), { code: '42P01' });
@@ -331,7 +302,6 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
     });
   });
 
-  // ─── OPTIONS preflight ────────────────────────────────────────────────────
   describe('OPTIONS preflight', () => {
     it('OPTIONS responds without requiring CSRF', async () => {
       const request = new NextRequest('http://localhost/api/waitlist/cloud-managed', {
@@ -339,9 +309,7 @@ describe('POST /api/waitlist/cloud-managed — security tests', () => {
       });
 
       const response = await OPTIONS(request);
-      // OPTIONS should be 204 (no content) for a CORS preflight
       expect([200, 204]).toContain(response.status);
-      // CSRF check must NOT be called for OPTIONS
       expect(mockRequireCsrfToken).not.toHaveBeenCalled();
     });
   });

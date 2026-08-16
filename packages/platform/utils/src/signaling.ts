@@ -5,14 +5,8 @@ import type {
   SignalKind,
 } from '@agiworkforce/types';
 
-// Re-export types for backwards compatibility
 export type { SignalingRole, SignalingEvent, SignalingClientOptions, SignalKind };
 
-// Helper functions for safe type coercion and validation
-
-/**
- * Safely parse JSON string, returning null on failure
- */
 function safeJsonParse(data: string): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(data);
@@ -25,9 +19,6 @@ function safeJsonParse(data: string): Record<string, unknown> | null {
   }
 }
 
-/**
- * Safely convert a value to a number, with a fallback
- */
 function safeToNumber(value: unknown, fallback: number): number {
   if (typeof value === 'number' && !Number.isNaN(value)) {
     return value;
@@ -41,23 +32,14 @@ function safeToNumber(value: unknown, fallback: number): number {
   return fallback;
 }
 
-/**
- * Safely convert a value to a string, with a fallback
- */
 function safeToString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }
 
-/**
- * Validate if a value is a valid SignalingRole
- */
 function isValidSignalingRole(value: unknown): value is SignalingRole {
   return value === 'desktop' || value === 'mobile';
 }
 
-/**
- * Validate if a value is a valid SignalKind
- */
 function isValidSignalKind(value: unknown): value is SignalKind {
   return value === 'offer' || value === 'answer' || value === 'ice' || value === 'control';
 }
@@ -70,16 +52,10 @@ function isValidPeerLeftReason(
   );
 }
 
-/**
- * Safely extract a SignalingRole from a message, with fallback
- */
 function safeToSignalingRole(value: unknown, fallback: SignalingRole): SignalingRole {
   return isValidSignalingRole(value) ? value : fallback;
 }
 
-/**
- * Safely extract a SignalKind from a message, with fallback
- */
 function safeToSignalKind(value: unknown, fallback: SignalKind): SignalKind {
   return isValidSignalKind(value) ? value : fallback;
 }
@@ -90,9 +66,6 @@ function safeToPeerLeftReason(
   return isValidPeerLeftReason(value) ? value : undefined;
 }
 
-/**
- * Safely extract metadata from a message
- */
 function safeToMetadata(value: unknown): Record<string, unknown> | null {
   if (value === null || value === undefined) {
     return null;
@@ -112,14 +85,6 @@ export class SignalingClient {
     this.connect();
   }
 
-  /**
-   * Hand a signal to the currently-open websocket.
-   *
-   * `true` means the browser/native websocket accepted the frame locally; it
-   * is not a peer acknowledgement. Callers that surface delivery state must
-   * still wait for their domain-level response (for example a Dispatch status
-   * event).
-   */
   sendSignal(kind: SignalKind, payload: unknown): boolean {
     return this.send({
       type: 'signal',

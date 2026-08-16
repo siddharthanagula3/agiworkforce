@@ -70,7 +70,6 @@ export function isFailoverEligibleError(error: unknown, signal?: AbortSignal): b
 export interface FailoverAttempt {
   model: string;
   provider: string;
-  /** The derived per-attempt request view — same reservation, serving model. */
   processed: ProcessedRequest;
 }
 
@@ -78,15 +77,6 @@ function requestCarriesTools(processed: ProcessedRequest): boolean {
   return Array.isArray(processed.llmRequest.tools) && processed.llmRequest.tools.length > 0;
 }
 
-/**
- * Derived per-attempt view of the processed request. The managed-usage
- * reservation, messages, caps, and request identity are the primary's; only
- * the serving route (model + provider) and the model-shaped tuning that
- * cannot transfer across providers (thinking config, effort) are recomputed.
- * `usedFallback`/`fallbackReason` are set so the existing response/persistence
- * rule (`usedFallback ? chatRequest.model : requestedModel`) stamps the model
- * that ACTUALLY served, and settlement prices by it.
- */
 export function buildFailoverAttemptView(
   processed: ProcessedRequest,
   model: string,
@@ -106,13 +96,6 @@ export function buildFailoverAttemptView(
     provider,
     usedFallback: true,
     fallbackReason: 'managed_failover',
-    // CPST Stage-0 telemetry (managed cloud only,
-    // docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2): this is
-    // the only place an ADDITIONAL provider attempt is created inside one billed
-    // request, so it is the only honest place to count one. The counter rides
-    // the attempt view, so whichever attempt finally settles carries the number
-    // of rotations it took to get there. Observability only — nothing reads it
-    // to decide anything.
     retries: (processed.retries ?? 0) + 1,
     chatRequest: { ...processed.chatRequest, model },
     llmRequest: {
@@ -124,35 +107,17 @@ export function buildFailoverAttemptView(
   };
 }
 
-/**
- * Create the bounded rotation state for one request. `next(error)` returns
- * the next admissible attempt view, or null when rotation is not permitted
- * (ineligible failure class, aborted, plan exhausted, or no candidate passes
- * the per-attempt admission and tool-compatibility re-checks).
- */
 export function createFailoverPlan(
   processed: ProcessedRequest,
   options: {
     signal: AbortSignal;
-    /** Providers route.ts can actually dispatch (ADAPTER_PROVIDERS keys). */
     isProviderDispatchable: (provider: string) => boolean;
   },
 ): { next: (error: unknown) => FailoverAttempt | null } {
   const remaining = [...(processed.fallbackModels ?? [])];
   const tier = processed.subscriptionTier;
   const mustStayOnProvider = requestCarriesTools(processed);
-  // Every attempt on this route authenticates with the PLATFORM's key for the
-  // upstream it targets, so a rejected credential (401/403, revoked OAuth
-  // token, disabled org, exhausted credit balance) condemns one provider
-  // account and says nothing about the request or the other providers on the
-  // plan. Per-request, never cached across requests: a suspension can lift.
   const credentialFailover = new CredentialFailoverState();
-  // CPST `retries` lineage: each attempt view must be built from the LATEST
-  // attempt view, not the original request view, or the counter re-computes
-  // `(original.retries ?? 0) + 1 = 1` on every rotation and the ledger
-  // under-counts multi-rotation requests. Only the counter lineage rides this
-  // variable — admission, tool checks, and the OpenRouter route-retry all still
-  // read the original `processed` on purpose.
   let latestView: ProcessedRequest = processed;
 
   const nextAdmissibleCandidate = (): FailoverAttempt | null => {
@@ -189,9 +154,6 @@ export function createFailoverPlan(
         );
         continue;
       }
-      // Fresh tier admission at attempt time — the plan was admitted at
-      // resolve time, but the ladder is re-checked per attempt like the
-      // gateway's enforcePlanTier re-check.
       if (tier !== undefined && !canAccessModel(candidate, tier)) {
         logger.warn(
           { requestId: processed.requestId, model: candidate, tier },
@@ -210,27 +172,6 @@ export function createFailoverPlan(
     return null;
   };
 
-  /**
-   * Retry the SAME model through OpenRouter, once, before changing model.
-   *
-   * Rotation answers an outage by switching to a different model, which is a
-   * worse answer than the user asked for and is why explicit selections are
-   * rotation-free. OpenRouter resells the same models, so an Anthropic 503 —
-   * or an Anthropic key the platform can no longer use — can be retried as the
-   * identical model on another wire under a different credential; the user's
-   * choice is preserved, and there is nothing to disclose because nothing
-   * changed except the path.
-   *
-   * That difference is why this is allowed where rotation is not: it runs for
-   * explicit selections and for requests with an empty fallback plan.
-   *
-   * Skipped when the request carries provider-native tool payloads
-   * (`rawVendorTools` — Anthropic's `web_search_20260209`, Google's
-   * `google_search`). Those are vendor-wire-specific and are not verified to
-   * survive the proxy; ordinary function tools transfer fine because the model
-   * on the far side is the same one. Attempted at most once per request, so a
-   * persistent OpenRouter fault cannot turn one outage into a retry storm.
-   */
   let routeRetryUsed = false;
   const routeRetryAttempt = (): FailoverAttempt | null => {
     if (routeRetryUsed) return null;
@@ -242,9 +183,6 @@ export function createFailoverPlan(
     );
     if (hasVendorNativeTools) return null;
     routeRetryUsed = true;
-    // Same model — only the provider changes, so pricing, tier admission and
-    // the response's model field all stay exactly as they were. Built from
-    // `latestView` so the retries counter keeps its lineage across attempts.
     const attemptView = {
       ...buildFailoverAttemptView(latestView, processed.llmRequest.model, 'openrouter'),
       fallbackReason: 'openrouter_route_failover',
@@ -261,10 +199,6 @@ export function createFailoverPlan(
     next: (error: unknown): FailoverAttempt | null => {
       if (options.signal.aborted) return null;
       const category = classifyError(error).category;
-      // Recorded BEFORE any candidate lookup so the rejected provider's own
-      // remaining plan routes are skipped instead of burning the turn on
-      // guaranteed repeat rejections. Returns true only for the credential
-      // class, which also admits a rotation the availability set refuses.
       const credentialRotation = credentialFailover.recordFailure(latestView.provider, category);
       if (!credentialRotation && !isFailoverEligibleError(error, options.signal)) return null;
 

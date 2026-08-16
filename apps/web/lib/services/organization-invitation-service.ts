@@ -1,38 +1,3 @@
-/**
- * @file organization-invitation-service.ts
- *
- * Member lifecycle for organizations: invite → accept | decline | revoke |
- * expire, plus resend.
- *
- * # Honest scope: no email is sent
- *
- * This repo has NO transactional email provider (verified: no resend /
- * sendgrid / postmark / nodemailer dependency in apps/web/package.json;
- * apps/web/app/api/user/delete-account/route.ts documents the same absence).
- * An invitation therefore persists a row and returns a one-time link the
- * inviter copies and delivers themselves. No response string in this module or
- * its routes claims an email was queued or sent. Delivery is a tracked gap.
- *
- * # Token handling
- *
- * A 32-byte random token is generated, returned exactly once, and stored only
- * as its sha256 hex. Lookup compares the hash in SQL. This mirrors
- * lib/server/device-refresh-token.ts / 0080_device_refresh_token_rotation.sql.
- * The raw token is never logged and never placed in a redirect URL.
- *
- * # Seat accounting
- *
- * A PENDING invitation holds a seat (0085 triggers). Every terminal transition
- * releases it. Acceptance MUST flip the invitation out of 'pending' BEFORE
- * inserting the membership row: the `organizations_seats_within_license` CHECK
- * is immediate and cannot be deferred, so the reverse order transiently reaches
- * seats_consumed + 1 and would trip the ceiling on a fully-licensed org.
- *
- * # Client injection contract
- *
- * USER-CONTEXT: every function takes `db: DatabaseAdapter`. No private
- * connection is constructed here. See lib/services/README.md.
- */
 import 'server-only';
 
 import crypto from 'node:crypto';
@@ -78,10 +43,6 @@ const INVITATION_COLUMNS = `id, organization_id, email, role, status,
    token_hash, invited_by_user_id, accepted_by_user_id, expires_at,
    resent_at, resend_count, created_at, updated_at`;
 
-/**
- * Public projection. `token_hash` never leaves the server, and the raw token is
- * returned only by the create/resend paths that just minted it.
- */
 export function formatInvitation(row: OrganizationInvitationRow) {
   return {
     id: row.id,
@@ -99,14 +60,6 @@ export function formatInvitation(row: OrganizationInvitationRow) {
   };
 }
 
-/**
- * Flip every pending invitation whose `expires_at` has passed to 'expired',
- * which fires the seat-release trigger.
- *
- * Called lazily inside the same transaction that is about to consume a seat, so
- * a dead invitation can never block a live one, AND durably from
- * /api/cron/expire-organization-invitations.
- */
 export async function expirePendingInvitations(
   db: DatabaseAdapter,
   organizationId?: string,
@@ -153,20 +106,9 @@ export interface CreateInvitationInput {
 
 export interface CreatedInvitation {
   invitation: OrganizationInvitationRow;
-  /** Returned exactly once. Never persisted, never logged. */
   token: string;
 }
 
-/**
- * Persist a pending invitation, consuming one licensed seat.
- *
- * Every rejection below happens BEFORE the seat-consuming INSERT so a no-op
- * cannot burn a seat:
- *   - the address already belongs to a member of this organization
- *   - a pending invitation for the address already exists (resend it instead)
- *
- * The seat ceiling itself is enforced by the database, not by a count here.
- */
 export async function createInvitation(
   db: DatabaseAdapter,
   input: CreateInvitationInput,
@@ -176,14 +118,11 @@ export async function createInvitation(
 
   const invitation = await withSeatAccountingErrors(() =>
     db.transaction(async (tx) => {
-      // Serialize with the add-member path, which takes the same advisory lock.
       await tx.query(
         `select pg_advisory_xact_lock(hashtextextended('agi:organization-members:' || $1, 0))`,
         [input.organizationId],
       );
 
-      // Release seats held by invitations that have already lapsed, so a stale
-      // invitation never blocks a live one.
       await expirePendingInvitations(tx, input.organizationId);
 
       const [alreadyMember] = await tx.query<{ user_id: string }>(
@@ -237,13 +176,6 @@ export async function createInvitation(
   return { invitation, token: credential.token };
 }
 
-/**
- * Mint a fresh token and extend the expiry of an existing pending invitation.
- *
- * An UPDATE, never a second row — the partial unique index on
- * (organization_id, email) where status = 'pending' makes that structural, and
- * it keeps the seat count stable across a resend.
- */
 export async function resendInvitation(
   db: DatabaseAdapter,
   organizationId: string,
@@ -296,9 +228,6 @@ export async function resendInvitation(
   return { invitation, token: credential.token };
 }
 
-/**
- * Revoke a pending invitation. Releases its seat through the trigger.
- */
 export async function revokeInvitation(
   db: DatabaseAdapter,
   organizationId: string,
@@ -328,9 +257,7 @@ export async function revokeInvitation(
 
 export interface AcceptInvitationInput {
   token: string;
-  /** The AUTHENTICATED subject. Never taken from the invitation row. */
   userId: string;
-  /** The authenticated subject's email, resolved server-side from profiles. */
   userEmail: string | null;
 }
 
@@ -339,14 +266,6 @@ export interface AcceptedInvitation {
   role: OrganizationMemberRow['role'];
 }
 
-/**
- * Accept an invitation by presenting its one-time token.
- *
- * Authorization is the token PLUS an email match: a leaked link must not grant
- * organization access to whoever opens it, so the authenticated subject's
- * stored email has to equal the invited address (case-insensitive). Membership
- * is always bound to the authenticated user id, never to the invited string.
- */
 export async function acceptInvitation(
   db: DatabaseAdapter,
   input: AcceptInvitationInput,
@@ -355,9 +274,6 @@ export async function acceptInvitation(
 
   return withSeatAccountingErrors(() =>
     db.transaction(async (tx) => {
-      // Bound to the token hash and nothing else — this is the one legitimately
-      // privileged lookup, because the invitee has no membership row yet and so
-      // no RLS predicate can authorize them.
       const [invitation] = await tx.query<OrganizationInvitationRow>(
         `select ${INVITATION_COLUMNS}
            from public.organization_invitations
@@ -379,9 +295,6 @@ export async function acceptInvitation(
         );
       }
 
-      // Serialize membership acceptance and the account's active-workspace
-      // selection. Accounts may belong to multiple workspaces; the exact
-      // invited organization is selected after the membership commits.
       await tx.query(
         `select pg_advisory_xact_lock(hashtextextended('agi:organization-owner:' || $1, 0))`,
         [input.userId],
@@ -404,10 +317,6 @@ export async function acceptInvitation(
         [invitation.organization_id, input.userId],
       );
 
-      // ORDER IS LOAD-BEARING: release the invitation's seat first. The
-      // `organizations_seats_within_license` CHECK is immediate, so inserting
-      // the member first would transiently reach seats_consumed + 1 and abort
-      // on a fully-licensed organization.
       const [accepted] = await tx.query<OrganizationInvitationRow>(
         `update public.organization_invitations
             set status = 'accepted', accepted_by_user_id = $1
@@ -431,18 +340,11 @@ export async function acceptInvitation(
 
       await persistProvenActiveWorkspaceSelection(tx, input.userId, invitation.organization_id);
 
-      // An invitation cannot silently rewrite an existing membership. This
-      // race is possible when the person joins through another legitimate path
-      // before opening an older invitation. Report the role that is actually
-      // persisted rather than the stale role requested by the invitation.
       return { invitation: accepted, role: existingMembership?.role ?? invitation.role };
     }),
   );
 }
 
-/**
- * Decline an invitation by presenting its token. Releases the held seat.
- */
 export async function declineInvitation(
   db: DatabaseAdapter,
   input: Pick<AcceptInvitationInput, 'token' | 'userEmail'>,

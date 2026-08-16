@@ -19,17 +19,6 @@ export interface DesktopCloudConnectorInstallOptions {
   isConnected: () => Promise<boolean>;
 }
 
-/**
- * Completes an external-provider install inside an owned Desktop webview.
- *
- * The provider may navigate the child window away from AGI temporarily, while
- * the main webview polls only AGI's authenticated connector API. No provider
- * credential or callback payload crosses into the Desktop JavaScript context.
- *
- * The install window is an authorization-consent surface, not a credential
- * form, so it stays capturable — a black window here is indistinguishable from
- * a hung install during a screen-shared walkthrough.
- */
 export async function completeDesktopCloudConnectorInstall(
   rawUrl: string,
   { isConnected }: DesktopCloudConnectorInstallOptions,

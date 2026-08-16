@@ -1,10 +1,5 @@
-/**
- * Realtime API — typed wrappers for WebSocket presence and activity commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface RealtimeConnectionInfo {
   url: string;
@@ -20,8 +15,6 @@ export interface UserActivity {
   description?: string;
   timestamp: string;
 }
-
-// ---- Commands ----
 
 export async function connectWebsocket(
   userId: string,

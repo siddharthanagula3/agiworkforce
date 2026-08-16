@@ -64,8 +64,6 @@ describe('GET /api/cron/run-schedules', () => {
 
     const response = await GET(request('cron-secret') as never);
 
-    // Five waves of ten is the platform-wide ceiling the tier quotas are sized
-    // against; a single batch per day was an order of magnitude below it.
     expect(processDue).toHaveBeenCalledTimes(Math.ceil(PLATFORM_SCHEDULE_RUNS_PER_SWEEP / 10));
     await expect(response.json()).resolves.toMatchObject({ claimed: 50, drained: false });
   });

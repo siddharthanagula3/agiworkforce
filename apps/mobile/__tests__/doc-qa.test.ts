@@ -1,14 +1,4 @@
-/**
- * Doc Q&A parser + RAG index tests (Wave 0).
- *
- * Parser tests cover: TXT, MD, CSV, code. PDF is tested with a minimal
- * synthetic base64 payload since a real PDF binary isn't available in unit tests.
- *
- * RAG index integration test verifies the index→retrieve roundtrip using
- * in-memory SQLite mocks.
- */
 
-// Must be before any imports that pull in the modules under test.
 jest.mock('expo-file-system/legacy', () => ({
   readAsStringAsync: jest.fn(),
   getInfoAsync: jest.fn().mockResolvedValue({ exists: true, size: 1234 }),
@@ -17,8 +7,6 @@ jest.mock('expo-file-system/legacy', () => ({
     Base64: 'base64',
   },
 }));
-
-// ── Shared SQLite mock state ──────────────────────────────────────────────────
 
 const chunkRows: Record<string, unknown>[] = [];
 
@@ -71,8 +59,6 @@ const mockDb = {
   closeAsync: jest.fn().mockResolvedValue(undefined),
 };
 
-// Mock storage/db directly so tests bypass the SQLCipher key derivation and
-// migration chain — those are tested separately in storage tests.
 jest.mock('../storage/db', () => ({
   getDb: jest.fn().mockResolvedValue(mockDb),
   closeDb: jest.fn().mockResolvedValue(undefined),
@@ -83,8 +69,6 @@ import * as LegacyFS from 'expo-file-system/legacy';
 import { parseDocument, DocParseError } from '../services/docParser';
 import { indexDocument, retrieve, deleteDocument } from '../src/features/memory/services/ragIndex';
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 const mockFs = LegacyFS as jest.Mocked<typeof LegacyFS>;
 
 function setFileContent(content: string, encoding: 'utf8' | 'base64' = 'utf8') {
@@ -92,13 +76,10 @@ function setFileContent(content: string, encoding: 'utf8' | 'base64' = 'utf8') {
   void encoding;
 }
 
-// Re-apply the getDb mock return value after clearAllMocks (which resets it).
 function restoreDbMock() {
   const { getDb } = jest.requireMock('../storage/db') as { getDb: jest.Mock };
   getDb.mockResolvedValue(mockDb);
 }
-
-// ── Parser: TXT ───────────────────────────────────────────────────────────────
 
 describe('docParser — TXT', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -116,8 +97,6 @@ describe('docParser — TXT', () => {
   });
 });
 
-// ── Parser: MD ────────────────────────────────────────────────────────────────
-
 describe('docParser — MD', () => {
   beforeEach(() => jest.clearAllMocks());
 
@@ -129,8 +108,6 @@ describe('docParser — MD', () => {
     expect(result.metadata.docType).toBe('md');
   });
 });
-
-// ── Parser: CSV ───────────────────────────────────────────────────────────────
 
 describe('docParser — CSV', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -147,14 +124,10 @@ describe('docParser — CSV', () => {
 
   it('throws EMPTY_DOCUMENT on CSV with only a header', async () => {
     setFileContent('name,age');
-    // Header only counts as 0 data rows; text should be just "Columns: name, age"
     const result = await parseDocument('file:///tmp/empty.csv');
-    // "Columns: name, age" is non-empty so it should parse without error
     expect(result.metadata.rows).toBe(0);
   });
 });
-
-// ── Parser: Code ──────────────────────────────────────────────────────────────
 
 describe('docParser — code', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -176,8 +149,6 @@ describe('docParser — code', () => {
   });
 });
 
-// ── Parser: unsupported format ────────────────────────────────────────────────
-
 describe('docParser — unsupported format', () => {
   it('throws UNSUPPORTED_FORMAT for unknown extensions', async () => {
     await expect(parseDocument('file:///tmp/archive.zip')).rejects.toMatchObject({
@@ -186,14 +157,10 @@ describe('docParser — unsupported format', () => {
   });
 });
 
-// ── Parser: PDF (synthetic) ───────────────────────────────────────────────────
-
 describe('docParser — PDF (synthetic)', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('extracts text from a minimal synthetic PDF base64', async () => {
-    // A real PDF starts with %PDF. We synthesize just enough structure to
-    // exercise the extractor without embedding an actual PDF binary.
     const fakePdfContent = '%PDF-1.4\n/Type /Page\nBT (Hello from PDF) Tj ET\n';
     const base64 = btoa(fakePdfContent);
     mockFs.readAsStringAsync.mockResolvedValue(base64);
@@ -212,15 +179,12 @@ describe('docParser — PDF (synthetic)', () => {
   });
 });
 
-// ── RAG index: integration roundtrip ─────────────────────────────────────────
-
 describe('ragIndex — index → retrieve roundtrip', () => {
   const CONV_ID = 'test-conv-001';
 
   beforeEach(() => {
     jest.clearAllMocks();
     chunkRows.splice(0);
-    // Re-apply implementations cleared by clearAllMocks
     restoreDbMock();
     mockDb.execAsync.mockResolvedValue(undefined);
     mockDb.getFirstAsync.mockResolvedValue(null);
@@ -286,7 +250,6 @@ describe('ragIndex — index → retrieve roundtrip', () => {
   });
 
   it('respects 4K context budget per chunk (token_count ≤ 500 default)', async () => {
-    // 500 tokens ≈ 385 words at 1.3 tok/word. Generate text well above that.
     const longText = Array.from({ length: 1000 }, (_, i) => `word${i}`).join(' ');
     const parsed = {
       text: longText,
@@ -296,7 +259,7 @@ describe('ragIndex — index → retrieve roundtrip', () => {
     await indexDocument(CONV_ID, parsed);
 
     for (const chunk of chunkRows) {
-      expect(chunk.token_count as number).toBeLessThanOrEqual(520); // 500 + small rounding
+      expect(chunk.token_count as number).toBeLessThanOrEqual(520);
     }
   });
 

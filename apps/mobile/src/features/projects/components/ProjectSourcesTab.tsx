@@ -1,11 +1,3 @@
-/**
- * ProjectSourcesTab — knowledge-file browser for the project detail screen.
- *
- * Shows attached files (name, size, date), "Add sources" CTA using
- * expo-document-picker, and an empty state when no sources are present.
- *
- * Sources live in the local project store.
- */
 
 import { useCallback, useMemo } from 'react';
 import { View, ScrollView, Pressable, Alert } from 'react-native';

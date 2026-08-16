@@ -5,10 +5,6 @@ import { logger } from '@shared/lib/logger';
 
 export type PermissionLevel = 'allow' | 'ask' | 'deny';
 
-/**
- * Nested map: connectorId -> toolName -> PermissionLevel
- * All tools default to 'ask' (needs approval) when not explicitly set.
- */
 export type ToolPermissionsMap = Record<string, Record<string, PermissionLevel>>;
 
 interface ToolPermissionsState {
@@ -20,19 +16,9 @@ interface ToolPermissionsActions {
   getToolPermission: (connectorId: string, toolName: string) => PermissionLevel;
   getConnectorPermissions: (connectorId: string) => Record<string, PermissionLevel>;
   resetConnectorPermissions: (connectorId: string) => void;
-  /**
-   * Load the user's server-persisted verdicts (cross-device) and merge them in.
-   * Local wins on conflict so an in-flight hydrate never clobbers a just-set
-   * value. Best-effort — a failure leaves the localStorage copy intact.
-   */
   hydrateFromServer: () => Promise<void>;
 }
 
-// Fire-and-forget server persistence so a "block this tool" verdict follows the
-// user across devices and gains server durability. The generic per-invocation
-// approval gate is enforced server-side in the tool loop regardless; this only
-// persists the remembered policy. Offline/failure is non-fatal — localStorage
-// holds the local copy.
 async function persistPermissionToServer(
   connectorId: string,
   toolName: string,
@@ -96,8 +82,6 @@ export const useToolPermissionsStore = create<ToolPermissionsState & ToolPermiss
           set((state) => {
             const merged: ToolPermissionsMap = { ...state.permissions };
             for (const p of data.permissions ?? []) {
-              // Local wins on conflict (a just-set value must not be clobbered
-              // by an in-flight hydrate); the server only fills gaps.
               merged[p.connectorId] = { [p.toolName]: p.level, ...merged[p.connectorId] };
             }
             return { permissions: merged };

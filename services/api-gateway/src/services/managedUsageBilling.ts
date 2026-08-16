@@ -11,57 +11,20 @@ import {
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,128}$/;
 const DEFAULT_MAX_OUTPUT_TOKENS = 8_192;
 const MAX_ESTIMATED_INPUT_TOKENS = 1_000_000;
-/** Coarse tokenizer-free approximation, shared by every pre-measurement estimate. */
 const ESTIMATED_CHARS_PER_TOKEN = 3.5;
 const BILLING_RPC_ATTEMPTS = 3;
 
-/**
- * Multipliers on the input rate for a cache WRITE the catalog leaves unpriced.
- * Mirrored from `CACHE_WRITE_FALLBACK_MULTIPLIERS` in
- * `apps/web/lib/services/llm-cost-calculator.ts`; that module is `server-only`
- * and lives inside the Next app, so this service cannot import it — the two
- * tables must be changed together, same constraint as the cap table below.
- * `__tests__/services/managedUsageBilling.test.ts` pins the resulting rates.
- *
- * There is no read entry: an unpriced cache READ is billed at the plain input
- * rate, so there is no multiplier to name.
- */
 const CACHE_WRITE_FALLBACK_MULTIPLIERS = {
-  /** Anthropic's published 5m-TTL cache-write surcharge. */
   write5m: 1.25,
-  /** Anthropic's published 1h-TTL cache-write surcharge. */
   write1h: 2,
 } as const;
 
-/**
- * Rolling spend ceilings in paid-ledger cents, mirrored from the canonical
- * table in `apps/web/lib/server/managed-usage-policy.ts`. That module is
- * `server-only` and lives inside the Next app, so this service cannot import
- * it — the two tables must be changed together. Canonical stores internal
- * usage units at two units per cent; the units are quoted per line so the two
- * tables can be diffed by eye, and
- * `__tests__/services/managedUsageBilling.test.ts` fails the build if the
- * billing catalog admits a tier to managed compute that is missing here.
- *
- * Only tiers that can actually reach a reservation appear. `local-only` and
- * `byok` are absent because `enforcePlanTier` (routes/llm.ts) refuses both via
- * `canUseBillingPlanCapability` before any reservation is attempted, and an
- * absent tier denies below in any case.
- *
- * A zero is a DENIAL, not a bypass: migration 0070 guards each ceiling on
- * `is not null`, so only `uncapped` — which resolves to `null` below — reserves
- * without a ceiling.
- */
 type ManagedUsageCapPolicy =
-  /** Negotiated contract that declares no configured ceiling. */
   | { readonly uncapped: true }
   /** Hard ceilings for the trailing five hours and trailing seven days. */
   | { readonly fiveHourCents: number; readonly weeklyCents: number };
 
 const MANAGED_USAGE_CAPS: Readonly<Record<string, ManagedUsageCapPolicy>> = Object.freeze({
-  // Free's real allowance lives in the micro-USD trial ledger, which this
-  // gateway path has no notion of; against the paid cents ledger it is 0, the
-  // same value canonical `getPlanSessionUsageBudgetCents` returns for it.
   free: { fiveHourCents: 0, weeklyCents: 0 },
   basic: { fiveHourCents: 10, weeklyCents: 50 }, // 20 / 100 internal units
   pro: { fiveHourCents: 50, weeklyCents: 250 }, // 100 / 500
@@ -73,21 +36,12 @@ const MANAGED_USAGE_CAPS: Readonly<Record<string, ManagedUsageCapPolicy>> = Obje
 
 const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
 
-/**
- * Models that back a flagship routing slot.
- *
- * Derived from the slot registry rather than `getSlotForModel`, which answers
- * with the FIRST slot a model appears in. A model shared by two flagship
- * slots resolves to the first one, so matching only later slot names would
- * pro-plus slot names alone tags nothing and the flagship window never binds.
- */
 const FLAGSHIP_MODEL_IDS: ReadonlySet<string> = new Set(
   Object.values(SLOT_REGISTRY)
     .filter((definition) => definition.slot.startsWith('flagship_'))
     .map((definition) => definition.modelId),
 );
 
-/** A resolved ceiling in paid-ledger cents; `null` is explicitly uncapped. */
 type ManagedUsageCapCents = number | null;
 
 function capPolicy(planTier: string): ManagedUsageCapPolicy | null {
@@ -99,10 +53,6 @@ function capPolicy(planTier: string): ManagedUsageCapPolicy | null {
 
 function planWindowCapCents(planTier: string, window: 'fiveHour' | 'weekly'): ManagedUsageCapCents {
   const policy = capPolicy(planTier);
-  // Backstop, not the gate: `enforcePlanTier` already rejects every tier that
-  // is not a key above, so this only catches a future caller of the exported
-  // reservation that reserves without going through plan admission. It denies
-  // rather than reserving uncapped.
   if (!policy) return 0;
   if ('uncapped' in policy) return null;
   return window === 'fiveHour' ? policy.fiveHourCents : policy.weeklyCents;
@@ -223,11 +173,6 @@ function finiteNonNegative(value: unknown, fallback = 0): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : fallback;
 }
 
-/**
- * The current canonical ledger is cent-denominated. Rounding every non-zero
- * managed request up to one cent prevents a stream of sub-cent calls from
- * bypassing metering until the planned micro-dollar ledger lands.
- */
 function dollarsToLedgerCents(costDollars: number): number {
   if (!Number.isFinite(costDollars) || costDollars <= 0) return 0;
   return Math.max(1, Math.ceil(costDollars * 100));
@@ -288,16 +233,8 @@ export function calculateManagedUsageCostCents(
     finiteNonNegative(usage.cacheWrite1hTokens),
   );
   const cacheWrite5mTokens = cacheWriteTokens - cacheWrite1hTokens;
-  // The tier threshold uses TOTAL request input. Anthropic-style accounting
-  // reports cache buckets disjoint from inputTokens; OpenAI-compatible
-  // accounting reports them as subsets. This is the same accounting-shape
-  // policy used below to avoid double billing cache tokens.
   const disjoint = metadata.provider === 'anthropic';
   const tierInputTokens = disjoint ? inputTokens + cacheReadTokens + cacheWriteTokens : inputTokens;
-  // One shared contract owns composition order: dated window, legacy
-  // post-promo override, then the greatest strict input-length tier. The Web
-  // calculator, routing estimates, embeddings, and this ledger therefore
-  // resolve identical rates for identical request facts.
   const effective = resolveEffectiveModelPricingForInputTokens(metadata, now, tierInputTokens);
   const inputRate = effective.inputCost;
   const outputRate = effective.outputCost;
@@ -305,28 +242,10 @@ export function calculateManagedUsageCostCents(
   const cachedWriteRate = effective.cached_write;
   const cachedWrite1hRate = effective.cached_write_1h;
 
-  // Anthropic reports ordinary input disjoint from cache counters. OpenAI and
-  // compatible providers report cache reads AND writes as a subset of input.
   const ordinaryInputTokens = disjoint
     ? inputTokens
     : Math.max(0, inputTokens - cacheReadTokens - cacheWriteTokens);
-  // A cache read the catalog leaves unpriced is billed at the FULL input rate
-  // -- a discount the provider does not publish is not invented here, and the
-  // desktop calculator prices the same request the same way. This keys on the
-  // ABSENCE of a `cached_input` price, NOT on `capabilities.caching` (no
-  // billing path reads that flag), so it covers every model the catalog leaves
-  // unpriced. A reachable flagship addition with OpenAI-shaped usage proves
-  // this path: `prompt_tokens_details.cached_tokens` reaches the ledger, but
-  // absent a catalog read rate those tokens remain full-price. Other unlisted
-  // catalog models may share the same pricing shape without being reachable.
   const cacheReadRate = cachedInputRate ?? inputRate;
-  // Catalog-declared write rates win. The fallback is provider-shaped: with
-  // disjoint accounting the written tokens are billed ONLY here, so an
-  // undeclared rate falls back to Anthropic's published surcharges. With subset
-  // accounting the written tokens were just removed from ordinaryInputTokens,
-  // so an undeclared rate falls back to the plain input rate -- billed once, no
-  // surcharge. Models without declared cache-write pricing take this branch;
-  // models with a catalog-declared write price take the priced branch above.
   const cacheWrite5mRate =
     cachedWriteRate ??
     (disjoint ? inputRate * CACHE_WRITE_FALLBACK_MULTIPLIERS.write5m : inputRate);
@@ -356,23 +275,6 @@ function estimateRequestInputTokens(body: ManagedUsageRequestBody): number {
   );
 }
 
-/**
- * Usage for a stream the client abandoned before the provider reported its own
- * counts.
- *
- * Providers report token counts in a final usage event an abandoned stream
- * never reaches, so tokens the provider was already paid to generate would
- * otherwise settle at zero. The prompt is charged in full — the provider bills
- * it the moment generation starts — and the generated side is derived from the
- * output bytes the gateway actually forwarded, using the same approximation as
- * the pre-flight estimate. Falling back to the reservation estimate instead
- * would charge the requested `max_tokens` for a response cut off after a few
- * words.
- *
- * Callers settle a zero-output abandonment as `failed` instead of calling this,
- * so `servedOutputChars` is expected to be at least one character; passing zero
- * yields zero output tokens and bills the prompt alone.
- */
 export function estimateAbandonedStreamUsage(
   body: ManagedUsageRequestBody,
   servedOutputChars: number,
@@ -464,8 +366,6 @@ export async function reserveManagedUsage(input: {
   idempotencyKey: string;
   provider: string;
   request: ManagedUsageRequestBody;
-  /** Required: every rolling ceiling below is per-tier, so a reservation
-   * without a tier cannot be capped. */
   planTier: string;
   leaseToken?: string;
 }): Promise<ManagedUsageReservation> {
@@ -474,31 +374,6 @@ export async function reserveManagedUsage(input: {
   const estimatedCostCents = estimateManagedUsageCostCents(input.request);
   const leaseToken = input.leaseToken ?? randomUUID();
 
-  /**
-   * `_with_limits`, not the bare `reserve_managed_usage_request`.
-   *
-   * The legacy eight-argument function takes no ceilings and does no rolling
-   * accounting, so this path — the one desktop, the CLI and the VS Code
-   * extension all use — admitted every request the credit balance could cover,
-   * with no five-hour, weekly or flagship window at all. The capped function
-   * delegates to the legacy one after checking, so this is the same durable
-   * reservation with the ceilings restored.
-   *
-   * `p_is_flagship` also matters beyond this request: the tag is stamped onto
-   * the settlement metadata only inside `_with_limits`, and the flagship
-   * weekly window sums on that tag. Reserving through the legacy function left
-   * gateway spend invisible to the flagship ceiling everywhere else too.
-   *
-   * KNOWN GAP, not closed here: the tag is computed from the REQUESTED model.
-   * `routes/llm.ts` can rotate to a client-supplied fallback model after a
-   * provider failure without re-reserving, so a request that fails over from a
-   * standard model to a flagship one is billed at the served model's cost but
-   * stays tagged `is_flagship=false`, invisible to the flagship window. The
-   * five-hour and weekly ceilings are tag-independent and still bind. Closing
-   * it needs the failover path to extend the reservation
-   * (`extend_managed_usage_request_provider_step`, which rejects a changed
-   * flagship tag as a conflict), which is not this call site.
-   */
   const row = await callBillingRpc(input.client, 'reserve_managed_usage_request_with_limits', {
     p_user_id: input.userId,
     p_idempotency_key: idempotencyKey,
@@ -576,17 +451,12 @@ export async function finalizeManagedUsage(
     model: string;
     usage?: Omit<StreamChunkUsage, 'type'>;
     estimatedCostCents?: number;
-    /** Injectable clock for deterministic post_promo_prices boundary tests. Defaults to the real time. */
     now?: Date;
   },
 ): Promise<ManagedUsageFinalizationResult> {
   const hasUsage =
     input.usage !== undefined &&
     (input.usage.inputTokens !== undefined || input.usage.outputTokens !== undefined);
-  // `failed` is a full release: the reservation is refunded and the request
-  // leaves no trace in the rolling windows. A stream the client abandoned after
-  // the provider generated output is NOT that case — routes/llm.ts settles it
-  // as `completed` with `estimateAbandonedStreamUsage`.
   const actualCostCents =
     input.outcome === 'failed'
       ? 0

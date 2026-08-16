@@ -1,12 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Mobile GeneratedFileCard snapshot tests.
- *
- * Locks the RN-native GeneratedFileCard rendered tree across complete /
- * running / failed states. Mirrors the unified-chat snapshot pattern.
- *
- * Round-10 autonomous suite-transformation slice, 2026-05-21.
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';

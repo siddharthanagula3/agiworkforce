@@ -1,8 +1,4 @@
 /* eslint-disable */
-// Fix jest-expo setup.js crash: "Object.defineProperty called on non-object"
-// jest-expo@52.x expects UIManager to exist on mockNativeModules before its
-// setup runs. This file runs via `setupFiles` (before preset setup) to
-// provide the missing global.
 const { Animated, NativeModules } = require('react-native');
 
 if (!NativeModules.UIManager) {
@@ -125,21 +121,11 @@ jest.mock('expo-notifications', () => {
   };
 });
 
-// react-native-webview pulls in a native TurboModule (RNCWebViewModule) that is
-// not registered in the jest binary. Mock it to a plain View so components that
-// render a WebView (MathBlock, SafeArtifactPreview, ArtifactFullScreen) can be
-// imported and rendered in unit tests.
 jest.mock('react-native-webview', () => {
   const WebView = require('react-native').View;
   return { __esModule: true, WebView, default: WebView };
 });
 
-// expo-speech-recognition ships untranspiled TS and touches native modules at
-// import time, so any suite that reaches it fails to LOAD rather than fail a
-// test. That failure mode is quiet: the suite contributes 0 tests, the run
-// total silently drops, and the summary still reads "passed". It surfaced when
-// the chat tab began importing useVoiceConversation for inline voice mode —
-// chat-tab-mode-toggle's 12 tests vanished without a visible failure.
 jest.mock('expo-speech-recognition', () => ({
   __esModule: true,
   ExpoSpeechRecognitionModule: {
@@ -154,9 +140,6 @@ jest.mock('expo-speech-recognition', () => ({
   addSpeechRecognitionListener: jest.fn(() => ({ remove: jest.fn() })),
 }));
 
-// expo-iap requires StoreKit/Play Billing native modules and is unavailable in
-// Jest/Expo Go. Individual billing tests override these spies to drive purchase
-// and restore callbacks without making a real store call.
 jest.mock('expo-iap', () => ({
   __esModule: true,
   useIAP: jest.fn(() => ({

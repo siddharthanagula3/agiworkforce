@@ -1,13 +1,3 @@
-/**
- * BatteryLowModal — shown when battery level is <15% AND an inference run
- * is about to start.
- *
- * Gives the user the choice to continue (they accept the risk of slowdown)
- * or cancel (abort the inference start).
- *
- * The caller gates on `Battery.getBatteryLevelAsync()` and only shows the
- * modal at the threshold — the component itself has no battery-reading logic.
- */
 import { Modal, View, Pressable } from 'react-native';
 import { BatteryLow } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -17,9 +7,7 @@ import { spacing, radii } from '@/src/ui/theme';
 
 export interface BatteryLowModalProps {
   visible: boolean;
-  /** User confirmed — inference should proceed. */
   onConfirm: () => void;
-  /** User cancelled — inference should NOT start. */
   onCancel: () => void;
 }
 

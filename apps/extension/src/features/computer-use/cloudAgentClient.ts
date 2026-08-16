@@ -33,34 +33,10 @@ import { BoundedSseDecoder } from '../cloud-bridge/boundedSseDecoder';
 
 export { getAuthToken };
 
-// ─── Model selection ─────────────────────────────────────────────────────────
-// Read from the canonical model catalog's SLOT_REGISTRY at build time
-// (managed_cloud.taskRouting in models.json was cleared in favour of the slot
-// registry — see packages/contracts/types/src/model-catalog.ts).
 import { getDefaultModelFor, getRoutingSlotModel } from '@agiworkforce/types';
 
-/**
- * The tier-agnostic computer-use model, from the canonical catalog's
- * 'computer_use' routing slot. Every tier that can run computer use at all
- * allows this slot, so it is the safe default when the account tier is unknown.
- * Never hardcode a model ID — always reference this constant.
- */
 export const COMPUTER_USE_MODEL: string = getRoutingSlotModel('computer_use');
 
-/**
- * Resolve the computer-use model the signed-in account is actually entitled to.
- *
- * The catalog's DEFAULT_KIND_SLOT_PREFERENCE['computer-use'] prefers
- * `computer_use_premium` and falls back to `computer_use`, and getDefaultModelFor
- * intersects that preference with the tier's allowedSlots — so a Max/Enterprise
- * account gets the premium automation model while lower tiers keep the balanced
- * one. Chrome previously pinned the balanced slot for every account, silently
- * denying entitled users the model their plan allows.
- *
- * An unknown or unreadable tier resolves to COMPUTER_USE_MODEL rather than
- * guessing upward: over-selecting a slot the plan does not allow would be
- * rejected downstream and waste a run.
- */
 export function resolveComputerUseModel(tier: string | null | undefined): string {
   if (!tier) return COMPUTER_USE_MODEL;
   try {
@@ -70,17 +46,11 @@ export function resolveComputerUseModel(tier: string | null | undefined): string
   }
 }
 
-// ─── Gateway base URL ─────────────────────────────────────────────────────────
-
 export const DEFAULT_GATEWAY_BASE = 'https://api.agiworkforce.com';
 
 const GATEWAY_URL_OVERRIDE_KEY = 'agi_gateway_url';
-/** Bound one pending computer-use SSE event before parsing provider-controlled JSON. */
 const COMPUTER_USE_MAX_SSE_FRAME_CHARS = 1_048_576;
 
-// ─── Tool definitions ─────────────────────────────────────────────────────────
-
-/** OpenAI function-calling tool definition shape (minimal). */
 export interface ToolDefinition {
   type: 'function';
   function: {
@@ -94,11 +64,6 @@ export interface ToolDefinition {
   };
 }
 
-/**
- * Browser tool definitions sent to the model.
- * These mirror the cdpDriver action surface and give the model a typed API
- * for controlling the browser.
- */
 export const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     type: 'function',
@@ -242,8 +207,6 @@ export const BROWSER_TOOL_DEFINITIONS: ToolDefinition[] = [
   },
 ];
 
-// ─── Message shapes ───────────────────────────────────────────────────────────
-
 export interface TextMessage {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content:
@@ -271,20 +234,11 @@ export interface ToolCall {
 export type AgentMessage = TextMessage | AssistantMessage;
 
 export interface CloudAgentResponse {
-  /** The assembled assistant message (may have tool_calls). */
   message: AssistantMessage;
-  /** Whether the stream ended because the model is "done" (stop reason = stop). */
   isDone: boolean;
-  /**
-   * P2-7: Total tokens used in this call (prompt + completion).
-   * 0 when the gateway does not emit a usage field in the SSE stream.
-   */
   tokensUsed: number;
 }
 
-// ─── SSE parser ───────────────────────────────────────────────────────────────
-
-/** Merge a streaming tool_calls delta into the accumulator. */
 function mergeToolCallDelta(
   acc: ToolCall[],
   delta: Array<{
@@ -307,8 +261,6 @@ function mergeToolCallDelta(
   }
 }
 
-// ─── Core call ───────────────────────────────────────────────────────────────
-
 /**
  * Call the AGI Cloud gateway with a message history and tool definitions.
  * Streams the response and returns the fully-assembled CloudAgentResponse.
@@ -324,14 +276,11 @@ export async function callCloud(
   signal?: AbortSignal,
   model: string = COMPUTER_USE_MODEL,
 ): Promise<CloudAgentResponse> {
-  // Validate gateway origin before sending JWT
   const validatedBase = validateGatewayUrl(gatewayBase);
   if (!validatedBase) {
     throw new Error(`callCloud: gateway URL not in allowlist: ${gatewayBase}`);
   }
 
-  // The gateway mounts the LLM proxy under /api/llm/v1 (services/api-gateway), so the
-  // chat-completions route is /api/llm/v1/chat/completions — a bare /v1/... 404s.
   const endpoint = `${validatedBase}/api/llm/v1/chat/completions`;
 
   const body = JSON.stringify({
@@ -348,24 +297,9 @@ export async function callCloud(
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
-      // Gateway validateCsrf requires this header on every POST (rejects 403 CSRF_ERROR otherwise).
       'X-Requested-With': 'XMLHttpRequest',
       'X-AGI-Surface': 'chrome',
-      // The gateway's managed-usage billing hard-requires an Idempotency-Key
-      // on POST /api/llm/v1/chat/completions (400 IDEMPOTENCY_KEY_REQUIRED
-      // before any provider work). callCloud never retries a send, so a fresh
-      // key per call is the correct durable-reservation identity.
-      //
-      // Deliberately NO x-agi-fallback-models header: the model is a pinned
-      // catalog routing slot resolved from the account's tier, not a
-      // resolveAutoRoute() auto plan, so this request is an explicit selection
-      // the gateway must never rotate.
       'Idempotency-Key': `cu:${crypto.randomUUID()}`,
-      // Legacy no-op: managed cloud is public alpha (open by default). The server gate
-      // (apps/web/lib/managed-compute-gate.ts) is now purely env-based — it ignores this
-      // header and only 403s when the AGI_MANAGED_COMPUTE_PRIVATE_BETA kill-switch is
-      // explicitly set to 0/false/off. We keep sending it for backward-compat with any
-      // older gateway deployment that still inspects it; it is harmless when ignored.
       'x-agi-managed-compute-beta': '1',
     },
     body,
@@ -374,12 +308,6 @@ export async function callCloud(
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    // Managed cloud is public alpha (open by default). A 403 here means one of two things,
-    // NOT that an operator must turn an env var on:
-    //   1. The AGI_MANAGED_COMPUTE_PRIVATE_BETA kill-switch is explicitly set to 0/false/off
-    //      on the server, temporarily re-gating managed cloud (incident rollback), OR
-    //   2. The signed-in account lacks the paid tier required for this model
-    //      (computer-use needs a paid plan).
     if (
       response.status === 403 &&
       (errText.includes('public_launch_blocked') ||
@@ -403,7 +331,6 @@ export async function callCloud(
     throw new Error(`callCloud: gateway returned ${response.status}: ${errText.slice(0, 300)}`);
   }
 
-  // Consume SSE stream
   const reader = response.body?.getReader();
   if (!reader) throw new Error('callCloud: response body is not readable');
 
@@ -419,7 +346,7 @@ export async function callCloud(
   let textContent = '';
   const toolCallsAcc: ToolCall[] = [];
   let isDone = false;
-  let tokensUsed = 0; // P2-7: accumulate token usage from SSE usage fields
+  let tokensUsed = 0;
 
   const consumeSseData = (data: string): void => {
     if (data === '[DONE]') {
@@ -440,7 +367,6 @@ export async function callCloud(
           }>;
         };
       }>;
-      // P2-7: OpenAI-style usage field (may appear in final chunk)
       usage?: {
         prompt_tokens?: number;
         completion_tokens?: number;
@@ -451,10 +377,9 @@ export async function callCloud(
     try {
       parsed = JSON.parse(data) as typeof parsed;
     } catch {
-      return; // malformed complete event — skip
+      return;
     }
 
-    // P2-7: Accumulate token usage when the gateway emits it
     if (parsed.usage?.total_tokens) {
       tokensUsed = parsed.usage.total_tokens;
     } else if (
@@ -493,9 +418,6 @@ export async function callCloud(
       }
       if (done) break;
 
-      // Network reads can split anywhere, including in the middle of `data:` or
-      // a JSON string. Decode incrementally and emit only complete SSE events;
-      // clearing a raw read buffer here used to silently drop split tool calls.
       for (const data of sseDecoder.push(decoder.decode(value, { stream: true }))) {
         consumeSseData(data);
         if (isDone) break;
@@ -538,10 +460,6 @@ export async function callCloud(
   return { message, isDone, tokensUsed };
 }
 
-/**
- * Resolve the gateway base URL: check storage for override, fall back to default.
- * Validates the override against GATEWAY_URL_ALLOWLIST_EXACT.
- */
 export async function resolveGatewayBase(): Promise<string> {
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {

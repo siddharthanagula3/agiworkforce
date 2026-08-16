@@ -1,9 +1,3 @@
-/**
- * CreateMemoryDialog Component
- *
- * Dialog for creating new memories with category selection,
- * topic input, content textarea, and importance slider.
- */
 import { memo, useCallback, useState } from 'react';
 import { Brain, Loader2, Plus } from 'lucide-react';
 
@@ -56,11 +50,8 @@ const CATEGORY_OPTIONS: { value: MemoryCategory; label: string; description: str
 ];
 
 export interface CreateMemoryDialogProps {
-  /** Trigger element for the dialog */
   trigger?: React.ReactNode;
-  /** Callback when memory is created successfully */
   onCreated?: (id: number) => void;
-  /** Additional class names */
   className?: string;
 }
 

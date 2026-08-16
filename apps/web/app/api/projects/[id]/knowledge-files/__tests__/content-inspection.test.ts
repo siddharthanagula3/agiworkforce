@@ -1,17 +1,3 @@
-/**
- * CRIT-005 — project sources must be content-inspected at ingest.
- *
- * `POST /api/projects/[id]/knowledge-files` registers a file the browser has
- * already PUT straight to object storage. Before this, the handler verified
- * byte count, checksum and stored content type — three checks that compare the
- * client's claims against each other and never open the file — and then handed
- * the bytes to pdfjs, stored the extracted text for every project turn's model
- * context, and served them back from this origin.
- *
- * These tests drive the REAL extractor and the REAL scanner through the route
- * handler (only storage and the database are mocked), so they fail if the
- * `scanUploadBytes` call is removed from the ingest path.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -49,8 +35,6 @@ vi.mock('@/lib/services/subscription-service', () => ({
 vi.mock('@/lib/services/active-workspace-service', () => ({
   resolveActiveOrganizationId: vi.fn(async () => null),
 }));
-// The only storage boundary. `objectKeyFromStorageUri` stays faithful to the
-// real one for the opaque-key form the presign route hands out.
 vi.mock('@/lib/server/object-storage', () => ({
   getObject: vi.fn(),
   getPrivateObject: mockGetPrivateObject,
@@ -71,7 +55,6 @@ function sha256(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-/** Route with a project the caller owns, no existing files, no duplicates. */
 function wireDatabase(): void {
   mockNeonQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
@@ -137,8 +120,6 @@ describe('POST /api/projects/[id]/knowledge-files — content inspection', () =>
   });
 
   it('rejects an ELF executable disguised as a text source and purges the object', async () => {
-    // ELF magic. Declared text/plain, stored as text/plain — every metadata
-    // check agrees; only opening the bytes catches it.
     const elf = Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46]), Buffer.alloc(64, 0x41)]);
 
     const res = await post(elf, 'text/plain', 'notes.txt');
@@ -148,7 +129,6 @@ describe('POST /api/projects/[id]/knowledge-files — content inspection', () =>
     expect(json.error?.message).toBe(
       'This file could not be added because its contents failed a safety check.',
     );
-    // Nothing registered, and the bytes are gone from storage.
     expect(insertWasAttempted()).toBe(false);
     expect(mockDeletePrivateObject).toHaveBeenCalledWith(STORAGE_URI);
   });

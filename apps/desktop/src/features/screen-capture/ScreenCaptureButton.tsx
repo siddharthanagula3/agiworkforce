@@ -46,7 +46,6 @@ export function ScreenCaptureButton({
     typeof navigator !== 'undefined' &&
     (/Mac|iPhone|iPad|iPod/i.test(navigator.platform || '') ||
       /Mac OS X|Darwin/i.test(navigator.userAgent || ''));
-  // AUDIT-ENV-064 fix: Use centralized isTauri detection (now includes __TAURI__ check)
   const useNativeDesktopPicker = isMacOS && isTauri;
 
   const handleFullScreen = async () => {
@@ -65,8 +64,6 @@ export function ScreenCaptureButton({
 
   const handleRegionCapture = async () => {
     if (useNativeDesktopPicker) {
-      // AUDIT-CAPTURE-089 fix: Use frontend region selector on macOS instead of native picker
-      // The native macOS picker ignores region arguments, so we use our custom selector
       setShowRegionSelector(true);
       return;
     }
@@ -75,8 +72,6 @@ export function ScreenCaptureButton({
 
   const handleWindowCapture = async () => {
     if (useNativeDesktopPicker) {
-      // AUDIT-CAPTURE-089 fix: Use frontend window selector on macOS instead of native picker
-      // The native macOS picker ignores window handle arguments, so we use our custom selector
       try {
         const windows = await getAvailableWindows();
         if (windows.length === 0) {

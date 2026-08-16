@@ -82,12 +82,6 @@ const DEFAULT_STATS: StatItem[] = [
   { label: MARKETING.models.label, value: MARKETING.models.display },
 ];
 
-/**
- * Marquee entries use OFFICIAL marks from simple-icons (via ProviderLogo,
- * monochrome currentColor) where the brand distributes one; providers
- * without a distributable mark render as clean text wordmarks · never
- * hand-drawn letter tiles.
- */
 const PROVIDER_PILLS: { name: string; slug?: string }[] = [
   { name: 'OpenAI' },
   { name: 'Anthropic', slug: 'anthropic' },
@@ -95,8 +89,6 @@ const PROVIDER_PILLS: { name: string; slug?: string }[] = [
   { name: 'Grok' },
   { name: 'DeepSeek', slug: 'deepseek' },
   { name: 'Qwen', slug: 'qwen' },
-  // No Mistral pill: `5a165d78b` (2026-07-22) removed the provider from
-  // models.json, so advertising it would be a claim the catalog cannot back.
   { name: 'Perplexity', slug: 'perplexity' },
   { name: 'Moonshot AI', slug: 'moonshot' },
   { name: 'ZhipuAI' },

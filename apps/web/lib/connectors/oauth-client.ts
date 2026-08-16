@@ -1,16 +1,3 @@
-/**
- * @file Token-endpoint client for the connector OAuth broker.
- *
- * Mirrors `exchange_code_form` / `refresh_token` in
- * `crates/agiworkforce-mcp/src/oauth/flow.rs`: a form-encoded POST to the
- * authorization server, an `Accept: application/json` response, and a strict
- * shape check before anything is trusted.
- *
- * SECRET HANDLING. Nothing in this module logs a code, verifier, token, or
- * client secret. Errors carry the HTTP status and, at most, the provider's
- * machine-readable `error` code — never the response body, which routinely
- * echoes the submitted code back.
- */
 
 import 'server-only';
 
@@ -42,18 +29,10 @@ export interface OAuthTokenResult {
   accessToken: string;
   refreshToken: string | null;
   tokenType: string;
-  /** Absolute expiry, or null when the provider issued no `expires_in`. */
   accessTokenExpiresAt: Date | null;
   grantedScopes: string[];
 }
 
-/**
- * A token-endpoint failure the caller can act on.
- *
- * `invalid_grant` specifically means the authorization or refresh token is
- * dead: the broker revokes the stored grant so the user is asked to reconnect
- * instead of retrying a credential that can never work again (RFC 6749 §5.2).
- */
 export class ConnectorOAuthTokenError extends Error {
   readonly status: number;
   readonly oauthError: string | null;
@@ -93,9 +72,6 @@ async function postToTokenEndpoint(
   form: URLSearchParams,
   requestedScopes: string[],
 ): Promise<OAuthTokenResult> {
-  // The token endpoint comes from operator configuration, but it is still a
-  // server-side outbound request with a secret attached: keep it under the same
-  // DNS-resolution egress policy every other connector fetch runs under.
   await assertResolvedPublicHostname(tokenUrl);
 
   const headers: Record<string, string> = {
@@ -133,9 +109,6 @@ async function postToTokenEndpoint(
     refreshToken: data.refresh_token ?? null,
     tokenType: data.token_type ?? 'Bearer',
     accessTokenExpiresAt: data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null,
-    // RFC 6749 §5.1: the response scope is authoritative when present and the
-    // request scope is what was granted when it is omitted. Storing the guess
-    // would let the UI claim a permission the user never gave.
     grantedScopes: data.scope ? data.scope.split(/\s+/).filter(Boolean) : requestedScopes,
   };
 }
@@ -164,7 +137,6 @@ export async function exchangeAuthorizationCode(params: {
 export async function refreshAccessToken(params: {
   provider: ConnectorOAuthProvider;
   refreshToken: string;
-  /** Token endpoint recorded on the grant, so a registry edit cannot silently redirect it. */
   tokenEndpoint: string;
   grantedScopes: string[];
 }): Promise<OAuthTokenResult> {
@@ -182,11 +154,6 @@ export async function refreshAccessToken(params: {
   return postToTokenEndpoint(params.provider, params.tokenEndpoint, form, params.grantedScopes);
 }
 
-/**
- * Best-effort provider-side revocation (RFC 7009). Returns false rather than
- * throwing: the local grant is dropped either way, and a provider outage must
- * never stop a user from disconnecting.
- */
 export async function revokeTokenAtProvider(
   provider: ConnectorOAuthProvider,
   token: string,

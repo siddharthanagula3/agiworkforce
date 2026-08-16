@@ -1,8 +1,3 @@
-/**
- * MessageAvatar Component
- *
- * Renders the avatar for a message based on role.
- */
 
 import React, { memo, useMemo } from 'react';
 

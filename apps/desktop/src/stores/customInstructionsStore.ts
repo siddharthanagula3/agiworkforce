@@ -1,62 +1,32 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Custom Instructions Store
- *
- * Manages global custom instructions that apply to all conversations,
- * as well as project-level instructions.
- *
- * Priority order (highest to lowest):
- * 1. Project instructions (from .claude/CLAUDE.md or similar)
- * 2. Per-conversation instructions (stored in conversation)
- * 3. Global instructions (stored here)
- *
- * Updated to Zustand v5 best practices:
- * - Middleware composition: devtools(persist(subscribeWithSelector(...)))
- * - TypeScript: Using create<State>()() pattern for type inference
- * - Persist middleware: Using createJSONStorage, partialize, version, migrate
- * - Better devtools integration with store name
- * - subscribeWithSelector for granular subscriptions
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { invoke, isTauriContext } from '../lib/tauri-mock';
 import { storageFallback } from '../lib/storageFallback';
 
 export interface CustomInstructionsState {
-  /** Global instructions that apply to all conversations */
   globalInstructions: string;
 
-  /** Project-specific instructions (loaded from project files) */
   projectInstructions: string;
 
-  /** Whether global instructions are enabled */
   globalInstructionsEnabled: boolean;
 
-  /** Whether project instructions are enabled */
   projectInstructionsEnabled: boolean;
 
-  /** Maximum character limit for instructions */
   maxInstructionsLength: number;
 
-  /** Set global instructions */
   setGlobalInstructions: (instructions: string) => void;
 
-  /** Set project instructions */
   setProjectInstructions: (instructions: string) => void;
 
-  /** Toggle global instructions enabled/disabled */
   setGlobalInstructionsEnabled: (enabled: boolean) => void;
 
-  /** Toggle project instructions enabled/disabled */
   setProjectInstructionsEnabled: (enabled: boolean) => void;
 
-  /** Clear all instructions */
   clearAllInstructions: () => void;
 
-  /** Save instructions to Tauri backend for persistence across sessions */
   saveToBackend: () => Promise<void>;
 
-  /** Load instructions from Tauri backend */
   loadFromBackend: () => Promise<void>;
 
   /**
@@ -68,9 +38,6 @@ export interface CustomInstructionsState {
    */
   getMergedInstructions: (conversationInstructions?: string) => string;
 
-  /**
-   * Get character count for instructions
-   */
   getInstructionsCharCount: () => {
     global: number;
     project: number;
@@ -78,9 +45,6 @@ export interface CustomInstructionsState {
   };
 }
 
-// storageFallback is imported from '../lib/storageFallback'
-
-// Version for storage migration
 const CUSTOM_INSTRUCTIONS_STORE_VERSION = 1;
 
 export const useCustomInstructionsStore = create<CustomInstructionsState>()(
@@ -97,7 +61,6 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
           const maxLength = get().maxInstructionsLength;
           const trimmed = instructions.slice(0, maxLength);
           set({ globalInstructions: trimmed }, undefined, 'customInstructions/setGlobal');
-          // Persist to backend asynchronously
           get().saveToBackend();
         },
 
@@ -113,7 +76,6 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
             undefined,
             'customInstructions/setGlobalEnabled',
           );
-          // Persist to backend asynchronously
           get().saveToBackend();
         },
 
@@ -174,21 +136,18 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
           const state = get();
           const parts: string[] = [];
 
-          // Add project instructions (highest priority)
           if (state.projectInstructionsEnabled && state.projectInstructions.trim()) {
             parts.push(
               `<project-instructions>\n${state.projectInstructions.trim()}\n</project-instructions>`,
             );
           }
 
-          // Add conversation-specific instructions (medium priority)
           if (conversationInstructions?.trim()) {
             parts.push(
               `<conversation-instructions>\n${conversationInstructions.trim()}\n</conversation-instructions>`,
             );
           }
 
-          // Add global instructions (lowest priority)
           if (state.globalInstructionsEnabled && state.globalInstructions.trim()) {
             parts.push(
               `<global-instructions>\n${state.globalInstructions.trim()}\n</global-instructions>`,
@@ -223,7 +182,6 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
           // Note: projectInstructions are not persisted as they are loaded from project files
         }),
         migrate: (persistedState: unknown, version: number) => {
-          // Migration logic for future schema changes
           if (version === 0) {
             return persistedState as CustomInstructionsState;
           }
@@ -235,7 +193,6 @@ export const useCustomInstructionsStore = create<CustomInstructionsState>()(
   ),
 );
 
-// Selectors
 export const selectGlobalInstructions = (state: CustomInstructionsState) =>
   state.globalInstructions;
 export const selectProjectInstructions = (state: CustomInstructionsState) =>
@@ -247,7 +204,6 @@ export const selectProjectInstructionsEnabled = (state: CustomInstructionsState)
 export const selectMaxInstructionsLength = (state: CustomInstructionsState) =>
   state.maxInstructionsLength;
 
-// Derived selectors
 export const selectHasGlobalInstructions = (state: CustomInstructionsState) =>
   state.globalInstructions.trim().length > 0;
 export const selectHasProjectInstructions = (state: CustomInstructionsState) =>

@@ -1,13 +1,3 @@
-/**
- * Layout store tests.
- *
- * PP-24 shrank this store to the two members `WebChatPage` actually consumes
- * plus the sign-out `reset` verb. The previous 386-line suite covered modals,
- * theme, dashboard filters/sorting and notification toggles — none of which
- * had a production reader or writer. Those tests were the ONLY thing exercising
- * that state, which is exactly how it survived: a store member can look
- * thoroughly tested and still be wired to nothing.
- */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useUIStore } from './layout-store';
@@ -36,8 +26,6 @@ describe('Layout Store', () => {
   });
 
   it('exposes no member without a production consumer', () => {
-    // Guards the shape rather than a list of names: a member added back here
-    // has to be justified in the PP-24 guard test as well.
     expect(Object.keys(useUIStore.getState()).sort()).toEqual([
       'reset',
       'setSidebarCollapsed',
@@ -48,11 +36,6 @@ describe('Layout Store', () => {
 
 describe('Layout Store — persisted v1 blobs', () => {
   it('keeps sidebarCollapsed and drops the retired keys on rehydrate', async () => {
-    // Exactly what a browser that ran the old build still holds under
-    // `agi-ui-store`: the v1 partialize wrote five keys, four of which no
-    // longer exist in the code. Without the version bump + migrate, zustand
-    // merges this blob over the initial state and puts `theme`/`dashboard`/
-    // `notifications` back on the live store object.
     localStorage.setItem(
       'agi-ui-store',
       JSON.stringify({

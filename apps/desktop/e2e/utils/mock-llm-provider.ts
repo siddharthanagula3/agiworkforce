@@ -24,13 +24,6 @@ export class MockLLMProvider {
 
   async setup(): Promise<void> {
     try {
-      // Shared handler — used for both `/api/chat/completions` (legacy proxy)
-      // and `/api/llm/v1/chat/completions` (WebRuntime → cloudApi.sendCloudMessage,
-      // the actual path the v3 ChatInterface fires from when running in browser
-      // mode under Playwright). Without the second pattern, send goes to the
-      // real cloud endpoint, returns 4xx, and no assistant message ever
-      // renders — which broke self-healing.spec.ts after Wave 4+5's WebRuntime
-      // wired through cloudApi.
       const handleChatCompletions = (route: Route) => {
         try {
           const request = route.request();
@@ -51,8 +44,6 @@ export class MockLLMProvider {
           const response = this.getResponseForPrompt(prompt);
 
           if (isStreaming) {
-            // Emit OpenAI-compat SSE chunks so cloudApi's SSE parser pumps
-            // content into the chat store as assistant message deltas.
             const chunkBody = JSON.stringify({
               id: 'mock-chatcmpl-' + Date.now(),
               object: 'chat.completion.chunk',
@@ -112,15 +103,9 @@ export class MockLLMProvider {
       await this.page.route('**/api/chat/completions', handleChatCompletions);
       this.registeredRoutes.add('**/api/chat/completions');
 
-      // Wave 4+5: WebRuntime → cloudApi.sendCloudMessage targets this path.
       await this.page.route('**/api/llm/v1/chat/completions', handleChatCompletions);
       this.registeredRoutes.add('**/api/llm/v1/chat/completions');
 
-      // Cloud chat backend — useChat.sendMessage aborts at line 396 if no
-      // activeConversationId is set. The desktop chat store auto-creates the
-      // conversation via cloudApi.createCloudConversation → POST /api/cloud-chat.
-      // Without this mock the fetch fails, conversation creation throws,
-      // convId stays null, and the LLM mock above is never reached.
       await this.page.route('**/api/cloud-chat', (route) => {
         const method = route.request().method();
         if (method === 'POST') {
@@ -146,7 +131,6 @@ export class MockLLMProvider {
           });
           return;
         }
-        // GET — list conversations
         route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -155,7 +139,6 @@ export class MockLLMProvider {
       });
       this.registeredRoutes.add('**/api/cloud-chat');
 
-      // Single-conversation fetch + message-list endpoints.
       await this.page.route('**/api/cloud-chat/**', (route) => {
         route.fulfill({
           status: 200,
@@ -175,9 +158,6 @@ export class MockLLMProvider {
       });
       this.registeredRoutes.add('**/api/cloud-chat/**');
 
-      // CSRF token endpoint — getAuthHeaders fetches this in web mode. Failure
-      // is non-fatal but slow (no timeout on the fetch); mocking keeps the
-      // auth path deterministic and fast.
       await this.page.route('**/api/csrf', (route) => {
         route.fulfill({
           status: 200,
@@ -238,12 +218,6 @@ export class MockLLMProvider {
       });
       this.registeredRoutes.add('**/api/chat/stream');
 
-      // Layer 4: Pre-populate the unified-chat store with an active conversation
-      // so useChat.addMsg can actually append the user message. Without this,
-      // hostBridge is undefined in Playwright web mode, addMsg silently no-ops
-      // (line 65 if-check), convId stays null, useChat.sendMessage aborts with
-      // "Failed to create conversation" toast, and no LLM call ever fires.
-      // The chat store uses zustand+persist with key `unified-chat-store`.
       await this.page.addInitScript(() => {
         const conversationId = 'e2e-mock-conversation';
         const chatStoreState = {

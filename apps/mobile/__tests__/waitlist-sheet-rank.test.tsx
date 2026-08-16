@@ -1,15 +1,4 @@
-/**
- * InviteCodeModal — waitlist tab rank display tests
- *
- * Verifies the WaitlistTab confirmed state renders rank+1 (1-indexed display)
- * given the 0-indexed rank value returned by the server RPC.
- *
- * Replaces the old CloudWaitlistSheet rank test after consolidation into InviteCodeModal.
- */
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
 
 jest.mock('@/src/ui/theme', () => ({
   useThemeColors: () => ({
@@ -41,21 +30,12 @@ jest.mock('@/src/features/waitlist/store', () => ({
     selector({ markJoined: jest.fn() }),
 }));
 
-// ---------------------------------------------------------------------------
-// Imports
-// ---------------------------------------------------------------------------
-
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
 import { InviteCodeModal } from '@/src/features/cloud-bridge';
 
-// We need to reach the service mock for assertion
 import { joinWaitlist } from '@/src/features/waitlist/service';
 const mockJoinWaitlist = joinWaitlist as jest.Mock;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeProps(rank: number) {
   mockJoinWaitlist.mockResolvedValue({ rank });
@@ -71,20 +51,14 @@ async function renderConfirmed(rank: number) {
   const props = makeProps(rank);
   const utils = render(<InviteCodeModal {...props} />);
 
-  // Fill in a valid email so the submit button is enabled
   fireEvent.changeText(utils.getByPlaceholderText('you@example.com'), 'test@example.com');
 
-  // Press submit and wait for the async joinWaitlist to resolve → confirmed state
   await act(async () => {
     fireEvent.press(utils.getByTestId('cloud-waitlist-submit-btn'));
   });
 
   return utils;
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 describe('InviteCodeModal — waitlist tab rank display', () => {
   beforeEach(() => {
@@ -106,16 +80,13 @@ describe('InviteCodeModal — waitlist tab rank display', () => {
     const props = makeProps(0);
     const { getByTestId, getByPlaceholderText } = render(<InviteCodeModal {...props} />);
 
-    // Press without email — joinWaitlist should not be called
     fireEvent.press(getByTestId('cloud-waitlist-submit-btn'));
     expect(mockJoinWaitlist).not.toHaveBeenCalled();
 
-    // Invalid email — still no call
     fireEvent.changeText(getByPlaceholderText('you@example.com'), 'not-an-email');
     fireEvent.press(getByTestId('cloud-waitlist-submit-btn'));
     expect(mockJoinWaitlist).not.toHaveBeenCalled();
 
-    // Valid email — button now reachable
     fireEvent.changeText(getByPlaceholderText('you@example.com'), 'test@example.com');
     expect(getByTestId('cloud-waitlist-submit-btn')).toBeTruthy();
   });

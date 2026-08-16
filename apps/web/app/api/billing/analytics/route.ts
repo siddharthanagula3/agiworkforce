@@ -10,10 +10,6 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 
-/**
- * Legacy alias for the percentage-only managed-usage summary.
- * Stripe invoices remain the exact, user-owned monetary history.
- */
 async function handleGetBillingAnalytics(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-analytics');
   if (rateLimitResponse) return rateLimitResponse;

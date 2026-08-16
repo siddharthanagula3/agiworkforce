@@ -1,4 +1,3 @@
-/** Obsolete pre-account/BYOK key retained by older extension installations. */
 export const LEGACY_PROVIDER_API_KEY = 'agi_api_key';
 
 interface RemovableStorageArea {
@@ -11,11 +10,6 @@ export interface LegacyProviderCredentialStorage {
   sync: RemovableStorageArea;
 }
 
-/**
- * Chrome no longer supports BYOK execution. Purge the old provider credential
- * from every storage plane so an upgrade cannot leave a usable secret at rest.
- * Each area is attempted independently; callers can report partial failures.
- */
 export async function purgeLegacyProviderCredentials(
   storage: LegacyProviderCredentialStorage,
 ): Promise<Array<keyof LegacyProviderCredentialStorage>> {

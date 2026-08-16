@@ -13,13 +13,11 @@ import { SubscriptionService } from '@/lib/services/subscription-service';
 import { requireCsrfToken } from '@/lib/csrf';
 
 async function handleClaimOffer(request: NextRequest) {
-  // AUDIT-008-006: Enforce CSRF protection for state-changing endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) {
     return csrfError as NextResponse;
   }
 
-  // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'claim-offer');
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -28,7 +26,6 @@ async function handleClaimOffer(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
   const db = getNeonDb();
 
-  // Parse and validate request body
   let body: unknown;
   try {
     body = await request.json();
@@ -44,7 +41,6 @@ async function handleClaimOffer(request: NextRequest) {
   const { code: trimmedCode } = validationResult.data;
 
   try {
-    // AUDIT-P3-008-009: Select only required columns instead of SELECT *
     type InviteRow = {
       id: string;
       plan_tier: string;
@@ -67,7 +63,6 @@ async function handleClaimOffer(request: NextRequest) {
       throw createError.validation('Invalid invite code');
     }
 
-    // Atomic claim via RPC (prevents race conditions and enforces one-offer-per-user)
     type ClaimRpcRow = {
       success: boolean;
       error: string | null;
@@ -92,14 +87,12 @@ async function handleClaimOffer(request: NextRequest) {
 
     if (!result?.success) {
       const msg = result?.error || 'Failed to claim invite code';
-      // Map to conflict vs validation
       if (msg.toLowerCase().includes('already')) {
         throw createError.conflict(msg);
       }
       throw createError.validation(msg);
     }
 
-    // Fetch the updated subscription to return to client
     type SubRow = Pick<
       SubscriptionRow,
       'id' | 'plan_tier' | 'status' | 'current_period_start' | 'current_period_end'
@@ -121,7 +114,6 @@ async function handleClaimOffer(request: NextRequest) {
       );
     }
 
-    // Allocate credits for the trial period
     if (
       updatedSubscription &&
       updatedSubscription.current_period_start &&
@@ -145,7 +137,6 @@ async function handleClaimOffer(request: NextRequest) {
           'Credits allocated for trial subscription',
         );
       } catch (creditError) {
-        // Log but don't fail the request if credit allocation fails
         logger.error(
           {
             error: creditError,

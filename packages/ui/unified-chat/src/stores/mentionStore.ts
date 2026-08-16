@@ -1,21 +1,10 @@
-/**
- * mentionStore — surface-agnostic store for @mention typeaheads.
- *
- * Tracks the active mention trigger (@skill or @file), the query text,
- * and the currently highlighted cursor index in the results list.
- *
- * Phase A Slice 5 (new store for SkillMentionPicker + FileMentionPicker)
- */
 import { create } from 'zustand';
 
 export type MentionTrigger = '@skill' | '@file' | null;
 
 interface MentionState {
-  /** Which mention type is active, or null when no mention is open. */
   activeTrigger: MentionTrigger;
-  /** Raw text the user typed after the @ prefix. */
   query: string;
-  /** Highlighted item index in the picker list. */
   cursorIndex: number;
 
   openMention: (trigger: MentionTrigger, query?: string) => void;
@@ -44,8 +33,6 @@ export const useMentionStore = create<MentionState>()((set, get) => ({
     }
   },
 }));
-
-// ── Selectors ─────────────────────────────────────────────────────────────────
 
 export const selectActiveMentionTrigger = (s: MentionState): MentionTrigger => s.activeTrigger;
 export const selectMentionQuery = (s: MentionState): string => s.query;

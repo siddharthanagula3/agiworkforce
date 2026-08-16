@@ -27,10 +27,6 @@ import { webManagedCloudProjects } from '@/features/projects/services/managed-cl
 import { KnowledgeFilesPanel } from './KnowledgeFilesPanel';
 import type { Project } from '@features/projects/stores/project-store';
 
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
-
 export interface ProjectSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -43,10 +39,6 @@ export interface ProjectSettingsDialogProps {
   ) => void;
   onDelete: (id: string) => void;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function ProjectSettingsDialog({
   open,
@@ -61,7 +53,6 @@ export function ProjectSettingsDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Sync local state when project changes (e.g., switching between projects)
   useEffect(() => {
     setName(project.name);
     setInstructions(project.instructions ?? '');
@@ -69,10 +60,6 @@ export function ProjectSettingsDialog({
 
   const [isDuplicating, setIsDuplicating] = useState(false);
 
-  /**
-   * Duplicate this project. The server copies settings, instructions, and
-   * knowledge files by reference, and deliberately does NOT copy conversations.
-   */
   const handleDuplicate = async () => {
     setIsDuplicating(true);
     try {
@@ -85,8 +72,6 @@ export function ProjectSettingsDialog({
         const body = (await response.json().catch(() => ({}))) as {
           error?: { message?: string };
         };
-        // Surface the server's reason verbatim: the common failure is the
-        // project quota, and "something went wrong" would hide that.
         throw new Error(body.error?.message ?? 'Could not duplicate the project.');
       }
       const { copiedKnowledgeFiles } = (await response.json()) as {
@@ -115,14 +100,8 @@ export function ProjectSettingsDialog({
     };
     setIsSaving(true);
     try {
-      // Persist to the server first (Neon `user_projects`) so the rename/edit
-      // survives the next hydration/sync. Previously this handler only wrote
-      // to the local projectStore, which the next server-driven refresh would
-      // silently revert. See PUT /api/projects/[id].
       await webManagedCloudProjects.updateProject(project.id, updates);
 
-      // Server write succeeded · sync the local store so the UI reflects the
-      // change immediately without waiting for the next background refresh.
       onUpdate(project.id, updates);
       toast.success('Project updated');
       onOpenChange(false);
@@ -136,20 +115,13 @@ export function ProjectSettingsDialog({
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
-      // Delete on the server first (DELETE /api/projects/[id] · soft-delete
-      // tombstone) so the removal actually persists. Previously this handler
-      // only called the local-store `onDelete` and showed a success toast, so
-      // the next server-driven `/api/projects` refresh silently resurrected the
-      // project — a false "Project deleted" toast with no DELETE ever sent.
       await webManagedCloudProjects.deleteProject(project.id);
 
-      // Server delete succeeded · remove from the local store and close.
       onDelete(project.id);
       setDeleteConfirmOpen(false);
       onOpenChange(false);
       toast.success('Project deleted');
     } catch (error) {
-      // Keep the confirm dialog open on failure so the user can retry.
       toast.error(error instanceof Error ? error.message : 'Failed to delete project');
     } finally {
       setIsDeleting(false);
@@ -336,9 +308,6 @@ export function ProjectSettingsDialog({
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
-                // Prevent Radix from auto-closing the confirm dialog before the
-                // async server delete resolves — we close it ourselves only on
-                // success, and keep it open (for retry) on failure.
                 e.preventDefault();
                 void handleDelete();
               }}

@@ -1,40 +1,7 @@
-/**
- * Cross-provider message-history repair.
- *
- * Anthropic's `claude.ts:1283-1306` runs a battery of fixups on the
- * messages array before each call so resume / teleport / mid-conversation
- * model-switch flows don't break. The same problem space exists when
- * the chat layer switches mid-thread between Anthropic and OpenAI:
- *
- *   - Orphan `tool_use` blocks with no matching `tool_result` → the
- *     next provider rejects with a 400. Insert synthetic error
- *     `tool_result` so the model knows the call failed.
- *   - Orphan `tool_result` blocks with no matching `tool_use` → strip
- *     before send.
- *   - Anthropic-only fields (`tool_reference`, `caller`, `connector_text`,
- *     `redacted_thinking`) on the assistant turn → strip when handing
- *     to a non-Anthropic adapter.
- *   - Excess media items (>100 images/PDFs) → silent-drop oldest.
- *
- * This module is the canonical home for these repairs. Each function
- * is pure: no IO, no SDK imports, structural-typed messages only.
- *
- * Citation:
- *   - `tasks/research/deep/m8-services-api.md` §17 #7.
- *   - `tasks/research/gap-matrix/pkg-api-providers-normalize.md`
- *     "Cross-provider message normalization (P0 for differentiator #3)".
- */
 
-/**
- * Provider-shape message — minimal fields we care about for repair.
- * Adapters operate on richer types; this module accepts the
- * structural intersection.
- */
 export interface RepairMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content?: string | RepairBlock[];
-  // Some adapters (OpenAI) carry tool calls at the message level
-  // rather than as content blocks.
   tool_calls?: Array<{ id: string; type: 'function'; function?: { name?: string } }>;
   tool_call_id?: string;
   name?: string;
@@ -54,41 +21,14 @@ export type RepairBlock =
   | { type: 'tool_reference' | 'caller'; [k: string]: unknown }
   | { type: string; [k: string]: unknown };
 
-/**
- * Default cap for media items per request. Anthropic enforces 100;
- * we mirror that as a portable default. OpenAI's effective cap varies
- * by model but never exceeds 100 in practice.
- */
 export const DEFAULT_MAX_MEDIA_PER_REQUEST = 100;
 
-// ===========================================================================
-// Tool-use / tool-result pairing
-// ===========================================================================
-
 interface ToolCallRef {
-  /** Either Anthropic content-block id or OpenAI tool_call.id. */
   id: string;
-  /** Index in messages array where the call was emitted. */
   messageIndex: number;
-  /** Name (for synthetic error message readability). */
   name: string;
 }
 
-/**
- * Walk the messages and collect every assistant tool_use / tool_calls
- * along with every user/tool tool_result / role:'tool' message. Pair
- * them up, then:
- *
- *   - Insert synthetic `is_error: true` `tool_result` blocks for any
- *     orphan `tool_use` that has no matching result.
- *   - Strip orphan `tool_result` blocks whose tool_use is no longer
- *     in scope.
- *
- * The caller passes `policy: 'anthropic-shape' | 'openai-shape'` so
- * the helper knows whether to emit blocks (Anthropic) or `role:'tool'`
- * messages (OpenAI). We do NOT mix shapes — the caller normalises to
- * one shape before invoking us.
- */
 export function ensureToolResultPairing(
   messages: RepairMessage[],
   policy: 'anthropic-shape' | 'openai-shape' = 'anthropic-shape',
@@ -115,7 +55,6 @@ export function ensureToolResultPairing(
           }
         }
       }
-      // OpenAI shape — assistant message with `tool_calls`.
       if (Array.isArray(m.tool_calls)) {
         for (const tc of m.tool_calls) {
           if (tc && typeof tc.id === 'string') {
@@ -142,14 +81,9 @@ export function ensureToolResultPairing(
     }
   }
 
-  // Find orphans — calls with no matching result.
   const orphans = toolCalls.filter((c) => !seenResultIds.has(c.id));
   if (orphans.length === 0) return messages;
 
-  // Strategy: insert synthetic results immediately AFTER the assistant
-  // message that emitted the call. We coalesce all orphans for the
-  // same source-message into a single user/tool message so we don't
-  // produce N adjacent inserts.
   const byMsgIndex = new Map<number, ToolCallRef[]>();
   for (const o of orphans) {
     const arr = byMsgIndex.get(o.messageIndex) ?? [];
@@ -188,19 +122,6 @@ function buildSyntheticToolResultMessage(
       })),
     };
   }
-  // OpenAI-shape — one role:'tool' message per orphan (OpenAI requires
-  // a separate message per tool_call_id; Anthropic allows multiple
-  // results in one user message).
-  // Caller handles the multi-message expansion when emitting; here we
-  // produce ONE message and the caller flattens. To keep the contract
-  // uniform we emit a content-block-array fallback, then have the
-  // caller iterate and split.
-  // Realistically callers want this expanded already, so we expand:
-  // Note — an OpenAI-shape return shouldn't have a single message with
-  // multiple tool_call_id values; we therefore fold into N messages by
-  // returning the FIRST and letting the caller's pairing pass produce
-  // the rest. To be honest about the shape, we collapse into one
-  // role:'tool' with a stringified concatenation if there are multiples.
   if (orphans.length === 1) {
     const o = orphans[0]!;
     return {
@@ -209,22 +130,12 @@ function buildSyntheticToolResultMessage(
       content: errMessage(o.name),
     };
   }
-  // Multiple orphans on a single OpenAI-shape message — emit a synthetic
-  // user note instead. OpenAI will see one user turn explaining the gap.
   return {
     role: 'user',
     content: orphans.map((o) => `[tool ${o.name} (${o.id}): no result returned]`).join('\n'),
   };
 }
 
-// ===========================================================================
-// Cross-provider field stripping
-// ===========================================================================
-
-/**
- * Anthropic-only assistant content blocks that other providers reject.
- * Strip when handing the conversation to a non-Anthropic adapter.
- */
 const ANTHROPIC_ONLY_BLOCK_TYPES: ReadonlySet<string> = new Set([
   'tool_reference',
   'caller',
@@ -232,10 +143,6 @@ const ANTHROPIC_ONLY_BLOCK_TYPES: ReadonlySet<string> = new Set([
   'redacted_thinking',
 ]);
 
-/**
- * When switching FROM Anthropic to a non-Anthropic adapter, strip
- * Anthropic-only fields. Pure: returns a new array; never mutates.
- */
 export function stripAnthropicOnlyFields(messages: RepairMessage[]): RepairMessage[] {
   return messages.map((m) => {
     if (!Array.isArray(m.content)) return m;
@@ -250,10 +157,6 @@ export function stripAnthropicOnlyFields(messages: RepairMessage[]): RepairMessa
   });
 }
 
-// ===========================================================================
-// Excess media truncation
-// ===========================================================================
-
 /**
  * Anthropic enforces a 100-media cap per request. Silently drop the
  * oldest media items (image / image_url / document / pdf blocks)
@@ -267,7 +170,6 @@ export function stripExcessMediaItems(
   messages: RepairMessage[],
   max = DEFAULT_MAX_MEDIA_PER_REQUEST,
 ): { messages: RepairMessage[]; dropped: number } {
-  // Walk messages oldest→newest collecting media block coords.
   interface Coord {
     msg: number;
     block: number;
@@ -287,7 +189,6 @@ export function stripExcessMediaItems(
   }
   if (coords.length <= max) return { messages, dropped: 0 };
   const toDrop = coords.length - max;
-  // Drop the oldest `toDrop` from the head.
   const dropSet = new Map<number, Set<number>>();
   for (let i = 0; i < toDrop; i++) {
     const coord = coords[i]!;
@@ -307,15 +208,9 @@ export function stripExcessMediaItems(
   return { messages: out, dropped: toDrop };
 }
 
-// ===========================================================================
-// Public composite repair
-// ===========================================================================
-
 export interface RepairOptions {
   policy?: 'anthropic-shape' | 'openai-shape';
-  /** When true (mid-thread provider switch), strip Anthropic-only fields. */
   stripAnthropicFields?: boolean;
-  /** Per-request media cap. */
   maxMediaItems?: number;
 }
 

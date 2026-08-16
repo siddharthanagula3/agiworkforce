@@ -1,8 +1,3 @@
-/**
- * Horizontal scrollable tag filter chips for the sidebar.
- * Shows "All" + one chip per tag from TAG_CATALOG.
- * Selected chip has filled background; unselected is transparent.
- */
 
 import { useCallback } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
@@ -20,7 +15,6 @@ interface TagFilterProps {
   tagCounts?: Partial<Record<ConversationTag, number>>;
 }
 
-/** A single filter chip with bounce animation on tap. */
 function FilterChip({
   label,
   dotColor,

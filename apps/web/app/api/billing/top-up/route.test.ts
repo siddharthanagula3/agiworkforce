@@ -4,7 +4,6 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   createSession: vi.fn(),
-  // Default: a USD subscription, i.e. the ordinary case.
   retrieveSubscription: vi.fn(async () => ({ currency: 'usd' })),
   audit: vi.fn(),
 }));
@@ -30,9 +29,6 @@ vi.mock('@shared/utils/env', () => ({
 vi.mock('stripe', () => ({
   default: class StripeMock {
     checkout = { sessions: { create: mocks.createSession } };
-    // The route reads the live subscription's currency before charging, so a
-    // USD top-up is never billed against a non-USD plan. Without this the whole
-    // suite 503s on the fail-closed branch of that lookup.
     subscriptions = { retrieve: mocks.retrieveSubscription };
   },
 }));

@@ -23,7 +23,6 @@ import {
   persistGeneratedFiles,
   type GeneratedFileRef,
 } from '@/lib/server/container-files';
-// ProcessedRequest carries quotaFeature, isFlagshipRequest, etc. · no extra imports needed
 
 const TTFT_SLO_TARGET_MS = Number(process.env['LLM_TTFT_SLO_TARGET_MS'] ?? 2500);
 const TTFT_SLO_BREACH_MS = Number(process.env['LLM_TTFT_SLO_BREACH_MS'] ?? 5000);
@@ -77,12 +76,6 @@ async function settleStreamBilling(input: {
   model: string;
   usage: StreamBillingUsage;
   outcome?: 'completed' | 'failed';
-  /**
-   * CPST Stage-0 (managed cloud only): true only for the stream `cancel()`
-   * path, where the client went away before a terminal answer existed. That is
-   * an unambiguous abandonment, which `taskOutcome` distinguishes from a
-   * provider failure. Any other caller leaves it unset.
-   */
   cancelled?: boolean;
 }): Promise<void> {
   const { processed, userId, provider, model, usage } = input;
@@ -137,12 +130,6 @@ async function settleStreamBilling(input: {
         cacheReadTokens: usage.cacheReadInputTokens,
         cacheWriteTokens: usage.cacheCreationInputTokens,
         cacheWrite1hTokens: usage.cacheCreation1hInputTokens,
-        // CPST Stage-0 telemetry, MANAGED CLOUD ONLY (design doc §4.3 phase 1).
-        // Spread into the SAME call because finalize replaces the usage jsonb
-        // wholesale; a follow-up write would erase the token counters above.
-        // `billingOutcome` reports what was actually charged; `cancelled` still
-        // carries the abandonment signal, so a billed-but-abandoned turn stays
-        // distinguishable from a normal completion in CPST.
         ...buildCpstUsageFields(processed, {
           billingOutcome: billedOutcome,
           ...(input.cancelled === true ? { cancelled: true } : {}),
@@ -172,9 +159,6 @@ export async function buildStreamResponse(
   stream: ReadableStream,
   processed: ProcessedRequest,
   userId: string,
-  // Auth token flows through the request pipeline (auth-gate → route) and is
-  // passed here for signature parity with buildNonStreamResponse; deduction is
-  // keyed on userId, so the token itself is not read in this builder.
   _token: string,
 ): Promise<NextResponse> {
   const {
@@ -225,11 +209,6 @@ export async function buildStreamResponse(
           try {
             const event = JSON.parse(jsonStr);
 
-            // Anthropic's message_start event is wire-silent, but it owns the
-            // authoritative input/cache usage for the request. Capture those
-            // counters before the provider-specific transform below filters
-            // message_start with `continue`; otherwise successful legacy
-            // Anthropic streams settle as if they consumed zero input tokens.
             if (event.type === 'message_start' && event.message?.usage) {
               inputTokens = Math.max(inputTokens, event.message.usage.input_tokens || 0);
               if (event.message.usage.cache_read_input_tokens != null) {
@@ -238,8 +217,6 @@ export async function buildStreamResponse(
               if (event.message.usage.cache_creation_input_tokens != null) {
                 cacheCreationInputTokens = event.message.usage.cache_creation_input_tokens;
               }
-              // Only present when the request mixes 5m and 1h TTLs; absent
-              // means the entire cache_creation_input_tokens total is 5m-priced.
               if (event.message.usage.cache_creation?.ephemeral_1h_input_tokens != null) {
                 cacheCreation1hInputTokens =
                   event.message.usage.cache_creation.ephemeral_1h_input_tokens;
@@ -458,14 +435,6 @@ export async function buildStreamResponse(
             if (event.usage) {
               inputTokens = Math.max(inputTokens, event.usage.prompt_tokens || 0);
               outputTokens = Math.max(outputTokens, event.usage.completion_tokens || 0);
-              // OpenAI/OpenRouter: capture cached token counts from the final usage
-              // event emitted when stream_options.include_usage=true is set.
-              // Chat Completions shape: prompt_tokens_details.cached_tokens
-              // Responses API shape:   input_tokens_details.cached_tokens
-              // OpenRouter (anthropic routes): cache_read_input_tokens / cache_creation_input_tokens
-              // DeepSeek native shape:  prompt_cache_hit_tokens (subset of prompt_tokens;
-              //   the streaming bypass returns DeepSeek's raw usage chunk, so this field
-              //   is the only place the ~90%-off cache discount can be captured on stream).
               const streamCacheRead =
                 event.usage.prompt_tokens_details?.cached_tokens ??
                 event.usage.input_tokens_details?.cached_tokens ??
@@ -479,9 +448,6 @@ export async function buildStreamResponse(
               if (streamCacheCreation != null) {
                 cacheCreationInputTokens = streamCacheCreation;
               }
-              // Reasoning tokens:
-              //   Chat Completions: completion_tokens_details.reasoning_tokens
-              //   Responses API:    output_tokens_details.reasoning_tokens
               const streamReasoning =
                 event.usage.completion_tokens_details?.reasoning_tokens ??
                 event.usage.output_tokens_details?.reasoning_tokens ??
@@ -493,8 +459,6 @@ export async function buildStreamResponse(
             if (event.usageMetadata) {
               inputTokens = Math.max(inputTokens, event.usageMetadata.promptTokenCount || 0);
               outputTokens = Math.max(outputTokens, event.usageMetadata.candidatesTokenCount || 0);
-              // Gemini implicit caching: cachedContentTokenCount is a subset of
-              // promptTokenCount served from cache. Capture for cost-discounting.
               if (event.usageMetadata.cachedContentTokenCount != null) {
                 cacheReadInputTokens = event.usageMetadata.cachedContentTokenCount;
               }
@@ -606,21 +570,10 @@ export async function buildStreamResponse(
         if (processed.managedUsage) throw reconciliationError;
       }
 
-      // Never acknowledge a successful stream before its financial outcome
-      // is durable. Moving the provider's terminal marker behind settlement
-      // also makes retries deterministic: a failed settlement interrupts the
-      // stream instead of exposing a false success that the client will not
-      // retry.
       if (hasTerminalSentinel) {
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       }
 
-      // BILLING FIX (0044): reconcileUsage/increment_usage double-charged by
-      // adding the raw token count to credits_used_cents (cents). The
-      // deduct_credits reconciliation above is the authoritative cost path.
-      // Removed to stop the double charge.
-
-      // Fire-and-forget cost tracking + OTel attribute emit (must not block the stream flush).
       try {
         const usage = {
           inputTokens,
@@ -630,7 +583,6 @@ export async function buildStreamResponse(
           cacheCreationInputTokens,
           cacheCreation1hInputTokens,
         };
-        // Bill at the request's own date so dated catalog rates resolve here.
         recordModelUsage(userId, modelUsed, usage, new Date());
         logger.info(
           {
@@ -641,7 +593,6 @@ export async function buildStreamResponse(
               providerUsed,
               modelUsed,
               usage,
-              // Mirror of the ledger keys settled just above (managed cloud only).
               buildCpstUsageFields(processed, { billingOutcome: 'completed' }),
             ),
           },
@@ -662,99 +613,23 @@ export async function buildStreamResponse(
     ...getCorsHeaders(request),
     ...getSecurityHeaders(),
   };
-  // The model that actually answered, after routing/fallback. The client
-  // otherwise labels the turn with what it REQUESTED — `auto` under Auto
-  // routing, which is not a catalog id, so the transcript rendered
-  // "Unavailable model" under every reply.
   if (modelUsed) {
     streamHeaders['X-AGI-Resolved-Model'] = modelUsed;
   }
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
-  // Idle heartbeat, provider-independent (see sse-heartbeat.ts) -- covers
-  // every provider dispatched through this function, not just Anthropic.
   return new NextResponse(withSseHeartbeat(reconciledStream), { headers: streamHeaders });
 }
 
-/**
- * `buildStreamResponse`'s sibling for the `packages/ai/providers/*` adapter
- * path (restructure Wave 2, task #34) -- Anthropic and Google so far (see
- * `ADAPTER_PROVIDERS` in route.ts). Consumes an `AsyncIterable<StreamChunk>`
- * (an adapter's `.stream()` result) instead of a raw upstream SSE
- * `ReadableStream`, reconstructing the SAME byte-stable legacy wire via
- * `OpenAIWireAssembler`'s `wireMode: 'legacy-web'` + `sseChunks()` (proven
- * against captured golden fixtures for each provider --
- * packages/ai/providers/anthropic/src/__tests__/web-wire-parity.test.ts,
- * apps/web/.../__tests__/stream-transform.google-byte-parity.test.ts).
- *
- * `buildStreamResponse` above is left completely untouched: every other
- * provider still dispatches through it via `LLMProviderFactory`'s raw
- * ReadableStream. Two separate functions, not a shared one with a branch,
- * so migrating a provider onto this one carries zero risk to the still-
- * legacy providers.
- *
- * Billing/TTFT/analytics logic is a straight port of `buildStreamResponse`'s
- * `flush()` -- same LLMCostCalculator/managed-usage/recordModelUsage calls,
- * same TTFT-observed/breach/missing log events -- just reading accumulated
- * `StreamChunk` usage fields (via `adapter-usage.ts`, shared with the
- * non-streaming `drainToLlmResponse`) instead of re-parsing JSON event
- * shapes per provider.
- *
- * `[DONE]` is emitted unconditionally once the adapter's AsyncIterable is
- * exhausted -- the canonical `StreamChunk` layer has no `[DONE]`-equivalent
- * chunk type at all (it's purely an OpenAI-WIRE-LEVEL sentinel
- * `OpenAIWireAssembler` never emits on its own), so appending it here
- * unconditionally was only verified safe for Anthropic/Google's raw wires,
- * neither of which ever contained their own `[DONE]` (confirmed for Google
- * via stream-transform.google-byte-parity.test.ts's `[DONE]` assertion).
- * CONFIRMED SAFE for OpenAI too (task #34's OpenAI slice), for a different
- * reason: OpenAI's real Chat Completions SSE DOES contain its own `[DONE]`,
- * but `createOpenAIAdapter` consumes it via the official `openai` SDK's
- * `sdk.chat.completions.create()` stream helper, which parses SSE internally
- * and treats `[DONE]` as "end the async iterable" -- it never surfaces as a
- * yielded chunk object for `translateOpenAIStream` to see or re-emit. So
- * `[DONE]` never reaches this function's input side for ANY provider wired
- * through it; the one appended here is always the only one on the wire.
- *
- * `wireMode` is caller-supplied (route.ts's `ADAPTER_PROVIDERS` table, one
- * per provider) rather than hardcoded, because OpenAI's byte-stable wire is
- * NOT `'legacy-web'` -- unlike Anthropic/Google, whose legacy providers
- * reshape their vendor's native wire into an OpenAI-like shape, OpenAI's
- * legacy provider (apps/web/lib/llm-providers/openai.ts) does zero internal
- * reshaping and returns real upstream SSE near-verbatim (confirmed via
- * stream-transform.openai-byte-parity.test.ts's captured bytes) -- see
- * `OpenAIWireAssemblerOptions.wireMode`'s `'openai-passthrough'` docs for
- * what that mode reconstructs.
- *
- * `streamStartedAt` is a CALLER-supplied timestamp, not computed internally
- * with `Date.now()` here -- unlike `buildStreamResponse`, which can safely
- * take its own timestamp because `await LLMProviderFactory.streamRequest()`
- * returns as soon as response headers arrive, before any content. This
- * function's caller (route.ts) instead calls `startProviderStream`, which
- * eagerly awaits the FIRST `StreamChunk` (see adapter-factory.ts's
- * docstring on why: detecting an immediate upstream error before committing
- * to a 200 response) -- so by the time `chunks` reaches this function, the
- * first token may already have arrived. Taking `Date.now()` here would
- * measure only the gap between that peek resolving and this function
- * starting (near-zero), silently breaking the `llm_ttft_slo_breach` alert
- * for every request dispatched this way. Route.ts captures the real start
- * time BEFORE calling `startProviderStream`.
- */
 export async function buildAdapterStreamResponse(
   request: NextRequest,
   chunks: AsyncIterable<StreamChunk>,
   processed: ProcessedRequest,
   userId: string,
-  // See buildStreamResponse's identical parameter for why this is unused.
   _token: string,
   streamStartedAt: number,
-  // Defaults to 'legacy-web' so every existing call site (Anthropic/Google,
-  // both wired before this parameter existed) is unaffected. New/updated
-  // call sites pass the provider's own wireMode explicitly (route.ts reads
-  // it off ADAPTER_PROVIDERS).
   wireMode: 'legacy-web' | 'openai-passthrough' = 'legacy-web',
-  /** Optional server-owned work that runs only after a durably settled clean stream. */
   onSuccessfulTurn?: () => Promise<void>,
 ): Promise<NextResponse> {
   const {
@@ -767,13 +642,8 @@ export async function buildAdapterStreamResponse(
     usedFallback,
   } = processed;
 
-  // Billing/analytics model id -- canonical (client-facing), matching
-  // buildStreamResponse's `modelUsed` exactly (both read `chatRequest.model`,
-  // never the apiModelId `toCanonicalChatRequest` sent to the provider via
-  // the shared `toProviderApiModelId` boundary).
   const modelUsed = chatRequest.model;
   const providerUsed = provider;
-  // Wire-visible model id -- identical rule to buildStreamResponse.
   const responseModelName = usedFallback ? chatRequest.model : requestedModel;
 
   const assembler = new OpenAIWireAssembler({ model: responseModelName, wireMode });
@@ -781,20 +651,8 @@ export async function buildAdapterStreamResponse(
   const encoder = new TextEncoder();
   let firstTokenTimestampMs: number | null = null;
 
-  // Provider-generated file refs seen this turn (OpenAI container-file
-  // citations / Anthropic code-execution outputs), deduped by file id. The
-  // bytes live in the provider's EPHEMERAL sandbox (OpenAI containers expire
-  // ~20 min), so they are fetched + persisted at end of turn and announced as
-  // an `x_generated_files` delta before [DONE]. Managed-gateway path only —
-  // the fetchers use the platform provider keys that created these ids.
   const generatedFileRefs = new Map<string, GeneratedFileRef>();
 
-  // AUDIT-FIX BUG-10/STR-5: the server never persisted the assistant turn on
-  // this path either -- `onSuccessfulTurn` is auto-memory only, and the browser
-  // at `[DONE]` was the sole writer. The assembler already accumulates the
-  // tag-free assistant text, so persistence costs one write and no extra
-  // buffering. Gated on the turn being persistable at all (owned non-temporary
-  // conversation + caller-supplied assistant_message_id).
   const assistantTurnPersistable = canPersistAssistantTurn(processed);
   let assistantTurnPersisted = false;
   const persistAssistantTurnSnapshot = async (truncated: boolean): Promise<void> => {
@@ -869,10 +727,6 @@ export async function buildAdapterStreamResponse(
         }
       }
 
-      // Persist provider-sandbox files BEFORE closing the stream so the
-      // client receives durable, same-origin renderable URLs in-band. Honest
-      // states: failures keep the log warn AND surface an inline note — the
-      // user is never silently shown nothing.
       if (generatedFileRefs.size > 0) {
         try {
           const { files, failedCount } = await persistGeneratedFiles({
@@ -922,14 +776,6 @@ export async function buildAdapterStreamResponse(
         }
       }
 
-      // The provider failed mid-stream (after this 200 SSE response had
-      // already committed) -- ingest()'s 'error' case (see
-      // OpenAIWireAssembler) captured the classified message, but the
-      // stream itself still ends cleanly with [DONE] (see sseChunks()'s
-      // 'error' case and the additive `x_stream_error` wire marker it now
-      // emits). Without this log the failure was previously invisible
-      // server-side too -- `assembler.lastError` had zero production
-      // readers before this fix.
       if (assembler.lastError !== null) {
         logger.warn(
           {
@@ -991,21 +837,13 @@ export async function buildAdapterStreamResponse(
       }
 
       if (assembler.lastError === null) {
-        // Financial settlement is durable at this point; persist the turn
-        // before the terminal sentinel so a reload always finds it.
         await persistAssistantTurnSnapshot(false);
         await onSuccessfulTurn?.();
       }
 
-      // A successful terminal sentinel is emitted only after the financial
-      // outcome is durable. If settlement fails, start() rejects and the
-      // client sees an interrupted stream instead of a false success.
       controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       controller.close();
 
-      // Fire-and-forget cost tracking + OTel attribute emit -- mirrors
-      // buildStreamResponse's flush(); the stream is already closed by this
-      // point, so a failure here can't affect what the client received.
       try {
         const usageForTracking = {
           inputTokens: usage.inputTokens,
@@ -1015,7 +853,6 @@ export async function buildAdapterStreamResponse(
           cacheCreationInputTokens: usage.cacheCreationInputTokens,
           cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
         };
-        // Bill at the request's own date so dated catalog rates resolve here.
         recordModelUsage(userId, modelUsed, usageForTracking, new Date());
         logger.info(
           {
@@ -1026,7 +863,6 @@ export async function buildAdapterStreamResponse(
               providerUsed,
               modelUsed,
               usageForTracking,
-              // Mirror of the ledger keys settled just above (managed cloud only).
               buildCpstUsageFields(processed, {
                 billingOutcome: assembler.lastError === null ? 'completed' : 'failed',
               }),
@@ -1054,14 +890,9 @@ export async function buildAdapterStreamResponse(
             cacheCreation1hInputTokens: usage.cacheCreation1hInputTokens,
           },
           outcome: 'failed',
-          // The client aborted (tab close, Stop, dropped connection). CPST
-          // records that as an abandoned task, not a failed one.
           cancelled: true,
         });
       }
-      // AUDIT-FIX BUG-10/STR-5: an aborted stream (tab close, Stop, dropped
-      // connection) already settled billing here but persisted nothing, so the
-      // turn was billed and lost. Save what was generated, marked truncated.
       await persistAssistantTurnSnapshot(true);
     },
   });
@@ -1073,20 +904,11 @@ export async function buildAdapterStreamResponse(
     ...getCorsHeaders(request),
     ...getSecurityHeaders(),
   };
-  // The model that actually answered, after routing/fallback. The client
-  // otherwise labels the turn with what it REQUESTED — `auto` under Auto
-  // routing, which is not a catalog id, so the transcript rendered
-  // "Unavailable model" under every reply.
   if (modelUsed) {
     streamHeaders['X-AGI-Resolved-Model'] = modelUsed;
   }
   if (quotaWarningHeader) {
     streamHeaders['X-Quota-Warning'] = quotaWarningHeader;
   }
-  // Idle heartbeat, provider-independent (see sse-heartbeat.ts) -- the
-  // Anthropic SDK swallows the vendor's own event:ping keepalive frames
-  // before translateAnthropicStream ever sees them, so this is the only
-  // mechanism this path has to keep a long-silent connection (e.g. extended
-  // thinking with no visible output) alive.
   return new NextResponse(withSseHeartbeat(body), { headers: streamHeaders });
 }

@@ -20,12 +20,6 @@ export interface ManagedCloudProjectsSession {
   retry: () => void;
 }
 
-/**
- * Bind the shared in-memory project view model to the current Clerk account.
- * The returned project list is empty until the fetched scope matches the
- * current account, so a render between auth change and effect execution cannot
- * flash the previous account's project metadata.
- */
 export function useManagedCloudProjects(): ManagedCloudProjectsSession {
   const { isLoaded, isSignedIn, userId } = useAuth();
   const projects = useProjectStore((state) => state.projects);

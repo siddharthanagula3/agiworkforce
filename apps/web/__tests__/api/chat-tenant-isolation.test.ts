@@ -1,18 +1,3 @@
-/**
- * Tenant-isolation regression tests (AUDIT CRITICAL #17).
- *
- * #17 (IDOR): POST /api/chat/conversations/[id]/messages/bulk upserted by
- * global message PK with NO conversation guard — posting a victim's message
- * UUID overwrote the victim's row and leaked provider/token/cost fields via
- * RETURNING.
- *
- * The upsert now carries a WHERE guard on the DO UPDATE; a foreign-row
- * conflict updates nothing and the missing RETURNING row is rejected
- * explicitly instead of silently swallowed (or crashed on).
- *
- * (#16, the /api/chat/sessions BOLA guard, was covered here until the
- * sessions alias API was deleted as a dead stack.)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -77,9 +62,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — IDOR guard (#17)',
   }
 
   it('includes the conversation ownership guard in the message upsert SQL', async () => {
-    // 1st query: conversation ownership check passes (attacker's own convo)
     mockQuery.mockResolvedValueOnce([{ id: ATTACKER_CONVERSATION_ID }]);
-    // 2nd query: upsert returns the row (same-conversation message)
     mockQuery.mockResolvedValueOnce([
       {
         id: VICTIM_MESSAGE_ID,
@@ -116,9 +99,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — IDOR guard (#17)',
   });
 
   it('rejects (400, not silent success) a message id owned by another conversation', async () => {
-    // Ownership check on attacker's conversation passes…
     mockQuery.mockResolvedValueOnce([{ id: ATTACKER_CONVERSATION_ID }]);
-    // …but the guarded upsert touches no row (victim's message id).
     mockQuery.mockResolvedValueOnce([]);
 
     const res = await postBulkMessages(
@@ -133,7 +114,7 @@ describe('POST /api/chat/conversations/[id]/messages/bulk — IDOR guard (#17)',
   });
 
   it('still 404s when the URL conversation is not owned by the caller', async () => {
-    mockQuery.mockResolvedValueOnce([]); // ownership check fails
+    mockQuery.mockResolvedValueOnce([]);
 
     const res = await postBulkMessages(
       makeJsonRequest(

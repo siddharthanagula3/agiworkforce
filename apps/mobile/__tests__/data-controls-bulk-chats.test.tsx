@@ -1,11 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M35 — Data controls exposes the bulk chat actions the server has always
- * accepted. The point of these tests is the wire contract: each button must
- * post its own action string against the server's validated enum
- * (apps/web/app/api/chat/conversations/bulk/route.ts), behind a two-step
- * destructive confirmation, and must refresh the chat list on success.
- */
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -115,15 +108,12 @@ import {
 
 type AlertButton = { text?: string; style?: string; onPress?: () => void };
 
-/** Records every Alert and lets a test drive the confirmation chain by label. */
 const alertCalls: Array<{ title: string; message?: string; buttons: AlertButton[] }> = [];
 
 function pressAlertButton(text: string) {
   for (let i = alertCalls.length - 1; i >= 0; i -= 1) {
     const button = alertCalls[i].buttons.find((b) => b.text === text);
     if (button) {
-      // The confirm handler kicks off the request and flips the busy state, so
-      // run it inside act() the same way fireEvent.press would.
       act(() => {
         button.onPress?.();
       });
@@ -214,7 +204,6 @@ describe('Data controls — Chat history bulk actions', () => {
     await waitFor(() =>
       expect(alertCalls.some((call) => call.title === 'Chats deleted')).toBe(true),
     );
-    // Singular noun for one chat, and the count comes from the server response.
     expect(alertCalls.find((call) => call.title === 'Chats deleted')?.message).toBe(
       '1 chat deleted.',
     );

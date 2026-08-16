@@ -52,7 +52,6 @@ export function ExecutionSidecarFilmstrip() {
     [setActiveContext, setUserOverrideContext],
   );
 
-  // Auto-scroll to right when new screenshots arrive
   useEffect(() => {
     const el = scrollRef.current;
     if (el) {

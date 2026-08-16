@@ -1,17 +1,3 @@
-/**
- * Regression test for the "popular searches 500" bug.
- *
- * Live audit (2026-07-10, section 9): opening the global Search Conversations
- * modal fired GET /api/search?type=popular, which threw "Internal Server Error"
- * (500). Root cause: migration 0045 changed get_popular_searches to a 3-arg
- * user-scoped signature (text, int, int), but on an un-migrated database only
- * the old 2-arg overload exists, so the 3-arg call raises Postgres
- * undefined_function (42883) and the whole modal-open 500s.
- *
- * The fix keeps the correct user-scoped call but degrades a migration-lag
- * (42883) failure to an empty list — popular searches is a best-effort
- * pre-fill. Unrelated DB errors must still surface (not be masked).
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -66,7 +52,6 @@ class PgError extends Error {
 }
 
 beforeEach(() => {
-  // vitest.config.ts sets mockReset: true — re-register per test.
   mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-abc' });
   mockResolveActiveOrganizationId.mockResolvedValue('11111111-1111-4111-8111-111111111111');
 });

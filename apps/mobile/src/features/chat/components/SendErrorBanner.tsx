@@ -4,20 +4,11 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
 interface SendErrorBannerProps {
-  /** Error message from the chat store, or null when there is no error. */
   error: string | null;
-  /** Retry the failed send. Omitted → no retry affordance is shown. */
   onRetry?: () => void;
-  /** Dismiss the banner (clears the store error). */
   onDismiss: () => void;
 }
 
-/**
- * Banner shown above the composer when a chat send/stream fails. Previously the
- * chat store set `error` on failures but nothing rendered it, so network and
- * validation failures were silent. Render directly above <Composer /> alongside
- * ModelTierWarningBanner.
- */
 export function SendErrorBanner({ error, onRetry, onDismiss }: SendErrorBannerProps) {
   const colors = useThemeColors();
 

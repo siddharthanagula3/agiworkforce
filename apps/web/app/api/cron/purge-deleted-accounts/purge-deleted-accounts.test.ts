@@ -1,10 +1,3 @@
-/**
- * The purge cron is the only thing that ends the deletion grace window, and —
- * since 0103 — the only thing that keeps an erased subject erased. Its due
- * queue reads `profiles.deletion_scheduled_for`, a column that lives on the row
- * the erasure deletes, so without the suppression list a restore resurrects an
- * account permanently and no query anywhere can see that it should not exist.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -46,10 +39,8 @@ vi.mock('@clerk/nextjs/server', () => ({
 import { GET } from './route';
 
 interface Fixture {
-  /** Undefined makes the due query throw `undefined_column`, as an unmigrated deployment would. */
   due?: Array<{ id: string }>;
   tombstones?: Array<{ user_id: string; profile_present: boolean }>;
-  /** Statement fragment whose execution throws, and the pg error code it throws. */
   failStatement?: { matching: string; code?: string };
 }
 
@@ -118,8 +109,6 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
     expect(await response.json()).toMatchObject({ purged: 1, failed: 0 });
     const opened = indexOfStatement('insert into public.erasure_tombstones');
     expect(opened).toBe(0);
-    // The profile row is the last pointer to the account; the record that the
-    // subject must stay erased has to be settled while it still exists.
     expect(indexOfStatement('set erased_at = now()')).toBeLessThan(
       indexOfStatement('delete from public.profiles where id = $1'),
     );
@@ -127,8 +116,6 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
   });
 
   it('re-erases a resurrected account that no longer carries a deletion timestamp', async () => {
-    // The whole point of the suppression list: this profile came back from a
-    // restore, so nothing in `profiles` says it was ever scheduled for erasure.
     primeDb({ due: [], tombstones: [{ user_id: 'ghost-1', profile_present: true }] });
 
     const response = await GET(cronRequest());
@@ -149,32 +136,22 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
     expect(mocks.execute).toHaveBeenCalledWith(expect.stringContaining('delete from public.'), [
       'ghost-1',
     ]);
-    // The resurrected row may also mean an earlier run erased the data but
-    // failed at Clerk, so the sweep has to finish the identity delete too.
     expect(mocks.deleteUser).toHaveBeenCalledWith('ghost-1');
   });
 
   it('keeps a resurrected profile row when the sweep cannot delete the identity', async () => {
-    // Without this the sweep deletes `profiles` — and with it the only retry
-    // pointer — while the identity stays signed-in-able forever.
     primeDb({ due: [], tombstones: [{ user_id: 'ghost-1', profile_present: true }] });
     mocks.deleteUser.mockRejectedValue(new Error('clerk is down'));
 
     const response = await GET(cronRequest());
 
     expect(await response.json()).toMatchObject({ reErased: 0, reErasureFailed: 1 });
-    // The data still goes; it is the identity delete that failed, and only the
-    // profile row can bring this subject back to either queue.
     expect(indexOfStatement('delete from public.web_conversations')).toBeGreaterThan(-1);
     expect(mocks.deleteUser).toHaveBeenCalledWith('ghost-1');
     expect(indexOfStatement('delete from public.profiles where id = $1')).toBe(-1);
   });
 
   it('queues resurrections first, then unfinished erasures, then a round-robin re-sweep', async () => {
-    // A restore that brings back child tables without `profiles` leaves nothing
-    // for the resurrection join to see, so the walk over the whole list is the
-    // only thing that reaches it. Its clauses cannot be asserted through a
-    // mocked driver, so the query itself is the contract.
     primeDb({ due: [], tombstones: [] });
 
     await GET(cronRequest());
@@ -185,13 +162,9 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
     expect(sweep).toContain('profile.id is not null');
     expect(sweep).toContain('tombstone.erased_at is null');
     expect(sweep).toContain("tombstone.last_swept_at < now() - interval '30 days'");
-    // All three tiers must be ORDER BY keys. `erased_at is null` in the WHERE
-    // alone would let a 30-day-stale settled tombstone outrank an erasure that
-    // never finished, which is the opposite of this test's name.
     expect(sweep).toContain('order by (profile.id is not null) desc');
     expect(sweep).toContain('(tombstone.erased_at is null) desc');
     expect(sweep).toContain('tombstone.last_swept_at asc\n');
-    // Each sweep is a full erasure and shares the run's timeout with the due queue.
     expect(sweep).toContain('limit 5');
   });
 
@@ -223,9 +196,6 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
   });
 
   it('erases NOTHING when the tombstone cannot be written', async () => {
-    // Erasing without a suppression-list entry is the exact state that made a
-    // restore permanent. The guard is only worth anything before the deletes,
-    // so the data and the retry pointer must both survive the run.
     primeDb({
       due: [{ id: 'user-1' }],
       tombstones: [],
@@ -238,7 +208,6 @@ describe('GET /api/cron/purge-deleted-accounts', () => {
     expect(mocks.deleteUser).not.toHaveBeenCalled();
     expect(indexOfStatement('delete from public.web_conversations')).toBe(-1);
     expect(indexOfStatement('delete from public.profiles where id = $1')).toBe(-1);
-    // The failed insert is the only statement the run got to execute.
     expect(executedStatements()).toHaveLength(1);
   });
 

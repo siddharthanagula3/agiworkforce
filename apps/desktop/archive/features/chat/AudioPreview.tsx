@@ -3,17 +3,11 @@ import { Pause, Play, X, Volume2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface AudioPreviewProps {
-  /** Audio source URL or base64 data */
   src: string;
-  /** File name to display */
   name?: string;
-  /** Duration in seconds (if known) */
   duration?: number;
-  /** Callback when remove button is clicked */
   onRemove?: () => void;
-  /** Optional className */
   className?: string;
-  /** Whether the preview is compact */
   compact?: boolean;
 }
 
@@ -33,10 +27,8 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(initialDuration || 0);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
-  // Stored as a ref because AudioContext is not rendered — avoids stale-closure lint warnings.
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Initialize audio context and analyser for waveform visualization
   useEffect(() => {
     if (!audioRef.current) return;
 
@@ -66,12 +58,10 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
     };
   }, [src]);
 
-  // Set up audio analyser for visualization
   const setupAudioAnalyser = useCallback(() => {
     if (!audioRef.current || audioContextRef.current) return;
 
     try {
-      // Safari fallback for webkitAudioContext
       const AudioContextClass =
         window.AudioContext ||
         (window as { webkitAudioContext?: typeof window.AudioContext }).webkitAudioContext;
@@ -93,7 +83,6 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
     }
   }, []);
 
-  // Draw waveform visualization
   const drawWaveform = useCallback(() => {
     if (!canvasRef.current || !analyser) return;
 
@@ -106,7 +95,6 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
 
     const draw = () => {
       if (!isPlaying) {
-        // Draw static waveform when paused using seeded values (no Math.random)
         ctx.fillStyle = 'rgba(0, 0, 0, 0)';
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -139,8 +127,7 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
         const barHeight = (value / 255) * canvas.height;
         const y = (canvas.height - barHeight) / 2;
 
-        // Gradient color based on frequency
-        const hue = (i / bufferLength) * 60 + 200; // Blue to purple range
+        const hue = (i / bufferLength) * 60 + 200;
         ctx.fillStyle = `hsla(${hue}, 70%, 60%, 0.8)`;
         ctx.fillRect(x, y, barWidth - 1, barHeight);
 
@@ -151,7 +138,6 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
     draw();
   }, [analyser, isPlaying]);
 
-  // Update visualization when playing state changes
   useEffect(() => {
     if (isPlaying) {
       drawWaveform();
@@ -166,7 +152,6 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
     };
   }, [isPlaying, drawWaveform]);
 
-  // Initial static waveform
   useEffect(() => {
     if (canvasRef.current && !isPlaying) {
       const canvas = canvasRef.current;
@@ -180,7 +165,6 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
       const barGap = 2;
 
       for (let i = 0; i < barCount; i++) {
-        // Create a pseudo-random but consistent pattern
         const seed = (i * 7 + 3) % 17;
         const barHeight = (seed / 17) * (canvas.height * 0.5) + canvas.height * 0.15;
         const x = i * (barWidth + barGap);
@@ -196,7 +180,6 @@ export const AudioPreview: React.FC<AudioPreviewProps> = ({
   const togglePlayPause = useCallback(() => {
     if (!audioRef.current) return;
 
-    // Set up analyser on first play
     if (!audioContextRef.current) {
       setupAudioAnalyser();
     }

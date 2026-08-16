@@ -1,10 +1,3 @@
-/**
- * Frontmatter parser regression tests.
- *
- * The mini-YAML parser in frontmatter.ts is hand-rolled (no `yaml` runtime
- * dep) so it needs explicit coverage for prototype-pollution avoidance and
- * the schema OpenClaw skills actually use.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -62,8 +55,6 @@ describe('parseFrontmatter — basic shape', () => {
 });
 
 describe('parseFrontmatter — security: prototype pollution avoidance', () => {
-  // AUDIT-FIX: H-1 — parser now rejects reserved keys instead of silently
-  // dropping them; the outcome (no Object.prototype pollution) is preserved.
   it('throws FrontmatterError on __proto__ key (no Object.prototype pollution)', () => {
     const before = ({} as Record<string, unknown>)['polluted'];
     expect(() =>

@@ -1,6 +1,3 @@
-/**
- * Finalize adapter output into schema-valid Findings for one review run.
- */
 import { randomUUID } from 'node:crypto';
 
 import { computeFingerprint, normalizePath } from '../fingerprint.js';
@@ -19,9 +16,7 @@ export interface RunContext {
   reviewRunId: string;
   headSha: string;
   baseSha?: string | null;
-  /** Injectable clock so fixtures produce stable output. */
   now: () => Date;
-  /** Injectable id source; defaults to crypto.randomUUID. */
   newId?: () => string;
 }
 

@@ -1,9 +1,3 @@
-/**
- * Tests for MessageBubble link sanitization.
- *
- * Regression: PKG-CHAT-LINK-HREF-XSS — markdown links with `javascript:`,
- * `data:`, or other dangerous schemes must NOT render as clickable anchors.
- */
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MessageBubble, safeHref } from '../MessageBubble';
@@ -134,7 +128,6 @@ describe('MessageBubble canonical agent activity', () => {
     );
 
     expect(html).toContain('Agent activity');
-    // Claude-style collapsed header = the step's semantic phrase, not a "Done in Xs" pill.
     expect(html).toContain('Searched official sources');
     expect(html).not.toContain('Done in 1s');
     expect(html).not.toContain('Legacy duplicate');

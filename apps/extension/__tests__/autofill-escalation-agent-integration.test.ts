@@ -33,21 +33,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Chrome API shim — hoisted so every import in the chain finds it
-// ---------------------------------------------------------------------------
 const chromeMock = vi.hoisted(() => {
   const localStore: Record<string, unknown> = {
-    // Pre-seed a dev bearer token so getAuthToken() succeeds in runAgentLoop
     agi_dev_bearer_token: 'test-bearer-token-integration',
-    // "ask before acting" is OFF by default (allow-all)
     agi_cu_ask_before_acting: false,
-    // Site allowlist — must contain the greenhouse domain we'll test with
     agi_site_allowlist: ['https://boards.greenhouse.io'],
   };
 
-  // Default sendCommand implementation — reinstalled in each beforeEach after
-  // vi.clearAllMocks()/vi.resetAllMocks() wipes it.
   const defaultSendCommandImpl = (
     _target: unknown,
     method: string,
@@ -61,12 +53,10 @@ const chromeMock = vi.hoisted(() => {
     if (method === 'Runtime.evaluate') {
       const p = params as { expression?: string } | undefined;
       const expr = p?.expression ?? '';
-      // waitForStable hash poll
       if (expr.includes('document.readyState') && !expr.includes('indexMap')) {
         callback({ result: { type: 'string', value: 'complete|1|buttonSubmit' } });
         return;
       }
-      // getPageContent (contains indexMap)
       if (expr.includes('indexMap')) {
         const summary =
           'URL: https://boards.greenhouse.io/acmecorp/jobs/123\n' +
@@ -83,12 +73,10 @@ const chromeMock = vi.hoisted(() => {
         });
         return;
       }
-      // getFieldValue
       if (expr.includes('.value') && expr.includes('querySelector')) {
         callback({ result: { type: 'string', value: '' } });
         return;
       }
-      // objectId lookup
       callback({ result: { type: 'object', objectId: 'obj-1' } });
       return;
     }
@@ -118,7 +106,6 @@ const chromeMock = vi.hoisted(() => {
     _defaultSendCommandImpl: defaultSendCommandImpl,
   };
 
-  // Capture messages sent via chrome.runtime.sendMessage
   const sentMessages: unknown[] = [];
 
   const mock = {
@@ -169,13 +156,9 @@ const chromeMock = vi.hoisted(() => {
   return mock;
 });
 
-// ---------------------------------------------------------------------------
-// Fetch mock — SSE responses for the AGI Cloud gateway
-// ---------------------------------------------------------------------------
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
-/** Build a ReadableStream that emits the given SSE lines then closes. */
 function makeSseStream(lines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   return new ReadableStream<Uint8Array>({
@@ -188,7 +171,6 @@ function makeSseStream(lines: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-/** Returns a tool_call SSE response (read_dom). */
 function makeToolCallStream(): ReadableStream<Uint8Array> {
   const chunk = JSON.stringify({
     choices: [
@@ -211,7 +193,6 @@ function makeToolCallStream(): ReadableStream<Uint8Array> {
   return makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']);
 }
 
-/** Returns a final text response (no tool calls). */
 function makeFinalStream(): ReadableStream<Uint8Array> {
   const chunk = JSON.stringify({
     choices: [
@@ -226,11 +207,6 @@ function makeFinalStream(): ReadableStream<Uint8Array> {
   return makeSseStream([`data: ${chunk}\n\n`, 'data: [DONE]\n\n']);
 }
 
-// ---------------------------------------------------------------------------
-// Imports — after mocks are installed
-// ---------------------------------------------------------------------------
-
-// Part 1: Content-script side (AGI_RUN_AUTOFILL handler internals)
 import {
   autofillGreenhouse,
   loadAutofillProfile,
@@ -241,16 +217,8 @@ import { detectJobApplication } from '../src/features/content/autofill/detector'
 import { makeEscalationDecision } from '../src/features/computer-use/escalationEngine';
 import { ASHBY_ALWAYS_ESCALATE_KEYS } from '../src/features/content/autofill/ashby';
 
-// Part 2: Background side (AGI_START_COMPUTER_USE handler internals)
 import { runAgentLoop } from '../src/features/computer-use/agentLoop';
 
-// Siteallowlist helper (to validate the background's re-check logic)
-// We import the same Set that background.ts derives from storage
-// (tested via the background handler behaviour).
-
-// ---------------------------------------------------------------------------
-// Helper: build a minimal Greenhouse DOM in jsdom
-// ---------------------------------------------------------------------------
 function buildGreenhouseDom(): void {
   document.body.innerHTML = `
     <form id="application_form">
@@ -274,15 +242,10 @@ function buildGreenhouseDom(): void {
   `;
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     buildGreenhouseDom();
-    // Set the URL to a Greenhouse job page so detectJobApplication matches
     Object.defineProperty(window, 'location', {
       value: { href: 'https://boards.greenhouse.io/acmecorp/jobs/123' },
       writable: true,
@@ -291,7 +254,6 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
 
   it('detects greenhouse platform and returns an autofill result', async () => {
     const detection = detectJobApplication();
-    // Greenhouse is detected when the URL matches and the form is present
     expect(detection.platform).toBe('greenhouse');
     expect(detection.isJobApplication).toBe(true);
     expect(detection.fields.length).toBeGreaterThan(0);
@@ -304,7 +266,6 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
       email: 'jane@example.com',
     };
     const result = await autofillGreenhouse(profile, 0);
-    // Platform must now be 'greenhouse' (was 'unknown' before the fix)
     expect(result.platform).toBe('greenhouse');
     expect(result.filledCount).toBeGreaterThan(0);
     expect(result.errors).toHaveLength(0);
@@ -359,13 +320,10 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
     expect(decision.triggers.some((t) => t.reason === 'file_upload')).toBe(true);
     expect(decision.agentGoal).toContain('greenhouse');
     expect(decision.agentGoal).toContain('files.resume');
-    // Confirm the goal explicitly says NOT to re-submit
     expect(decision.agentGoal).toContain('NEVER click Submit');
   });
 
   it('escalates Ashby always-escalate fields only when the platform keys are passed', () => {
-    // Ashby marks its typeahead/file fields skipped with a reason the file_upload
-    // trigger does NOT match; escalation only fires via the alwaysEscalate set.
     const fillResults = [
       {
         key: 'files.resume',
@@ -393,14 +351,9 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
     ];
     const profileValues = {};
 
-    // Regression: 4-arg call (alwaysEscalate defaults empty) produces NO
-    // platform_always_escalate trigger — the resume was silently never attached
-    // on Ashby (the reason string doesn't match the file_upload trigger either).
     const without = makeEscalationDecision(fillResults, detectedFields, profileValues, 'ashby');
     expect(without.triggers.some((t) => t.reason === 'platform_always_escalate')).toBe(false);
 
-    // Fix: passing the platform's always-escalate keys triggers escalation for
-    // exactly the skipped Ashby fields.
     const withKeys = makeEscalationDecision(
       fillResults,
       detectedFields,
@@ -413,7 +366,6 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
   });
 
   it('full chain: autofill → escalation for a form with file upload', async () => {
-    // Simulates what handleRunAutofill() does in content.ts
     const profile = await loadAutofillProfile();
     const detection = detectJobApplication();
 
@@ -437,7 +389,6 @@ describe('AGI_RUN_AUTOFILL content handler → escalation decision', () => {
       detection.platform,
     );
 
-    // The form has a file upload field — escalation must fire
     expect(escalation.shouldEscalate).toBe(true);
     expect(escalation.agentGoal.length).toBeGreaterThan(0);
   });
@@ -449,7 +400,6 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
     chromeMock.runtime.lastError = null;
     chromeMock.sentMessages.length = 0;
 
-    // Reinstall CDP mocks after vi.clearAllMocks() wiped implementations
     chromeMock.debugger.sendCommand.mockImplementation(chromeMock.debugger._defaultSendCommandImpl);
     chromeMock.debugger.attach.mockImplementation((_t: unknown, _v: unknown, cb: () => void) =>
       cb(),
@@ -462,7 +412,6 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
       return Promise.reject(new Error('Tab not found'));
     });
 
-    // Wire up two-call SSE sequence for runAgentLoop
     fetchMock
       .mockResolvedValueOnce({
         ok: true,
@@ -477,7 +426,7 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
   });
 
   afterEach(() => {
-    vi.clearAllMocks(); // preserve implementations, only reset call counts
+    vi.clearAllMocks();
   });
 
   it('runAgentLoop emits progress events and returns final message', async () => {
@@ -490,22 +439,18 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
         maxSteps: 10,
         onProgress: (step) => {
           progressSteps.push(step.kind);
-          // Simulate what background.ts does: broadcast each step to the side panel
           void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
         },
       },
     );
 
-    // Loop completed
     expect(result.finalMessage).toContain('completed');
     expect(result.cappedAtMaxSteps).toBe(false);
 
-    // Progress events were emitted
     expect(progressSteps).toContain('tool_call');
     expect(progressSteps).toContain('tool_result');
     expect(progressSteps).toContain('final');
 
-    // AGI_CU_STEP was broadcast for each step
     const cuStepMessages = chromeMock.sentMessages.filter(
       (m) =>
         typeof m === 'object' &&
@@ -514,7 +459,6 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
     );
     expect(cuStepMessages.length).toBeGreaterThan(0);
 
-    // Gateway was called twice (once for tool_call, once for final)
     expect(fetchMock).toHaveBeenCalledTimes(2);
     const firstCall = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(firstCall[0]).toBe('https://api.agiworkforce.com/api/llm/v1/chat/completions');
@@ -523,7 +467,6 @@ describe('AGI_START_COMPUTER_USE background handler → runAgentLoop', () => {
       stream: boolean;
     };
     expect(firstBody.stream).toBe(true);
-    // Goal was injected into the first user message
     expect(JSON.stringify(firstBody.messages)).toContain('Greenhouse job application');
   });
 
@@ -559,7 +502,6 @@ describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER
     chromeMock.runtime.lastError = null;
     chromeMock.sentMessages.length = 0;
 
-    // Reinstall CDP mocks after vi.clearAllMocks()
     chromeMock.debugger.sendCommand.mockImplementation(chromeMock.debugger._defaultSendCommandImpl);
     chromeMock.debugger.attach.mockImplementation((_t: unknown, _v: unknown, cb: () => void) =>
       cb(),
@@ -586,11 +528,10 @@ describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER
   });
 
   afterEach(() => {
-    vi.clearAllMocks(); // preserve implementations, only reset call counts
+    vi.clearAllMocks();
   });
 
   it('drives the complete spine: autofill → escalation → loop → AGI_CU_STEP emitted', async () => {
-    // ── Step 1: Simulate content script AGI_RUN_AUTOFILL handler ─────────────
     const profile = await loadAutofillProfile();
     const detection = detectJobApplication();
     expect(detection.isJobApplication).toBe(true);
@@ -612,26 +553,18 @@ describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER
       detection.platform,
     );
 
-    // The file upload field triggers escalation
     expect(escalation.shouldEscalate).toBe(true);
 
-    // ── Step 2: Side panel checks shouldEscalate and decides to call background
-    // (Here we call runAgentLoop directly to simulate what the background handler does,
-    //  since the background handler itself is a service worker we can't easily unit-test
-    //  end-to-end. The background integration is verified via the import and call site
-    //  in background.ts:1762.)
     const cuStepKinds: string[] = [];
 
     const loopResult = await runAgentLoop(escalation.agentGoal, 99, {
       maxSteps: 5,
       onProgress: (step) => {
         cuStepKinds.push(step.kind);
-        // This is what background.ts:1762 does on each step
         void chrome.runtime.sendMessage({ type: 'AGI_CU_STEP', step });
       },
     });
 
-    // ── Step 3: Assert AGI_CU_STEP was emitted ───────────────────────────────
     expect(loopResult.finalMessage).toContain('completed');
     expect(cuStepKinds).toContain('final');
 
@@ -640,12 +573,10 @@ describe('Full chain: AGI_RUN_AUTOFILL → shouldEscalate → AGI_START_COMPUTER
     );
     expect(broadcastedSteps.length).toBeGreaterThan(0);
 
-    // ── Step 4: Assert the gateway received the escalation goal ──────────────
     const firstFetchCall = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(firstFetchCall[1].body as string) as {
       messages: Array<{ role: string; content: unknown }>;
     };
-    // The agent goal describes what the fast-path already did
     const allContent = JSON.stringify(body.messages);
     expect(allContent).toContain('greenhouse');
     expect(allContent).toContain('NEVER click Submit');

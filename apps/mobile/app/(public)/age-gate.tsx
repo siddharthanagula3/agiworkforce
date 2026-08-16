@@ -1,21 +1,3 @@
-/**
- * Age-gate screen — first-run, appears BEFORE the onboarding hero.
- *
- * Policy compliance:
- *   - DPDP Act 2023 (India): 18+ for data processing without parental consent
- *   - EU AI Act Article 5(1)(b): minor protection from manipulative AI
- *   - Google Play GenAI policy: age gate required for general-audience apps
- *   - COPPA (US): 13+ minimum
- *
- * Flow:
- *   1. User enters their age (numeric input)
- *   2. `confirmAgeGate(age)` is called — persists result + detects minor status
- *   3. If minor: show minor-safe notice, then continue to onboarding
- *   4. If adult: continue to onboarding immediately
- *
- * Minor mode is stored in MMKV and checked by contentFilter at prompt time.
- * No parental-consent flow in v1 — minor-safe mode is a content filter only.
- */
 import { useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -34,10 +16,6 @@ import { useTheme } from '@/src/ui/theme';
 import { confirmAgeGate, getAgeThreshold } from '@/src/features/auth/services/ageGate';
 
 const PARENTAL_CONTROLS_RETURN_PATH = '/(app)/settings/parental-controls' as const;
-
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
 
 export default function AgeGateScreen() {
   const { colors, isDark } = useTheme();
@@ -253,10 +231,6 @@ export default function AgeGateScreen() {
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   header: {

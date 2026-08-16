@@ -1,19 +1,6 @@
-/**
- * LSP API
- *
- * TypeScript wrappers for the Language Server Protocol Tauri commands.
- * Provides server lifecycle, document operations, code intelligence
- * (completion, hover, definition, references, rename, formatting),
- * workspace symbols, code actions, and diagnostics.
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/** LSP server information */
 export interface LSPServer {
   language: string;
   command: string;
@@ -22,25 +9,21 @@ export interface LSPServer {
   initialized: boolean;
 }
 
-/** Position in a text document */
 export interface LSPPosition {
   line: number;
   character: number;
 }
 
-/** Range in a text document */
 export interface LSPRange {
   start: LSPPosition;
   end: LSPPosition;
 }
 
-/** Location in a document (uri + range) */
 export interface LSPLocation {
   uri: string;
   range: LSPRange;
 }
 
-/** Completion suggestion item */
 export interface CompletionItem {
   label: string;
   kind: number;
@@ -49,13 +32,11 @@ export interface CompletionItem {
   insertText?: string;
 }
 
-/** Hover information */
 export interface HoverResult {
   contents: string;
   range?: LSPRange;
 }
 
-/** Diagnostic message from the LSP server */
 export interface LSPDiagnostic {
   range: LSPRange;
   severity: number;
@@ -64,7 +45,6 @@ export interface LSPDiagnostic {
   code?: string;
 }
 
-/** Symbol in the workspace */
 export interface WorkspaceSymbol {
   name: string;
   kind: number;
@@ -72,13 +52,11 @@ export interface WorkspaceSymbol {
   containerName?: string;
 }
 
-/** Text edit operation */
 export interface TextEdit {
   range: LSPRange;
   newText: string;
 }
 
-/** Code action (quick fix, refactoring, etc.) */
 export interface CodeAction {
   title: string;
   kind?: string;
@@ -86,16 +64,10 @@ export interface CodeAction {
   edit?: WorkspaceEdit;
 }
 
-/** Workspace edit with changes across files */
 export interface WorkspaceEdit {
   changes?: Record<string, TextEdit[]>;
 }
 
-// ============================================================================
-// Server Lifecycle
-// ============================================================================
-
-/** Start an LSP server for a given language and project root */
 export async function lspStartServer(language: string, rootPath: string): Promise<LSPServer> {
   try {
     if (!isTauri) throw new Error('LSP requires Tauri runtime');
@@ -106,7 +78,6 @@ export async function lspStartServer(language: string, rootPath: string): Promis
   }
 }
 
-/** Stop an LSP server for a given language */
 export async function lspStopServer(language: string): Promise<void> {
   try {
     if (!isTauri) throw new Error('LSP requires Tauri runtime');
@@ -117,7 +88,6 @@ export async function lspStopServer(language: string): Promise<void> {
   }
 }
 
-/** List all running LSP server languages */
 export async function lspListServers(): Promise<string[]> {
   try {
     if (!isTauri) throw new Error('LSP requires Tauri runtime');
@@ -128,7 +98,6 @@ export async function lspListServers(): Promise<string[]> {
   }
 }
 
-/** Detect the language for a given file path */
 export async function lspDetectLanguage(filePath: string): Promise<string> {
   try {
     if (!isTauri) throw new Error('LSP requires Tauri runtime');
@@ -139,11 +108,6 @@ export async function lspDetectLanguage(filePath: string): Promise<string> {
   }
 }
 
-// ============================================================================
-// Document Notifications
-// ============================================================================
-
-/** Notify the LSP server that a document was opened */
 export async function lspDidOpen(
   language: string,
   uri: string,
@@ -159,7 +123,6 @@ export async function lspDidOpen(
   }
 }
 
-/** Notify the LSP server that a document was changed */
 export async function lspDidChange(
   language: string,
   uri: string,
@@ -175,7 +138,6 @@ export async function lspDidChange(
   }
 }
 
-/** Notify the LSP server that a document was closed */
 export async function lspDidClose(language: string, uri: string): Promise<void> {
   try {
     if (!isTauri) throw new Error('LSP requires Tauri runtime');
@@ -186,11 +148,6 @@ export async function lspDidClose(language: string, uri: string): Promise<void> 
   }
 }
 
-// ============================================================================
-// Code Intelligence
-// ============================================================================
-
-/** Get completion items at a position */
 export async function lspCompletion(
   language: string,
   uri: string,
@@ -211,7 +168,6 @@ export async function lspCompletion(
   }
 }
 
-/** Get hover information at a position */
 export async function lspHover(
   language: string,
   uri: string,
@@ -232,7 +188,6 @@ export async function lspHover(
   }
 }
 
-/** Go to definition at a position */
 export async function lspDefinition(
   language: string,
   uri: string,
@@ -253,7 +208,6 @@ export async function lspDefinition(
   }
 }
 
-/** Find all references at a position */
 export async function lspReferences(
   language: string,
   uri: string,
@@ -274,7 +228,6 @@ export async function lspReferences(
   }
 }
 
-/** Rename symbol at a position */
 export async function lspRename(
   language: string,
   uri: string,
@@ -297,7 +250,6 @@ export async function lspRename(
   }
 }
 
-/** Format a document */
 export async function lspFormatting(language: string, uri: string): Promise<TextEdit[]> {
   try {
     if (!isTauri) throw new Error('LSP requires Tauri runtime');
@@ -308,7 +260,6 @@ export async function lspFormatting(language: string, uri: string): Promise<Text
   }
 }
 
-/** Search for workspace symbols */
 export async function lspWorkspaceSymbol(
   language: string,
   query: string,
@@ -322,7 +273,6 @@ export async function lspWorkspaceSymbol(
   }
 }
 
-/** Get code actions for a range and set of diagnostics */
 export async function lspCodeAction(
   language: string,
   uri: string,
@@ -343,11 +293,6 @@ export async function lspCodeAction(
   }
 }
 
-// ============================================================================
-// Diagnostics
-// ============================================================================
-
-/** Get diagnostics for a specific file URI */
 export async function lspGetDiagnostics(language: string, uri: string): Promise<LSPDiagnostic[]> {
   try {
     if (!isTauri) throw new Error('LSP requires Tauri runtime');
@@ -358,7 +303,6 @@ export async function lspGetDiagnostics(language: string, uri: string): Promise<
   }
 }
 
-/** Get all diagnostics across all open files */
 export async function lspGetAllDiagnostics(
   language: string,
 ): Promise<Record<string, LSPDiagnostic[]>> {

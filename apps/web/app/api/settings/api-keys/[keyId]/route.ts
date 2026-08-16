@@ -13,10 +13,6 @@ import { handleCorsPreflightRequest } from '@/lib/cors';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { recordAuditEvent } from '@/lib/security-audit';
 
-/**
- * DELETE /api/settings/api-keys/[keyId]
- * Revoke (soft-delete) an API key owned by the current user.
- */
 async function handleRevoke(request: NextRequest, context: { params: Promise<{ keyId: string }> }) {
   const rateLimitResponse = await withRateLimit(request, 'api-keys-delete');
   if (rateLimitResponse) return rateLimitResponse;
@@ -33,7 +29,6 @@ async function handleRevoke(request: NextRequest, context: { params: Promise<{ k
 
   const db = getNeonDb();
 
-  // Verify ownership before revoking.
   const [existing] = await db.query<Pick<ApiKeyRow, 'id' | 'user_id' | 'revoked_at'>>(
     `select id, user_id, revoked_at from public.api_keys where id = $1 limit 1`,
     [keyId],

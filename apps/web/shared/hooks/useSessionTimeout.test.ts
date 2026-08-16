@@ -1,14 +1,9 @@
-/**
- * Tests for useSessionTimeout hook
- */
 
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, cleanup } from '@testing-library/react';
 
-// Stable authenticated state so the hook's effects arm (they early-return when
-// signed out). Both are the hook's real dependency imports.
 vi.mock('@shared/stores/authentication-store', () => ({
   useAuthStore: () => ({ user: { id: 'u1' }, logout: vi.fn(), isAuthenticated: true }),
 }));
@@ -18,7 +13,6 @@ vi.mock('@features/settings/hooks/use-settings-queries', () => ({
 
 import { useSessionTimeout } from './useSessionTimeout';
 
-// Constants for testing
 const ACTIVITY_STORAGE_KEY = 'agi_last_activity';
 const DEFAULT_SESSION_TIMEOUT_MINUTES = 60;
 const WARNING_TIME_BEFORE_TIMEOUT_MS = 2 * 60 * 1000;
@@ -69,18 +63,18 @@ describe('useSessionTimeout utilities', () => {
     it('should calculate correct timeout in milliseconds', () => {
       const timeoutMinutes = DEFAULT_SESSION_TIMEOUT_MINUTES;
       const timeoutMs = timeoutMinutes * 60 * 1000;
-      expect(timeoutMs).toBe(60 * 60 * 1000); // 1 hour in ms
+      expect(timeoutMs).toBe(60 * 60 * 1000);
     });
 
     it('should calculate warning threshold correctly', () => {
       const timeoutMs = DEFAULT_SESSION_TIMEOUT_MINUTES * 60 * 1000;
       const warningThreshold = timeoutMs - WARNING_TIME_BEFORE_TIMEOUT_MS;
-      expect(warningThreshold).toBe(58 * 60 * 1000); // 58 minutes
+      expect(warningThreshold).toBe(58 * 60 * 1000);
     });
 
     it('should determine if session is expired', () => {
       const timeoutMs = DEFAULT_SESSION_TIMEOUT_MINUTES * 60 * 1000;
-      const lastActivity = Date.now() - 61 * 60 * 1000; // 61 minutes ago
+      const lastActivity = Date.now() - 61 * 60 * 1000;
       const elapsed = Date.now() - lastActivity;
       const isExpired = elapsed >= timeoutMs;
       expect(isExpired).toBe(true);
@@ -88,7 +82,7 @@ describe('useSessionTimeout utilities', () => {
 
     it('should determine if session is active', () => {
       const timeoutMs = DEFAULT_SESSION_TIMEOUT_MINUTES * 60 * 1000;
-      const lastActivity = Date.now() - 30 * 60 * 1000; // 30 minutes ago
+      const lastActivity = Date.now() - 30 * 60 * 1000;
       const elapsed = Date.now() - lastActivity;
       const isExpired = elapsed >= timeoutMs;
       expect(isExpired).toBe(false);
@@ -96,7 +90,7 @@ describe('useSessionTimeout utilities', () => {
 
     it('should determine if warning should show', () => {
       const timeoutMs = DEFAULT_SESSION_TIMEOUT_MINUTES * 60 * 1000;
-      const lastActivity = Date.now() - 59 * 60 * 1000; // 59 minutes ago
+      const lastActivity = Date.now() - 59 * 60 * 1000;
       const elapsed = Date.now() - lastActivity;
       const timeRemaining = timeoutMs - elapsed;
       const shouldShowWarning = timeRemaining <= WARNING_TIME_BEFORE_TIMEOUT_MS;
@@ -105,7 +99,7 @@ describe('useSessionTimeout utilities', () => {
 
     it('should not show warning when plenty of time remains', () => {
       const timeoutMs = DEFAULT_SESSION_TIMEOUT_MINUTES * 60 * 1000;
-      const lastActivity = Date.now() - 30 * 60 * 1000; // 30 minutes ago
+      const lastActivity = Date.now() - 30 * 60 * 1000;
       const elapsed = Date.now() - lastActivity;
       const timeRemaining = timeoutMs - elapsed;
       const shouldShowWarning = timeRemaining <= WARNING_TIME_BEFORE_TIMEOUT_MS;
@@ -116,7 +110,6 @@ describe('useSessionTimeout utilities', () => {
   describe('cross-tab synchronization', () => {
     it('should handle storage events', () => {
       const newTimestamp = Date.now();
-      // Create StorageEvent and set read-only properties via defineProperty
       const storageEvent = new StorageEvent('storage');
       Object.defineProperty(storageEvent, 'key', { value: ACTIVITY_STORAGE_KEY });
       Object.defineProperty(storageEvent, 'newValue', { value: newTimestamp.toString() });
@@ -126,7 +119,6 @@ describe('useSessionTimeout utilities', () => {
     });
 
     it('should ignore storage events for other keys', () => {
-      // Create StorageEvent and set read-only properties via defineProperty
       const storageEvent = new StorageEvent('storage');
       Object.defineProperty(storageEvent, 'key', { value: 'other_key' });
       Object.defineProperty(storageEvent, 'newValue', { value: 'some_value' });
@@ -144,19 +136,15 @@ describe('useSessionTimeout utilities', () => {
         return now - lastUpdate < ACTIVITY_THROTTLE_MS;
       };
 
-      // First activity - should not throttle (lastUpdate is 0, diff is large)
       const now1 = Date.now();
-      expect(shouldThrottle(now1)).toBe(false); // Large diff means no throttle
+      expect(shouldThrottle(now1)).toBe(false);
 
-      // Update lastUpdate
       lastUpdate = now1;
 
-      // Immediate second activity - should throttle
-      const now2 = now1 + 1000; // 1 second later
+      const now2 = now1 + 1000;
       expect(shouldThrottle(now2)).toBe(true);
 
-      // Activity after throttle period - should not throttle
-      const now3 = now1 + 6000; // 6 seconds later
+      const now3 = now1 + 6000;
       expect(shouldThrottle(now3)).toBe(false);
     });
   });
@@ -164,19 +152,18 @@ describe('useSessionTimeout utilities', () => {
   describe('seconds remaining calculation', () => {
     it('should calculate seconds remaining correctly', () => {
       const timeoutMs = DEFAULT_SESSION_TIMEOUT_MINUTES * 60 * 1000;
-      const lastActivity = Date.now() - 59 * 60 * 1000; // 59 minutes ago
+      const lastActivity = Date.now() - 59 * 60 * 1000;
       const elapsed = Date.now() - lastActivity;
       const timeRemaining = timeoutMs - elapsed;
       const secondsRemaining = Math.ceil(timeRemaining / 1000);
 
-      // Should be approximately 60 seconds
       expect(secondsRemaining).toBeGreaterThan(50);
       expect(secondsRemaining).toBeLessThanOrEqual(70);
     });
 
     it('should return 0 when time has expired', () => {
       const timeoutMs = DEFAULT_SESSION_TIMEOUT_MINUTES * 60 * 1000;
-      const lastActivity = Date.now() - 61 * 60 * 1000; // 61 minutes ago
+      const lastActivity = Date.now() - 61 * 60 * 1000;
       const elapsed = Date.now() - lastActivity;
       const timeRemaining = timeoutMs - elapsed;
       const secondsRemaining = Math.max(0, Math.ceil(timeRemaining / 1000));
@@ -244,14 +231,6 @@ describe('useSessionTimeout render-loop regression', () => {
     localStorage.clear();
   });
 
-  // Regression for the intermittent /chat freeze: SessionTimeoutGuard passes
-  // fresh inline onWarning/onSessionExtended/onTimeout callbacks on every
-  // render, so checkTimeout's identity changed every render and its effect
-  // re-ran, re-invoking checkTimeout via queueMicrotask. When checkTimeout
-  // returned a NEW state object unconditionally, that forced another render →
-  // a self-sustaining loop that pegged a CPU core (no "max update depth"
-  // because it hopped through a microtask). The fix makes idle checks bail
-  // (return the same state reference), so renders settle.
   it('settles (does not re-render unboundedly) with fresh inline callbacks each render', async () => {
     let renders = 0;
     function Guard() {
@@ -265,12 +244,8 @@ describe('useSessionTimeout render-loop regression', () => {
     }
 
     render(React.createElement(Guard));
-    // Let effects + any queued microtask-driven re-renders flush. A loop would
-    // keep incrementing `renders` across these ticks; a settled hook will not.
     await new Promise((r) => setTimeout(r, 250));
 
-    // A healthy mount is a small, bounded number of renders (mount + a couple
-    // of effect-driven settles). The pre-fix loop produced hundreds/thousands.
     expect(renders).toBeLessThan(15);
   });
 });

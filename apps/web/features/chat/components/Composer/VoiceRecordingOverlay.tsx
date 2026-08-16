@@ -1,41 +1,22 @@
 'use client';
 
-/**
- * VoiceRecordingOverlay - Overlay shown during voice recording
- *
- * - "Listening..." text + elapsed timer
- * - Cancel (X) and Done (checkmark) buttons
- * - 4 animated waveform bars with staggered animation
- */
-
 import { memo } from 'react';
 import { X, Check, Loader2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface VoiceRecordingOverlayProps {
-  /** Whether actively recording */
   isListening: boolean;
-  /** Whether transcribing the recording */
   isTranscribing: boolean;
-  /** Elapsed recording time in seconds */
   elapsedSeconds: number;
-  /** Called when the user clicks the Done/check button */
   onDone: () => void;
-  /** Called when the user clicks the Cancel/X button */
   onCancel: () => void;
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatTimer(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
-
-// ─── Waveform Bars ───────────────────────────────────────────────────────────
 
 const BAR_DELAYS = ['0s', '0.15s', '0.3s', '0.45s'];
 const BAR_HEIGHTS = ['60%', '100%', '75%', '90%'];
@@ -53,7 +34,6 @@ function WaveformBars({ animate }: { animate: boolean }) {
           style={{
             animationDelay: animate ? delay : undefined,
             height: animate ? undefined : '4px',
-            // Set a max-height via custom property so the animation can use it
 
             ['--bar-height' as any]: BAR_HEIGHTS[i],
           }}
@@ -62,8 +42,6 @@ function WaveformBars({ animate }: { animate: boolean }) {
     </div>
   );
 }
-
-// ─── Component ───────────────────────────────────────────────────────────────
 
 function VoiceRecordingOverlayComponent({
   isListening,

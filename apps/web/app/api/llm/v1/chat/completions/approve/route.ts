@@ -38,15 +38,6 @@ import {
   type ConnectorToolPermissions,
 } from '../lib/connector-tool-permissions';
 
-/**
- * Resume a suspended managed agent from tenant-owned server state.
- *
- * The client sends only a run id and explicit decisions. Model selection,
- * transcript, signed thinking continuity, tool names/arguments, and the event
- * cursor are loaded from the durable checkpoint and revalidated under the
- * caller's current subscription before any tool side effect occurs.
- */
-
 function jsonError(message: string, status: number): NextResponse {
   return NextResponse.json(
     { error: { message, type: 'invalid_request_error', code: 'tool_approval_invalid' } },
@@ -100,8 +91,6 @@ function checkpointError(error: unknown): NextResponse | null {
     return jsonError('Approval decisions do not match the pending tool calls.', 400);
   }
   if (error instanceof CloudAgentApprovalCheckpointExpiredError) {
-    // AUDIT-FIX AGT-3: an aged-out approval is gone for a reason the user can
-    // act on, so say so instead of reporting it as never having existed.
     return jsonError('This approval request expired and can no longer be resumed.', 410);
   }
   if (error instanceof CloudAgentApprovalCheckpointNotFoundError) {
@@ -159,8 +148,6 @@ async function handleToolApproval(request: NextRequest) {
     throw error;
   }
 
-  // Re-run current auth, model, tier, quota, and billing policy against a
-  // server-built request. Stale entitlements fail without consuming the lease.
   const processResult = await processRequest(buildSyntheticRequest(request, claim), authResult);
   if (!processResult.ok) {
     await releaseClaim(db, userId, claim);
@@ -168,18 +155,8 @@ async function handleToolApproval(request: NextRequest) {
   }
   const processed: ProcessedRequest = processResult;
 
-  // Restore internal-only signed thinking blocks after public request parsing.
   processed.llmRequest.messages = claim.checkpoint.messages;
 
-  // AUDIT-FIX CON-1: the resume path used to trust the client's decision alone.
-  // The user's saved verdicts are loaded here, BEFORE the durable continuation
-  // starts, and applied twice:
-  //   1. `deny` tools are dropped from the offered catalog (CON-2), so the
-  //      loop's `isToolOffered` guard fails closed for them even if a decision
-  //      somehow survives;
-  //   2. any `approved` decision naming a blocked tool is rewritten to
-  //      `rejected` below, so the loop appends a denial result instead of
-  //      executing.
   const discovery: { mcpTools: WebMcpToolDef[]; permissions: ConnectorToolPermissions } =
     await (async () => {
       try {
@@ -188,20 +165,12 @@ async function handleToolApproval(request: NextRequest) {
           loadMcpToolDefs(),
           loadUserConnectorToolDefs(userId, {
             customConnectorLimit: getCustomRemoteMcpLimit(processed.subscriptionTier) ?? undefined,
-            // GOV-7: same per-plan connector-tool ceiling the initial turn
-            // used, so a resumed turn cannot be offered a different catalog
-            // than the one whose approval card the user is answering.
             planTier: processed.subscriptionTier,
             isToolDenied: permissions.isConnectorToolDenied,
           }),
         ]);
         return { mcpTools: [...operatorTools, ...connectorTools], permissions };
       } catch (error) {
-        // No provider or tool side effect has started yet, so this exact lease
-        // is safe to return to pending. Without the release, a transient MCP or
-        // connector-discovery outage permanently strands the approval card.
-        // The admission pass may already have reserved paid usage, so release
-        // that reservation explicitly instead of waiting for reconciliation.
         if (processed.managedUsage) {
           await finalizeManagedUsageRequest({
             ...processed.managedUsage,
@@ -261,7 +230,6 @@ async function handleToolApproval(request: NextRequest) {
 
   const { mcpTools, permissions: connectorPermissions } = discovery;
 
-  // Rewrite approvals for blocked tools.
   const blockedToolCallIds = new Set(
     claim.checkpoint.pendingToolCalls
       .filter((call) => connectorPermissions.isDenied(call.qualifiedName))

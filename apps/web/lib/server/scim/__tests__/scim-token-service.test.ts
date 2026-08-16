@@ -22,8 +22,6 @@ const ORG = '11111111-1111-4111-8111-111111111111';
 const OTHER_ORG = '22222222-2222-4222-8222-222222222222';
 const CONNECTION = '33333333-3333-4333-8333-333333333333';
 
-// These exercise REAL Argon2id, not a mock: the point of the test is that a
-// credential minted by this service verifies and a forged one does not.
 describe('SCIM token credentials', () => {
   let db: DatabaseAdapter;
 
@@ -37,8 +35,6 @@ describe('SCIM token credentials', () => {
     expect(raw).toMatch(SCIM_TOKEN_PATTERN);
     expect(raw.startsWith(`scim_${prefix}_`)).toBe(true);
     expect(prefix).toMatch(/^[0-9a-f]{16}$/);
-    // Argon2id, not a digest of the token, and the token is not recoverable
-    // from it.
     expect(hash.startsWith('$argon2id$')).toBe(true);
     expect(hash).not.toContain(raw);
   });
@@ -78,7 +74,6 @@ describe('SCIM token credentials', () => {
       createdByUserId: 'admin-user',
     });
 
-    // Same prefix, different secret: the Argon2 verification must fail.
     const prefix = parseScimTokenPrefix(rawToken)!;
     const forged = `scim_${prefix}_${'0'.repeat(48)}`;
     expect(forged).not.toBe(rawToken);
@@ -97,7 +92,6 @@ describe('SCIM token credentials', () => {
 
     expect(state.scim_tokens[0]?.['last_used_at']).toBeNull();
     await verifyScimToken(scoped, rawToken);
-    // last_used_at is written fire-and-forget; let the microtask queue drain.
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(state.scim_tokens[0]?.['last_used_at']).not.toBeNull();
   });
@@ -117,11 +111,9 @@ describe('SCIM token credentials', () => {
     expect(await revokeScimToken(scoped, token.id, ORG)).toBe(true);
     await expect(verifyScimToken(scoped, rawToken)).resolves.toBeNull();
 
-    // Soft delete: the record of which credential was in use survives.
     expect(state.scim_tokens).toHaveLength(1);
     expect(state.scim_tokens[0]?.['revoked_at']).not.toBeNull();
 
-    // Revoking twice is a no-op, not a second success.
     expect(await revokeScimToken(scoped, token.id, ORG)).toBe(false);
   });
 
@@ -134,7 +126,6 @@ describe('SCIM token credentials', () => {
     });
 
     expect(await revokeScimToken(db, token.id, OTHER_ORG)).toBe(false);
-    // Still valid — the cross-tenant revoke changed nothing.
     await expect(verifyScimToken(db, rawToken)).resolves.not.toBeNull();
   });
 

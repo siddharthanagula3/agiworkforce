@@ -382,8 +382,6 @@ describe('cloud agent run service', () => {
 
       await listCloudAgentRuns(db, { userId: 'user-1', states: ['awaiting_input'] });
 
-      // The lateral join applies the same TTL predicate the claim does, so an
-      // approval the resume endpoint would answer 410 for never reaches a client.
       const [sql] = vi.mocked(db.query).mock.calls[0]!;
       expect(sql).toMatch(
         /state = 'pending'[\s\S]*created_at > now\(\) - make_interval\(hours =>/i,

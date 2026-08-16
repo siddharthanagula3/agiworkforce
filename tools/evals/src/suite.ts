@@ -12,13 +12,6 @@
 import { gradeCase } from './grader';
 import type { CaseResult, EvalDataset, Responder, SuiteReport } from './types';
 
-/**
- * Run one corpus through a responder.
- *
- * Sequential on purpose: a live responder is a paid, rate-limited network call,
- * and a fan-out that trips a provider rate limit would report a quality drop
- * that is really a 429.
- */
 export async function runSuite(dataset: EvalDataset, respond: Responder): Promise<SuiteReport> {
   const cases: CaseResult[] = [];
   for (const evalCase of dataset.cases) {
@@ -40,13 +33,6 @@ export async function runSuite(dataset: EvalDataset, respond: Responder): Promis
   };
 }
 
-/**
- * Render a report for a failing assertion.
- *
- * A gate that fails with "expected false to be true" costs whoever reads the CI
- * log a local re-run, so the failing rows, the check that rejected them and the
- * row's own `notes` are printed with the score.
- */
 export function formatReport(report: SuiteReport): string {
   const header = `${report.suite} v${report.version}: ${report.passed}/${report.total} passed (score ${report.score.toFixed(3)}, threshold ${report.threshold})`;
   const failures = report.cases.filter((result) => !result.passed);

@@ -1,28 +1,3 @@
-/**
- * MessageGeneratedFiles — renders a message's `generatedFiles` (files the
- * model created in the managed-cloud E2B sandbox, delivered via the
- * `x_generated_files` SSE delta) as shared `GeneratedFileCard`s with a
- * working Download action.
- *
- * Auth: the bytes live behind the authenticated `/api/files/{id}` route.
- * Hosts that need explicit auth (desktop Tauri → Bearer JWT) provide
- * `ChatHostBridge.fetchCloudFile`; without it we fall back to a same-origin
- * fetch where session cookies apply (embedded web build). Preview uses that
- * same authenticated path. PDF and image bytes render from revocable object
- * URLs, text-like files render as inert source, and unsupported formats show
- * an honest download-only state. Failures surface with a Retry action — no
- * silent no-op buttons and no execution of generated HTML/SVG.
- *
- * Live execution state: while an E2B execution tool (`execute_code` /
- * `write_file` / `create_folder`, surfaced through the message's running
- * `toolCalls`) is still running and no files have arrived yet, an honest
- * pending strip ("Running code…") renders in place of the cards. It never
- * claims a file exists — it is replaced by real cards when
- * `x_generated_files` lands, or disappears when the turn ends without files.
- *
- * Cloud mode only: local runtimes never emit `generated_files` events, so
- * this section never renders for Local chats.
- */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Download, FileQuestion, Loader2, RotateCcw } from 'lucide-react';
@@ -67,11 +42,6 @@ type PreviewState =
   | { status: 'ready'; kind: Exclude<PreviewKind, 'unsupported'>; content: string }
   | { status: 'error'; error: string };
 
-/**
- * Selects only renderers that cannot execute generated active content.
- * Server-owned `previewable` remains the capability gate; this helper only
- * selects the safe client renderer after that gate has admitted the file.
- */
 function previewKindFor(entry: GeneratedFileEntry): PreviewKind {
   const mimeType = entry.mimeType.toLowerCase().split(';', 1)[0]?.trim() ?? '';
   if (mimeType === 'application/pdf') return 'pdf';
@@ -95,38 +65,23 @@ function truncateTextPreview(text: string): string {
   return `${text.slice(0, MAX_TEXT_PREVIEW_CHARACTERS)}\n\n[Preview truncated. Download the file to view the rest.]`;
 }
 
-/**
- * E2B sandbox execution tools that can produce generated files. Mirrors
- * `EXECUTION_TOOLS` in `apps/web/lib/e2b/execution-tools.ts` — the server's
- * tool loop routes exactly these names into the sandbox.
- */
 const EXECUTION_TOOL_NAMES: ReadonlySet<string> = new Set([
   'execute_code',
   'write_file',
   'create_folder',
 ]);
 
-/** Honest per-tool activity labels — none of them claims a file exists yet. */
 const EXECUTION_TOOL_LABELS: Readonly<Record<string, string>> = {
   execute_code: 'Running code…',
   write_file: 'Writing file…',
   create_folder: 'Preparing workspace…',
 };
 
-/**
- * The message shape this component needs. `toolCalls` + `isStreaming` drive
- * the pending execution strip; the rest drives the file cards.
- */
 export type MessageGeneratedFilesMessage = Pick<
   ChatMessage,
   'generatedFiles' | 'createdAt' | 'timestamp' | 'toolCalls' | 'isStreaming'
 >;
 
-/**
- * True while the message is still streaming and an E2B execution tool is
- * running (or queued) on it. Hosts/MessageBubble use this to decide whether
- * the generated-files section should render before any file has arrived.
- */
 export function hasRunningExecutionTool(message: MessageGeneratedFilesMessage): boolean {
   if (!message.isStreaming) return false;
   return (message.toolCalls ?? []).some(
@@ -135,7 +90,6 @@ export function hasRunningExecutionTool(message: MessageGeneratedFilesMessage): 
   );
 }
 
-/** Label for the most recent running execution tool ("Running code…" etc). */
 function runningExecutionLabel(message: MessageGeneratedFilesMessage): string {
   const running = (message.toolCalls ?? []).filter(
     (tc) =>
@@ -145,8 +99,6 @@ function runningExecutionLabel(message: MessageGeneratedFilesMessage): string {
   return (latest && EXECUTION_TOOL_LABELS[latest.name]) || 'Running code…';
 }
 
-/** Map one UI entry onto the suite-contract `GeneratedFile` the shared
- *  presentation helper consumes (mirrors mobile's chatExecutionStore map). */
 export function generatedFileFromEntry(
   entry: GeneratedFileEntry,
   createdAt: string,
@@ -156,8 +108,6 @@ export function generatedFileFromEntry(
     : 'other';
   return {
     id: entry.id,
-    // Sandbox sessions are server-internal; the presentation layer treats
-    // these as absent and falls back to file-level labels.
     computeSessionId: '',
     ownerUserId: '',
     sourceSurface: 'web',
@@ -191,8 +141,6 @@ export interface MessageGeneratedFilesProps {
 export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
   const hostBridge = useHostBridge();
   const [downloadErrors, setDownloadErrors] = useState<Record<string, string>>({});
-  // File ids with a download currently in flight — retry buttons disable
-  // while their file is downloading so a failing path can't be spammed.
   const [inFlightIds, setInFlightIds] = useState<Record<string, true>>({});
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [previewEntry, setPreviewEntry] = useState<GeneratedFileEntry | null>(null);
@@ -211,13 +159,10 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
       files.map((entry) => {
         const presentation = summarizeGeneratedFileBundle({
           generatedFile: generatedFileFromEntry(entry, createdAt),
-          // Files only arrive on the wire after the server persisted them.
           fallbackStatus: 'completed',
         });
         return {
           entry,
-          // The server classifies whether a file is previewable. Do not infer
-          // that authorization merely because a primary download URI exists.
           presentation: { ...presentation, canPreview: entry.previewable === true },
         };
       }),
@@ -298,8 +243,6 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
         a.download = entry.fileName;
         a.click();
         URL.revokeObjectURL(url);
-        // Clear a previous failure only once the retry actually succeeded —
-        // keeping the error (and its disabled Retry) visible while in flight.
         setDownloadErrors((prev) => {
           if (!(entry.id in prev)) return prev;
           const next = { ...prev };
@@ -322,9 +265,6 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
     [hostBridge],
   );
 
-  // "Download all": sequentially re-uses the SAME per-file download path —
-  // no bundling backend, no new network routes. Per-file failures surface on
-  // their own error lines.
   const handleDownloadAll = useCallback(async () => {
     setDownloadingAll(true);
     try {
@@ -337,7 +277,6 @@ export function MessageGeneratedFiles({ message }: MessageGeneratedFilesProps) {
   }, [files, handleDownload]);
 
   if (presentations.length === 0) {
-    // Honest pending state: execution is running but no file exists yet.
     if (executionRunning) {
       return (
         <div

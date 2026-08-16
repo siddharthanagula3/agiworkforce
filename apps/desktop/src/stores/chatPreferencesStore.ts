@@ -1,54 +1,23 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Chat Preferences Store
- *
- * Manages chat-related preferences: prompt completion, agent mode,
- * compact mode, auto-approve tools, skill injection.
- *
- * Middleware: devtools(persist(subscribeWithSelector(...)))
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { invoke } from '../lib/tauri-mock';
 import { storageFallback } from '../lib/storageFallback';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * Agent operating modes:
- * - 'safe'     — minimal tool use, always confirms before acting
- * - 'plan'     — READ-ONLY: reads files, searches, analyses, but NEVER writes/edits/executes.
- *                Shows a plan before asking user to switch to 'build' to apply it.
- * - 'build'    — full tool access, can write/edit files and run shell commands (default)
- * - 'autopilot'— full tool access, skips all confirmation dialogs
- */
 export type AgentMode = 'safe' | 'plan' | 'build' | 'autopilot';
 
 export interface ChatPreferences {
-  /** Enable AI-powered prompt completion (ghost text suggestions) */
   promptCompletionEnabled: boolean;
-  /** Always use agent mode with tools for all messages (not just action requests) */
   alwaysUseAgentMode: boolean;
-  /** Show simple one-line status messages instead of detailed command/code blocks */
   compactMode: boolean;
-  /**
-   * Auto-approve all tool confirmation dialogs — skips every "Allow this action?" popup.
-   * Equivalent to God Mode / trust-all. Use with caution.
-   */
   autoApproveTools: boolean;
-  /** Enable automatic skill injection based on message intent */
   autoInjectSkills?: boolean;
-  /** Agent execution mode — controls which tools are allowed and whether approval dialogs appear */
   agentMode: AgentMode;
-  /** Automatically speak assistant responses when input was voice */
   autoTTS: boolean;
 }
 
 interface ChatPreferencesState {
   chatPreferences: ChatPreferences;
-  /** Transient flag: true when the most recent user message was submitted via voice input */
   lastInputWasVoice: boolean;
 }
 
@@ -65,10 +34,6 @@ interface ChatPreferencesActions {
 
 export type ChatPreferencesStore = ChatPreferencesState & ChatPreferencesActions;
 
-// ============================================================================
-// Defaults
-// ============================================================================
-
 export const defaultChatPreferences: ChatPreferences = {
   promptCompletionEnabled: true,
   alwaysUseAgentMode: false,
@@ -78,10 +43,6 @@ export const defaultChatPreferences: ChatPreferences = {
   agentMode: 'build' as AgentMode,
   autoTTS: true,
 };
-
-// ============================================================================
-// Store
-// ============================================================================
 
 export const useChatPreferencesStore = create<ChatPreferencesStore>()(
   devtools(
@@ -146,7 +107,6 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
         },
 
         setAgentMode: async (mode: AgentMode) => {
-          // Delegate to settingsStore which has rollback on sync failure
           const { setAgentMode: setMode } = await import('./settingsStore').then((m) =>
             m.useSettingsStore.getState(),
           );
@@ -168,11 +128,6 @@ export const useChatPreferencesStore = create<ChatPreferencesStore>()(
         },
       })),
       {
-        // `stores/settings/chatPrefs.ts` declares a twin of this store and is
-        // the copy the app actually reaches (via `settingsStore`); it keeps
-        // `agiworkforce-chat-preferences` and the data written under it. Two
-        // stores on one key clobber each other's payload on rehydrate, so this
-        // module persists separately.
         name: 'agiworkforce-chat-preferences-store',
         version: 2,
         storage: createJSONStorage(() =>

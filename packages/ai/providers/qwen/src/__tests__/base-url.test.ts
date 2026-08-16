@@ -18,7 +18,6 @@ describe('QWEN_DEFAULT_BASE_URL', () => {
       id: QWEN_DEFAULT_MODEL_ID,
     });
     expect(detected.capabilities.endpointClass).toBe('modelstudio-native');
-    // modelstudio-native gets native streaming-usage compat.
     expect(detected.capabilities.supportsNativeStreamingUsageCompat).toBe(true);
   });
 });

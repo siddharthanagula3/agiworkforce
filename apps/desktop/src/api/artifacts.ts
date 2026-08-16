@@ -1,18 +1,5 @@
-/**
- * Artifacts API
- *
- * TypeScript wrappers for the 24 artifact Tauri commands.
- * Provides CRUD, streaming, versioning, tagging, filtering,
- * diff-based updates, and bulk import/export operations.
- *
- * Command names: snake_case. Invoke params: camelCase.
- */
 
 import { invoke, isTauri } from '../lib/tauri-mock';
-
-// ============================================================================
-// Types
-// ============================================================================
 
 export type ArtifactType =
   | 'code'
@@ -254,14 +241,12 @@ export interface ImageRenderData {
   alt_text?: string;
 }
 
-/** Response wrapper matching Rust's ArtifactResponse<T> */
 export interface ArtifactResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-/** A single hunk in a diff-based artifact update */
 export interface ArtifactDiffHunk {
   startLine: number;
   endLine: number;
@@ -269,7 +254,6 @@ export interface ArtifactDiffHunk {
   newContent: string;
 }
 
-/** Filter options for listing artifacts */
 export interface ArtifactListFilter {
   artifactTypes?: ArtifactType[];
   statuses?: ArtifactStatus[];
@@ -280,10 +264,6 @@ export interface ArtifactListFilter {
   limit?: number;
   offset?: number;
 }
-
-// ============================================================================
-// Helpers
-// ============================================================================
 
 function unwrap<T>(response: ArtifactResponse<T>): T {
   if (response.success && response.data !== undefined) {
@@ -319,11 +299,6 @@ function mockArtifact(overrides: Partial<Artifact> = {}): Artifact {
   };
 }
 
-// ============================================================================
-// 1. artifact_create
-// ============================================================================
-
-/** Create a new artifact. */
 export async function artifactCreate(
   title: string,
   artifactType: ArtifactType,
@@ -348,11 +323,6 @@ export async function artifactCreate(
   return unwrap(response);
 }
 
-// ============================================================================
-// 2. artifact_create_streaming
-// ============================================================================
-
-/** Create a streaming artifact (content will be appended incrementally). */
 export async function artifactCreateStreaming(
   title: string,
   artifactType: ArtifactType,
@@ -373,11 +343,6 @@ export async function artifactCreateStreaming(
   return unwrap(response);
 }
 
-// ============================================================================
-// 3. artifact_append_streaming
-// ============================================================================
-
-/** Append a content delta to a streaming artifact. */
 export async function artifactAppendStreaming(id: string, delta: string): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_append_streaming', {
@@ -387,11 +352,6 @@ export async function artifactAppendStreaming(id: string, delta: string): Promis
   unwrapVoid(response);
 }
 
-// ============================================================================
-// 4. artifact_finalize_streaming
-// ============================================================================
-
-/** Finalize a streaming artifact, marking it complete. */
 export async function artifactFinalizeStreaming(
   id: string,
   changeDescription?: string,
@@ -406,11 +366,6 @@ export async function artifactFinalizeStreaming(
   return unwrap(response);
 }
 
-// ============================================================================
-// 5. artifact_get
-// ============================================================================
-
-/** Get an artifact by ID. */
 export async function artifactGet(id: string): Promise<Artifact> {
   if (!isTauri) {
     return mockArtifact({ id });
@@ -419,11 +374,6 @@ export async function artifactGet(id: string): Promise<Artifact> {
   return unwrap(response);
 }
 
-// ============================================================================
-// 6. artifact_get_rendered
-// ============================================================================
-
-/** Get a rendered artifact suitable for display. */
 export async function artifactGetRendered(id: string): Promise<RenderedArtifact> {
   if (!isTauri) {
     return {
@@ -457,11 +407,6 @@ export async function artifactGetRendered(id: string): Promise<RenderedArtifact>
   return unwrap(response);
 }
 
-// ============================================================================
-// 7. artifact_update
-// ============================================================================
-
-/** Update an artifact's content, creating a new version. */
 export async function artifactUpdate(
   id: string,
   content: string,
@@ -484,11 +429,6 @@ export async function artifactUpdate(
   return unwrap(response);
 }
 
-// ============================================================================
-// 8. artifact_apply_diff
-// ============================================================================
-
-/** Apply a set of diff hunks to an artifact, creating a new version. */
 export async function artifactApplyDiff(
   id: string,
   hunks: ArtifactDiffHunk[],
@@ -510,11 +450,6 @@ export async function artifactApplyDiff(
   return unwrap(response);
 }
 
-// ============================================================================
-// 9. artifact_rollback
-// ============================================================================
-
-/** Rollback an artifact to a specific version. */
 export async function artifactRollback(id: string, version: number): Promise<Artifact> {
   if (!isTauri) {
     return mockArtifact({ id, current_version: version });
@@ -523,77 +458,42 @@ export async function artifactRollback(id: string, version: number): Promise<Art
   return unwrap(response);
 }
 
-// ============================================================================
-// 10. artifact_delete
-// ============================================================================
-
-/** Delete an artifact permanently. */
 export async function artifactDelete(id: string): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_delete', { id });
   unwrapVoid(response);
 }
 
-// ============================================================================
-// 11. artifact_archive
-// ============================================================================
-
-/** Archive an artifact (soft delete). */
 export async function artifactArchive(id: string): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_archive', { id });
   unwrapVoid(response);
 }
 
-// ============================================================================
-// 12. artifact_unarchive
-// ============================================================================
-
-/** Unarchive a previously archived artifact. */
 export async function artifactUnarchive(id: string): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_unarchive', { id });
   unwrapVoid(response);
 }
 
-// ============================================================================
-// 13. artifact_pin
-// ============================================================================
-
-/** Pin or unpin an artifact. */
 export async function artifactPin(id: string, pinned: boolean): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_pin', { id, pinned });
   unwrapVoid(response);
 }
 
-// ============================================================================
-// 14. artifact_add_tags
-// ============================================================================
-
-/** Add tags to an artifact. */
 export async function artifactAddTags(id: string, tags: string[]): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_add_tags', { id, tags });
   unwrapVoid(response);
 }
 
-// ============================================================================
-// 15. artifact_remove_tags
-// ============================================================================
-
-/** Remove tags from an artifact. */
 export async function artifactRemoveTags(id: string, tags: string[]): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_remove_tags', { id, tags });
   unwrapVoid(response);
 }
 
-// ============================================================================
-// 16. artifact_list
-// ============================================================================
-
-/** List artifacts with optional filtering. */
 export async function artifactList(filter?: ArtifactListFilter): Promise<ArtifactSummary[]> {
   if (!isTauri) return [];
   const response = await invoke<ArtifactResponse<ArtifactSummary[]>>('artifact_list', {
@@ -609,11 +509,6 @@ export async function artifactList(filter?: ArtifactListFilter): Promise<Artifac
   return unwrap(response);
 }
 
-// ============================================================================
-// 17. artifact_get_by_conversation
-// ============================================================================
-
-/** Get all artifacts associated with a specific conversation. */
 export async function artifactGetByConversation(
   conversationId: number,
 ): Promise<ArtifactSummary[]> {
@@ -625,11 +520,6 @@ export async function artifactGetByConversation(
   return unwrap(response);
 }
 
-// ============================================================================
-// 18. artifact_get_versions
-// ============================================================================
-
-/** Get the full version history for an artifact. */
 export async function artifactGetVersions(id: string): Promise<ArtifactVersion[]> {
   if (!isTauri) return [];
   const response = await invoke<ArtifactResponse<ArtifactVersion[]>>('artifact_get_versions', {
@@ -638,11 +528,6 @@ export async function artifactGetVersions(id: string): Promise<ArtifactVersion[]
   return unwrap(response);
 }
 
-// ============================================================================
-// 19. artifact_get_diff
-// ============================================================================
-
-/** Get a diff between two versions of an artifact. */
 export async function artifactGetDiff(
   id: string,
   fromVersion: number,
@@ -666,11 +551,6 @@ export async function artifactGetDiff(
   return unwrap(response);
 }
 
-// ============================================================================
-// 20. artifact_get_stats
-// ============================================================================
-
-/** Get aggregate statistics for the artifact store. */
 export async function artifactGetStats(): Promise<ArtifactStoreStats> {
   if (!isTauri) {
     return {
@@ -685,44 +565,24 @@ export async function artifactGetStats(): Promise<ArtifactStoreStats> {
   return unwrap(response);
 }
 
-// ============================================================================
-// 21. artifact_export_all
-// ============================================================================
-
-/** Export all artifacts for backup. Returns the full artifact array. */
 export async function artifactExportAll(): Promise<Artifact[]> {
   if (!isTauri) return [];
   const response = await invoke<ArtifactResponse<Artifact[]>>('artifact_export_all');
   return unwrap(response);
 }
 
-// ============================================================================
-// 22. artifact_import_all
-// ============================================================================
-
-/** Import artifacts from a backup. Returns the number of artifacts imported. */
 export async function artifactImportAll(artifacts: Artifact[]): Promise<number> {
   if (!isTauri) return 0;
   const response = await invoke<ArtifactResponse<number>>('artifact_import_all', { artifacts });
   return unwrap(response);
 }
 
-// ============================================================================
-// 23. artifact_clear_all
-// ============================================================================
-
-/** Clear all artifacts from the store. Use with caution. */
 export async function artifactClearAll(): Promise<void> {
   if (!isTauri) return;
   const response = await invoke<ArtifactResponse<void>>('artifact_clear_all');
   unwrapVoid(response);
 }
 
-// ============================================================================
-// 24. artifact_list_persisted
-// ============================================================================
-
-/** List persisted artifacts from SQLite (bypasses in-memory cache). */
 export async function artifactListPersisted(
   conversationId?: string,
   limit?: number,

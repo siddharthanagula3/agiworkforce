@@ -1,21 +1,7 @@
-/**
- * Tests for CSRF protection on state-changing endpoints
- *
- * Verifies:
- * - PUT /api/memory/[id] requires a valid CSRF token
- * - DELETE /api/memory/[id] requires a valid CSRF token
- * - PUT /api/chat/conversations/[id] requires a valid CSRF token
- * - DELETE /api/chat/conversations/[id] requires a valid CSRF token
- * - GET requests are NOT blocked (no CSRF check)
- *
- * Strategy: override the default test/setup.ts mock (requireCsrfToken → null)
- * to simulate the real 403 response, then reset back to null for non-CSRF tests.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// ─── Baseline mocks ───────────────────────────────────────────────────────────
 vi.mock('server-only', () => ({}));
 
 vi.mock('@/lib/rate-limit', () => ({
@@ -45,19 +31,16 @@ vi.mock('@/lib/error-handler', () => ({
 const mockRequireCsrfToken = vi.fn();
 vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: (...args: unknown[]) => mockRequireCsrfToken(...args),
-  // Keep other CSRF helpers real-ish (not used by routes in these tests)
   generateCsrfToken: vi.fn(() => 'valid-token'),
   verifyCsrfToken: vi.fn(() => true),
   getSessionIdFromRequest: vi.fn(() => Promise.resolve('session-123')),
 }));
 
-// ─── Clerk auth — used by memory/[id]/route ───────────────────────────────────
 const mockGetClerkAuthUser = vi.fn();
 vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: (...args: unknown[]) => mockGetClerkAuthUser(...args),
 }));
 
-// ─── Neon DB — used by memory/[id]/route ─────────────────────────────────────
 const mockMemoryNeonQuery = vi.fn();
 const mockMemoryNeonExecute = vi.fn();
 vi.mock('@/lib/server/neon-db', () => ({
@@ -78,8 +61,6 @@ vi.mock('next/headers', () => ({
   })),
 }));
 
-// ─── Neon DB + Clerk auth — used by chat/conversations/[id]/route ─────────────
-// The conversation routes were migrated from Neon to Neon + Clerk in Wave 3.
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
 const mockRequireCurrentUserId = vi.fn();
@@ -90,7 +71,6 @@ vi.mock('@/lib/server/neon-chat', () => ({
   normalizeMessageMetadata: (v: unknown) => v,
 }));
 
-// ─── Import routes under test ─────────────────────────────────────────────
 import {
   PUT as memoryPUT,
   DELETE as memoryDELETE,
@@ -102,7 +82,6 @@ import {
   GET as convGET,
 } from '@/app/api/chat/conversations/[id]/route';
 
-// ─── Shared CSRF 403 response factory ────────────────────────────────────────
 function csrfBlockedResponse(): Response {
   return new Response(
     JSON.stringify({ error: 'Invalid or missing CSRF token', code: 'CSRF_VALIDATION_FAILED' }),
@@ -110,7 +89,6 @@ function csrfBlockedResponse(): Response {
   );
 }
 
-// ─── Request helpers ──────────────────────────────────────────────────────────
 function makeMemoryRequest(method: 'GET' | 'PUT' | 'DELETE', body?: unknown): NextRequest {
   return new NextRequest('http://localhost/api/memory/test-id', {
     method,
@@ -136,15 +114,12 @@ function makeConvRequest(method: 'GET' | 'PUT' | 'DELETE', body?: unknown): Next
 const routeContext = { params: Promise.resolve({ id: 'test-id' }) };
 const convRouteContext = { params: Promise.resolve({ id: 'test-conv-id' }) };
 
-// ─── Tests ────────────────────────────────────────────────────────────────────
 describe('CSRF protection on state-changing endpoints', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: authenticated user (Clerk auth for memory routes)
     mockGetClerkAuthUser.mockResolvedValue({ userId: 'user-1', email: 'test@test.com' });
 
-    // Default Neon mock for memory routes
     mockMemoryNeonQuery.mockResolvedValue([
       {
         id: 'test-id',
@@ -157,7 +132,6 @@ describe('CSRF protection on state-changing endpoints', () => {
     ]);
     mockMemoryNeonExecute.mockResolvedValue(undefined);
 
-    // Default Neon + Clerk mocks for conversation routes
     mockRequireCurrentUserId.mockResolvedValue('user-1');
     mockNeonQuery.mockResolvedValue([
       {
@@ -170,7 +144,6 @@ describe('CSRF protection on state-changing endpoints', () => {
     ]);
     mockNeonExecute.mockResolvedValue(undefined);
 
-    // By default pass CSRF
     mockRequireCsrfToken.mockResolvedValue(null);
   });
 
@@ -178,7 +151,6 @@ describe('CSRF protection on state-changing endpoints', () => {
     vi.restoreAllMocks();
   });
 
-  // ───────────────────────────────────────────────────────────────────────────
   describe('PUT /api/memory/[id]', () => {
     it('returns 403 when CSRF token is missing/invalid', async () => {
       mockRequireCsrfToken.mockResolvedValueOnce(csrfBlockedResponse());
@@ -201,7 +173,6 @@ describe('CSRF protection on state-changing endpoints', () => {
         routeContext,
       );
 
-      // Should not be a CSRF 403 — route proceeds to actual logic
       expect(response.status).not.toBe(403);
     });
 
@@ -214,7 +185,6 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 
-  // ───────────────────────────────────────────────────────────────────────────
   describe('DELETE /api/memory/[id]', () => {
     it('returns 403 when CSRF token is missing/invalid', async () => {
       mockRequireCsrfToken.mockResolvedValueOnce(csrfBlockedResponse());
@@ -228,7 +198,6 @@ describe('CSRF protection on state-changing endpoints', () => {
 
     it('proceeds normally with valid CSRF token', async () => {
       mockRequireCsrfToken.mockResolvedValue(null);
-      // Simulate successful delete (Neon execute resolves with no error)
       mockMemoryNeonExecute.mockResolvedValueOnce(undefined);
 
       const response = await memoryDELETE(makeMemoryRequest('DELETE'), routeContext);
@@ -245,7 +214,6 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 
-  // ───────────────────────────────────────────────────────────────────────────
   describe('GET /api/memory/[id] — no CSRF required', () => {
     it('does NOT call requireCsrfToken for GET requests', async () => {
       await memoryGET(makeMemoryRequest('GET'), routeContext);
@@ -254,7 +222,6 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 
-  // ───────────────────────────────────────────────────────────────────────────
   describe('PUT /api/chat/conversations/[id]', () => {
     it('returns 403 when CSRF token is missing/invalid', async () => {
       mockRequireCsrfToken.mockResolvedValueOnce(csrfBlockedResponse());
@@ -289,7 +256,6 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 
-  // ───────────────────────────────────────────────────────────────────────────
   describe('DELETE /api/chat/conversations/[id]', () => {
     it('returns 403 when CSRF token is missing/invalid', async () => {
       mockRequireCsrfToken.mockResolvedValueOnce(csrfBlockedResponse());
@@ -303,7 +269,6 @@ describe('CSRF protection on state-changing endpoints', () => {
 
     it('proceeds normally with valid CSRF token', async () => {
       mockRequireCsrfToken.mockResolvedValue(null);
-      // Neon execute is already mocked to resolve in beforeEach
 
       const response = await convDELETE(makeConvRequest('DELETE'), convRouteContext);
 
@@ -319,7 +284,6 @@ describe('CSRF protection on state-changing endpoints', () => {
     });
   });
 
-  // ───────────────────────────────────────────────────────────────────────────
   describe('GET /api/chat/conversations/[id] — no CSRF required', () => {
     it('does NOT call requireCsrfToken for GET requests', async () => {
       mockNeonQuery

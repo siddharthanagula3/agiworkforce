@@ -50,7 +50,6 @@ export function useOCR(): UseOCRReturn {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<OCRResult | null>(null);
-  // AUDIT-007-006 fix: Track mounted state to prevent setState after unmount
   const isMountedRef = useRef(true);
 
   useEffect(() => {
@@ -62,7 +61,6 @@ export function useOCR(): UseOCRReturn {
 
   const processImage = useCallback(
     async (captureId: string, imagePath: string, language = 'eng'): Promise<OCRResult> => {
-      // AUDIT-007-006 fix: Check isMounted before setState calls
       if (isMountedRef.current) {
         setIsProcessing(true);
         setError(null);
@@ -102,7 +100,6 @@ export function useOCR(): UseOCRReturn {
       height: number,
       language = 'eng',
     ): Promise<OCRResult> => {
-      // AUDIT-007-006 fix: Check isMounted before setState calls
       if (isMountedRef.current) {
         setIsProcessing(true);
         setError(null);
@@ -142,7 +139,6 @@ export function useOCR(): UseOCRReturn {
       return languages;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      // AUDIT-007-006 fix: Check isMounted before setState
       if (isMountedRef.current) {
         setError(errorMessage);
       }
@@ -155,14 +151,12 @@ export function useOCR(): UseOCRReturn {
       const ocrResult = await invoke<OCRResult | null>('ocr_get_result', {
         captureId,
       });
-      // AUDIT-007-006 fix: Check isMounted before setState
       if (ocrResult && isMountedRef.current) {
         setResult(ocrResult);
       }
       return ocrResult;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      // AUDIT-007-006 fix: Check isMounted before setState
       if (isMountedRef.current) {
         setError(errorMessage);
       }

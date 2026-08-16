@@ -32,7 +32,6 @@ export const InlineDatabaseResults: React.FC<ToolResultProps> = ({ result, statu
 
   const data = result?.data as DatabaseResultData | undefined;
 
-  // Show running state
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -42,7 +41,6 @@ export const InlineDatabaseResults: React.FC<ToolResultProps> = ({ result, statu
     );
   }
 
-  // Show error state if status indicates failure
   if (status === 'failed' || status === 'error') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -72,7 +70,6 @@ export const InlineDatabaseResults: React.FC<ToolResultProps> = ({ result, statu
     operation = 'query',
   } = data;
 
-  // Error state
   if (!success || error) {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">

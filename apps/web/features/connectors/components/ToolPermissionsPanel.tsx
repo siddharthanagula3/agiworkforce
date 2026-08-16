@@ -1,29 +1,5 @@
 'use client';
 
-/**
- * ⚠️ CALLERS MUST GATE ON WIRE TOOL NAMES.
- *
- * This panel writes tool-permission decisions keyed by the strings it renders.
- * The store's real consumers — useChatStream's approval auto-resolve and
- * ToolTimeline's ToolPermissionQuickPicker — key by the WIRE tool name parsed
- * from `mcp__<serverId>__<toolName>`, so anything else saves decisions under
- * keys nothing ever reads (silent no-op permissions).
- *
- * The list therefore comes from `supportedActions` in
- * `@/lib/connectors/catalog`, which holds wire names and is populated only for
- * a connector with a shipped adapter — github today. It replaced
- * `CONNECTOR_TOOLS` (config/connector-logos.ts), a table of display-label
- * marketing copy with no backing implementation, deleted under audit CRIT-001.
- * Operator-mapped and custom connectors advertise their tool names at runtime
- * from the remote catalog, which no static table can know.
- *
- * ConnectorsPage is the only caller. It renders this dialog for a connected
- * connector but only ever opens it behind `hasWireToolNames(connector.id)`
- * (pages/ConnectorsPage.tsx), which is GitHub-only — that gate, not this
- * component, is what keeps the keys honest. Widen it only once connector tool
- * lists are server-derived. The live per-tool permission UX for everything
- * else is the quick picker on the approval card in ToolTimeline.
- */
 import React from 'react';
 import { Check, Ban, HelpCircle, RotateCcw } from 'lucide-react';
 import {
@@ -39,8 +15,6 @@ import { getConnectorCapability } from '@/lib/connectors/catalog';
 import { OfficialConnectorLogo } from './OfficialConnectorLogo';
 import { useToolPermissionsStore, type PermissionLevel } from '../stores/tool-permissions-store';
 
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
 interface ConnectorInfo {
   id: string;
   name: string;
@@ -54,8 +28,6 @@ interface ToolPermissionsPanelProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-// ─── Permission config ─────────────────────────────────────────────────────────
 
 const PERMISSION_LEVELS: {
   level: PermissionLevel;
@@ -93,8 +65,6 @@ const PERMISSION_LEVELS: {
       'border-white/[0.06] bg-transparent text-muted-foreground hover:border-white/[0.12] hover:text-foreground',
   },
 ];
-
-// ─── ToolRow ───────────────────────────────────────────────────────────────────
 
 interface ToolRowProps {
   connectorId: string;
@@ -134,8 +104,6 @@ function ToolRow({ connectorId, toolName }: ToolRowProps) {
   );
 }
 
-// ─── PermissionLegend ──────────────────────────────────────────────────────────
-
 function PermissionLegend() {
   return (
     <div className="flex flex-wrap gap-3 rounded-lg border border-white/[0.04] bg-white/[0.02] px-3 py-2">
@@ -160,16 +128,11 @@ function PermissionLegend() {
   );
 }
 
-// ─── ToolPermissionsPanel ──────────────────────────────────────────────────────
-
 export function ToolPermissionsPanel({ connector, open, onOpenChange }: ToolPermissionsPanelProps) {
   const resetConnectorPermissions = useToolPermissionsStore((s) => s.resetConnectorPermissions);
 
   if (!connector) return null;
 
-  // Registry `supportedActions` are wire tool names — the exact keys the
-  // permission store and the chat tool loop use. Empty for every connector
-  // without a shipped adapter, which renders the honest empty state below.
   const tools = getConnectorCapability(connector.id)?.supportedActions ?? [];
 
   return (

@@ -1,11 +1,3 @@
-/**
- * useConnectors — OAuth broker behavior.
- *
- * The shapes asserted here are the ones `app/api/connectors/route.ts` actually
- * returns: `source: 'oauth'` entries carry `scopes` and `needsReauthorization`,
- * and POST answers a configured-but-unconnected OAuth provider with 409 +
- * `oauthStartPath` (built server-side by `buildConnectorOAuthStartPath`).
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -41,7 +33,6 @@ import {
   currentConnectorReturnPath,
 } from '../use-connectors';
 
-/** jsdom's real `location` refuses assignment; swap in a recordable stand-in. */
 function stubLocation(href: string): { current: string } {
   const url = new URL(href);
   const record = { current: url.toString() };
@@ -139,9 +130,6 @@ describe('useConnectors — OAuth grants', () => {
     );
   });
 
-  // Regression guard: the hook only followed `installStartPath` (the GitHub App
-  // alias). A configured OAuth provider that stops emitting that alias would
-  // have shown a generic "could not connect" toast instead of the consent screen.
   it('follows oauthStartPath on a 409 and appends the current page as returnPath', async () => {
     const location = stubLocation('https://app.example.com/connectors?category=Developer');
     vi.stubGlobal(
@@ -198,8 +186,6 @@ describe('useConnectors — OAuth grants', () => {
     expect(location.current).toBe('/api/github/install/start');
   });
 
-  // Honest unavailability: POST 501s a provider with no flow configured. The
-  // user must see the server's reason, not an optimistic connected row.
   it('surfaces the server message and rolls back when no flow exists', async () => {
     stubLocation('https://app.example.com/connectors');
     vi.stubGlobal(
@@ -228,8 +214,6 @@ describe('useConnectors — OAuth grants', () => {
     );
   });
 
-  // A dead grant is still a connected row. reconnect() must not blink the
-  // connector out of the connected list on its way to the consent screen.
   it('reconnect keeps the connector listed while sending the user back to the provider', async () => {
     const location = stubLocation('https://app.example.com/connectors');
     vi.stubGlobal(
@@ -316,9 +300,6 @@ describe('connector OAuth start-path helpers', () => {
     ).toBe('/api/connectors/oauth/start?connectorId=linear&returnPath=%2Fconnectors');
   });
 
-  // The start path is a navigation target handed back by the API. Refusing
-  // anything that is not a same-origin absolute path keeps a malformed or
-  // tampered body from turning into an off-origin redirect.
   it.each(['https://evil.example.com/steal', '//evil.example.com/steal', '\\/evil', 'relative'])(
     'refuses %s as a start path',
     (candidate) => {

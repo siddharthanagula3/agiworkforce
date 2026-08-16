@@ -17,7 +17,6 @@ export interface CloudUtilityErrorActionOptions {
 const RETRYABLE_NETWORK_PATTERN =
   /\b(?:ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ETIMEDOUT)\b|fetch failed|network error|socket hang up|timed out/iu;
 
-/** Pure classification shared by every explicit cloud-backed editor utility. */
 export function classifyCloudUtilityFailure(error: unknown): CloudUtilityFailureKind {
   if (error instanceof AgiWorkforcePaywallError) return 'paywall';
   if (error instanceof AgiWorkforceApiError) {
@@ -46,11 +45,6 @@ function failureMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/**
- * Present only recovery actions that can resolve the classified failure.
- * Local and provider-BYOK sessions never pass through this helper; it is for
- * the separate cloud utility boundary only.
- */
 export async function showCloudUtilityErrorActions(
   error: unknown,
   options: CloudUtilityErrorActionOptions,

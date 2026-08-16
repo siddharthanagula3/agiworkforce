@@ -1,13 +1,3 @@
-/**
- * PromptStash component
- *
- * A dropdown anchored to a Bookmark toolbar button that lets users:
- * - Save the current chat-input text as a stash entry (optionally labelled)
- * - Load a saved entry back into the input with one click
- * - Delete individual entries or clear all
- *
- * The panel closes on outside-click via a useEffect document listener.
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Bookmark, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -16,22 +6,11 @@ import { cn } from '../../lib/utils';
 import { usePromptStashStore } from '../../stores/promptStashStore';
 import type { PromptStashEntry } from '../../stores/promptStashStore';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 interface PromptStashProps {
-  /** Current value of the chat input textarea */
   currentText: string;
-  /** Called when the user clicks an entry to load it into the input */
   onLoad: (text: string) => void;
-  /** Whether the trigger button should be disabled (e.g., while AI is responding) */
   disabled?: boolean;
 }
-
-// ============================================================================
-// Helpers
-// ============================================================================
 
 function formatDate(ts: number): string {
   const d = new Date(ts);
@@ -42,10 +21,6 @@ function entryPreview(entry: PromptStashEntry): string {
   if (entry.label) return entry.label;
   return entry.text.length > 60 ? `${entry.text.slice(0, 60)}…` : entry.text;
 }
-
-// ============================================================================
-// Sub-components
-// ============================================================================
 
 interface EntryRowProps {
   entry: PromptStashEntry;
@@ -89,10 +64,6 @@ function EntryRow({ entry, onSelect, onDelete }: EntryRowProps) {
   );
 }
 
-// ============================================================================
-// Main component
-// ============================================================================
-
 export function PromptStash({ currentText, onLoad, disabled = false }: PromptStashProps) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,7 +72,6 @@ export function PromptStash({ currentText, onLoad, disabled = false }: PromptSta
     useShallow((s) => ({ entries: s.entries, save: s.save, remove: s.remove, clear: s.clear })),
   );
 
-  // ── Close on outside click ──────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
 
@@ -115,7 +85,6 @@ export function PromptStash({ currentText, onLoad, disabled = false }: PromptSta
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [isOpen]);
 
-  // ── Close on Escape ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!isOpen) return;
 
@@ -129,7 +98,6 @@ export function PromptStash({ currentText, onLoad, disabled = false }: PromptSta
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  // ── Handlers ────────────────────────────────────────────────────────────
   const handleSave = useCallback(() => {
     const trimmed = currentText.trim();
     if (!trimmed) return;
@@ -161,7 +129,6 @@ export function PromptStash({ currentText, onLoad, disabled = false }: PromptSta
     setIsOpen(false);
   }, [clear]);
 
-  // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div ref={containerRef} className="relative">
       {/* Trigger button */}

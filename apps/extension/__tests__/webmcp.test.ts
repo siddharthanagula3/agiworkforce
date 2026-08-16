@@ -1,13 +1,6 @@
-/**
- * Comprehensive tests for the WebMCP discovery module (webmcp.ts).
- *
- * Covers declarative (HTML form) and imperative (navigator.modelContext)
- * tool discovery, combined discovery with deduplication, and tool invocation.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Polyfill CSS.escape for jsdom (not provided by default)
 if (typeof globalThis.CSS === 'undefined') {
   (globalThis as Record<string, unknown>).CSS = {};
 }
@@ -15,7 +8,6 @@ if (typeof CSS.escape !== 'function') {
   CSS.escape = (value: string) => value.replace(/([^\w-])/g, '\\$1');
 }
 
-// Mock the logger so console output is suppressed during tests
 vi.mock('../src/utils', () => ({
   logger: {
     debug: vi.fn(),
@@ -32,14 +24,10 @@ import {
   discoverImperativeTools,
 } from '../src/webmcp';
 
-// ─── Helpers ────────────────────────────────────────────────────────────────────
-
-/** Remove all child nodes from document.body between tests. */
 function clearBody(): void {
   document.body.innerHTML = '';
 }
 
-/** Build a declarative WebMCP form and append it to the DOM. */
 function addForm(opts: {
   toolName?: string;
   toolDescription?: string;
@@ -69,7 +57,6 @@ function addForm(opts: {
   return form;
 }
 
-/** Stub navigator.modelContextTesting on the navigator object. */
 function stubModelContextTesting(api: Record<string, unknown>): void {
   Object.defineProperty(navigator, 'modelContextTesting', {
     value: api,
@@ -78,7 +65,6 @@ function stubModelContextTesting(api: Record<string, unknown>): void {
   });
 }
 
-/** Stub navigator.modelContext on the navigator object. */
 function stubModelContext(api: Record<string, unknown>): void {
   Object.defineProperty(navigator, 'modelContext', {
     value: api,
@@ -87,9 +73,7 @@ function stubModelContext(api: Record<string, unknown>): void {
   });
 }
 
-/** Remove modelContext / modelContextTesting stubs from navigator. */
 function cleanNavigator(): void {
-  // delete may not work on non-configurable props, so overwrite with undefined
   try {
     delete (navigator as Record<string, unknown>).modelContextTesting;
   } catch {
@@ -110,8 +94,6 @@ function cleanNavigator(): void {
   }
 }
 
-// ─── Setup / teardown ───────────────────────────────────────────────────────────
-
 beforeEach(() => {
   clearBody();
   cleanNavigator();
@@ -121,10 +103,6 @@ afterEach(() => {
   clearBody();
   cleanNavigator();
 });
-
-// ═════════════════════════════════════════════════════════════════════════════════
-// discoverDeclarativeTools()
-// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('discoverDeclarativeTools', () => {
   it('discovers a form with tool-name and tool-description', () => {
@@ -199,12 +177,10 @@ describe('discoverDeclarativeTools', () => {
   });
 
   it('skips forms without a tool-name attribute', () => {
-    // Form WITHOUT tool-name
     const form = document.createElement('form');
     form.innerHTML = '<input name="q" />';
     document.body.appendChild(form);
 
-    // Form WITH tool-name
     addForm({ toolName: 'real-tool', toolDescription: 'Has name' });
 
     const tools = discoverDeclarativeTools();
@@ -282,10 +258,6 @@ describe('discoverDeclarativeTools', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════════
-// discoverImperativeTools()
-// ═════════════════════════════════════════════════════════════════════════════════
-
 describe('discoverImperativeTools', () => {
   it('discovers tools via navigator.modelContextTesting.listTools()', () => {
     stubModelContextTesting({
@@ -338,7 +310,6 @@ describe('discoverImperativeTools', () => {
     });
 
     const tools = discoverImperativeTools();
-    // modelContextTesting returns early, so modelContext is not consulted
     expect(tools).toHaveLength(1);
     expect(tools[0].name).toBe('from-testing');
   });
@@ -399,10 +370,6 @@ describe('discoverImperativeTools', () => {
     expect(tools).toEqual([]);
   });
 });
-
-// ═════════════════════════════════════════════════════════════════════════════════
-// discoverAllTools()
-// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('discoverAllTools', () => {
   it('combines declarative and imperative tools', () => {
@@ -474,15 +441,7 @@ describe('discoverAllTools', () => {
   });
 });
 
-// ═════════════════════════════════════════════════════════════════════════════════
-// callTool()
-// ═════════════════════════════════════════════════════════════════════════════════
-
 describe('callTool', () => {
-  // M-06 audit 2026-05-19: the declarative-form fallback now prompts the
-  // user via window.confirm before submitting. Tests stub confirm to
-  // return true so the existing assertions about successful submission
-  // continue to hold.
   beforeEach(() => {
     vi.spyOn(window, 'confirm').mockReturnValue(true);
   });
@@ -542,7 +501,6 @@ describe('callTool', () => {
       ],
     });
 
-    // Prevent actual form submission in jsdom
     form.requestSubmit = vi.fn();
 
     const response = await callTool({
@@ -556,7 +514,6 @@ describe('callTool', () => {
     });
     expect(form.requestSubmit).toHaveBeenCalled();
 
-    // Verify form fields were filled
     const emailInput = form.querySelector('[name="email"]') as HTMLInputElement;
     const messageTextarea = form.querySelector('[name="message"]') as HTMLTextAreaElement;
     expect(emailInput.value).toBe('test@example.com');

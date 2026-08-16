@@ -12,7 +12,6 @@ export class AGIPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
-    // Use semantic locators with fallback to test IDs
     this.goalInput = page.getByTestId('goal-input').or(page.getByPlaceholder(/goal/i)).first();
     this.submitButton = page
       .getByRole('button', { name: /submit/i })
@@ -35,7 +34,6 @@ export class AGIPage extends BasePage {
   }
 
   async navigateToAGI() {
-    // Use semantic navigation - prefer role-based or text-based locators
     const agiLink = this.page
       .getByRole('link', { name: /agi|goals/i })
       .or(this.page.getByRole('button', { name: /agi|goals/i }))

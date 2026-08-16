@@ -1,25 +1,7 @@
-/**
- * Route-level managed-failover pins (AUTO-ROUTER-MIGRATION-01 web twin) —
- * the REAL route.ts POST handler consuming the resolver's fallback plan,
- * mirroring the gateway's llm-managed-failover.test.ts semantics:
- * success-after-fallback, rotate-after-credential (the rejected provider's
- * own remaining routes skipped), never-mid-stream,
- * explicit-never-rotates, tier-recheck-per-attempt,
- * single-reservation-single-settlement, attribution-actual-server, and
- * failed-attempt-text-never-leaks.
- *
- * Harness cloned from route.openai-compat-dispatch.test.ts; the resolver is
- * the one seam mocked beyond it (canned selected route + fallback plan), so
- * the attempt loop, admission re-check, billing lifecycle, and response
- * assembly under test are all real.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// GOV-3: route.ts now acquires a per-plan concurrent-turn slot from this module,
-// so the mock must provide it or the handler crashes on an undefined import.
-// Always-admit + no-op release keeps every existing assertion unchanged.
 const admitManagedTurnSlot = () => ({
   admitted: true,
   limit: null,
@@ -65,10 +47,6 @@ vi.mock('@shared/utils/env', () => ({
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
 }));
 
-// The resolver seam: real @agiworkforce/routing everywhere EXCEPT
-// resolveAutoRoute, which returns a canned selected route with a fallback
-// plan for Auto and an EMPTY plan for explicit selections — the same
-// structural contract the real resolver honors.
 const routingMocks = vi.hoisted(() => ({
   resolveAutoRoute: vi.fn(),
 }));
@@ -77,8 +55,6 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => ({
   resolveAutoRoute: (...args: unknown[]) => routingMocks.resolveAutoRoute(...args),
 }));
 
-// Controllable provider adapters: the primary (anthropic) behavior is set
-// per test; the fallback (openai) always serves a distinct canned stream.
 const providerControl = vi.hoisted(() => ({
   anthropicChunks: [] as Array<Record<string, unknown>>,
   anthropicCalls: 0,
@@ -236,7 +212,6 @@ import { POST } from '@/app/api/llm/v1/chat/completions/route';
 
 const PRIMARY = 'fo-primary-model';
 const FALLBACK = 'fo-fallback-model';
-/** A second plan entry on the PRIMARY's provider — same managed key. */
 const SECOND_ANTHROPIC = 'fo-primary-sibling-model';
 
 function makeRequest(model: string, stream: boolean): NextRequest {
@@ -310,8 +285,6 @@ beforeEach(() => {
   mockGetProviderFromModel.mockImplementation((model: string) =>
     model === FALLBACK ? 'openai' : 'anthropic',
   );
-  // Auto: primary + one fallback. Explicit: NO fallbacks (the resolver's
-  // structural contract for explicit selections).
   routingMocks.resolveAutoRoute.mockImplementation((input: { selection: string }) =>
     input.selection === 'auto'
       ? selectedRoute(PRIMARY, [FALLBACK])
@@ -341,12 +314,9 @@ describe('managed failover — non-streaming', () => {
     expect(providerControl.anthropicCalls).toBe(1);
     expect(providerControl.openaiCalls).toBe(1);
     expect(data.choices?.[0]?.message?.content).toBe('Fallback served this.');
-    // Attribution: the model that actually served, not the failed primary.
     expect(data.model).toBe(FALLBACK);
     expect(data.x_agi_workforce?.provider).toBe('openai');
 
-    // Billing lifecycle: exactly one reservation and one settlement, and the
-    // settlement is a completed outcome (never the failed-refund path).
     expect(managedUsageMocks.reserve).toHaveBeenCalledTimes(1);
     expect(managedUsageMocks.finalize).toHaveBeenCalledTimes(1);
     expect(managedUsageMocks.finalize.mock.calls[0]![0]).toMatchObject({ outcome: 'completed' });
@@ -366,9 +336,6 @@ describe('managed failover — non-streaming', () => {
 
   it('skips the remaining plan routes on the provider whose credential was rejected', async () => {
     anthropicFailsWith('401', 'authentication error');
-    // Plan: another anthropic model first, then the openai fallback. The
-    // anthropic entry would present the SAME rejected key, so it must be
-    // skipped rather than attempted.
     routingMocks.resolveAutoRoute.mockImplementation((input: { selection: string }) =>
       input.selection === 'auto'
         ? selectedRoute(PRIMARY, [SECOND_ANTHROPIC, FALLBACK])
@@ -377,7 +344,6 @@ describe('managed failover — non-streaming', () => {
 
     const response = await POST(makeRequest('auto', false));
     expect(response.status).toBe(200);
-    // One anthropic attempt, not two: the second anthropic route was skipped.
     expect(providerControl.anthropicCalls).toBe(1);
     expect(providerControl.openaiCalls).toBe(1);
   });
@@ -437,7 +403,6 @@ describe('managed failover — streaming', () => {
     expect(providerControl.openaiCalls).toBe(1);
     expect(body).toContain('Fallback served this.');
     expect(body).toContain(FALLBACK);
-    // The failed primary contributed NOTHING to the client stream.
     expect(body).not.toContain('upstream unavailable');
     expect(body).not.toContain(PRIMARY);
 
@@ -457,9 +422,7 @@ describe('managed failover — streaming', () => {
     expect(response.status).toBe(200);
     const body = await response.text();
 
-    // The partial primary content streamed (current behavior, unchanged)…
     expect(body).toContain('primary partial text');
-    // …and the fallback was never consulted.
     expect(providerControl.openaiCalls).toBe(0);
   });
 });

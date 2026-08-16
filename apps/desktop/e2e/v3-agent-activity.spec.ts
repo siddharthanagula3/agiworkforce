@@ -75,16 +75,6 @@ function resolveGeminiResearchModel() {
 
 const GEMINI_RESEARCH_MODEL = resolveGeminiResearchModel();
 
-/**
- * DES-C14: this spec used to mock `**\/api/cloud-chat`, a path that exists
- * nowhere under `apps/web/app/api`, while leaving the real managed-cloud chat
- * route (`/api/chat/conversations`, see `MANAGED_CLOUD_CHAT_BASE_PATH`) and
- * `/api/projects` unrouted. Cloud admission hydrates the conversation boundary
- * from exactly those two, so the v3 shell never mounted and the composer this
- * test types into did not exist. `mockCloudApi` owns the shipping route set;
- * the conversation below is in the real `ManagedCloudConversationWireSchema`
- * shape rather than the invented snake_case one.
- */
 const conversation = cloudConversationFixture({
   id: '9c3a1b52-6d2f-4c8e-9a44-1f0b5c7d2e31',
   title: 'Agent activity check',
@@ -171,17 +161,6 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
   const unexpectedDiagnostics: string[] = [];
   const observedApiRequests: string[] = [];
   const runtimeErrors: string[] = [];
-  // `cloudAccountAuth.fetchAccountSnapshot` and `managedCloudSettingsSync` are
-  // the only two callers that use the ABSOLUTE `WEB_APP_URL` instead of the
-  // browser build's same-origin `CLOUD_API_BASE_URL` (''). When the configured
-  // origin is not in the dev server's CSP `connect-src` (vite.config.ts:129 —
-  // e.g. a local `.env.local` pointing VITE_WEB_APP_URL at localhost:3000) the
-  // browser refuses the request before it reaches the network stack, so
-  // `page.route` never sees it and NO Playwright mock can answer it. That is an
-  // environment fact, not a product regression, so a bare
-  // "TypeError: Failed to fetch" from those two is not counted. Everything else
-  // still fails this test: a contract violation, a non-2xx, or any
-  // `analytics_set_privacy_mode` call (which is never a network error).
   const isUnmockableEgress = (text: string) =>
     /TypeError: Failed to fetch/.test(text) &&
     /managedCloudSettingsSync|Failed to refresh Clerk\/Neon/i.test(text);
@@ -206,8 +185,6 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
     }
   });
   page.on('requestfailed', (request) => {
-    // Same-origin settings/sync IS routable here, so a failure on it is a real
-    // regression. The absolute-origin variant is the CSP case documented above.
     if (/settings\/sync/i.test(request.url()) && request.url().startsWith(appOrigin)) {
       unexpectedDiagnostics.push(
         `requestfailed: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? ''}`,
@@ -228,8 +205,6 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
     createdConversation: conversation,
     messagesByConversation: { [conversation.id]: [] },
   });
-  // Registered after mockCloudApi so the streaming completion wins over the
-  // catch-all.
   const cloudChatRequests = await mockCloudChat(page);
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -258,9 +233,6 @@ test('Desktop Cloud renders one collapsed, progressively expandable canonical ac
 
   const activityToggle = assistant.getByRole('button', { name: /show agent activity/i });
   await expect(activityToggle).toHaveAttribute('aria-expanded', 'false');
-  // The completed row keeps Claude's semantic “what happened” summary. Its
-  // check icon and live-region announcement carry completion state without
-  // replacing the useful action label with an elapsed-time pill.
   await expect(activityToggle).toContainText('Searching official sources');
   await expect(activityToggle).not.toContainText(/Done in|1 tool/);
   await expect(assistant.getByText('Official AGI documentation')).toHaveCount(0);

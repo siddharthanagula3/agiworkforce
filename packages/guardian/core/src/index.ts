@@ -1,9 +1,3 @@
-/**
- * @agiworkforce/guardian-core — AGI Guardian's provider- and transport-neutral
- * core: normalized finding schema, stable fingerprints, repository
- * configuration, verification, deduplication, ranking, policy, and
- * deterministic scanner adapters.
- */
 export * from './schema.js';
 export * from './fingerprint.js';
 export * from './config.js';

@@ -1,15 +1,3 @@
-/**
- * Cloud Billing screen — unit tests.
- *
- * Covers the 2026-07-05 fixes:
- *  - The plan badge no longer swaps for an indefinite ActivityIndicator
- *    during a tier refresh — it renders every time, immediately.
- *  - guardedFetch (lib/egressGuard.ts) silently blocks this screen's own
- *    tier refresh while chat is set to Local Mode (a zero-leak guarantee
- *    unrelated to this screen's purpose) — the screen must show an
- *    explicit CloudSyncBlockedBanner instead of a permanently-stale plan,
- *    and re-fetch the instant the user switches to Cloud mode.
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
@@ -281,14 +269,8 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
   });
 
   it('always renders the plan badge — never swaps it for an indefinite spinner', () => {
-    // Regression: the badge slot used to render an ActivityIndicator whenever
-    // useTierStore().isRefreshing was true, which (while blocked by Local
-    // Mode, or on any slow network) left the badge missing indefinitely with
-    // no other visual explanation. The badge must always render.
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { queryByText } = render(<CloudBillingScreen />);
-    // Free plan feature list is a reliable proxy that the plan card rendered
-    // its full content immediately, not a loading placeholder.
     expect(queryByText('Chat on web, iOS, Android, and desktop')).toBeTruthy();
   });
 
@@ -427,11 +409,6 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
     expect(queryByText('Usage top-ups')).toBeNull();
   });
 
-  // CRIT-007: this screen used to tell the user "You purchased this
-  // subscription through the Apple App Store" and offer a store link, for an
-  // app that has never had an App Store listing. The alert must still block the
-  // plan change, but it may not name a store or link to one while the
-  // release-state registry has no verified listing.
   it('blocks a store-sourced subscription without claiming a store AGI has no listing on', () => {
     Object.assign(mockTierState, {
       tier: 'pro',
@@ -457,7 +434,6 @@ describe('Cloud Billing screen — Local-mode-blocked tier refresh (2026-07-05)'
       text?: string;
       onPress?: () => void;
     }>;
-    // No store link is offered at all — only the dismiss button.
     expect(buttons.map((button) => button.text)).toEqual(['OK']);
     buttons.find((button) => button.text === 'Open subscriptions')?.onPress?.();
     expect(openExternalUrl).not.toHaveBeenCalledWith(

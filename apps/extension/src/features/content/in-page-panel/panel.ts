@@ -33,8 +33,6 @@ import {
   renderIcon,
 } from '../../../assets/icons';
 
-// ─── DOM builder ────────────────────────────────────────────────────────────────
-
 interface PanelElements {
   panel: HTMLElement;
   closeBtn: HTMLButtonElement;
@@ -56,7 +54,6 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   panel.setAttribute('role', 'region');
   panel.setAttribute('aria-label', 'AGI page assistant');
 
-  // ── Header ────────────────────────────────────────────────────────────────
   const header = document.createElement('div');
   header.className = 'agi-header';
 
@@ -66,10 +63,6 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
 
   const providerLabel = document.createElement('span');
   providerLabel.className = 'agi-provider-pill';
-  // The in-page panel's send path (IN_PAGE_PROMPT → handleInPagePrompt) always
-  // routes to Managed Cloud with modelSelection: 'auto'. There is no per-panel
-  // provider/model selection reachable from the page world, so the pill reflects
-  // that fixed routing rather than reading storage keys nothing writes.
   providerLabel.textContent = 'Managed Cloud · Auto';
   providerLabel.setAttribute('aria-label', 'Provider: Managed Cloud, automatic model selection');
 
@@ -83,12 +76,10 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   header.appendChild(providerLabel);
   header.appendChild(closeBtn);
 
-  // ── Actions row ───────────────────────────────────────────────────────────
   const actionsRow = document.createElement('div');
   actionsRow.className = 'agi-actions-row';
   actionsRow.setAttribute('aria-describedby', 'agi-page-context-disclosure');
 
-  // ── Response area ─────────────────────────────────────────────────────────
   const responseArea = document.createElement('div');
   responseArea.className = 'agi-response-area';
   responseArea.setAttribute('role', 'status');
@@ -101,7 +92,6 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   disclosure.setAttribute('role', 'note');
   disclosure.setAttribute('aria-label', 'Page context privacy notice');
 
-  // ── Composer ──────────────────────────────────────────────────────────────
   const composer = document.createElement('div');
   composer.className = 'agi-composer';
 
@@ -122,7 +112,6 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   composer.appendChild(textarea);
   composer.appendChild(submitBtn);
 
-  // ── Footer ────────────────────────────────────────────────────────────────
   const footer = document.createElement('div');
   footer.className = 'agi-footer';
 
@@ -153,12 +142,6 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   };
 }
 
-// ─── Streaming helper ──────────────────────────────────────────────────────────
-
-/**
- * Send a prompt to the background service worker and render the response.
- * Resolves once the full response has been received (batch, not chunked).
- */
 async function streamPrompt(
   prompt: string,
   pageContext: string,
@@ -195,7 +178,6 @@ async function streamPrompt(
       return;
     }
 
-    // Render plain text — no innerHTML — to prevent XSS from model output
     responseArea.textContent = response.text ?? '';
   } catch (err) {
     cursor.remove();
@@ -306,8 +288,6 @@ function showPromptOutcome(
   responseArea.appendChild(errEl);
 }
 
-// ─── Chip builder ───────────────────────────────────────────────────────────────
-
 function buildActionChips(
   actions: PageAction[],
   actionsRow: HTMLElement,
@@ -342,8 +322,6 @@ function autoResizeTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
 }
 
-// ─── Page context capture ──────────────────────────────────────────────────────
-
 function capturePageContext(): {
   url: string;
   title: string;
@@ -375,12 +353,6 @@ function updateDisclosure(
     'open the side panel for a saved conversation.';
 }
 
-// ─── Public API ────────────────────────────────────────────────────────────────
-
-/**
- * Create the overlay panel host and return open/close/toggle controllers.
- * The host must be appended to document.body by the caller.
- */
 export function createPanel(): {
   host: HTMLElement;
   open: () => void;
@@ -395,7 +367,6 @@ export function createPanel(): {
   const shadow = host.attachShadow({ mode: 'closed' });
   const els = buildPanelDOM(shadow);
 
-  // Capture page context at creation time; refreshed on SPA navigations.
   let ctx = capturePageContext();
   let requestInFlight = false;
   let returnFocus: HTMLElement | null = null;
@@ -429,7 +400,6 @@ export function createPanel(): {
     ctx = capturePageContext();
     updateDisclosure(els.disclosure, ctx);
     buildActionChips(ctx.actions, els.actionsRow, (action) => {
-      // Re-capture on each chip click so SPA navigation changes are reflected.
       const fresh = capturePageContext();
       ctx = fresh;
       updateDisclosure(els.disclosure, fresh);
@@ -442,7 +412,6 @@ export function createPanel(): {
 
   rebuildChips();
 
-  // Subscribe to SPA navigation events so chips and page context stay current.
   window.addEventListener('popstate', rebuildChips);
   const _origPushState = history.pushState.bind(history);
   history.pushState = function (...args: Parameters<typeof history.pushState>) {
@@ -474,7 +443,6 @@ export function createPanel(): {
     syncComposerState();
   });
 
-  // Keep ctx reference alive (used by close handler if needed in future).
   void ctx;
 
   let isOpen = false;

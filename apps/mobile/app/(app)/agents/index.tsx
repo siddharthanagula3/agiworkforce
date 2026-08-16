@@ -199,13 +199,6 @@ export default function TasksScreen() {
     };
   }, [clerkUserId, cloudUnlocked, fetchRuns, isCloudMode, isForeground]);
 
-  /**
-   * Answer a run's outstanding approval from the phone.
-   *
-   * The point of a durable run is that the device that started it does not have
-   * to be the device that unblocks it. One decision covers every pending call
-   * because the server only accepts a complete decision set.
-   */
   const handleResolveApproval = useCallback(
     async (run: CloudAgentRun, decision: 'approved' | 'rejected') => {
       const pending = run.pendingApproval;
@@ -229,7 +222,6 @@ export default function TasksScreen() {
         );
       } finally {
         if (isCloudAccountEpochCurrent(account)) setResolvingRunId(null);
-        // Whether it worked or raced, the list is now stale.
         await fetchRuns().catch(() => undefined);
       }
     },

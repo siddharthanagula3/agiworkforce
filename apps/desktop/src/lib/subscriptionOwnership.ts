@@ -21,15 +21,6 @@ function isTerminalSubscriptionStatus(status: string): boolean {
   return TERMINAL_SUBSCRIPTION_STATUSES.has(status.trim().toLowerCase());
 }
 
-/**
- * Resolves the one billing owner for Desktop.
- *
- * `/api/me` is authoritative. Older deployments may omit
- * `subscription_source`, which Desktop maps to `unknown`; an unknown,
- * non-terminal subscription fails closed so a transient contract mismatch can
- * never create a second Stripe purchase beside an Apple, Google, or manually
- * provisioned subscription.
- */
 export function getDesktopSubscriptionOwnerPolicy(
   source: SubscriptionSource,
   status: string,

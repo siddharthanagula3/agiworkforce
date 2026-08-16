@@ -1,10 +1,3 @@
-/**
- * Anthropic-specific replay policy for transcript history rebuild.
- *
- * The main thing Anthropic cares about is that `thinking` blocks are
- * preserved with their `signature` when round-tripping (otherwise the API
- * rejects them). For all other content this is a passthrough.
- */
 
 import type { ProviderMessage, ContentBlock, ReplayPolicy } from '@agiworkforce/types';
 
@@ -25,7 +18,6 @@ export function buildAnthropicReplayPolicy(): ReplayPolicy {
 }
 
 function isReplayableBlock(block: ContentBlock): boolean {
-  // Drop unsigned thinking blocks; Anthropic will reject them on replay.
   if (block.type === 'thinking' && !block.signature) {
     return false;
   }

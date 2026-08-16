@@ -3,14 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getCsrfToken } from '@/lib/client/csrf';
 
-/**
- * Admin surface for enterprise directory sync (SCIM 2.0).
- *
- * Before this existed the directory-sync API had ZERO callers anywhere in the
- * repo — it was a control plane nobody could reach. Everything here maps to a
- * real endpoint; nothing on this page is decorative.
- */
-
 interface Connection {
   id: string;
   organization_id: string;
@@ -81,7 +73,6 @@ export default function DirectorySyncAdminPage() {
 
   const [tokenConnectionId, setTokenConnectionId] = useState('');
   const [tokenName, setTokenName] = useState('');
-  // Shown once, never persisted, never re-fetchable.
   const [freshToken, setFreshToken] = useState<string | null>(null);
 
   const load = useCallback(async () => {

@@ -162,8 +162,6 @@ async function verifyApplePurchase(input: {
   purchaseToken: string;
   appAccountToken: string;
 }): Promise<VerifiedMobileIapPurchase> {
-  // The payload is decoded only to choose Apple's verifier environment. Every
-  // field used for billing comes from SignedDataVerifier below.
   const environment = appleEnvironmentHint(input.purchaseToken);
   const verifier = createAppleVerifier(environment);
 

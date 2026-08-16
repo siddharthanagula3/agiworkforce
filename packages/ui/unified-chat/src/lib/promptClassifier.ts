@@ -1,51 +1,19 @@
-/**
- * Zero-latency heuristic prompt classifier for auto model routing.
- *
- * Architecture mirrors LiteLLM's Complexity Router + NVIDIA's task-taxonomy:
- *   Tier 1 — keyword pattern matching (sub-millisecond, zero cost)
- *   Tier 2 — token-count signals (prompt length)
- *   Tier 3 — attachment signals (vision, document)
- *
- * Maps each classified task to a RoutingSlot scoped by the active auto-mode
- * tier (economy → balanced → premium).
- *
- * THIS MODULE DOES NOT SELECT MODELS AND MUST NOT BE MADE TO. Which model a
- * turn may reach depends on trust boundary, plan tier, runtime profile,
- * lifecycle and harness admission — none of which this file knows. That
- * decision has exactly one implementation, `resolveAutoRoute`
- * (`@agiworkforce/routing`), called on the live send path in
- * `hooks/useChat.ts` (`sendMessage` → `requiresRegistryAdmission` branch).
- * A `buildRoutingDecision` helper here used to dereference the slot table
- * into a model id with zero eligibility checks; it had no callers and was
- * deleted rather than hardened, so there is no second routing engine to
- * drift. `classifyPrompt` below is retained for its taxonomy and `TASK_LABEL`
- * only, and currently has no production caller either.
- *
- * References:
- *   LiteLLM Auto Routing: https://docs.litellm.ai/docs/proxy/auto_routing
- *   NVIDIA prompt-task-and-complexity-classifier (HuggingFace, DeBERTa-v3)
- *   OpenRouter Auto Router (NotDiamond under the hood)
- *   RouteLLM paper: https://arxiv.org/abs/2406.18665
- */
 
 import { listCanonicalModels, type ModelCapabilities, type RoutingSlot } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// Task taxonomy (mirrors NVIDIA 11-category classifier + extras)
-// ---------------------------------------------------------------------------
 export type ClassifiedTask =
-  | 'computer_use' // Desktop automation, clicking, screen control
-  | 'image_generation' // Generate / draw / paint images
-  | 'video_generation' // Animate / generate video
-  | 'deep_research' // Comprehensive multi-source analysis with citations
-  | 'search' // Real-time lookup, current events, live data
-  | 'coding' // Code generation, debugging, refactoring
-  | 'reasoning' // Multi-step logic, math, proof, analysis
-  | 'vision' // Prompt with image attachment
-  | 'long_context' // Very long document or prompt
-  | 'creative_writing' // Stories, poems, scripts, fiction
-  | 'simple_chat' // Short conversational question
-  | 'general'; // Default fallback
+  | 'computer_use'
+  | 'image_generation'
+  | 'video_generation'
+  | 'deep_research'
+  | 'search'
+  | 'coding'
+  | 'reasoning'
+  | 'vision'
+  | 'long_context'
+  | 'creative_writing'
+  | 'simple_chat'
+  | 'general';
 
 export interface ClassificationResult {
   task: ClassifiedTask;
@@ -55,19 +23,11 @@ export interface ClassificationResult {
 }
 
 export interface ClassifyOptions {
-  /** True when the user attached an image to the message. */
   hasImageAttachment?: boolean;
-  /** True when a document/PDF is attached. */
   hasDocumentAttachment?: boolean;
-  /** The active auto-mode ID — controls which tier of slots to use. */
   autoModeId?: string;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/** Rough token estimate: 1 token ≈ 4 chars in English. */
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
@@ -93,7 +53,6 @@ const MEDIA_MODEL_TERMS: Record<MediaGenerationCapability, readonly string[]> = 
     .sort((left, right) => right.length - left.length),
 };
 
-/** Match current media-model references without pinning the classifier to a roster. */
 function matchCatalogMediaModel(
   text: string,
   capability: MediaGenerationCapability,
@@ -109,10 +68,6 @@ function matchCatalogMediaModel(
   }
   return null;
 }
-
-// ---------------------------------------------------------------------------
-// Pattern banks — ordered from most-specific to least-specific
-// ---------------------------------------------------------------------------
 
 const COMPUTER_USE: RegExp[] = [
   /\b(automate|automation)\b/i,
@@ -224,10 +179,6 @@ const CREATIVE_WRITING: RegExp[] = [
   /\bcontinue (the |this |my )(story|narrative|poem|tale)\b/i,
 ];
 
-// ---------------------------------------------------------------------------
-// Slot map: task × tier → RoutingSlot
-// ---------------------------------------------------------------------------
-
 type Tier = 'economy' | 'balanced' | 'premium';
 
 const SLOT_MAP: Record<ClassifiedTask, Record<Tier, RoutingSlot>> = {
@@ -290,10 +241,6 @@ function autoModeToTier(autoModeId: string): Tier {
   return 'balanced';
 }
 
-// ---------------------------------------------------------------------------
-// Classifier — pure function, zero I/O, sub-millisecond
-// ---------------------------------------------------------------------------
-
 export function classifyPrompt(
   content: string,
   options: ClassifyOptions = {},
@@ -305,7 +252,6 @@ export function classifyPrompt(
 
   let match: string | null;
 
-  // 1. Computer use — highest priority (user intent is unambiguous)
   if ((match = matchesAny(content, COMPUTER_USE))) {
     signals.push(`computer-use keyword: "${match}"`);
     return {
@@ -316,7 +262,6 @@ export function classifyPrompt(
     };
   }
 
-  // 2. Image generation
   if ((match = matchesAny(content, IMAGE_GEN) ?? matchCatalogMediaModel(content, 'imageGen'))) {
     signals.push(`image-gen keyword: "${match}"`);
     return {
@@ -327,7 +272,6 @@ export function classifyPrompt(
     };
   }
 
-  // 3. Video generation
   if ((match = matchesAny(content, VIDEO_GEN) ?? matchCatalogMediaModel(content, 'videoGen'))) {
     signals.push(`video-gen keyword: "${match}"`);
     return {
@@ -338,7 +282,6 @@ export function classifyPrompt(
     };
   }
 
-  // 4. Deep research
   if ((match = matchesAny(content, DEEP_RESEARCH))) {
     signals.push(`deep-research keyword: "${match}"`);
     return {
@@ -349,19 +292,16 @@ export function classifyPrompt(
     };
   }
 
-  // 5. Web search / real-time data
   if ((match = matchesAny(content, SEARCH))) {
     signals.push(`search keyword: "${match}"`);
     return { task: 'search', slot: SLOT_MAP.search[tier], reason: TASK_REASONS.search, signals };
   }
 
-  // 6. Coding
   if ((match = matchesAny(content, CODING))) {
     signals.push(`coding keyword: "${match}"`);
     return { task: 'coding', slot: SLOT_MAP.coding[tier], reason: TASK_REASONS.coding, signals };
   }
 
-  // 7. Reasoning / math
   if ((match = matchesAny(content, REASONING))) {
     signals.push(`reasoning keyword: "${match}"`);
     return {
@@ -372,13 +312,11 @@ export function classifyPrompt(
     };
   }
 
-  // 8. Vision — image attachment (any prompt + image → vision model)
   if (hasImageAttachment) {
     signals.push('image attachment detected');
     return { task: 'vision', slot: SLOT_MAP.vision[tier], reason: TASK_REASONS.vision, signals };
   }
 
-  // 9. Long context — very long prompt
   if (tokens > 2000) {
     signals.push(`long prompt (≈${tokens} tokens)`);
     return {
@@ -389,7 +327,6 @@ export function classifyPrompt(
     };
   }
 
-  // 10. Creative writing
   if ((match = matchesAny(content, CREATIVE_WRITING))) {
     signals.push(`creative-writing keyword: "${match}"`);
     return {
@@ -400,7 +337,6 @@ export function classifyPrompt(
     };
   }
 
-  // 11. Simple chat — short conversational message
   if (tokens < 40) {
     signals.push(`short prompt (≈${tokens} tokens)`);
     return {
@@ -411,12 +347,10 @@ export function classifyPrompt(
     };
   }
 
-  // 12. General fallback
   signals.push('no specific task signals detected');
   return { task: 'general', slot: SLOT_MAP.general[tier], reason: TASK_REASONS.general, signals };
 }
 
-/** Human-readable label for routing decision badge in the UI. */
 export const TASK_LABEL: Record<ClassifiedTask, string> = {
   computer_use: 'computer use',
   image_generation: 'image gen',

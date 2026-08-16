@@ -6,9 +6,6 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useAppModeStore } from '../../stores/appModeStore';
 import { useUnifiedAuthStore } from '../../stores/auth';
 
-// Mirrors the module-mock pattern in features/chat/FolderSelector.test.tsx —
-// override the global test/setup.ts mock (which pins isTauri: false) so the
-// native-dialog branch of `selectFolder` is actually exercised.
 const invokeMock = vi.fn();
 const openDialogMock = vi.fn();
 
@@ -56,7 +53,6 @@ describe('useFolderSelection', () => {
     expect(openDialogMock).toHaveBeenCalledWith(
       expect.objectContaining({ directory: true, multiple: false }),
     );
-    // The core ask: the flow reaches the real backend command.
     expect(invokeMock).toHaveBeenCalledWith('project_context_set_folder', {
       path: '/Users/siddhartha/Projects/agiworkforce',
     });
@@ -118,13 +114,6 @@ describe('useFolderSelection — cloud mode grants no capability', () => {
     });
   });
 
-  /**
-   * The whole point of the cloud mode. `project_context_set_folder` persists the
-   * path into settings.allowed_directories, writes settings.json, reloads MCP
-   * config to project-local scope and repoints the MCP filesystem root. Calling
-   * it from Managed Cloud would widen filesystem permissions with no consent
-   * step and leave them in place after switching back to Local.
-   */
   it('uses only the native picker-owned grant and never invokes the folder-scope command', async () => {
     invokeMock.mockResolvedValue(cloudGrant);
 

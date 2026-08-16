@@ -1,16 +1,3 @@
-/**
- * POST /api/support/handoff
- *
- * Raise a support escalation. The server — not the client — decides whether that
- * becomes a live chat or an email, by re-resolving presence at write time.
- *
- * SOFT AUTH: the marketing widget calls this signed out. A signed-out caller
- * must supply `contactEmail`; a signed-in caller's verified Clerk address always
- * wins and any `contactEmail` in the body is ignored.
- *
- * Nothing in the body is trusted for identity, plan, or usage: `ownerUserId`,
- * `ownerSessionKey`, and the whole account context are resolved server-side.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -38,8 +25,6 @@ const HandoffRequestSchema = z.object({
     'action_refused',
   ]),
   summary: z.string().trim().min(1).max(1_000),
-  // Capped here as well as in transcript.ts: the parser is the first line, the
-  // normalizer is the guarantee.
   transcript: z.array(TurnSchema).max(500),
   attemptedActions: z
     .array(

@@ -1,8 +1,3 @@
-/**
- * FocusModeButtons Component
- *
- * Displays focus mode selection buttons for filtering search/response types.
- */
 
 import React from 'react';
 import { motion } from 'framer-motion';
@@ -32,11 +27,8 @@ export const FOCUS_MODES: FocusModeOption[] = [
 ];
 
 export interface FocusModeButtonsProps {
-  /** Currently selected focus mode */
   focusMode: FocusMode;
-  /** Callback when focus mode changes */
   onFocusModeChange: (mode: FocusMode) => void;
-  /** Whether reduced motion is preferred */
   prefersReducedMotion?: boolean;
 }
 
@@ -73,9 +65,6 @@ export const FocusModeButtons: React.FC<FocusModeButtonsProps> = ({
   );
 };
 
-/**
- * Get the placeholder text for a given focus mode
- */
 export function getFocusModePlaceholder(
   focusMode: FocusMode,
   defaultPlaceholder: string = 'How can I help you today?',

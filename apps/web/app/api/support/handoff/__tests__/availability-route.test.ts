@@ -1,7 +1,3 @@
-/**
- * GET /api/support/handoff/availability — the endpoint that lets the widget tell
- * the truth BEFORE the user commits to anything.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,7 +43,6 @@ describe('GET /api/support/handoff/availability', () => {
     expect(payload.headline).toBe('No one is available right now');
     expect(payload.fallback.channel).toBe('email');
     expect(payload.fallback.address).toContain('@');
-    // The widget must be able to bound any waiting UI it later renders.
     expect(payload.waitTimeoutSeconds).toBeGreaterThan(0);
     expect(payload.pollIntervalMs).toBeGreaterThan(0);
   });

@@ -49,8 +49,6 @@ describe('GET /api/maps/tile/[z]/[x]/[y]', () => {
     expect(response.headers.get('cache-control')).toContain('max-age=604800');
     const [url, init] = mocks.fetch.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://tile.openstreetmap.org/5/7/12.png');
-    // OpenStreetMap's tile policy requires an identifiable consumer; an
-    // anonymous proxy is the thing that gets the deployment blocked.
     expect((init.headers as Record<string, string>)['User-Agent']).toContain('AGIWorkforce');
   });
 

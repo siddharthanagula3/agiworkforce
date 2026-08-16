@@ -13,9 +13,6 @@ vi.mock('@/lib/csrf', () => ({
   requireCsrfToken: vi.fn(() => null),
 }));
 
-// Approving a device now requires the caller to have accepted the current
-// Terms first — an unmocked gate answered false, so the route returned 403
-// TERMS_ACCEPTANCE_REQUIRED and every case here read as an auth failure.
 const mockHasAcceptedCurrentTerms = vi.hoisted(() => vi.fn(async () => true));
 vi.mock('@/lib/server/terms', () => ({
   hasAcceptedCurrentTerms: mockHasAcceptedCurrentTerms,
@@ -44,8 +41,6 @@ const mockExecute = vi.fn();
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (sql: string, params: unknown[]) => {
-      // assertAccountActive() in getClerkAuthUser issues its own account_status
-      // lookup ahead of the route's real query; keep it out of mockQuery's queue.
       if (typeof sql === 'string' && sql.includes('account_status')) {
         return Promise.resolve([]);
       }
@@ -103,9 +98,6 @@ describe('Device code approve compatibility API', () => {
   });
 
   it('refuses to approve a device until the current terms are accepted', async () => {
-    // The gate the mock above defaults to true. Pinned so that default is a
-    // stated assumption rather than a silent one: an unaccepted user must not
-    // be able to authorize a CLI device.
     mockHasAcceptedCurrentTerms.mockResolvedValueOnce(false);
     mockQuery.mockResolvedValueOnce([
       {

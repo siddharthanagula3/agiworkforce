@@ -7,31 +7,12 @@ import { useThemeColors } from '@/src/ui/theme';
 import { deriveReasoningPhrase, formatThinkingDuration } from '@agiworkforce/utils/reasoning';
 
 interface ThinkingChipProps {
-  /** Full thinking/reasoning text from the model */
   thinkingText: string;
-  /** Whether thinking tokens are still streaming */
   isStreaming?: boolean;
-  /** Duration in seconds shown after completion */
   duration?: number;
-  /** Wall-clock ms when thinking began — drives the live elapsed timer while streaming */
   startedAtMs?: number;
 }
 
-/**
- * Reasoning as a one-line ACTION STATUS in the transcript, with the full text
- * behind a tap.
- *
- * This used to be an inline accordion that auto-expanded while streaming: on a
- * phone that meant a wall of chain-of-thought unfolding above the answer,
- * pushing the actual response off-screen and reflowing the list on every
- * token. The transcript now carries a single muted line ("Thought for 12s ›"),
- * and tapping it opens a bottom sheet with the reasoning — the same shape the
- * web surface uses (a status line that discloses on click), adapted to touch,
- * where a modal sheet is the native disclosure rather than an inline panel.
- *
- * While streaming, the line shows a live verb phrase and a real per-second
- * timer from `startedAtMs`; an open sheet keeps updating as tokens arrive.
- */
 export function ThinkingChip({
   thinkingText,
   isStreaming,
@@ -43,7 +24,6 @@ export function ThinkingChip({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const bodyScrollRef = useRef<ScrollView>(null);
 
-  // Live 1s tick while thinking streams — a real timer, not a static label.
   useEffect(() => {
     if (!isStreaming || startedAtMs === undefined) return;
     setNowMs(Date.now());
@@ -51,8 +31,6 @@ export function ThinkingChip({
     return () => clearInterval(interval);
   }, [isStreaming, startedAtMs]);
 
-  // Follow the stream while the sheet is open, so the newest reasoning is the
-  // part the reader is looking at.
   useEffect(() => {
     if (!sheetOpen || !isStreaming) return;
     bodyScrollRef.current?.scrollToEnd({ animated: false });
@@ -62,9 +40,6 @@ export function ThinkingChip({
     isStreaming && startedAtMs !== undefined
       ? Math.max(0, (nowMs - startedAtMs) / 1000)
       : undefined;
-  // A completed block with no reported duration (or a rounded-to-zero one) has
-  // no timing to state — "Thought for 0s" under a long chain of reasoning is a
-  // measurement that was never taken, so fall back to the plain label.
   const headerLabel = isStreaming
     ? liveSeconds !== undefined
       ? `${deriveReasoningPhrase(thinkingText)} • Thinking for ${formatThinkingDuration(liveSeconds)}`
@@ -73,7 +48,6 @@ export function ThinkingChip({
       ? `Thought for ${formatThinkingDuration(duration)}`
       : 'Thought process';
 
-  // Don't render an empty completed block (edge case: <thinking></thinking>).
   if (!isStreaming && thinkingText.trim().length === 0) return null;
 
   return (
@@ -120,8 +94,6 @@ export function ThinkingChip({
           onPress={() => setSheetOpen(false)}
           accessibilityLabel="Dismiss reasoning"
           accessibilityRole="button"
-          // accessible=false so this backdrop does not swallow the sheet's own
-          // accessibility elements.
           accessible={false}
         >
           <SafeAreaView edges={['bottom']} style={styles.safeArea}>
@@ -183,8 +155,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 8,
-    // Tall enough to read a real chain of thought, short enough that the
-    // message behind it stays visible as context.
     maxHeight: '75%',
   },
   grabber: {

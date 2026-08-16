@@ -41,15 +41,6 @@ function getStripe(): Stripe {
   return stripeClient;
 }
 
-/**
- * Read-only proration preview for a mid-cycle upgrade. Returns the exact amount
- * Stripe would charge NOW (prorated) plus the going-forward recurring amount, so
- * the client can show a "you'll be charged $X today, then $Y/interval" confirmation
- * before the actual charge. Mirrors the setup of app/api/upgrade/route.ts exactly
- * (same tier order, same subscription lookup, same `always_invoice` and exact
- * `proration_date`) but calls `invoices.createPreview` — it NEVER
- * mutates the subscription or charges the card.
- */
 async function handleUpgradePreview(request: NextRequest): Promise<NextResponse> {
   const { userId } = await getClerkAuthUser(request);
 
@@ -129,7 +120,6 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
           code: 'checkout_required',
         },
         checkout: {
-          // Per-seat plans are quoted per seat; the org's bill is unit x seats.
           amountDueNowCents: checkoutPrice.amountMinor * requestedSeats,
           currency: checkoutPrice.currency,
           recurringAmountCents: checkoutPrice.amountMinor * requestedSeats,
@@ -141,9 +131,6 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   }
 
   const currentTier = sub.plan_tier ?? 'free';
-  // A same-tier request is a SEAT change on a per-seat plan and must survive the
-  // cheap pre-check; how many seats it actually adds is only knowable once the
-  // Stripe item is resolved below, where `classifyPlanChange` decides for real.
   const sameTierSeatChange = currentTier === targetPlan && isPerSeatBillingPlan(targetPlan);
   if (!sameTierSeatChange && !isUpgrade(currentTier, targetPlan)) {
     throw createError.validation(
@@ -204,7 +191,6 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
             code: 'checkout_required',
           },
           checkout: {
-            // Per-seat plans are quoted per seat; the org's bill is unit x seats.
             amountDueNowCents: checkoutPrice.amountMinor * requestedSeats,
             currency: checkoutPrice.currency,
             recurringAmountCents: checkoutPrice.amountMinor * requestedSeats,
@@ -241,10 +227,6 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
   }
   if (!stripeItemId || !customerId) throw createError.internal('Subscription has no items');
 
-  // Mirrors the identical guard in /api/upgrade so the refusal happens BEFORE
-  // the confirm dialog quotes a price, not after the user clicks pay. Keeping
-  // the two in sync matters: preview is the contract this product signs with
-  // the buyer, and the apply route replays its signed token verbatim.
   if (cancelAtPeriodEnd) {
     return NextResponse.json(
       {
@@ -299,32 +281,9 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
       customer: customerId,
       subscription: stripeSubId,
       subscription_details: {
-        // Quantity is the seat count. Omitting it makes Stripe price the change
-        // at the item's CURRENT quantity, so an org adding seats would confirm a
-        // proration for the seats it already had.
         items: [{ id: stripeItemId, price: newPriceId, quantity: requestedSeats }],
         proration_behavior: 'always_invoice',
-        // Preserve the existing renewal date. Setting the anchor to `now`
-        // starts a new full cycle and invoices the full target plan minus an
-        // unused-time credit; that is materially more than the requested
-        // remaining-period price difference.
-        //
-        // This MUST be stated explicitly. The intent above was previously left
-        // to the default, and `invoices.createPreview` defaults the anchor to
-        // `now` — which Stripe then refuses to combine with `proration_date`:
-        //
-        //   "You cannot specify `proration_date` when `billing_cycle_anchor=now`"
-        //
-        // Every upgrade preview therefore 500'd, so no user could reach the
-        // confirm step at all. `subscriptions.update` in the apply route
-        // defaults this to `unchanged`, so only the preview was affected — but
-        // that also meant preview and apply were describing different changes.
-        // Pinning it here makes the two agree, which is the premise the signed
-        // preview token relies on.
         billing_cycle_anchor: 'unchanged',
-        // Pin the calculation instant into the signed preview token. The apply
-        // endpoint reuses this exact second so Stripe cannot charge a value
-        // different from the amount the user confirmed.
         proration_date: prorationDate,
       },
     });
@@ -337,12 +296,7 @@ async function handleUpgradePreview(request: NextRequest): Promise<NextResponse>
     plan: targetPlan,
     billingInterval,
     currency: preview.currency,
-    // Charged now (prorated): the full new plan minus credit for unused time on
-    // the old plan. This is the ONLY figure the server must compute — the going-
-    // forward recurring price is a static catalog value the client already knows.
     amountDueNowCents: preview.amount_due,
-    // Per-seat plans recur at unit price x seats. Publishing the unit amount
-    // here would understate a Team org's going-forward bill by a factor of N.
     recurringAmountCents: priceSelection.amountMinor * requestedSeats,
     seats: requestedSeats,
     previewToken: createUpgradePreviewToken(

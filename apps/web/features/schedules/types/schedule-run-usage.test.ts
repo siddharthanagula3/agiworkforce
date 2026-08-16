@@ -4,19 +4,6 @@ import { getModels, isModelLive } from '@agiworkforce/types';
 import { formatCostCents, formatTokenCount, scheduleModelLabel, scheduleRunUsage } from './index';
 import type { ScheduleRun } from './index';
 
-/**
- * `scheduled-agent-executor.ts` has always returned `usage.costCents` with the
- * token counts, and `finalizeScheduleRun` has always persisted the whole result
- * object into `scheduled_task_runs.result` — so every scheduled run has been
- * billed, settled, and stored while the run history displayed only a duration.
- * A schedule that fires hourly is the easiest way to spend money without
- * noticing.
- *
- * The failure worth guarding is not a missing number, it is a WRONG one: a run
- * with no recorded usage must render as nothing, never as "$0.00", which claims
- * the run was free.
- */
-
 function run(result: Record<string, unknown> | null): ScheduleRun {
   return {
     id: 'run-1',
@@ -55,8 +42,6 @@ describe('scheduleRunUsage', () => {
   });
 
   it('returns null when the run recorded no usage at all', () => {
-    // Runs from before the executor emitted usage, and failures that never
-    // reached the provider. Rendering 0 here would be a false claim.
     expect(scheduleRunUsage(run({ text: 'done' }))).toBeNull();
     expect(scheduleRunUsage(run(null))).toBeNull();
   });
@@ -92,8 +77,6 @@ describe('formatCostCents', () => {
   });
 
   it('does not round a real cost down to free', () => {
-    // The single most misleading output available here: a run that cost
-    // something rendering as $0.00.
     expect(formatCostCents(0.45)).toBe('<$0.01');
     expect(formatCostCents(0.0001)).toBe('<$0.01');
   });

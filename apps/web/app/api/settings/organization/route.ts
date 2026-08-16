@@ -91,14 +91,10 @@ function buildOrgResponse(
     slug: org.slug,
     plan: access.plan,
     memberCount: parseInt(org.member_count, 10),
-    // Backed by `organizations.licensed_seats` when an organization is in
-    // scope (0085); null only when no organization was named.
     maxMembers: access.maxMembers,
     seatsConsumed: access.seatsConsumed,
     seatsAvailable: access.seatsAvailable,
     seatSource: access.seatSource,
-    // Derived by trigger from organization_members, so it can never disagree
-    // with the membership table.
     ownerUserId: org.owner_user_id ?? null,
     createdAt: org.created_at,
     updatedAt: org.updated_at,
@@ -106,11 +102,6 @@ function buildOrgResponse(
   };
 }
 
-/**
- * GET /api/settings/organization
- * Return the active workspace plus every organization membership available to
- * the account. Personal scope is represented by a null active organization.
- */
 async function handleGet(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org');
   if (rateLimitResponse) return rateLimitResponse;
@@ -133,8 +124,6 @@ async function handleGet(request: NextRequest) {
       )
     : [];
 
-  // Seat state is only meaningful for an organization in scope, so the
-  // capability is resolved AFTER membership rather than before it.
   const access = await getTeamAdminAccess(db, userId, membership?.organization_id ?? null);
 
   if (!membership) {
@@ -173,11 +162,6 @@ async function handleGet(request: NextRequest) {
   });
 }
 
-/**
- * POST /api/settings/organization
- * Provision a Team/Enterprise user's owned organization and make it active.
- * An account may also be a member of other workspaces through invitations.
- */
 async function handleCreate(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
@@ -195,11 +179,6 @@ async function handleCreate(request: NextRequest) {
   const db = getNeonDb();
   const access = await requireTeamAdminAccess(db, userId);
 
-  // Answer a caller who already has an organization before spending a Stripe
-  // round-trip on them: without this they pay for the read-back below on every
-  // repeat attempt, and during a Stripe outage they would get a 503 where the
-  // honest answer is 409. The authoritative check is still the serialized one
-  // inside the transaction — this only short-circuits the obvious case.
   const [priorOwnership] = await db.query<OrganizationMemberRow>(
     `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
        from public.organization_members
@@ -212,22 +191,10 @@ async function handleCreate(request: NextRequest) {
     throw createError.conflict('You already own a workspace. Switch to it from the account menu.');
   }
 
-  // A per-seat purchase can only precede this call — creating an organization
-  // requires a Team plan — so the webhook had no organization to write the paid
-  // seat count onto and reported `no_organization`. Read it back from Stripe now
-  // and let the INSERT carry it; `licensed_seats` is not writable from the
-  // product afterwards, so an organization created at the default of 1 would
-  // strand a multi-seat purchase until the buyer changed seats in Stripe's
-  // portal. The gate above proves an entitled team/enterprise `plan_tier`, NOT a
-  // per-seat subscription, so a null return here is ordinary (enterprise is
-  // contract-sold, and comped rows carry no Stripe quantity at all).
   let purchasedSeats: OwnerPurchasedSeats | null;
   try {
     purchasedSeats = await resolvePurchasedSeatsForOwner(db, getStripe, userId);
   } catch (error) {
-    // A missing STRIPE_SECRET_KEY and an unreachable Stripe both have to fail
-    // closed here, but they are different incidents: one is this deployment's
-    // configuration, the other is Stripe. Say which in the log.
     const reason =
       error instanceof Error && error.message.includes('STRIPE_SECRET_KEY')
         ? 'stripe_not_configured'
@@ -243,8 +210,6 @@ async function handleCreate(request: NextRequest) {
 
   try {
     const organization = await db.transaction(async (tx) => {
-      // Serialize provisioning by user so concurrent create requests cannot
-      // both pass the single-owned-workspace check.
       await tx.query(
         `select pg_advisory_xact_lock(hashtextextended('agi:organization-owner:' || $1, 0))`,
         [userId],
@@ -265,21 +230,6 @@ async function handleCreate(request: NextRequest) {
         );
       }
 
-      // Seats land on the INSERT rather than a follow-up UPDATE: a failure
-      // between the two would leave the organization at the default seat, and
-      // its owner told there is nothing to invite into for a purchase already
-      // made. `billing_plan_tier` rides along because it is what makes the
-      // number legible — it records which plan the seats were bought under.
-      //
-      // The Stripe anchors (`stripe_subscription_id`, `stripe_customer_id`) are
-      // deliberately NOT written here. `idx_organizations_stripe_subscription`
-      // (0085) is unique over a non-null subscription id, so stamping it at
-      // creation turns any org that already holds this buyer's subscription —
-      // e.g. one they transferred away and were then removed from — into a
-      // 23505 that the catch below reports as a slug conflict the user cannot
-      // escape by renaming. The webhook binds the anchor on the next per-seat
-      // event (`coalesce($3, stripe_subscription_id)` in seats.ts), which is
-      // where that binding has always been made.
       const [created] = await tx.query<OrganizationRow>(
         `insert into public.organizations
            (name, slug, created_by, licensed_seats, billing_plan_tier, seat_billing_updated_at)
@@ -316,9 +266,6 @@ async function handleCreate(request: NextRequest) {
     return NextResponse.json(
       {
         organization: buildOrgResponse(
-          // The owner membership row inserted above is what the 0085 trigger
-          // derives `organizations.owner_user_id` from, so reporting the
-          // creator here matches what a re-read returns.
           { ...organization, member_count: '1', owner_user_id: userId },
           {
             organization_id: organization.id,
@@ -347,10 +294,6 @@ async function handleCreate(request: NextRequest) {
   }
 }
 
-/**
- * PATCH /api/settings/organization
- * Update organization settings. Only owners and admins may update.
- */
 async function handlePatch(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-patch');
   if (rateLimitResponse) return rateLimitResponse;
@@ -385,7 +328,6 @@ async function handlePatch(request: NextRequest) {
     throw createError.notFound('Select a workspace before updating its settings');
   }
 
-  // Verify the user has an admin/owner role in the active workspace.
   const [membership] = await db.query<OrganizationMemberRow>(
     `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
      from public.organization_members
@@ -398,8 +340,6 @@ async function handlePatch(request: NextRequest) {
     throw createError.notFound('You are not a member of any organization');
   }
 
-  // Re-resolve with the organization in scope so the response carries this
-  // org's real licensed seat state rather than the no-org placeholder.
   const access = await requireTeamAdminAccess(db, userId, membership.organization_id);
 
   if (!['owner', 'admin'].includes(membership.role)) {
@@ -432,7 +372,6 @@ async function handlePatch(request: NextRequest) {
 
   logger.info({ userId, orgId: membership.organization_id }, 'Organization settings updated');
 
-  // Return the updated organization.
   const [updatedOrg] = await db.query<OrgWithCount>(
     `select o.id, o.name, o.slug, o.created_by, o.created_at, o.updated_at, o.owner_user_id,
             count(m.user_id)::text as member_count

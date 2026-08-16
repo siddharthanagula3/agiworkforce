@@ -1,11 +1,3 @@
-/**
- * Regression test: a single ProviderMessage with multiple tool_result
- * blocks must emit one Ollama `role: "tool"` message per result. Earlier
- * versions of `translateMessage` returned a single OllamaChatMessage and
- * silently dropped every tool_result past the first plus any co-occurring
- * text content. Local LLM users are first-class per pricing model and hit
- * this constantly when the agent uses multiple tools per turn.
- */
 
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
@@ -39,7 +31,6 @@ describe('Ollama tool_result split', () => {
     };
 
     const translated = translateChatRequest(req);
-    // user → assistant (with tool_calls) → tool(A) → tool(B)
     expect(translated.messages).toHaveLength(4);
     expect(translated.messages[0]?.role).toBe('user');
     expect(translated.messages[1]?.role).toBe('assistant');
@@ -64,8 +55,6 @@ describe('Ollama tool_result split', () => {
     };
 
     const translated = translateChatRequest(req);
-    // user (text) → tool(first) → tool(second). Three total — earlier
-    // versions emitted just one and dropped the text + the second result.
     expect(translated.messages).toHaveLength(3);
     expect(translated.messages[0]?.role).toBe('user');
     expect(translated.messages[0]?.content).toBe('Here are the results:');
@@ -113,8 +102,6 @@ describe('Ollama tool_result split', () => {
   });
 
   it('preserves all three tool_results when more than two are present', () => {
-    // Earlier `[0]`-style indexing would emit only the first; this asserts
-    // every result reaches the wire, in submitted order.
     const req: ChatRequest = {
       model: FIXTURE_MODEL_ID,
       messages: [
@@ -135,9 +122,6 @@ describe('Ollama tool_result split', () => {
   });
 
   it('flattens multi-block tool_result content (TextBlock[] form) into a single string per result', () => {
-    // The tool_result.content field is `string | TextBlock[]`. The
-    // TextBlock[] form must be joined per-result, not lost or merged
-    // across results.
     const req: ChatRequest = {
       model: FIXTURE_MODEL_ID,
       messages: [

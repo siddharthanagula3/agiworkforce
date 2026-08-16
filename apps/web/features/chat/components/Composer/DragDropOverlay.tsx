@@ -80,7 +80,6 @@ export function DragDropOverlay({
     };
   }, [accept, maxFiles, onDrop]);
 
-  // suppress unused warning
   void dragCounter;
 
   return (

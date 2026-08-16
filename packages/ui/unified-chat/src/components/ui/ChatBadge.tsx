@@ -2,15 +2,6 @@ import type { HTMLAttributes } from 'react';
 import { Badge } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 
-/**
- * Thin wrapper over @agiworkforce/ui Badge that adds the chat package's
- * domain variants (result/script/file/byok/local), styled with the live
- * --chat-badge-* tokens from @agiworkforce/design-tokens/chat.css.
- *
- * Uses the pkg Badge's `outline` variant as a base (no fill, no hover tint)
- * so only color is overridden per domain variant — `border-transparent`
- * cancels the outline variant's visible border.
- */
 interface ChatBadgeProps extends HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'result' | 'script' | 'file' | 'byok' | 'local';
 }

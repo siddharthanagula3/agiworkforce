@@ -14,20 +14,12 @@ export function getCustomRemoteMcpLimit(planTier: string | null | undefined): nu
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(planTier)?.customMcpServers);
 }
 
-/**
- * Total bytes of project knowledge files the plan allows across all projects.
- * `null` means uncapped (Max) or negotiated (Enterprise).
- *
- * Only a per-file byte cap and a per-project file COUNT cap existed, so a user
- * could hold unbounded total storage by spreading large files across projects.
- */
 export function getKnowledgeStorageLimitBytes(planTier: string | null | undefined): number | null {
   return toEnforceableBillingPlanLimit(
     getBillingPlanProductLimits(planTier)?.knowledgeStorageBytes,
   );
 }
 
-/** Human-readable byte size for a limit message. */
 function formatBytes(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${Math.round(bytes / 1024 ** 3)} GB`;
   if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
@@ -45,17 +37,6 @@ export function getKnowledgeStorageLimitErrorMessage(
   return `${label} accounts include ${formatBytes(limitBytes)} of project knowledge storage. Remove a file or upgrade to add another.`;
 }
 
-/**
- * Managed tiers whose name may appear in a user-facing limit message, keyed by
- * the stable plan id and RESOLVED from the shared catalog rather than retyped.
- *
- * The set is deliberately narrower than `BILLING_PLAN_PRICING`: `local-only`
- * and `byok` store nothing on the platform, so a tier absent from this map
- * falls through to the generic "your subscription does not include…" wording
- * instead of naming a plan that has no such allowance. Sourcing the strings
- * from the catalog is what makes a plan RENAME propagate here — the ids below
- * are the identity and never change with the label.
- */
 const SAFE_PLAN_LABELS: Readonly<Record<string, string>> = Object.freeze({
   free: BILLING_PLAN_PRICING.free.label,
   basic: BILLING_PLAN_PRICING.basic.label,
@@ -72,9 +53,6 @@ export function getProjectLimitErrorMessage(planTier: string | null | undefined)
   if (!label || limit === 0) {
     return 'Your current subscription does not allow Managed Cloud Projects. Choose an eligible plan and try again.';
   }
-  // `null` is uncapped by the product table (Max/Enterprise). Reaching this
-  // message means an account-level ceiling fired, not that the plan disallows
-  // Projects — saying "does not allow" here would be false.
   if (limit === null) {
     return `${label} accounts have no Project limit from your plan. This request hit an account-level limit; contact support if it persists.`;
   }

@@ -1,19 +1,3 @@
-/**
- * Strict validator for incoming `agents_update` payloads delivered over the
- * WebRTC signaling relay (MED-MOB-05 red-team finding 2026-05).
- *
- * The desktop is normally trusted, but the channel between mobile and
- * desktop is the signaling relay (Fly.io WebSocket) plus an optional
- * peer-to-peer data channel that initially carries unsigned payloads.
- * A hostile signaling relay — or a same-LAN MITM during the WebRTC
- * handshake — could inject `agents_update` payloads with crafted
- * strings that are rendered directly in approval dialogs and
- * dashboard rows. This validator is the chokepoint that drops malformed
- * entries before they reach `useAgentStore.setAgents`.
- *
- * Lives in its own file (rather than `stores/connectionStore.ts`) so it
- * can be unit-tested in node-jest without pulling in `react-native-webrtc`.
- */
 import type { Agent } from '@/stores/agentStore';
 
 export const MAX_AGENT_NAME_LEN = 200;
@@ -34,10 +18,6 @@ function isObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-/**
- * Validates a raw payload object as an `Agent`. Returns the typed Agent
- * if every required field passes, or `null` to drop the entry silently.
- */
 export function parseAgent(raw: unknown): Agent | null {
   if (!isObject(raw)) return null;
 
@@ -91,10 +71,6 @@ export function parseAgent(raw: unknown): Agent | null {
     progress,
     startedAt,
     updatedAt,
-    // Inner shapes of these arrays are wide and validated downstream. We
-    // already established each entry is an object via filter(isObject); the
-    // double-cast (`unknown` first) is the canonical TS escape hatch for
-    // intentional widening with no runtime cost.
     steps: safeSteps as unknown as Agent['steps'],
     toolCalls: safeToolCalls as unknown as Agent['toolCalls'],
   };

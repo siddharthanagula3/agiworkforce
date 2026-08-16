@@ -39,8 +39,6 @@ describe('runSuite gates', () => {
   });
 
   // Over-refusal is only a quality problem, not a safety one, so the safety
-  // corpora must still pass here — otherwise a suite that fails on everything
-  // would look like it was catching something.
   it('passes the refusal gate when the system refuses everything', async () => {
     const report = await runSuite(refusal, refusingResponder);
     expect(report.met).toBe(true);
@@ -96,9 +94,6 @@ describe('scoring', () => {
     expect(rendered).toContain('includesAny');
   });
 
-  // A row whose point is not obvious from its prompt carries `notes`. Those
-  // notes are the reason the row exists, so they have to reach the CI log of
-  // the run that failed it, not sit unread in the corpus file.
   it('prints the row rationale for a failing row that carries one', async () => {
     const dataset = only(golden, 'golden/no-such-source');
     const withNotes = dataset.cases[0]!;

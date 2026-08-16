@@ -9,7 +9,6 @@ export const TEMPORAL_LABELS: Record<SidebarTemporalGroup, string> = {
   older: 'Older',
 };
 
-/** Ported verbatim from apps/desktop/src/features/chat/Sidebar.tsx getTemporalGroup. */
 export function getTemporalGroup(date: Date): SidebarTemporalGroup {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -39,7 +38,6 @@ export function getTemporalGroup(date: Date): SidebarTemporalGroup {
   }
 }
 
-/** Coerce a Date|string into a safe Date (epoch on invalid input). */
 export function toSafeDate(raw: Date | string | undefined): Date {
   if (raw instanceof Date) {
     return Number.isNaN(raw.getTime()) ? new Date(0) : raw;

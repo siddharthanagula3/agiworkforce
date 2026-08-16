@@ -5,13 +5,9 @@ import { cn } from '../cn';
 import { useUiTranslation } from '../i18n';
 
 interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Animation style */
   animation?: 'pulse' | 'wave' | 'none';
 }
 
-/**
- * Base skeleton component for loading states.
- */
 function Skeleton({ className, animation = 'pulse', ...props }: SkeletonProps) {
   const animationClass = {
     pulse: 'animate-pulse',
@@ -30,17 +26,10 @@ function Skeleton({ className, animation = 'pulse', ...props }: SkeletonProps) {
 
 Skeleton.displayName = 'Skeleton';
 
-/**
- * Skeleton for text content - displays multiple lines.
- */
 interface SkeletonTextProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Number of lines to display */
   lines?: number;
-  /** Whether the last line should be shorter */
   lastLineWidth?: 'full' | 'three-quarters' | 'half';
-  /** Gap between lines */
   gap?: 'sm' | 'md' | 'lg';
-  /** Animation style */
   animation?: 'pulse' | 'wave' | 'none';
 }
 
@@ -86,17 +75,10 @@ function SkeletonText({
 
 SkeletonText.displayName = 'SkeletonText';
 
-/**
- * Skeleton for a card component.
- */
 interface SkeletonCardProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Whether to show an image placeholder */
   showImage?: boolean;
-  /** Whether to show action buttons */
   showActions?: boolean;
-  /** Number of text lines */
   textLines?: number;
-  /** Animation style */
   animation?: 'pulse' | 'wave' | 'none';
 }
 
@@ -135,17 +117,10 @@ function SkeletonCard({
 
 SkeletonCard.displayName = 'SkeletonCard';
 
-/**
- * Skeleton for a list item with avatar.
- */
 interface SkeletonListItemProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Whether to show an avatar */
   showAvatar?: boolean;
-  /** Avatar shape */
   avatarShape?: 'circle' | 'square';
-  /** Number of text lines */
   textLines?: number;
-  /** Animation style */
   animation?: 'pulse' | 'wave' | 'none';
 }
 
@@ -186,15 +161,9 @@ function SkeletonListItem({
 
 SkeletonListItem.displayName = 'SkeletonListItem';
 
-/**
- * Skeleton for a chat message.
- */
 interface SkeletonChatMessageProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Whether this is a user message (right-aligned) */
   isUser?: boolean;
-  /** Number of text lines */
   lines?: number;
-  /** Animation style */
   animation?: 'pulse' | 'wave' | 'none';
 }
 
@@ -229,13 +198,8 @@ function SkeletonChatMessage({
 
 SkeletonChatMessage.displayName = 'SkeletonChatMessage';
 
-/**
- * Skeleton for a table row.
- */
 interface SkeletonTableRowProps extends React.HTMLAttributes<HTMLTableRowElement> {
-  /** Number of columns */
   columns?: number;
-  /** Animation style */
   animation?: 'pulse' | 'wave' | 'none';
 }
 
@@ -267,15 +231,9 @@ function SkeletonTableRow({
 
 SkeletonTableRow.displayName = 'SkeletonTableRow';
 
-/**
- * Skeleton for form fields.
- */
 interface SkeletonFormFieldProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** Whether to show a label */
   showLabel?: boolean;
-  /** Whether to show helper text */
   showHelper?: boolean;
-  /** Animation style */
   animation?: 'pulse' | 'wave' | 'none';
 }
 

@@ -158,14 +158,6 @@ function closeServer(server: Server): Promise<void> {
   });
 }
 
-/**
- * Start a deterministic, loopback-only LM Studio-compatible provider.
- *
- * The fixture intentionally lives outside the extension host. The exact
- * installed VSIX and its configured CLI have to discover and call it through
- * their production protocols. Control routes require a per-run random token
- * and expose only bounded request metadata, never prompt bodies or auth values.
- */
 export async function startLocalModelFixture(
   holdAfterFirstDeltaMs: number,
 ): Promise<LocalModelFixture> {

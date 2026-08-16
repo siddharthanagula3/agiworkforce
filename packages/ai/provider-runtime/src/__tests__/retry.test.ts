@@ -140,7 +140,6 @@ describe('withRetry', () => {
     await expect(
       withRetry(
         async () => {
-          // input already >= contextLimit-1000 → no headroom for FLOOR_OUTPUT_TOKENS=3000.
           throw new Error(
             'input length and `max_tokens` exceed context limit: 199999 + 8192 > 200000',
           );
@@ -205,11 +204,6 @@ describe('withRetry', () => {
   });
 
   it('property test: 100 simulated failure paths terminate correctly', async () => {
-    // Property: every classified outcome should yield exactly one of:
-    //   - return value (success)
-    //   - CannotRetryError
-    //   - FallbackTriggeredError
-    // No infinite loops, no other thrown class.
     const fakeErrors = [
       { status: 200, payload: 'ok' as const },
       { status: 401, msg: 'unauthorized' },
@@ -238,7 +232,6 @@ describe('withRetry', () => {
     let fallbacks = 0;
 
     for (let i = 0; i < 100; i++) {
-      // Randomise per-iteration: model, fallback, picked error, retries.
       const errIdx = Math.floor(Math.random() * fakeErrors.length);
       const ctx = createRetryContext({
         model: PRIMARY_FIXTURE_MODEL_ID,
@@ -261,11 +254,9 @@ describe('withRetry', () => {
       } catch (err) {
         if (err instanceof FallbackTriggeredError) fallbacks++;
         else if (err instanceof CannotRetryError) cannots++;
-        else throw err; // unexpected — fail the test
+        else throw err;
       }
     }
-    // Sanity — we got at least some of each terminal class given the
-    // randomised input.
     expect(successes + cannots + fallbacks).toBe(100);
   });
 
@@ -287,8 +278,6 @@ describe('withRetry', () => {
   });
 
   it('does not invoke onEvent if hook throws (does not catch)', () => {
-    // Negative test — we ensure onEvent throws propagate. Using vi.fn that throws
-    // would explode the call; we just confirm the contract by not catching.
     const hook = vi.fn();
     expect(hook).not.toBeCalled();
   });

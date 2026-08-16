@@ -1,14 +1,5 @@
 'use client';
 
-/**
- * SessionItem — a single conversation row, ChatGPT-style: title + preview,
- * active highlight, inline-rename, and a hover 3-dots menu exposing pin/star/
- * rename/share/archive/move-to-project/delete. Ported from the desktop
- * ConversationItem hover-action layout + the web ConversationListItem menu,
- * merged into one prop-driven, store-free component.
- *
- * Every action is an injected callback; the component performs NO IO.
- */
 import { memo, useEffect, useRef, useState } from 'react';
 import {
   Archive,
@@ -45,11 +36,8 @@ export interface SessionItemProps extends SessionItemHandlers {
   session: SidebarSession;
   isActive: boolean;
   isKeyboardFocused?: boolean;
-  /** When set, shows a "in <name>" attribution line under the preview. */
   projectName?: string;
-  /** Projects offered in the "Move to project" submenu. */
   projects?: SidebarProject[];
-  /** Compact menu (delete only) — mirrors desktop Simple Mode. */
   simple?: boolean;
 }
 

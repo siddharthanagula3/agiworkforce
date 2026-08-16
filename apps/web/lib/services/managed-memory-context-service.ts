@@ -1,10 +1,3 @@
-/**
- * Server-owned account-memory context for Managed Cloud chat.
- *
- * The completion route owns the policy of whether memory is allowed for a
- * turn (notably, Temporary Chats opt out). This service only owns the reusable
- * owner-scoped loading, prompt bounding, and request-merging mechanics.
- */
 
 import { createHash } from 'node:crypto';
 import { classifyMemoryCategory, normalizeMemoryKey } from '@agiworkforce/agent-core';
@@ -42,11 +35,6 @@ function truncate(value: string, maxChars: number): string {
   return value.length > maxChars ? `${value.slice(0, Math.max(0, maxChars - 1))}…` : value;
 }
 
-/**
- * Read the same account-scoped `capabilities` namespace written by Web and
- * synchronized to Desktop Managed Cloud. Missing, malformed, or absent values
- * are disabled so a settings outage can never disclose memory to a prompt.
- */
 export async function loadManagedMemoryPolicy(
   db: ManagedMemoryContextDb,
   params: { userId: string },
@@ -64,30 +52,15 @@ export async function loadManagedMemoryPolicy(
       : {};
   return {
     enabled: capabilities['memory'] === true,
-    // Preserve the pre-toggle behavior for accounts that opted into Memory
-    // before this key existed. An explicit false is the only off value.
     generateFromHistory:
       capabilities['memory'] === true && capabilities['generateFromHistory'] !== false,
     allowToolAssistedGeneration: capabilities['allowToolAssistedGeneration'] === true,
   };
 }
 
-/** Upper bound on stored exclusion terms — a settings list, not a rules engine. */
 export const MAX_MEMORY_EXCLUSIONS = 50;
-/** Terms shorter than this match almost everything and would disable memory wholesale. */
 export const MIN_MEMORY_EXCLUSION_LENGTH = 3;
 
-/**
- * Normalize an exclusion list from stored settings.
- *
- * Deliberately plain case-insensitive SUBSTRINGS, not regexes: a user-supplied
- * regex is both a footgun (a stray `.*` silently excludes everything) and a
- * ReDoS surface on a server-side path that runs per chat turn.
- *
- * Anything unusable is dropped rather than rejected — this runs on the write
- * path, and a malformed settings blob must not stop the filter applying to the
- * terms that ARE valid.
- */
 export function normalizeMemoryExclusions(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
@@ -101,14 +74,6 @@ export function normalizeMemoryExclusions(value: unknown): string[] {
   return [...seen];
 }
 
-/**
- * Terms this account has asked never to be remembered.
- *
- * Read from the same `user_settings` row as the memory policy. Absent or
- * malformed settings yield an empty list: an exclusion that fails open is a
- * privacy claim the product does not honor, so this is paired with a write-path
- * filter that runs on every candidate, NOT with client-side filtering.
- */
 export async function loadMemoryExclusions(
   db: ManagedMemoryContextDb,
   params: { userId: string },
@@ -127,14 +92,12 @@ export async function loadMemoryExclusions(
   return normalizeMemoryExclusions(memory['excludedTerms']);
 }
 
-/** True when `content` contains any excluded term (case-insensitive). */
 export function isMemoryExcluded(content: string, exclusions: readonly string[]): boolean {
   if (exclusions.length === 0) return false;
   const haystack = content.toLowerCase();
   return exclusions.some((term) => haystack.includes(term));
 }
 
-/** Load bounded, active account memories through an owner-scoped DB handle. */
 export async function loadManagedMemoryContext(
   db: ManagedMemoryContextDb,
   params: { userId: string },
@@ -157,11 +120,6 @@ export async function loadManagedMemoryContext(
   return rows;
 }
 
-/**
- * Render memory facts as serialized, explicitly untrusted data. The model may
- * use relevant facts but cannot treat text saved in memory as higher-priority
- * instructions.
- */
 export function formatManagedMemorySystemPrompt(
   memories: readonly ManagedMemoryContextItem[],
 ): string | null {
@@ -185,7 +143,6 @@ export function formatManagedMemorySystemPrompt(
   return fenceUntrustedMemoryContent(JSON.stringify(bounded), 'account_memories');
 }
 
-/** Merge the bounded memory block into the request's leading system context. */
 export function applyManagedMemoryContext(
   chatRequest: ChatCompletionRequest,
   prompt: string,
@@ -211,16 +168,9 @@ function deterministicAutoMemoryId(userId: string, normalizedKey: string): strin
 export interface ManagedAutoMemoryResult {
   extracted: number;
   inserted: number;
-  /** Candidates dropped by the account's sensitive-data exclusions. */
   excluded: number;
 }
 
-/**
- * Persist already-extracted facts in one bounded, idempotent statement.
- * Deterministic UUIDs prevent concurrent/retried auto turns from duplicating
- * one fact; the normalized owner-scoped NOT EXISTS check also reuses an
- * equivalent memory the user previously saved by hand.
- */
 export async function persistManagedAutoMemoryFacts(
   db: ManagedMemoryContextDb,
   params: { userId: string; candidates: readonly string[] },
@@ -228,11 +178,6 @@ export async function persistManagedAutoMemoryFacts(
   const extracted = params.candidates.length;
   if (extracted === 0) return { extracted: 0, inserted: 0, excluded: 0 };
 
-  // Sensitive-data exclusions are enforced HERE, on the write path, before any
-  // candidate reaches the table. Filtering in the UI would leave the fact
-  // stored and merely hidden, which is the false-privacy-claim shape: the user
-  // is told it was excluded while it sits in the database and keeps being fed
-  // to the model. `excluded` is reported so the caller can log the drop.
   const exclusions = await loadMemoryExclusions(db, { userId: params.userId });
 
   const seen = new Set<string>();

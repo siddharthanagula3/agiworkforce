@@ -1,17 +1,3 @@
-/**
- * terminalShellIntegration.test.ts — SIX-15.
- *
- * "Explain Terminal Output" read `terminal.shellIntegration.executions`, a
- * property that does not exist on the VS Code API: `vscode.TerminalShellIntegration`
- * carries only `cwd` and `executeCommand`, and executions are delivered through
- * `window.onDidStartTerminalShellExecution` / `onDidEndTerminalShellExecution`.
- * The branch was permanently undefined, so every invocation fell through to the
- * manual-paste prompt claiming "Shell integration is not available" — false
- * whenever it was active.
- *
- * These tests drive the real events and assert the command captures output, and
- * that the fallback prompt states the real reason when it is genuinely reached.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fs from 'fs';
@@ -70,7 +56,6 @@ function listeners(): { start: ShellExecutionListener; end: ShellExecutionListen
   return { start, end };
 }
 
-/** Let the queued `read()` drain settle. */
 async function flush(): Promise<void> {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 }
@@ -98,10 +83,8 @@ describe('terminal shell-integration capture (SIX-15)', () => {
       path.resolve(__dirname, '../providers/terminalProvider.ts'),
       'utf8',
     );
-    // Comments stripped: the file documents the old shape on purpose.
     const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
-    // The exact defect: a locally-declared shape with an `executions` array.
     expect(code).not.toMatch(/shellIntegration\.executions/);
     expect(code).not.toMatch(/interface TerminalShellIntegration/);
     expect(code).toContain('onDidStartTerminalShellExecution');
@@ -122,7 +105,6 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     const explanation = await provider.captureAndExplain(token());
 
     expect(explanation).toBe('explanation');
-    // The false claim this item is about.
     expect(vscode.window.showInputBox).not.toHaveBeenCalled();
     expect(lastPrompt()).toContain('3 passing');
     expect(lastPrompt()).toContain('1 failing');
@@ -201,7 +183,6 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     const execution = makeExecution('pnpm build', ['compiling…\n']);
     start({ terminal, execution });
     await flush();
-    // No end event — the command has not finished.
 
     await provider.captureAndExplain(token());
 
@@ -244,13 +225,11 @@ describe('terminal shell-integration capture (SIX-15)', () => {
     await flush();
     end({ terminal, execution, exitCode: 0 });
 
-    // A different terminal must not inherit the capture.
     vscode.window.activeTerminal = other;
     vi.mocked(vscode.window.showInputBox).mockResolvedValue('pasted output');
     await provider.captureAndExplain(token());
     expect(vscode.window.showInputBox).toHaveBeenCalledTimes(1);
 
-    // Closing the captured terminal releases its buffered output.
     const onClose = vi.mocked(vscode.window.onDidCloseTerminal).mock.calls[0]?.[0] as unknown as (
       t: vscode.Terminal,
     ) => void;

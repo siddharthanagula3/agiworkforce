@@ -2,33 +2,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * Guard rails for the trust surface: /security, /trust, /status, /sla.
- *
- * WHY THIS FILE EXISTS
- * The 2026 marketing audit found the site asserting things the code
- * contradicted, and the recurring mechanism was not deliberate exaggeration —
- * it was two habits:
- *
- *   1. Certification-adjacent language ("SOC 2", "ISO 27001", "HIPAA
- *      compliant", "penetration tested") drifting onto a page for a product
- *      that holds none of those. AGI has no SOC 2 report, no ISO 27001
- *      certificate, and no third-party penetration test.
- *   2. Unfalsifiable hedges ("is designed to", "where available", "where
- *      enabled", "should not be able to") standing in for a control. A
- *      reviewer can neither verify nor disprove them, so real drift hides
- *      inside them — which is exactly how an advertised audit trail survived
- *      over a table nothing wrote to.
- *
- * These tests read the page sources as text. That is deliberate: they must fail
- * on the words a future writer types, whether or not the component renders in a
- * test environment.
- *
- * If a check below fires on legitimate copy, the fix is to state the control
- * concretely or move it to the "what we have not done" section — not to widen
- * the pattern.
- */
-
 const APP_DIR = path.resolve(__dirname, '..', '..');
 
 const PAGES = {
@@ -44,23 +17,10 @@ function read(page: PageName): string {
   return readFileSync(PAGES[page], 'utf8');
 }
 
-/**
- * Strip comments before matching. The doc comments on these pages quote the
- * exact hedges and certification words they are banning, so leaving them in
- * would make every rule trip on its own explanation.
- */
 function rendered(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//gu, '').replace(/^\s*\/\/.*$/gmu, '');
 }
 
-/**
- * Hedges that describe an intention rather than a deployed control. Each of
- * these appeared verbatim on the pre-2026-08 trust surface.
- *
- * This list stays scoped to the four trust pages on purpose. "Are designed to"
- * is a defect in a security control and ordinary English on a feature page, so
- * it cannot be lifted to a site-wide rule the way the certification checks were.
- */
 const UNFALSIFIABLE_HEDGES = [
   'is designed to',
   'are designed to',
@@ -72,17 +32,6 @@ const UNFALSIFIABLE_HEDGES = [
   'is expected to',
   'are expected to',
 ] as const;
-
-/*
- * The certification-honesty and security-superlative checks that used to live
- * here now run over EVERY route page, in
- * `app/__tests__/compliance-claim-honesty.test.ts` (ledger DOC-024). They were
- * moved rather than duplicated: a four-page copy sitting beside a site-wide
- * copy is how two lists drift apart. That file also carries the rule these four
- * checks could not express — a ban on asserting an audit or certification
- * PROGRAMME, which is what /enterprise was still doing after /trust dropped the
- * same claim.
- */
 
 describe('trust surface — falsifiable statements', () => {
   for (const page of Object.keys(PAGES) as PageName[]) {
@@ -135,7 +84,6 @@ describe('trust surface — the honest-gap sections stay present', () => {
     const source = read('trust');
     expect(source).toContain('LAST_REVIEWED');
     expect(source).toContain('NEXT_REVIEW');
-    // Every ledger row carries its own as-of date.
     expect(source.match(/asOf: '\d{4}-\d{2}-\d{2}'/gu)?.length ?? 0).toBeGreaterThan(10);
   });
 
@@ -147,11 +95,8 @@ describe('trust surface — the honest-gap sections stay present', () => {
 
   it('/status describes its own check mechanism correctly', () => {
     const lower = read('status').toLowerCase();
-    // The page calls runHealthChecks() in-process precisely to avoid a
-    // Host-header SSRF; claiming it fetches its own endpoint was false.
     expect(lower).toContain('in-process');
     expect(lower).not.toContain('call to our health endpoint');
-    // And it must disclose what the three-check signal does not cover.
     expect(lower).toContain('not covered');
   });
 });
@@ -183,17 +128,6 @@ describe('trust surface — managed cloud maturity is stated', () => {
 });
 
 describe('trust surface — the erasure figure is derived, not remembered', () => {
-  /**
-   * /security and /trust both publish a count of the tables account erasure
-   * walks. Both said 34 while `USER_SCOPED_TABLES` had grown to 66 — a figure
-   * nothing checked, so every migration that added a user-scoped table widened
-   * the gap in silence. That is the exact shape of claim this whole test file
-   * exists to catch, and it had no guard.
-   *
-   * The number is read out of the constant rather than written here, so this
-   * assertion cannot itself go stale: add a table, and the pages must be
-   * updated in the same change or the build fails.
-   */
   it('publishes the real USER_SCOPED_TABLES length on /security and /trust', async () => {
     const { USER_SCOPED_TABLES } = await import('@/lib/server/account-erasure');
     const count = USER_SCOPED_TABLES.length;

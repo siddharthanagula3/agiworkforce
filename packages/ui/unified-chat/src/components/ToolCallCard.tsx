@@ -1,19 +1,3 @@
-// packages/ui/unified-chat/src/components/ToolCallCard.tsx
-//
-// Canonical tool-call renderer, shared by web and desktop. Consolidated from
-// three parallel implementations: this file's own prior standalone card
-// (framer-motion, no InlineToolCall — only ever used by this package's own
-// unused-by-apps ToolTimeline/TaskPhaseTimeline), apps/web's InlineToolCall-based
-// wrapper (approval callbacks, code-block detection, copy action), and
-// apps/desktop's InlineToolCall-based wrapper (Tauri-IPC approval, sidecar link).
-//
-// Both apps' real production UIs were already built on InlineToolCall, so that
-// stays the rendering foundation here. Approve/reject/cancel are injected
-// callbacks — this component owns no transport (REST, IPC, store) of its own,
-// matching the "injected callbacks for surface-specific transport" pattern.
-// `kind` defaults to InlineToolCall's own `'auto'` label-based inference
-// (desktop's separate toInlineKind() duplicated this unnecessarily, since it
-// always passed the raw tool name as the label anyway).
 
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
 import { AlertCircle, Check, Copy, Play, X as XIcon } from 'lucide-react';
@@ -29,59 +13,29 @@ export type ToolCallStatus =
   | 'cancelled';
 
 export interface ToolCallCardProps {
-  /** Stable id — used for aria wiring and passed back to approve/reject/cancel/copy callbacks. */
   id: string;
-  /** Tool name shown in the bar; also drives auto icon-kind inference (see `kind`). */
   name: string;
   status: ToolCallStatus;
-  /**
-   * Independent approval-gate flag. Shows the approval prompt even when
-   * `status` isn't `'awaiting_approval'` — desktop models these as orthogonal
-   * (a tool can be `pending` and simultaneously awaiting a permission gate).
-   */
   requiresApproval?: boolean;
-  /** Structured parameters. Rendered as JSON, or a highlighted code block when a code-execution tool is detected (see `detectCodeBlock`). */
   args?: Record<string, unknown>;
-  /** Pre-formatted request text. Rendered as-is instead of `args` when provided (desktop's IPC tool-command string, which arrives already formatted). */
   commandText?: string;
-  /** Whether to render the "Request" section at all (args/commandText). Defaults to true. */
   showParameters?: boolean;
   result?: string;
   error?: string;
   elapsedMs?: number;
-  /** Unix ms. When set and `status === 'running'`, the duration ticks live instead of using `elapsedMs`. */
   startedAt?: number;
-  /** Tool-kind override. Omit to use InlineToolCall's own name-based auto-inference. */
   kind?: InlineToolKind;
-  /** Badge-letter override (Claude parity) — e.g. a connector's own initial ("F"
-   * for Filesystem) instead of the generic per-kind letter. Only used with the
-   * badge icon style. */
   iconLetter?: string;
-  /** Injected transport callbacks — the caller owns the actual approve/reject/cancel side effect (IPC call, REST call, store mutation). */
   onApprove?: (id: string) => void;
   onReject?: (id: string) => void;
   onCancel?: (id: string) => void;
-  /**
-   * True when an awaiting-approval card's suspended turn is no longer
-   * resolvable from its persisted run reference (for example, an old card
-   * created before durable checkpoints existed). Renders a distinct expired
-   * notice instead of live Approve/Reject buttons, which would otherwise
-   * render wired but silently no-op when clicked. Callers decide liveness
-   * (e.g. web's `isApprovalTurnLive`); this component only renders the state.
-   */
   expired?: boolean;
-  /** Resend affordance shown on an expired approval card. Omit to show text guidance only (no fake availability). */
   onResend?: (id: string) => void;
-  /** Hides the built-in copy-summary-to-clipboard action when explicitly set to false. Defaults to true. */
   showCopyAction?: boolean;
-  /** Extra content rendered below the bar — e.g. desktop's "Open in {tab} view" sidecar link. */
   footer?: ReactNode;
   className?: string;
 }
 
-// ─── Code-block detection (ported from apps/web's ToolCallCard) ─────────────
-
-/** Tool names that carry executable code in their parameters. */
 const CODE_EXECUTION_TOOLS = new Set([
   'execute_code',
   'code_execute',
@@ -91,10 +45,6 @@ const CODE_EXECUTION_TOOLS = new Set([
   'jupyter_execute',
 ]);
 
-/**
- * Returns the { language, code } pair to highlight from a tool's parameters,
- * or null when the parameters are not code-bearing.
- */
 export function detectCodeBlock(
   toolName: string,
   parameters?: Record<string, unknown>,
@@ -159,8 +109,6 @@ function HighlightedCodeBlock({ language, code }: { language: string; code: stri
   );
 }
 
-// ─── Status mapping ───────────────────────────────────────────────────────────
-
 function toInlineStatus(
   status: ToolCallStatus,
   requiresApproval?: boolean,
@@ -187,8 +135,6 @@ function formatDuration(ms: number): string {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60_000).toFixed(1)}m`;
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 const ToolCallCardComponent = ({
   id,

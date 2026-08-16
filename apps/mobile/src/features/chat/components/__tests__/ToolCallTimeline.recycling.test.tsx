@@ -1,21 +1,7 @@
-/**
- * ToolCallTimeline — FlashList v2 component recycling (streaming/approval
- * cluster Finding 6). FlashList reuses mounted component instances across
- * list items for performance; a bare useState for UI-only toggle state would
- * bleed a PRIOR message's collapsed/expanded state onto whichever message
- * this instance now renders after a recycle. `rerender`ing the SAME instance
- * with a different `messageId` (without unmounting) is exactly what a
- * recycle does from React's point of view -- this pins that the collapsed
- * state resets when that happens instead of carrying over.
- */
 import { render, fireEvent } from '@testing-library/react-native';
 import { ToolCallTimeline } from '../ToolCallTimeline';
 import type { ToolCall } from '@/types/chat';
 
-// Deliberately still `running`. A finished run auto-collapses on its own (see
-// tool-call-timeline.test.tsx), which would mask the thing these tests exist to
-// pin: that a MANUAL toggle does not bleed across a recycle. Keeping the run in
-// flight isolates the recycling invariant from the auto-collapse behaviour.
 const manyTools: ToolCall[] = Array.from({ length: 5 }, (_, i) => ({
   id: `tool-${i}`,
   name: 'read_file',
@@ -33,15 +19,11 @@ describe('ToolCallTimeline — recycling state reset', () => {
       <ToolCallTimeline messageId="msg-a" toolCalls={manyTools} summary={summary} />,
     );
 
-    // Collapse it for message A.
     fireEvent.press(getByLabelText(toggleLabel(summary, false)));
     expect(() => getByLabelText(toggleLabel(summary, true))).not.toThrow();
 
-    // FlashList recycles this SAME component instance onto a different
-    // message (no unmount/remount -- that's the whole point of recycling).
     rerender(<ToolCallTimeline messageId="msg-b" toolCalls={manyTools} summary={summary} />);
 
-    // Message B must start expanded (the default), not inherit A's collapse.
     expect(() => getByLabelText(toggleLabel(summary, false))).not.toThrow();
   });
 
@@ -54,8 +36,6 @@ describe('ToolCallTimeline — recycling state reset', () => {
     fireEvent.press(getByLabelText(toggleLabel(summary, false)));
     expect(() => getByLabelText(toggleLabel(summary, true))).not.toThrow();
 
-    // Same message, e.g. a streaming delta added a new tool call -- must
-    // stay collapsed (a real user toggle must survive unrelated re-renders).
     rerender(
       <ToolCallTimeline messageId="msg-a" toolCalls={manyTools} summary="Read 5 files, updated" />,
     );

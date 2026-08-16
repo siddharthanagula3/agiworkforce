@@ -1,10 +1,6 @@
-/**
- * API request and response types
- */
 
 import { PlanTier, BillingInterval } from '@/lib/validations/checkout';
 
-// Checkout API
 export interface CheckoutRequest {
   plan: PlanTier;
   billingInterval: BillingInterval;
@@ -14,9 +10,6 @@ export interface CheckoutResponse {
   url: string;
 }
 
-// Me API response shape lives in @agiworkforce/cloud-contracts (MeResponseSchema).
-
-// Device API
 export interface DeviceLinkRequest {
   device_id: string;
   device_name?: string;
@@ -44,7 +37,6 @@ export interface DevicePollResponse {
   };
 }
 
-// Claim Offer API
 export interface ClaimOfferRequest {
   code: string;
 }
@@ -63,19 +55,16 @@ export interface ClaimOfferResponse {
   } | null;
 }
 
-// Portal API
 export interface PortalResponse {
   url: string;
 }
 
-// Sync Subscription API
 export interface SyncSubscriptionResponse {
   success: boolean;
   message: string;
   stripe_price_id: string;
 }
 
-// Health Check API
 export interface HealthCheckResponse {
   status: 'healthy' | 'degraded' | 'unhealthy';
   timestamp: string;
@@ -95,7 +84,6 @@ export interface HealthCheckResponse {
   };
 }
 
-// Error Response
 export interface ErrorResponse {
   error: {
     code: string;

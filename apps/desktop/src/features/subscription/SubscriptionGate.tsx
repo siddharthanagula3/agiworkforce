@@ -9,8 +9,6 @@ import { cloudAccountAuth } from '../../services/cloudAccountAuth';
 export function SubscriptionGate({ children }: { children: React.ReactNode }) {
   const [gateResult, setGateResult] = useState(() => checkSubscriptionGate());
   const account = useAccountStore((state) => state.account);
-  // FIX-037: avoid the cold-boot flash where cloud auth hasn't resolved yet
-  // and the gate paints "Not signed in?" for a signed-in user.
   const sessionValidated = useUnifiedAuthStore((state) => state.sessionValidated);
 
   useEffect(() => {

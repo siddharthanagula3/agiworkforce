@@ -1,17 +1,3 @@
-/**
- * The API host must not serve the app UI.
- *
- * `api.agiworkforce.com` serves direct `/api/*` requests and rewrites a narrow
- * set of OpenAI-compatible aliases. Everything else fell through to the same
- * Next app, so the marketing site and the signed-in chat UI both rendered
- * there. A user who landed on it saw their account in the sidebar and
- * "Authentication required" in the content, because the page was rendering on
- * an origin the session does not belong to.
- *
- * The narrow scoping is the part worth protecting: matching "any host that is
- * not the app host" would redirect every preview deployment and localhost to
- * production.
- */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -98,8 +84,6 @@ describe('API host does not serve the app', () => {
     ['localhost:3000', 'local development'],
   ])('does not redirect %s (%s)', async (host) => {
     const response = await requestFrom(host, '/chat');
-    // /chat is protected, so a signed-out request redirects to /login — the
-    // point is that it is NOT bounced to another host.
     const location = response?.headers.get('location') ?? null;
     expect(location === null || !location.startsWith('https://agiworkforce.com/chat')).toBe(true);
   });

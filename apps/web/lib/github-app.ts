@@ -5,11 +5,6 @@ import { loadKeyRing, openEnvelope, sealEnvelope, type KeyRing } from '@/lib/cry
 import { getNeonDb } from '@/lib/server/neon-db';
 import { findInGitHubRestPages } from './github-rest-pagination';
 
-/**
- * SECURITY: Validate GitHub API path segments to prevent SSRF and path traversal.
- * Only allows alphanumeric, hyphen, underscore, and dot - the valid characters
- * for GitHub owner/repo names.
- */
 const SAFE_PATH_SEGMENT = /^[a-zA-Z0-9._-]+$/;
 
 function validateGitHubPathSegment(value: string, label: string): string {
@@ -31,9 +26,7 @@ const GITHUB_APP_ID = process.env['GITHUB_APP_ID'];
 const GITHUB_APP_PRIVATE_KEY_BASE64 = process.env['GITHUB_APP_PRIVATE_KEY_BASE64'];
 const GITHUB_WEBHOOK_SECRET = process.env['GITHUB_WEBHOOK_SECRET'];
 const GITHUB_TOKEN_ENCRYPTION_KEY = process.env['GITHUB_TOKEN_ENCRYPTION_KEY'];
-/** Public app slug (github.com/apps/<slug>) — required only for the install-start redirect. */
 const GITHUB_APP_SLUG = process.env['GITHUB_APP_SLUG'];
-/** OAuth credentials used only for short-lived installation ownership proof. */
 const GITHUB_APP_CLIENT_ID = process.env['GITHUB_APP_CLIENT_ID'];
 const GITHUB_APP_CLIENT_SECRET = process.env['GITHUB_APP_CLIENT_SECRET'];
 
@@ -72,11 +65,6 @@ export interface VerifiedGitHubInstallation {
   accountType: 'User' | 'Organization';
 }
 
-/**
- * Whether installation tokens can be minted in this deployment. Offering GitHub
- * connector tools requires this (tokens are minted lazily at execution time, so
- * a cached access_token_enc is NOT required — only the app credentials).
- */
 export function isGitHubAppConfigured(): boolean {
   return Boolean(GITHUB_APP_ID && GITHUB_APP_PRIVATE_KEY_BASE64);
 }
@@ -102,18 +90,12 @@ export function isGitHubInstallationLinkingAvailable(): boolean {
   );
 }
 
-/** Install URL on github.com, or null when the app slug is not configured. */
 export function getGitHubAppInstallUrl(): string | null {
   return GITHUB_APP_SLUG
     ? `https://github.com/apps/${encodeURIComponent(GITHUB_APP_SLUG)}/installations/new`
     : null;
 }
 
-/**
- * Build the GitHub App web-authorization URL used after the untrusted setup
- * callback. The callback URI must exactly match one registered on the GitHub
- * App. The state is stored separately in a short-lived HttpOnly cookie.
- */
 export function getGitHubUserAuthorizationUrl(state: string, redirectUri: string): string {
   if (!isGitHubInstallationLinkingAvailable() || !GITHUB_APP_CLIENT_ID) {
     throw new Error('GitHub App user authorization is not configured');
@@ -137,11 +119,6 @@ export function getGitHubUserAuthorizationUrl(state: string, redirectUri: string
   return authorizeUrl.toString();
 }
 
-/**
- * Exchange a one-time GitHub OAuth code for an ephemeral GitHub App user
- * access token. Callers must discard the returned token after ownership
- * verification; it must never be persisted or logged.
- */
 export async function exchangeGitHubOAuthCode(code: string, redirectUri: string): Promise<string> {
   if (
     !isGitHubInstallationLinkingAvailable() ||
@@ -179,11 +156,6 @@ export async function exchangeGitHubOAuthCode(code: string, redirectUri: string)
   return parsed.data.access_token;
 }
 
-/**
- * Prove that `targetInstallationId` is accessible to the GitHub user who
- * authorized the App. GitHub paginates this endpoint; every page is checked
- * until the target is found or the validated total is exhausted.
- */
 export async function findGitHubInstallationForUser(
   userAccessToken: string,
   targetInstallationId: number,
@@ -249,10 +221,6 @@ export function verifyGitHubWebhookSignature(
   return timingSafeEqual(expectedBuffer, signatureBuffer);
 }
 
-/**
- * Build a GitHub App JWT using Node.js built-in crypto (RS256).
- * jose is not available in this project - we implement manually.
- */
 export async function getGitHubAppJwt(): Promise<string> {
   if (!GITHUB_APP_ID || !GITHUB_APP_PRIVATE_KEY_BASE64) {
     throw new Error('GitHub App credentials not configured');
@@ -278,32 +246,16 @@ export async function getGitHubAppJwt(): Promise<string> {
   return `${signingInput}.${signature}`;
 }
 
-// Cache the dev fallback ring so encrypt/decrypt use the same key within a process
 let _devFallbackRing: KeyRing | null = null;
 
 const HEX_64_RE = /^[0-9a-fA-F]{64}$/;
 
-/**
- * The ring behind `github_installations.access_token_enc`.
- *
- * Reads resolve across every key on the ring, so an installation token sealed
- * under a key that has since moved to `GITHUB_TOKEN_ENCRYPTION_KEY_RETIRED`
- * still opens while scripts/reencrypt.mjs walks the rows onto the active key.
- * Writes stay in the historical `iv:ct:tag` hex layout so an instance of the
- * previous build can still read them mid-deploy.
- */
 function getKeyRing(): KeyRing {
   const keyHex = GITHUB_TOKEN_ENCRYPTION_KEY;
   if (keyHex && HEX_64_RE.test(keyHex)) {
     return loadKeyRing('GITHUB_TOKEN_ENCRYPTION_KEY');
   }
 
-  // AUDIT-FIX STB-2: fail closed outside development. See the identical guard in
-  // lib/custom-connector-crypto.ts — a per-process random key makes installation
-  // tokens written by one serverless instance undecryptable by every other, and
-  // permanently undecryptable after a redeploy, with no signal that anything is
-  // wrong. The shape check is hex, not length: a 64-char non-hex value silently
-  // truncated through Buffer.from(_, 'hex').
   if (process.env['NODE_ENV'] === 'production') {
     throw new Error(
       'GITHUB_TOKEN_ENCRYPTION_KEY is missing or malformed (expected 64 hex characters). ' +
@@ -337,7 +289,6 @@ export async function getInstallationAccessToken(installationId: number): Promis
 
   const db = getNeonDb();
 
-  // Check cached token
   const rows = await db.query<{
     access_token_enc: string | null;
     access_token_expires_at: string | null;
@@ -364,7 +315,6 @@ export async function getInstallationAccessToken(installationId: number): Promis
     return decryptToken(installation.access_token_enc);
   }
 
-  // Fetch new installation token
   const jwt = await getGitHubAppJwt();
   const res = await fetch(
     buildGitHubApiUrl(
@@ -391,7 +341,6 @@ export async function getInstallationAccessToken(installationId: number): Promis
   }
   const { token, expires_at } = parsed.data;
 
-  // Cache encrypted token
   await db.execute(
     `UPDATE github_installations
         SET access_token_enc = $1, access_token_expires_at = $2
@@ -489,11 +438,6 @@ export async function postIssueComment(
   if (!res.ok) throw new Error(`Failed to post comment: ${res.status}`);
 }
 
-/**
- * Generate a cryptographically random state parameter for GitHub App installation.
- * The caller must set this as a cookie (`github_install_state`) before redirecting
- * the user to GitHub. The callback handler in /api/github/install validates it.
- */
 export function generateGitHubInstallState(): string {
   return randomBytes(32).toString('hex');
 }

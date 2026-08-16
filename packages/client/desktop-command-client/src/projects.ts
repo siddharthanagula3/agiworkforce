@@ -1,10 +1,5 @@
-/**
- * Projects API — typed wrappers for project_* and project_context_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface Project {
   id: string;
@@ -39,8 +34,6 @@ export interface ProjectInstructionFile {
   content: string;
 }
 
-// ---- Project CRUD ----
-
 export async function projectCreate(project: Project): Promise<Project> {
   return command<Project>('project_create', { project });
 }
@@ -65,8 +58,6 @@ export async function projectUpdateSettings(
 ): Promise<void> {
   return command<void>('project_update_settings', { projectId, settings });
 }
-
-// ---- Project Context ----
 
 export async function projectContextSetFolder(path?: string): Promise<ProjectContextInfo> {
   return command<ProjectContextInfo>('project_context_set_folder', { path });

@@ -9,25 +9,9 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { getPluginRegistryEntry } from '@/lib/services/plugin-registry-service';
 import type { PluginRegistryEntryResponse } from '@agiworkforce/types';
 
-/**
- * Hosted plugin registry — one entry (CAP-046 slice 2).
- *
- *   GET /api/plugins/{id} -> { entry, manifest }
- *
- * `manifest` is null for `preview` entries: they have no artifact, and
- * synthesizing one would invent the pack's contents. The CLI resolver treats a
- * null manifest as "not installable", which is exactly true today.
- *
- * Public and unauthenticated for the same reason as the list route.
- */
-
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-/**
- * Same alphabet as the DB CHECK and the CLI's `validate_plugin_name`: the id
- * becomes a URL segment and, on install, a directory name.
- */
 const ParamsSchema = z.object({
   id: z
     .string()
@@ -48,8 +32,6 @@ export async function GET(
   const headers = { ...getCorsHeaders(request), ...getSecurityHeaders() };
   const parsed = ParamsSchema.safeParse(await context.params);
 
-  // A malformed id and an unknown id are the same 404, so the endpoint cannot
-  // be probed for id-shape feedback.
   if (!parsed.success) {
     return NextResponse.json(
       { error: { code: 'NOT_FOUND', message: 'Plugin not found' } },

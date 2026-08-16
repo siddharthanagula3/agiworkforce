@@ -1,17 +1,3 @@
-/**
- * @file Pairing API Routes (Mobile <-> Desktop QR Pairing)
- * @security
- * - Rate limiting: Strict limits to prevent enumeration attacks
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Authentication: JWT required for all endpoints
- * - Pairing codes are cryptographically random and time-limited
- *
- * Rate limit rationale (OWASP compliant):
- * - POST /initiate: 10/min - strict to prevent pairing code enumeration
- * - POST /confirm: 10/min - strict to prevent brute-force confirmation
- * - GET /status: 60/min - read operation for polling pairing status
- * - DELETE /cancel: 10/min - destructive operation
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -24,20 +10,12 @@ import { fetchWithTimeout } from '../lib/fetchWithTimeout';
 
 const router: Router = Router();
 
-// CodeQL js/missing-rate-limiting (audit 2026-05-03): pairing flow is
-// auth-required but the underlying signaling-server pairing-code search
-// is not free, so apply baseline rate-limiting after auth.
 router.use(authenticateToken);
 router.use(createRateLimiter('default'));
 
 const SIGNALING_HTTP_URL = process.env['SIGNALING_HTTP_URL'] ?? 'http://localhost:4000';
 const SIGNALING_INTERNAL_SECRET = process.env['SIGNALING_INTERNAL_SECRET'];
 
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
-
-// SECURITY: .strict() rejects unexpected fields to prevent mass assignment
 const initiateSchema = z
   .object({
     desktopId: z.string().uuid().optional(),
@@ -70,26 +48,6 @@ function buildPairingQrData(code: string, pairToken: string): string {
   return `agiw:${code}:${pairToken}`;
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
-/**
- * Initiate a QR pairing flow
- * POST /pair/initiate
- *
- * Creates a new pairing session via the signaling server and returns
- * a pairing code + QR data for the opposite peer to scan.
- *
- * Flow:
- * 1. Initiating peer calls POST /pair/initiate -> gets pairing code + QR data
- * 2. Initiating peer displays QR code
- * 3. Opposite peer scans QR code, extracts pairing code and role token
- * 4. Both peers connect to the signaling server with their role-specific tokens
- * 5. WebRTC connection established
- *
- * SECURITY: Rate limited to 10/min to prevent enumeration
- */
 router.post('/initiate', createRateLimiter('pairing-code'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -107,7 +65,6 @@ router.post('/initiate', createRateLimiter('pairing-code'), async (req: Request,
     throw new AppError('Signaling pairing is not configured', 503);
   }
 
-  // Request a pairing code from the signaling server
   let fetchResponse: globalThis.Response;
   try {
     fetchResponse = await fetchWithTimeout(`${SIGNALING_HTTP_URL.replace(/\/+$/, '')}/pairings`, {
@@ -152,12 +109,6 @@ router.post('/initiate', createRateLimiter('pairing-code'), async (req: Request,
 
   const payload = pairingCodeResponseSchema.parse(jsonBody);
 
-  // Wave 1.5+ task #17 (2026-05-08): the legacy `pairing_sessions` write
-  // here was a dead persistence sink — the table doesn't exist in the
-  // canonical schema (only `device_pairings` does), so the insert always
-  // failed and was swallowed. The signaling server is the source of truth
-  // for pairing state; the DB write was never load-bearing. Removed.
-
   res.json({
     code: payload.code,
     expiresAt: payload.expiresAt,
@@ -174,15 +125,6 @@ router.post('/initiate', createRateLimiter('pairing-code'), async (req: Request,
   });
 });
 
-/**
- * Confirm a pairing from the desktop side
- * POST /pair/confirm
- *
- * Called by the desktop after scanning the QR code. Links the desktop
- * device to the pairing session and notifies the mobile client.
- *
- * SECURITY: Rate limited to 10/min to prevent brute-force
- */
 router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -195,7 +137,6 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
 
   const userDb = getUserScopedClient(user);
 
-  // Verify the desktop belongs to this user
   const { data: desktop, error: desktopError } = await userDb
     .from('desktop_devices')
     .select('id, user_id')
@@ -210,7 +151,6 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
     throw new AppError('Desktop not found', 404);
   }
 
-  // Verify the pairing code exists and is valid via the signaling server
   let lookupResponse: globalThis.Response;
   try {
     lookupResponse = await fetchWithTimeout(
@@ -234,14 +174,6 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
     throw new AppError('Failed to verify pairing code', 502);
   }
 
-  // Wave 1.5+ task #17 (2026-05-08): two legacy best-effort writes were
-  // removed here. They targeted `public.pairing_sessions` (table doesn't
-  // exist; only `public.device_pairings` does) and `public.users.desktop_id`
-  // (table+column don't exist; canonical user table is `public.profiles`,
-  // no desktop_id column). Both calls always failed and were swallowed —
-  // the signaling server is the source of truth for pairing state, so
-  // these were dead persistence sinks, not load-bearing.
-
   res.json({
     code,
     desktopId,
@@ -255,14 +187,6 @@ router.post('/confirm', createRateLimiter('pairing-code'), async (req: Request, 
   });
 });
 
-/**
- * Get pairing status
- * GET /pair/status?code=<pairing-code>
- *
- * Check the current status of a pairing session.
- *
- * SECURITY: Rate limited to 60/min for polling
- */
 router.get('/status', createRateLimiter('device-status'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -274,7 +198,6 @@ router.get('/status', createRateLimiter('device-status'), async (req: Request, r
     throw new AppError('code query parameter is required', 400);
   }
 
-  // Check the signaling server for live status
   let lookupResponse: globalThis.Response;
   try {
     lookupResponse = await fetchWithTimeout(
@@ -314,12 +237,6 @@ router.get('/status', createRateLimiter('device-status'), async (req: Request, r
   });
 });
 
-/**
- * Cancel a pairing session
- * DELETE /pair/cancel?code=<pairing-code>
- *
- * SECURITY: Rate limited to 10/min for destructive operations
- */
 router.delete(
   '/cancel',
   createRateLimiter('device-delete'),
@@ -338,7 +255,6 @@ router.delete(
       throw new AppError('Signaling pairing is not configured', 503);
     }
 
-    // Delete from signaling server
     let deleteResponse: globalThis.Response;
     try {
       deleteResponse = await fetchWithTimeout(
@@ -359,10 +275,6 @@ router.delete(
     if (!deleteResponse.ok && deleteResponse.status !== 404) {
       throw new AppError('Failed to cancel pairing session', 502);
     }
-
-    // Wave 1.5+ task #17 (2026-05-08): legacy `pairing_sessions` update
-    // removed (dead — table doesn't exist; cancellation is enforced by
-    // the signaling-server DELETE above).
 
     res.json({ code, status: 'cancelled' });
   },

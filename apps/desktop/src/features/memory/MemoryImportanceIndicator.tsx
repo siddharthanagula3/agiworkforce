@@ -1,41 +1,19 @@
-/**
- * MemoryImportanceIndicator Component
- *
- * Displays the importance level of a memory with visual indicators including:
- * - Star rating (1-10)
- * - Decay timeline
- * - Last access date
- * - Importance trend
- *
- * Useful for understanding memory freshness and relevance.
- */
 import { memo } from 'react';
 import { Star, TrendingDown, TrendingUp, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/utils';
 
 export interface MemoryImportanceIndicatorProps {
-  /** Importance level (1-10) */
   importance: number;
-  /** Date memory was created */
   createdAt: string;
-  /** Date memory was last accessed or updated */
   lastAccessedAt?: string;
-  /** Show decay warning if memory hasn't been accessed */
   showDecayWarning?: boolean;
-  /** Decay decay threshold in days */
   decayThresholdDays?: number;
-  /** Size of the indicator (small, medium, large) */
   size?: 'sm' | 'md' | 'lg';
-  /** Show trend indicator */
   showTrend?: boolean;
-  /** Whether this is in a compact view */
   compact?: boolean;
 }
 
-/**
- * Get color for importance level
- */
 function getImportanceColor(importance: number): string {
   if (importance >= 9) return 'text-red-400';
   if (importance >= 7) return 'text-orange-400';
@@ -44,9 +22,6 @@ function getImportanceColor(importance: number): string {
   return 'text-zinc-400';
 }
 
-/**
- * Get background color for importance level
- */
 function getImportanceBgColor(importance: number): string {
   if (importance >= 9) return 'bg-red-500/10';
   if (importance >= 7) return 'bg-orange-500/10';
@@ -55,9 +30,6 @@ function getImportanceBgColor(importance: number): string {
   return 'bg-zinc-800/50';
 }
 
-/**
- * Calculate days since last access
- */
 function getDaysSinceAccess(dateString: string): number {
   const lastAccess = new Date(dateString);
   const now = new Date();
@@ -65,9 +37,6 @@ function getDaysSinceAccess(dateString: string): number {
   return Math.floor(diffMs / (1000 * 60 * 60 * 24));
 }
 
-/**
- * Check if memory is decaying
- */
 function isMemoryDecaying(lastAccess: string, threshold: number): boolean {
   return getDaysSinceAccess(lastAccess) >= threshold;
 }
@@ -176,9 +145,6 @@ export const MemoryImportanceIndicator = memo(function MemoryImportanceIndicator
   );
 });
 
-/**
- * Compact version for inline display
- */
 export const CompactMemoryImportanceIndicator = memo(function CompactMemoryImportanceIndicator({
   importance,
   lastAccessedAt,

@@ -14,7 +14,6 @@ import {
   ManagedCloudConversationResponseSchema,
   ManagedCloudCreateConversationResponseSchema,
   ManagedCloudDeleteConversationResponseSchema,
-  // PER-33: the real runtime validator for loaded message metadata.
   ManagedCloudMessageMetadataSchema,
   readPersistedInteractiveCards,
   ManagedCloudUpdateConversationRequestSchema,
@@ -25,23 +24,6 @@ import {
   type ManagedCloudMessageWire,
 } from '@agiworkforce/cloud-contracts';
 
-/**
- * PER-33 — validate loaded message metadata instead of asserting it.
- *
- * Attachments already had a real runtime validator (`readPersistedAttachments`)
- * while the metadata object beside them was taken on trust with a bare
- * `as Message['metadata']`, so a malformed or over-sized row from the API
- * reached the store and every renderer downstream typed as something it was
- * not. The wire schema only checks that metadata is a JSON object; this applies
- * the canonical `ManagedCloudMessageMetadataSchema` (object shape + the size
- * bound the write path enforces).
- *
- * Degrades per message rather than per conversation: a bad row loses its
- * metadata and keeps its text, instead of failing the whole transcript load.
- * The single cast below is on a value zod has already validated at runtime —
- * `MessageMetadata`'s fields are all optional, so the validated
- * `Record<string, unknown>` is a structurally sound source for it.
- */
 export function readLoadedMessageMetadata(value: unknown): Message['metadata'] {
   if (value === null || value === undefined) return undefined;
   const parsed = ManagedCloudMessageMetadataSchema.safeParse(value);
@@ -56,13 +38,6 @@ export function readLoadedMessageMetadata(value: unknown): Message['metadata'] {
   } as Message['metadata'];
 }
 
-/**
- * Both page sizes come from the conversations wire contract rather than local
- * literals: the default is what `GET /api/chat/conversations` itself falls back
- * to, and the project list deliberately asks for the contract maximum — the
- * route clamps `limit` to that same ceiling, so a larger local number would be
- * silently reduced and a stale local copy could drift below it.
- */
 const CONVERSATIONS_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 const PROJECT_CONVERSATIONS_PAGE_SIZE = MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE;
 
@@ -106,10 +81,6 @@ export function toWebConversation(
     isPinned: conversation.pinned,
     isStarred: conversation.starred,
     isArchived: conversation.archived,
-    // AUDIT-FIX CMP-3: this mapper dropped `isTemporary`, so even once the flag
-    // was persisted the UI forgot it on the next load — the store excludes
-    // `conversations` from `partialize`, making the server response the only
-    // source. Carrying it here is what makes the checkmark survive a reload.
     isTemporary: conversation.isTemporary,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
@@ -119,21 +90,10 @@ export function toWebConversation(
 interface UseConversationsReturn {
   conversations: Conversation[];
   activeConversationId: string | null;
-  /**
-   * AUDIT-FIX STR-7/BUG-12: conversation CRUD progress (sidebar list fetch,
-   * create, open). This is deliberately NOT the chat store's `isLoading`
-   * anymore: that flag means "a TURN is in flight" and gates the composer's
-   * Stop button and disabled state. Writing it from a sidebar fetch or a
-   * `loadConversation` was the actual mechanism behind the reported "Stop
-   * button persists when switching chats".
-   */
   isLoading: boolean;
   error: string | null;
-  // Pagination: the sidebar list is fetched a page at a time (50 rows) so
-  // conversations beyond the most-recent page stay reachable via loadMore.
   hasMoreConversations: boolean;
   isLoadingMoreConversations: boolean;
-  // Actions
   fetchConversations: () => Promise<void>;
   loadMoreConversations: () => Promise<void>;
   createConversation: (
@@ -151,7 +111,6 @@ interface UseConversationsReturn {
       pinned?: boolean;
       starred?: boolean;
       archived?: boolean;
-      /** AUDIT-FIX CMP-3: temporary-chat privacy flag (persisted server-side). */
       isTemporary?: boolean;
     },
   ) => Promise<boolean>;
@@ -159,9 +118,6 @@ interface UseConversationsReturn {
   setActiveConversation: (id: string | null) => void;
 }
 
-/**
- * Hook for managing chat conversations
- */
 export function useConversations(): UseConversationsReturn {
   const { getAuthHeaders, isLoaded, isSignedIn } = useConversationAuthHeaders();
   const conversations = useChatStore((state) => state.conversations);
@@ -180,31 +136,15 @@ export function useConversations(): UseConversationsReturn {
   const setMessages = useChatStore((state) => state.setMessages);
   const setError = useChatStore((state) => state.setError);
 
-  // Pagination state for "load more" beyond the first page of conversations.
   const [hasMoreConversations, setHasMoreConversations] = useState(false);
   const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
   const nextOffsetRef = useRef(0);
 
-  /**
-   * AUDIT-FIX STR-7/BUG-12: local conversation-CRUD progress. These used to be
-   * written into the chat store's turn-scoped `isLoading`, which
-   * `ChatComposerNew` reads as `isTurnActive` -- so simply listing or opening a
-   * conversation disabled the composer and showed a Stop button for a turn that
-   * did not exist.
-   */
   const [isFetchingConversations, setIsFetchingConversations] = useState(false);
   const [isCreatingConversation, setIsCreatingConversation] = useState(false);
   const [isOpeningConversation, setIsOpeningConversation] = useState(false);
-  /**
-   * AUDIT-FIX STR-13: monotonic request token for `loadConversation`. Rapid
-   * A -> B -> C switching used to land whichever response resolved last, with
-   * no check that its id was still the one the user wanted. Same
-   * `cancelled`-flag shape already used for the handoff-preview effect in
-   * WebChatPage.
-   */
   const loadSequenceRef = useRef(0);
 
-  // Fetch the first page of conversations (resets pagination state)
   const fetchConversations = useCallback(async () => {
     setIsFetchingConversations(true);
     setError(null);
@@ -235,7 +175,6 @@ export function useConversations(): UseConversationsReturn {
     }
   }, [getAuthHeaders, isLoaded, isSignedIn, setConversations, setError]);
 
-  // Fetch the next page and append it to the existing list (deduped by id).
   const loadMoreConversations = useCallback(async () => {
     if (!isLoaded || !isSignedIn || isLoadingMoreConversations || !hasMoreConversations) {
       return;
@@ -282,8 +221,6 @@ export function useConversations(): UseConversationsReturn {
     setError,
   ]);
 
-  // Create a new conversation, optionally scoped to a project (the API stores
-  // web_conversations.project_id and echoes it back as projectId).
   const createConversation = useCallback(
     async (
       title?: string,
@@ -328,24 +265,11 @@ export function useConversations(): UseConversationsReturn {
     [getAuthHeaders, addConversation, setActiveConversation, setMessages, setError],
   );
 
-  /**
-   * Load a conversation with its messages.
-   *
-   * Returns `false` ONLY when this request genuinely failed and the caller
-   * should surface it (WebChatPage redirects to /chat on `false`). A request
-   * superseded by a newer `loadConversation` resolves `true`: it is not a
-   * failure, and the newer request owns the outcome -- returning `false` would
-   * bounce the user off the conversation they just opened.
-   */
   const loadConversation = useCallback(
     async (id: string): Promise<boolean> => {
-      // AUDIT-FIX STR-13: claim this request. Every apply point below re-checks
-      // the token, so a slower A/B response can never land after C.
       const requestId = (loadSequenceRef.current += 1);
       const cancelled = () => requestId !== loadSequenceRef.current;
 
-      // AUDIT-FIX STR-7/BUG-12: opening a conversation is NOT a turn -- keep it
-      // out of the chat store's turn-scoped isLoading (see isFetchingConversations).
       setIsOpeningConversation(true);
       setError(null);
 
@@ -396,14 +320,9 @@ export function useConversations(): UseConversationsReturn {
           throw new Error('Conversation response was empty');
         }
         const loadedConversation = toWebConversation(loadedConversationWire);
-        // Detail routes are the source of truth for deep-linked conversations,
-        // including rows older than the first sidebar page. A map-only update
-        // silently dropped those rows and therefore their saved model.
         upsertConversation(loadedConversation);
 
-        // Convert API messages to store format
         const messages: Message[] = loadedMessageWires.map((m) => {
-          // PER-33: validated, not asserted.
           const metadata = readLoadedMessageMetadata(m.metadata);
           const resumesVideo =
             metadata?.toolType === 'video-generation' &&
@@ -422,14 +341,6 @@ export function useConversations(): UseConversationsReturn {
           };
         });
 
-        // AUDIT-FIX STR-4/BUG-14: never replace a transcript that is live or
-        // already in memory. This used to overwrite unconditionally, so a
-        // refetch that raced an in-flight turn (the server copy has the user
-        // message but not the still-streaming assistant one) destroyed the
-        // assistant message mid-stream. Both guards mirror
-        // packages/ui/unified-chat/src/components/ChatInterface.tsx: skip while
-        // that conversation is streaming, and short-circuit on a cached
-        // transcript. Conversation metadata above is still refreshed either way.
         const state = useChatStore.getState();
         const isStreamingHere = state.streamingConversationIds.includes(id);
         const cachedMessages = state.messagesByConversation[id] ?? [];
@@ -438,12 +349,9 @@ export function useConversations(): UseConversationsReturn {
           return true;
         }
 
-        // Atomically set active conversation and messages to avoid race conditions
         setActiveConversationWithMessages(id, messages);
         return true;
       } catch (err) {
-        // A superseded request's failure belongs to nobody: surfacing it would
-        // put a stale error banner on the conversation the user actually opened.
         if (cancelled()) return true;
         setError(err instanceof Error ? err.message : 'Failed to load conversation', id);
         return false;
@@ -460,7 +368,6 @@ export function useConversations(): UseConversationsReturn {
     ],
   );
 
-  // Update a conversation - returns true on success
   const updateConversation = useCallback(
     async (
       id: string,
@@ -471,7 +378,6 @@ export function useConversations(): UseConversationsReturn {
         pinned?: boolean;
         starred?: boolean;
         archived?: boolean;
-        /** AUDIT-FIX CMP-3: temporary-chat privacy flag (persisted server-side). */
         isTemporary?: boolean;
       },
     ): Promise<boolean> => {
@@ -499,9 +405,6 @@ export function useConversations(): UseConversationsReturn {
           isPinned: data.conversation.pinned ?? false,
           isStarred: data.conversation.starred ?? false,
           isArchived: data.conversation.archived ?? false,
-          // AUDIT-FIX CMP-3: mirror the SERVER's value, not the optimistic one,
-          // so a rejected write can never leave the UI claiming a privacy mode
-          // the database does not have.
           isTemporary: data.conversation.is_temporary ?? false,
           updatedAt: data.conversation.updated_at,
         });
@@ -519,7 +422,6 @@ export function useConversations(): UseConversationsReturn {
     [getAuthHeaders, updateConversationInStore, setError],
   );
 
-  // Delete a conversation - returns true on success
   const deleteConversation = useCallback(
     async (id: string): Promise<boolean> => {
       try {
@@ -546,7 +448,6 @@ export function useConversations(): UseConversationsReturn {
     [getAuthHeaders, deleteConversationFromStore, setError],
   );
 
-  // Fetch conversations on mount
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
     fetchConversations();
@@ -555,8 +456,6 @@ export function useConversations(): UseConversationsReturn {
   return {
     conversations,
     activeConversationId,
-    // AUDIT-FIX STR-7/BUG-12: conversation-CRUD progress only (see the
-    // UseConversationsReturn doc) -- never the chat store's turn flag.
     isLoading: isFetchingConversations || isCreatingConversation || isOpeningConversation,
     error,
     hasMoreConversations,
@@ -581,11 +480,6 @@ interface UseProjectConversationsReturn {
   loadMore: () => Promise<void>;
 }
 
-/**
- * Project-detail conversation reader. It uses the same authenticated API and
- * wire schema as the sidebar without replacing the sidebar's global store with
- * a project-filtered subset.
- */
 export function useProjectConversations(
   projectId: string | undefined,
 ): UseProjectConversationsReturn {
@@ -669,9 +563,6 @@ export function useProjectConversations(
   return { conversations, isLoading, error, hasMore, isLoadingMore, retry, loadMore };
 }
 
-/**
- * Group conversations by date (Today, Yesterday, Previous 7 Days, Older)
- */
 export function groupConversationsByDate(
   conversations: Conversation[],
 ): Record<string, Conversation[]> {
@@ -705,7 +596,6 @@ export function groupConversationsByDate(
     }
   }
 
-  // Remove empty groups
   const filteredGroups: Record<string, Conversation[]> = {};
   for (const [key, value] of Object.entries(groups)) {
     if (value.length > 0) {

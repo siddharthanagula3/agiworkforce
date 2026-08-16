@@ -20,7 +20,6 @@
  * @packageDocumentation
  */
 
-// ----- errors -----
 export {
   CannotRetryError,
   FallbackTriggeredError,
@@ -30,7 +29,6 @@ export {
   type ErrorCategory,
 } from './errors';
 
-// ----- retry -----
 export {
   withRetry,
   computeDelay,
@@ -47,7 +45,6 @@ export {
   type RetryOperation,
 } from './retry';
 
-// ----- watchdog -----
 export {
   withStreamIdleWatchdog,
   StreamIdleTimeoutError,
@@ -58,7 +55,6 @@ export {
   type WatchdogHooks,
 } from './watchdog';
 
-// ----- base URL SSRF allowlist -----
 export {
   validateBaseUrl,
   resolveValidatedBaseUrl,
@@ -67,7 +63,6 @@ export {
   type ValidateBaseUrlResult,
 } from './base-url';
 
-// ----- headers -----
 export {
   LatchedHeaderStore,
   defaultLatchedHeaderStore,
@@ -75,16 +70,12 @@ export {
   type LatchedHeaders,
 } from './headers';
 
-// ----- gateway -----
 export { detectGateway, gatewayEnforcesUserSideLimits, type GatewayId } from './gateway';
 
-// ----- fallback -----
 export { buildFallbackChain, type FallbackStrategy, type FallbackChainOptions } from './fallback';
 
-// ----- failover admission -----
 export { CredentialFailoverState } from './failover';
 
-// ----- history (repair) -----
 export {
   repairMessageHistory,
   ensureToolResultPairing,
@@ -99,7 +90,6 @@ export {
 // ----- shared retry-after helpers (also re-exported here for consumer migration) -----
 export { parseRetryAfter, parseRetryAfterFromError } from './retry-after-internal';
 
-// ----- client (browser-safe SSE provider-stream client) -----
 export {
   streamFromProvider,
   type StreamFromProviderOptions,

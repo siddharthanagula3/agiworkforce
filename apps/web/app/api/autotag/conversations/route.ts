@@ -1,11 +1,3 @@
-/**
- * Autotag Conversations API
- *
- * GET /api/autotag/conversations?tag=coding - Get conversation IDs by tag
- *
- * Returns all conversation IDs for the authenticated user that match
- * the specified tag from the conversation_tags table.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -35,7 +27,6 @@ async function handleGetConversationsByTag(request: NextRequest) {
   const db = getNeonDb();
   const organizationId = await resolveActiveOrganizationId(db, userId);
 
-  // Parse and validate the tag query parameter
   const { searchParams } = new URL(request.url);
   const tag = searchParams.get('tag');
 

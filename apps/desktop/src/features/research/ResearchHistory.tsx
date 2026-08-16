@@ -1,9 +1,3 @@
-/**
- * ResearchHistory Component
- *
- * Displays a list of past research sessions with the ability
- * to view summaries and reload previous research.
- */
 import { memo, useCallback, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { History, Clock, BookOpen, ChevronRight, Trash2, Search, ExternalLink } from 'lucide-react';
@@ -281,8 +275,6 @@ function HistoryCard({ entry, onView, onDelete }: HistoryCardProps) {
     </Card>
   );
 }
-
-// Utility functions
 
 function formatDate(timestamp: number): string {
   const date = new Date(timestamp);

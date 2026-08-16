@@ -1,10 +1,5 @@
-/**
- * Prompt Enhancement API — typed wrappers for prompt detection, enhancement, and routing commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface UseCaseDetection {
   useCase: string;
@@ -32,8 +27,6 @@ export interface PromptEnhancementConfig {
   autoDetect: boolean;
   [key: string]: unknown;
 }
-
-// ---- Commands ----
 
 export async function detectUseCase(text: string): Promise<UseCaseDetection> {
   return command<UseCaseDetection>('detect_use_case', { text });

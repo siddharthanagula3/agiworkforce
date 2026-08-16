@@ -5,36 +5,14 @@ import {
   INTERACTIVE_CARDS_METADATA_KEY,
 } from '@agiworkforce/types';
 
-/** Registry-owned default selection used when Cloud callers omit a model. */
 export const MANAGED_CLOUD_DEFAULT_MODEL_SELECTION = getDefaultAutoRoutingProfile().id;
 
 export const MANAGED_CLOUD_CHAT_BASE_PATH = '/api/chat/conversations';
-/**
- * Explicit Managed Cloud workspace selector.
- *
- * This is a scope selector, never an authorization grant: servers must prove
- * organization membership before using it. `personal` is required because an
- * omitted header means "use the account's current workspace", which is not a
- * stable binding for background sync.
- */
 export const MANAGED_CLOUD_ORGANIZATION_HEADER = 'x-agi-organization-id';
 export const MANAGED_CLOUD_PERSONAL_WORKSPACE_HEADER_VALUE = 'personal';
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_LENGTH = 100_000;
-/**
- * PER-5 — hard cap on a message's serialized `metadata`.
- *
- * `content` was capped at 100 000 chars but `metadata` was an uncapped
- * `z.record(z.string(), z.unknown())`, and the server-side normalizer was a
- * bare type check. So a 1.4–4 MB `data:image/png;base64,…` URL smuggled in as
- * `metadata.imageUrl` sailed past every validator and only failed at the body
- * limit — surfacing to the user as "Couldn't save this response" with no
- * indication of what was wrong. 32 000 chars is ~10x the largest legitimate
- * metadata payload (tool results, citations, image-generation parameters) and
- * far below anything that could carry an inline image.
- */
 export const MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH = 32_000;
 
-/** Serialized size of a metadata object, or Infinity when it cannot be serialized. */
 export function managedCloudMetadataLength(value: unknown): number {
   try {
     return JSON.stringify(value ?? {})?.length ?? 0;
@@ -43,11 +21,6 @@ export function managedCloudMetadataLength(value: unknown): number {
   }
 }
 
-/**
- * Message metadata: a JSON object bounded by
- * `MANAGED_CLOUD_CHAT_MAX_METADATA_LENGTH`. The error message is written for a
- * human reading a 400, not for a log line.
- */
 export const ManagedCloudMessageMetadataSchema = z
   .record(z.string(), z.unknown())
   .superRefine((value, ctx) => {
@@ -65,11 +38,6 @@ export const ManagedCloudMessageMetadataSchema = z
   });
 export const MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE = 50;
 export const MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE = 100;
-/**
- * The conversation-detail route accepts at most 500 messages per response.
- * Keep the response contract bounded to that deployed wire maximum even when
- * a caller chooses a smaller page size.
- */
 export const MANAGED_CLOUD_CHAT_MAX_MESSAGE_PAGE_SIZE = 500;
 export const MANAGED_CLOUD_REFLECT_PATH = '/api/reflect';
 
@@ -90,11 +58,6 @@ export type ManagedCloudReflectRange = z.infer<typeof ManagedCloudReflectRangeSc
 
 export const ManagedCloudConversationWireSchema = z.object({
   id: z.string().min(1),
-  /**
-   * The server-confirmed workspace owning this row. Optional only for rolling
-   * compatibility with older deployments; persistence clients that require a
-   * stable cross-workspace binding must fail closed when it is absent.
-   */
   organization_id: z.string().uuid().nullable().optional(),
   title: z.string().nullable(),
   model: z.string().nullable(),
@@ -152,15 +115,6 @@ export const ManagedCloudUpdateConversationRequestSchema = z.object({
   pinned: z.boolean().optional(),
   starred: z.boolean().optional(),
   archived: z.boolean().optional(),
-  /**
-   * AUDIT-FIX CMP-3: "Temporary chat" is a PRIVACY control, and it could only
-   * be set at conversation-creation time. Toggling it afterwards wrote to a
-   * local Zustand map with no network call, while the server reads
-   * `is_temporary` straight from the DB to decide auto-memory extraction and
-   * persistence — so a user who turned the control on mid-conversation was
-   * still having that conversation remembered. The update contract carries it
-   * now, so the toggle reaches the row it claims to control.
-   */
   isTemporary: z.boolean().optional(),
 });
 export type ManagedCloudUpdateConversationRequest = z.infer<
@@ -195,10 +149,6 @@ export const ManagedCloudConversationListResponseSchema = z.object({
   conversations: z.array(ManagedCloudConversationWireSchema).max(MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE),
   hasMore: z.boolean(),
   nextOffset: z.number().int().nonnegative(),
-  /**
-   * Owner-scoped totals for non-temporary Cloud history. Optional so older
-   * deployed servers remain readable during a rolling app/API rollout.
-   */
   historyStats: ManagedCloudConversationHistoryStatsSchema.optional(),
 });
 export type ManagedCloudConversationListResponse = z.infer<
@@ -231,11 +181,6 @@ export const ManagedCloudDeleteConversationResponseSchema = z.object({
 });
 export const ManagedCloudDeleteMessageResponseSchema = ManagedCloudDeleteConversationResponseSchema;
 
-/**
- * A group of sibling conversations that share one fork point. The Web host
- * renders the group beside `messageId` and navigates by `conversationId`;
- * message copying and ownership remain server concerns.
- */
 export const ManagedCloudConversationBranchItemSchema = z.object({
   conversationId: z.string().uuid(),
   title: z.string().min(1).max(500),
@@ -262,7 +207,6 @@ export type ManagedCloudConversationBranchesResponse = z.infer<
 
 export const ManagedCloudCreateConversationBranchRequestSchema = z.object({
   messageId: z.string().uuid(),
-  /** Client-generated idempotency key; retries return the original branch. */
   requestId: z.string().uuid(),
 });
 export type ManagedCloudCreateConversationBranchRequest = z.infer<
@@ -336,7 +280,6 @@ export type ManagedCloudReflectRecap = z.infer<typeof ManagedCloudReflectRecapSc
 
 export interface ManagedCloudConversation {
   id: string;
-  /** Missing only when an older server omitted the scope from its wire row. */
   organizationId?: string | null;
   title: string;
   model?: string;

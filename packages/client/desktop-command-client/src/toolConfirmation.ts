@@ -4,16 +4,12 @@
 
 import { command } from '@agiworkforce/client-runtime';
 
-// ---- Types ----
-
 export interface ToolSafetyTierInfo {
   tier: string;
   description: string;
   requiresApproval: boolean;
 }
 export type AgentMode = 'supervised' | 'autonomous' | 'restricted';
-
-// ---- Commands ----
 
 export async function respondToolConfirmation(
   requestId: string,

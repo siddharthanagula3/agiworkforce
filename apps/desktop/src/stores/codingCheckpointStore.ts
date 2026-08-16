@@ -1,19 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Coding Checkpoint Store
- *
- * Wires the named file-snapshot checkpoint system to the frontend.
- * Commands (all in sys/commands/undo.rs):
- *
- *   coding_checkpoint_create  — snapshot files under a named label, returns checkpoint ID
- *   coding_checkpoint_list    — list all stored checkpoints (chronological order)
- *   coding_checkpoint_rewind  — restore files to a checkpoint, returns restored paths
- *
- * NOTE: A prior call used the wrong identifier "codingCheckpointRewind" (camelCase).
- * The correct command name is "coding_checkpoint_rewind" (snake_case as registered
- * in lib.rs). Tauri translates snake_case command names to camelCase for JS — but
- * the invoke() first argument must match the Rust fn name exactly.
- */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -21,27 +6,13 @@ import { immer } from 'zustand/middleware/immer';
 import { invoke } from '../lib/tauri-mock';
 import { toast } from 'sonner';
 
-// =============================================================================
-// Types (match Rust NamedFileCheckpoint in core/agent/change_tracker.rs)
-// =============================================================================
-
-/** A named file checkpoint returned by the backend. */
 export interface NamedFileCheckpoint {
-  /** UUID assigned by the backend. */
   id: string;
-  /** Human-readable label provided at creation time. */
   name: string;
-  /** ISO-8601 timestamp (UTC). */
   timestamp: string;
-  /** Map from file path to snapshot content (may be large — not persisted). */
   fileSnapshots: Record<string, string>;
-  /** Internal change index at the time of checkpoint creation. */
   changeIndex: number;
 }
-
-// =============================================================================
-// Store State
-// =============================================================================
 
 interface CodingCheckpointState {
   checkpoints: NamedFileCheckpoint[];
@@ -50,16 +21,11 @@ interface CodingCheckpointState {
   lastRewindedPaths: string[];
   error: string | null;
 
-  // Actions
   createCheckpoint: (name: string, paths: string[]) => Promise<string | null>;
   listCheckpoints: () => Promise<NamedFileCheckpoint[]>;
   rewindToCheckpoint: (id: string) => Promise<string[] | null>;
   clearError: () => void;
 }
-
-// =============================================================================
-// Store
-// =============================================================================
 
 export const useCodingCheckpointStore = create<CodingCheckpointState>()(
   devtools(
@@ -90,7 +56,6 @@ export const useCodingCheckpointStore = create<CodingCheckpointState>()(
           );
           try {
             const id = await invoke<string>('coding_checkpoint_create', { name, paths });
-            // Refresh the list so the new checkpoint shows immediately
             await get().listCheckpoints();
             set(
               (state) => {
@@ -172,7 +137,6 @@ export const useCodingCheckpointStore = create<CodingCheckpointState>()(
               (state) => {
                 state.isRewinding = false;
                 state.lastRewindedPaths = restoredPaths;
-                // Prune checkpoints newer than rewound one
                 const idx = state.checkpoints.findIndex((c) => c.id === id);
                 if (idx !== -1) {
                   state.checkpoints = state.checkpoints.slice(0, idx + 1);
@@ -210,7 +174,6 @@ export const useCodingCheckpointStore = create<CodingCheckpointState>()(
       {
         name: 'coding-checkpoint-store',
         version: 1,
-        // Only persist the lightweight checkpoint metadata — not snapshot content
         partialize: (state) => ({
           checkpoints: state.checkpoints.map((c) => ({
             id: c.id,
@@ -225,10 +188,6 @@ export const useCodingCheckpointStore = create<CodingCheckpointState>()(
     { name: 'CodingCheckpointStore', enabled: import.meta.env.DEV },
   ),
 );
-
-// =============================================================================
-// Selectors
-// =============================================================================
 
 export const selectCheckpoints = (state: CodingCheckpointState) => state.checkpoints;
 export const selectCheckpointLoading = (state: CodingCheckpointState) => state.isLoading;

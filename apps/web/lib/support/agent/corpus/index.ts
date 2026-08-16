@@ -1,21 +1,3 @@
-/**
- * The merged, frozen support corpus.
- *
- * Two sources, both static:
- *   A. `corpus.generated.json` — built from `content/support/*.md` by
- *      `scripts/build-support-corpus.mjs` and committed, so the entire indexed
- *      surface is reviewable in one diff.
- *   B. `lib/support/static-data.ts` — the existing published FAQs and articles.
- *
- * THE INDEX CONTAINS PRODUCT DOCUMENTATION ONLY. There is no database import
- * anywhere in `lib/support/agent/**`, which makes cross-account leakage
- * structurally impossible rather than merely policed — `corpus-hygiene.test.ts`
- * asserts the absent dependency by scanning the subtree's imports.
- *
- * Load is fail-closed: a schema violation or a non-public path yields an
- * unavailable corpus, which the answer engine turns into an abstention. It never
- * degrades into answering from model priors.
- */
 
 import { MARKETING, POSITIONING } from '@/lib/marketing-constants';
 import type { CorpusChunk } from '../types';
@@ -23,13 +5,6 @@ import { buildStaticDataChunks } from './static-data-source';
 import { corpusArtifactSchema, isPublicCorpusPath } from './schema';
 import rawCorpus from '../corpus.generated.json';
 
-/**
- * Facts a corpus document may interpolate with `{{TOKEN}}`. Restating counts in
- * prose is how an agent ends up citing a stale "10+ providers" long after the
- * catalogue moved; interpolating the same constants the marketing pages render
- * keeps the two in step. The map is a closed allowlist — an unknown token is a
- * load-time failure, not a silently empty string.
- */
 const FACT_TOKENS: Readonly<Record<string, string>> = Object.freeze({
   'MARKETING.providers.display': MARKETING.providers.display,
   'MARKETING.providers.count': String(MARKETING.providers.count),
@@ -49,7 +24,6 @@ export class CorpusUnavailableError extends Error {
   }
 }
 
-/** Substitute `{{TOKEN}}` against the allowlist. Unknown token => throw. */
 export function interpolateFacts(text: string, source: string): string {
   return text.replace(TOKEN_PATTERN, (_match, token: string) => {
     const value = FACT_TOKENS[token];
@@ -136,13 +110,11 @@ function load(): CorpusLoadResult {
   }
 }
 
-/** Memoized at module scope. Safe to call on every request. */
 export function getSupportCorpus(): CorpusLoadResult {
   cached ??= load();
   return cached;
 }
 
-/** Test-only: drop the memo so a test can observe a fresh load. */
 export function __resetSupportCorpusForTests(): void {
   cached = null;
 }

@@ -1,13 +1,3 @@
-/**
- * ChatMessageList tests
- *
- * Covers:
- * - groupMessages() pure helper (message grouping logic)
- * - Auto-scroll behavior (new messages, streaming updates)
- * - User scroll detection (pauses auto-scroll when user scrolls up)
- * - Message rendering (user + assistant, streaming indicator)
- * - Typing indicator visibility
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
@@ -25,12 +15,6 @@ const ttsMock = vi.hoisted(() => {
   return { state, speak, stop };
 });
 
-// ---------------------------------------------------------------------------
-// Global setup
-// ---------------------------------------------------------------------------
-
-// jsdom doesn't implement element scrolling. Mirror the browser contract
-// react-window uses and emit the scroll event that drives its visible range.
 beforeEach(() => {
   window.HTMLElement.prototype.scrollTo = vi.fn(function (
     this: HTMLElement,
@@ -50,11 +34,6 @@ beforeEach(() => {
   ttsMock.stop.mockClear();
 });
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
-// Silence framer-motion in jsdom · avoids CSS/animation timing issues
 vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -65,9 +44,6 @@ vi.mock('framer-motion', () => ({
     ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  // AUDIT-FIX GOV-33: the component now reads prefers-reduced-motion through
-  // framer-motion so it can drop INLINE motion styles the global CSS reset
-  // cannot reach. The mock must export it or every render throws.
   useReducedMotion: () => false,
 }));
 
@@ -80,7 +56,6 @@ vi.mock('@/lib/hooks/useTTS', () => ({
   }),
 }));
 
-// MessageBubble renders content directly so we can assert on text
 vi.mock('./MessageBubble', () => ({
   MessageBubble: ({
     message,
@@ -161,10 +136,6 @@ vi.mock('./TypingIndicator', () => ({
   TypingIndicator: () => <div data-testid="typing-indicator">Typing...</div>,
 }));
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function makeMessage(
   overrides: Partial<ChatMessage> & Pick<ChatMessage, 'id' | 'role' | 'content'>,
 ): ChatMessage {
@@ -179,10 +150,6 @@ function makeMessage(
     metadata: overrides.metadata,
   };
 }
-
-// ---------------------------------------------------------------------------
-// groupMessages() pure helper tests
-// ---------------------------------------------------------------------------
 
 describe('groupMessages()', () => {
   it('returns empty array for empty input', () => {
@@ -244,10 +211,6 @@ describe('groupMessages()', () => {
     expect(groups[0]!.firstId).toBe('first');
   });
 });
-
-// ---------------------------------------------------------------------------
-// ChatMessageList rendering tests
-// ---------------------------------------------------------------------------
 
 describe('ChatMessageList rendering', () => {
   const messages = [
@@ -341,14 +304,6 @@ describe('ChatMessageList rendering', () => {
     expect(screen.getByRole('log')).toBeInTheDocument();
   });
 
-  /**
-   * AUDIT-FIX GOV-29: this test previously asserted aria-live="polite" on the
-   * SCROLL CONTAINER. That contract was the defect — it made the whole
-   * transcript one live region, so unrelated content was re-announced on every
-   * re-render and the streamed delta was never announced on its own. The
-   * container is now an inert log that reports aria-busy, and a dedicated
-   * off-screen status region carries the announcements.
-   */
   it('silences the scroll container as a live region and reports busy state', () => {
     render(<ChatMessageList messages={messages} />);
     const log = screen.getByRole('log');
@@ -434,10 +389,6 @@ describe('ChatMessageList rendering', () => {
     });
   });
 });
-
-// ---------------------------------------------------------------------------
-// Message actions callback tests
-// ---------------------------------------------------------------------------
 
 describe('ChatMessageList actions', () => {
   it('forwards the persisted billing recovery action instead of treating every refusal as upgrade', () => {
@@ -590,10 +541,6 @@ describe('ChatMessageList actions', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Auto-scroll tests
-// ---------------------------------------------------------------------------
-
 describe('ChatMessageList auto-scroll', () => {
   it('scrolls to bottom when messages are first rendered', async () => {
     const scrollTo = window.HTMLElement.prototype.scrollTo as ReturnType<typeof vi.fn>;
@@ -686,7 +633,6 @@ describe('ChatMessageList auto-scroll', () => {
 
     const scrollContainer = screen.getByRole('log');
 
-    // Simulate scrolling up: scrollTop well away from bottom
     Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
     Object.defineProperty(scrollContainer, 'clientHeight', { value: 300, configurable: true });
     Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
@@ -706,7 +652,6 @@ describe('ChatMessageList auto-scroll', () => {
 
     const scrollContainer = screen.getByRole('log');
 
-    // First scroll up to show button
     Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
     Object.defineProperty(scrollContainer, 'clientHeight', { value: 300, configurable: true });
     Object.defineProperty(scrollContainer, 'scrollTop', { value: 0, configurable: true });
@@ -719,7 +664,6 @@ describe('ChatMessageList auto-scroll', () => {
       expect(screen.getByLabelText('Scroll to bottom')).toBeInTheDocument();
     });
 
-    // Now scroll back to bottom
     Object.defineProperty(scrollContainer, 'scrollTop', { value: 700, configurable: true });
 
     act(() => {
@@ -732,10 +676,6 @@ describe('ChatMessageList auto-scroll', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Message grouping integration tests
-// ---------------------------------------------------------------------------
-
 describe('ChatMessageList message grouping', () => {
   it('renders grouped consecutive user messages in a single group', () => {
     const messages = [
@@ -747,7 +687,6 @@ describe('ChatMessageList message grouping', () => {
     const groups = container.querySelectorAll('.user-group');
     expect(groups).toHaveLength(1);
 
-    // Both messages should be present
     expect(screen.getByTestId('bubble-u1')).toBeInTheDocument();
     expect(screen.getByTestId('bubble-u2')).toBeInTheDocument();
   });
@@ -767,10 +706,6 @@ describe('ChatMessageList message grouping', () => {
     expect(assistantGroups).toHaveLength(1);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Continue Generation button (task #88)
-// ---------------------------------------------------------------------------
 
 describe('ChatMessageList Continue Generation', () => {
   const continueButton = () =>
@@ -861,8 +796,6 @@ describe('ChatMessageList Continue Generation', () => {
 
 describe('ChatMessageList stream error notice', () => {
   const retryButton = () => screen.queryByRole('button', { name: /regenerate this response/i });
-  // Matches both the fallback copy ("This response may be incomplete — ...")
-  // and the enriched copy ("Response may be incomplete: <classified message>").
   const noticeText = () => screen.queryByText(/response may be incomplete/i);
 
   function streamErrorThread(streamError: string | undefined, content = 'partial answer') {
@@ -920,9 +853,6 @@ describe('ChatMessageList stream error notice', () => {
       }),
     ];
     rerender(<ChatMessageList messages={streaming} onRegenerate={vi.fn()} />);
-    // hasStreamError itself doesn't check isStreaming (pure metadata read),
-    // so showStreamErrorNotice guards on it explicitly — this message would
-    // never realistically carry a terminal streamError while still
     // isStreaming, but the safety bar must hold regardless.
     expect(noticeText()).not.toBeInTheDocument();
   });
@@ -934,9 +864,6 @@ describe('ChatMessageList stream error notice', () => {
   });
 
   it('is mutually exclusive with Continue Generation (finishReason takes precedence)', () => {
-    // A turn with BOTH a continuable finishReason and a streamError shouldn't
-    // realistically happen (see the field's doc comment), but the notice
-    // must not double up with Continue if it ever does.
     const messages = [
       makeMessage({ id: 'u1', role: 'user', content: 'q' }),
       makeMessage({

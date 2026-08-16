@@ -1,9 +1,3 @@
-/**
- * Chat Conversations API
- *
- * GET /api/chat/conversations - List user's conversations
- * POST /api/chat/conversations - Create a new conversation
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -38,7 +32,6 @@ async function handleGetConversations(request: NextRequest) {
 
   const userId = await requireCurrentUserId(request);
 
-  // Optional title search. Sanitize to prevent oversized ILIKE patterns.
   const url = new URL(request.url);
   const rawQ = url.searchParams.get('q') ?? '';
   const q = rawQ.slice(0, 200).trim();
@@ -51,27 +44,11 @@ async function handleGetConversations(request: NextRequest) {
   if (!['include', 'only', 'exclude'].includes(archivedFilter)) {
     throw createError.validation('Invalid archived filter');
   }
-  /**
-   * Deleted conversations are SOFT-deleted (`deleted_at`) and nothing purges
-   * them — there is no conversation equivalent of `purge-deleted-media`. They
-   * were simply unreachable: every read filtered `deleted_at is null`, so a
-   * mis-click was permanent from the user's point of view while the rows sat
-   * in the table indefinitely.
-   *
-   * `only` surfaces exactly those rows so they can be restored. It is opt-in,
-   * so no existing caller changes behaviour.
-   */
   const deletedFilter = url.searchParams.get('deleted') ?? 'exclude';
   if (!['exclude', 'only'].includes(deletedFilter)) {
     throw createError.validation('Invalid deleted filter');
   }
 
-  // Offset-based pagination so the sidebar can page past the first page of
-  // conversations instead of having anything older become unreachable. The
-  // bounds come from the wire contract: `ManagedCloudConversationListResponse`
-  // caps `conversations` at MANAGED_CLOUD_CHAT_MAX_PAGE_SIZE, so a locally
-  // re-declared ceiling would let this route emit a payload its own clients
-  // reject.
   const limit =
     parsePositiveInt(
       url.searchParams.get('limit'),
@@ -104,9 +81,6 @@ async function handleGetConversations(request: NextRequest) {
     const limitParameter = params.length - 1;
     const offsetParameter = params.length;
 
-    // Fetch one extra row to cheaply detect whether another page exists
-    // without a separate count(*) query. Every shape remains owner-and-workspace-scoped;
-    // projectId only narrows the authenticated user's conversations in that workspace.
     const [rows, historyStatsRows] = await Promise.all([
       db.query<ChatConversationRow>(
         `
@@ -173,7 +147,6 @@ async function handleCreateConversation(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // AUDIT-008-003: Validate input with Zod schema
   let rawBody: unknown = {};
   try {
     rawBody = await request.json();
@@ -209,9 +182,6 @@ async function handleCreateConversation(request: NextRequest) {
   }
 
   try {
-    // Accept a client-supplied UUID (offline-first id); fall back to the DB default.
-    // ON CONFLICT makes a retried create idempotent, and the owner/workspace-guarded
-    // WHERE ensures a client can never overwrite a conversation from another scope.
     const [conversation] = await db.query<ChatConversationRow>(
       `
         insert into web_conversations
@@ -237,16 +207,9 @@ async function handleCreateConversation(request: NextRequest) {
       ],
     );
     if (!conversation) {
-      // The id exists but is owned by another user — never leak or hijack it.
       throw createError.conflict('Conversation id already exists');
     }
 
-    // Session-taxonomy labeling (W5 discipline wave 1 stage 2): every web
-    // chat conversation is a `cloud_chat` AppSession. Asserting invariants
-    // here — at the actual persistence boundary, right after the insert
-    // succeeds — is additive: on the happy path it is silent and the
-    // response below is unchanged; a violation surfaces through the SAME
-    // catch block and error response this route already has.
     assertSessionInvariants(
       buildCloudChatSessionLabel({
         conversationId: conversation.id,

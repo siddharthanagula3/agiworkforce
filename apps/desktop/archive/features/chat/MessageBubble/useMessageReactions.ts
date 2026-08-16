@@ -1,8 +1,3 @@
-/**
- * useMessageReactions Hook
- *
- * Handles message reaction state and handlers.
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import React from 'react';
@@ -15,19 +10,12 @@ interface UseMessageReactionsOptions {
 }
 
 interface UseMessageReactionsReturn {
-  /** Available reaction configurations */
   reactions: ReactionConfig[];
-  /** Whether the reaction picker is visible */
   showReactionPicker: boolean;
-  /** Toggle reaction picker visibility */
   setShowReactionPicker: (show: boolean) => void;
-  /** Handle a reaction being clicked */
   handleReaction: (reaction: MessageReaction) => void;
 }
 
-/**
- * Default reaction configurations
- */
 const REACTION_CONFIGS: ReactionConfig[] = [
   { type: 'thumbsUp', icon: React.createElement(ThumbsUp, { size: 14 }), label: 'Like' },
   { type: 'thumbsDown', icon: React.createElement(ThumbsDown, { size: 14 }), label: 'Dislike' },
@@ -51,7 +39,6 @@ export function useMessageReactions({
     [messageId, toggleMessageReaction],
   );
 
-  // Close reaction picker on click outside
   useEffect(() => {
     if (!showReactionPicker) return;
 
@@ -60,7 +47,6 @@ export function useMessageReactions({
       if (e.key === 'Escape') setShowReactionPicker(false);
     };
 
-    // Small delay to prevent immediate close when opening
     const timer = setTimeout(() => {
       window.addEventListener('click', handleClick);
       window.addEventListener('keydown', handleEscape);

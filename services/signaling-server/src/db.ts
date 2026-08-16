@@ -22,10 +22,6 @@ type RawDbError = { code?: string; message?: string };
 
 const databaseUrl = process.env['NEON_DATABASE_URL'] ?? process.env['DATABASE_URL'];
 
-/**
- * Migration guard: signaling-server persists pairings in Neon.
- * Fail closed when no DB url is configured.
- */
 if (!databaseUrl) {
   throw new Error(
     'SIGNALING service requires NEON_DATABASE_URL (or DATABASE_URL) for pairing persistence.',

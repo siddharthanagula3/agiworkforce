@@ -1,10 +1,3 @@
-/**
- * ArtifactPanel Component
- *
- * Side panel for displaying and managing artifacts alongside the chat.
- * Features artifact tabs, per-artifact Preview/Code/Versions inner tabs,
- * version history, and real-time streaming updates.
- */
 
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -120,7 +113,6 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   const [innerTab, setInnerTab] = useState<InnerTab>('preview');
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
 
-  // Load artifacts for conversation
   useEffect(() => {
     if (conversationId) {
       getArtifactsByConversation(conversationId)
@@ -157,7 +149,6 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     };
   }, [activeArtifactId, artifacts, getArtifact]);
 
-  // Load rendered artifact when active artifact changes
   useEffect(() => {
     if (activeArtifactId) {
       getRenderedArtifact(activeArtifactId)
@@ -170,7 +161,6 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     }
   }, [activeArtifactId, getRenderedArtifact, isStreaming]);
 
-  // Auto-update during streaming
   useEffect(() => {
     if (isStreaming && activeArtifactId === isStreaming) {
       let cancelled = false;
@@ -191,7 +181,6 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     return undefined;
   }, [isStreaming, activeArtifactId, getRenderedArtifact]);
 
-  // Load versions when switching to versions tab
   useEffect(() => {
     if (innerTab === 'versions' && activeArtifactId) {
       setIsLoadingVersions(true);
@@ -205,7 +194,6 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     }
   }, [innerTab, activeArtifactId, getVersionHistory]);
 
-  // Reset inner tab when switching artifacts
   useEffect(() => {
     setInnerTab('preview');
     setIsEditing(false);
@@ -336,34 +324,11 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
     setShareDialogArtifactId(activeArtifactId);
   }, [activeArtifactId]);
 
-  /**
-   * "Fix Bug" from the artifact renderer's error state (e.g. an invalid
-   * diagram). Ported from features/canvas/ArtifactPreview.tsx's onFixBug
-   * pattern: send the error + source back to the model. There is no prop
-   * path from here to the chat composer, so this reuses the existing
-   * `chat:action` window-event bus (see PlansModal.tsx / settings General)
-   * that App.tsx already listens on to queue an externalSendRequest.
-   */
   const handleFixBug = useCallback((errorMessage: string, source: string) => {
     const content = `Fix this bug in my artifact:\n\nError:\n${errorMessage}\n\nSource:\n\`\`\`\n${source}\n\`\`\``;
     window.dispatchEvent(new CustomEvent('chat:action', { detail: { type: 'fix-bug', content } }));
   }, []);
 
-  /**
-   * Export via the canonical artifact-publish service.
-   *
-   * Wires @agiworkforce/artifacts publishArtifact with the Tauri
-   * localFileWriter adapter and `privacyMode: 'local'`, so this always writes a
-   * `file://` copy under the app data directory and never leaves the device.
-   *
-   * Desktop injects no `CloudPublisher` — the web adapter
-   * (apps/web/features/chat/components/artifacts/publishArtifactClient.ts,
-   * CAP-015) is the only one that exists — so there is no hosted-URL result to
-   * handle here. This used to end in a "Cloud publish is coming soon" toast on
-   * an arm that `privacyMode: 'local'` can never reach: an unreachable branch
-   * advertising a launch gate the product does not have (see
-   * constants/cloudAvailability.ts — desktop copy never says "coming soon").
-   */
   const handlePublish = useCallback(async () => {
     if (!activeArtifactId) return;
     try {
@@ -372,7 +337,6 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
         toast.error('Could not load artifact content for publishing');
         return;
       }
-      // Derive language from metadata for code artifacts.
       const language =
         (artifact.metadata as Record<string, unknown> & { Code?: { language?: string } })?.Code
           ?.language ?? undefined;
@@ -429,7 +393,6 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       if (isTauri) {
-        // After saving, open the file location via shell
         await shellOpen(filename).catch(() => {
           // Silently ignore — file may not be discoverable by path alone
         });
@@ -928,10 +891,6 @@ export function ArtifactPanel({ conversationId, className, onClose }: ArtifactPa
   );
 }
 
-// =============================================================================
-// Raw Code View
-// =============================================================================
-
 function RawCodeView({ content, language }: { content: string; language: string }) {
   return (
     <SyntaxHighlighter
@@ -958,10 +917,6 @@ function RawCodeView({ content, language }: { content: string; language: string 
     </SyntaxHighlighter>
   );
 }
-
-// =============================================================================
-// Versions List
-// =============================================================================
 
 interface VersionsListProps {
   versions: ArtifactVersion[];
@@ -1050,10 +1005,6 @@ function VersionsList({
     </div>
   );
 }
-
-// =============================================================================
-// Helpers
-// =============================================================================
 
 function getRawSource(rendered: RenderedArtifact): string {
   const c = rendered.rendered_content;

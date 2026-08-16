@@ -22,11 +22,6 @@ import { PROJECT_TEMPLATES, getProjectTemplate } from '@/features/projects/data/
 interface CreateProjectDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /**
-   * When provided, the created project is handed to the caller INSTEAD of
-   * navigating to /projects/[id] — used by the composer "Project or folder"
-   * picker, where the user is mid-composition and must stay on /chat.
-   */
   onCreated?: (project: Project) => void;
 }
 
@@ -37,9 +32,6 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
   const addProject = useProjectStore((s) => s.addProject);
 
   const [name, setName] = useState('');
-  // Templates only pre-fill the create form. Nothing about the created project
-  // is special-cased by template, so a template can never produce a project the
-  // user could not have typed by hand.
   const [templateId, setTemplateId] = useState('blank');
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -48,14 +40,12 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
   const trimmedName = name.trim();
   const canSubmit = trimmedName.length > 0 && submitState !== 'submitting';
 
-  // Reset state when modal opens/closes
   useEffect(() => {
     if (open) {
       setName('');
       setTemplateId('blank');
       setSubmitState('idle');
       setErrorMsg(null);
-      // Autofocus the input after the dialog animation
       const t = window.setTimeout(() => inputRef.current?.focus(), 80);
       return () => window.clearTimeout(t);
     }
@@ -72,18 +62,12 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
       const template = getProjectTemplate(templateId);
       const project: Project = await webManagedCloudProjects.createProject({
         name: trimmedName,
-        // Only send what the template actually carries. An empty-string
-        // description on the Blank template would overwrite nothing, but it
-        // would also make every project carry a meaningless empty field.
         ...(template?.description ? { description: template.description } : {}),
         ...(template?.instructions ? { instructions: template.instructions } : {}),
       });
 
-      // Merge into the store so the sidebar picks it up immediately
       addProject(project);
 
-      // Close modal, then either hand the project to the caller (composer
-      // picker flow) or navigate to the new project page (sidebar flow).
       onOpenChange(false);
       if (onCreated) {
         onCreated(project);
@@ -201,9 +185,6 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
                     type="button"
                     onClick={() => {
                       setTemplateId(template.id);
-                      // Fill the name only when the field is untouched or still
-                      // holds another template's suggestion — never clobber
-                      // something the user typed.
                       const suggestions = PROJECT_TEMPLATES.map((entry) => entry.name);
                       if (!name.trim() || suggestions.includes(name.trim())) {
                         setName(template.name);

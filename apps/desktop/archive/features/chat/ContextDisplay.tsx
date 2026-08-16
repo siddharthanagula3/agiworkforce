@@ -1,17 +1,10 @@
-/**
- * ContextDisplay Component
- *
- * Displays active context items as chips with remove functionality.
- */
 
 import React from 'react';
 import { X } from 'lucide-react';
 import { ContextItem } from '../../stores/unifiedChatStore';
 
 export interface ContextDisplayProps {
-  /** List of active context items */
   items: ContextItem[];
-  /** Callback when a context item is removed */
   onRemove: (id: string) => void;
 }
 

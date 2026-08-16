@@ -173,24 +173,6 @@ function reservationError(decision: string): ManagedUsageRequestError {
   }
 }
 
-/**
- * Purchased balance this account may spend past its rolling caps, in cents.
- *
- * Returns 0 — i.e. "no overage", the pre-0118 behaviour — unless the account
- * has explicitly opted in. Policy lives here rather than in SQL so it is
- * testable and so the database function stays a pure arithmetic decision.
- *
- * The amount is `least(remaining balance, purchased allocation)`. Both terms
- * matter: `credits_allocated_cents` also contains the PLAN grant, so spending
- * the raw remainder would let a user overage on plan money they had merely not
- * used yet; and `top_up_allocated_cents` alone ignores that some of the
- * purchase is already spent.
- *
- * This is a live figure, and that is what makes the SQL side safe to write as
- * `estimate <= headroom`: a managed reservation writes its deduction
- * immediately, so the balance falls as overage is spent and the budget closes
- * itself without any separate meter (see migration 0119).
- */
 async function resolveOverageHeadroomCents(db: DatabaseAdapter, userId: string): Promise<number> {
   try {
     const rows = await db.query<{ headroom_cents: number | string | null }>(
@@ -211,9 +193,6 @@ async function resolveOverageHeadroomCents(db: DatabaseAdapter, userId: string):
     const value = Number(rows[0]?.headroom_cents ?? 0);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
   } catch (error) {
-    // Fail CLOSED. A lookup failure must not silently grant unlimited overage,
-    // and it must not deny a request the plan already covers — returning 0
-    // reproduces the plan-only caps exactly.
     logger.warn({ error, userId }, 'Overage headroom lookup failed; treating as no headroom');
     return 0;
   }
@@ -234,10 +213,6 @@ export async function reserveManagedUsageRequest(input: {
 }): Promise<ManagedUsageRequestReservation> {
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
-  // GOV-1: `null` is passed ONLY for a tier that declares itself uncapped.
-  // Every other tier — including one whose numeric allowance is 0 — passes a
-  // number, and the 0070 migration's `is not null` guard turns 0 into a denial
-  // instead of the unlimited bypass the old `> 0` guard produced.
   const sessionCapCents = getPlanSessionUsageCapCents(input.planTier);
   const weeklyCapCents = getPlanWeeklyUsageCapCents(input.planTier);
   const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageCapCents(input.planTier);
@@ -291,7 +266,6 @@ export async function reserveManagedUsageRequest(input: {
   };
 }
 
-/** Reserve one stable provider operation before its external side effect. */
 export async function reserveManagedUsageProviderStep(input: {
   reservation: ManagedUsageRequestReservation;
   operationKey: string;
@@ -311,7 +285,6 @@ export async function reserveManagedUsageProviderStep(input: {
     );
   }
 
-  // GOV-1: same null-means-declared-uncapped contract as the reservation path.
   const sessionCapCents = getPlanSessionUsageCapCents(input.planTier);
   const weeklyCapCents = getPlanWeeklyUsageCapCents(input.planTier);
   const flagshipWeeklyCapCents = getPlanFlagshipWeeklyUsageCapCents(input.planTier);

@@ -1,6 +1,3 @@
-/**
- * Tauri API type declarations for window.__TAURI__
- */
 
 type TauriInvoke = <T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>;
 

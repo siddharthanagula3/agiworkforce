@@ -1,4 +1,3 @@
-// apps/desktop/src/features/chat/ToolTimeline.tsx
 import type { ElementType } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -32,18 +31,10 @@ import { cn } from '../../lib/utils';
 interface ToolTimelineProps {
   entries: ToolLabelEntry[];
   className?: string;
-  /**
-   * When `true` and entries carry `phase` metadata, delegates rendering to
-   * `<TaskPhaseTimeline>` which groups tool calls into named phase sections
-   * (Manus-style multi-phase task UI). Defaults to `false` — existing
-   * behaviour is fully preserved when this flag is absent or `false`.
-   */
   enablePhaseGrouping?: boolean;
 }
 
-/** A rendered group: either a single standalone entry or a set of parallel entries. */
 interface EntryGroup {
-  /** Non-undefined means all entries share this parallel group key. */
   parallelGroup?: string;
   entries: ToolLabelEntry[];
 }
@@ -188,7 +179,6 @@ const FILE_WRITE_NAMES = new Set([
   'file_create',
 ]);
 
-/** Derive extension label from a file path, e.g. "main.rs" → "RS". */
 function fileExtLabel(filePath: string): string {
   const dot = filePath.lastIndexOf('.');
   if (dot === -1 || dot === filePath.length - 1) return 'FILE';
@@ -198,13 +188,11 @@ function fileExtLabel(filePath: string): string {
     .slice(0, 6);
 }
 
-/** Extract basename from a path, falling back to the full string. */
 function basename(filePath: string): string {
   const slash = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
   return slash === -1 ? filePath : filePath.slice(slash + 1);
 }
 
-/** Count diff additions and deletions from a unified diff string. */
 function parseDiffCounts(diff: string): { added: number; removed: number } {
   let added = 0;
   let removed = 0;
@@ -223,7 +211,6 @@ function ToolTimelineRow({ entry, isLast }: { entry: ToolLabelEntry; isLast: boo
   const detail = isError ? entry.error : entry.resultPreview;
   const hasDetail = Boolean(detail);
 
-  // File-op structured display — shown for write/edit tools when not an error
   const isFileOp = !isError && FILE_WRITE_NAMES.has(entry.displayName);
   const filePath = isFileOp && entry.displayArgs ? entry.displayArgs : null;
   const diffCounts =
@@ -255,7 +242,6 @@ function ToolTimelineRow({ entry, isLast }: { entry: ToolLabelEntry; isLast: boo
 
       <div className="min-w-0 flex-1 pb-3">
         {filePath ? (
-          /* Structured file-op row: type badge + filename + diff counts */
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide bg-muted/60 text-muted-foreground font-mono">
               {fileExtLabel(filePath)}
@@ -305,7 +291,6 @@ function ToolTimelineRow({ entry, isLast }: { entry: ToolLabelEntry; isLast: boo
             )}
           </div>
         ) : (
-          /* Default non-file-op row */
           <div className="flex flex-wrap items-center gap-2">
             <span className={cn('text-xs', isError ? 'text-red-300' : 'text-foreground/85')}>
               {entry.displayName}
@@ -383,34 +368,26 @@ export function ToolTimeline({
   const [userForcedClosed, setUserForcedClosed] = useState(false);
   const hasRunning = entries.some((e) => e.status === 'running');
 
-  // Reset userForcedClosed when all tools finish so next batch auto-expands
   const prevHasRunning = useRef(hasRunning);
   useEffect(() => {
     const wasRunning = prevHasRunning.current;
-    // Update the ref first so it always reflects the latest value,
-    // preventing stale reads if hasRunning changes rapidly between renders.
     prevHasRunning.current = hasRunning;
     if (wasRunning && !hasRunning) {
       setUserForcedClosed(false);
     }
   }, [hasRunning]);
 
-  // Auto-expand while tools are running, but respect user's manual close
   const isOpen = userForcedClosed ? false : hasRunning || isExpanded;
   const errorCount = entries.filter((e) => e.status === 'error').length;
 
-  // Group consecutive entries that share the same parallelGroup value.
-  // Entries without a parallelGroup are always their own single-item group.
   const groupedEntries = useMemo<EntryGroup[]>(() => {
     const groups: EntryGroup[] = [];
     let currentGroup: EntryGroup | null = null;
 
     for (const entry of entries) {
       if (entry.parallelGroup && currentGroup?.parallelGroup === entry.parallelGroup) {
-        // Continue the current parallel group.
         currentGroup.entries.push(entry);
       } else {
-        // Start a new group (parallel or standalone).
         currentGroup = {
           parallelGroup: entry.parallelGroup,
           entries: [entry],
@@ -437,8 +414,6 @@ export function ToolTimeline({
 
   if (entries.length === 0) return null;
 
-  // When phase grouping is opted in, check whether any entry carries phase
-  // metadata. If so, delegate entirely to TaskPhaseTimeline.
   if (enablePhaseGrouping) {
     const entriesWithPhase = entries as ToolLabelEntryWithPhase[];
     const hasPhaseData = entriesWithPhase.some((e) => e.phase != null && e.phase !== '');
@@ -460,11 +435,9 @@ export function ToolTimeline({
         type="button"
         onClick={() => {
           if (isOpen) {
-            // User is collapsing — if tools are running, force closed
             setUserForcedClosed(true);
             setIsExpanded(false);
           } else {
-            // User is expanding — clear forced close
             setUserForcedClosed(false);
             setIsExpanded(true);
           }
@@ -534,7 +507,6 @@ export function ToolTimeline({
                   );
                 }
 
-                // Single standalone entry (parallelGroup absent, or only one entry in group).
                 return group.entries.map((entry, index) => (
                   <ToolTimelineRow
                     key={entry.id}

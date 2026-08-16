@@ -1,9 +1,3 @@
-/**
- * InstructionFilesSettings
- *
- * Shows a list of well-known instruction file patterns (CLAUDE.md, AGENTS.md, etc.),
- * their status (Found/Not found), and lets users view/edit or create them.
- */
 
 import { AlertCircle, Check, Circle, Edit2, FileText, Loader2, Plus, Save, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -66,21 +60,17 @@ export function InstructionFilesSettings() {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  // Resolve home directory and check file existence
   useEffect(() => {
     if (!isTauriContext()) {
-      // In web/test mode, mark as not checking and not found
       setFileStatuses((prev) => prev.map((s) => ({ ...s, checking: false, found: false })));
       return;
     }
 
     const init = async () => {
-      // Resolve home directory via @tauri-apps/api/path
       let home = '~';
       try {
         home = await getHomeDir();
       } catch {
-        // Fallback — use get_user_preference for a known path
         try {
           const prefResult = await invoke<{ value: string } | null>('get_user_preference', {
             key: 'home_directory',
@@ -92,7 +82,6 @@ export function InstructionFilesSettings() {
       }
       setHomeDir(home);
 
-      // Check each file
       const updated: FileStatus[] = [];
       for (const p of INSTRUCTION_FILE_PATTERNS) {
         const fullPath = resolveHomePath(p.pattern, home);
@@ -147,7 +136,6 @@ export function InstructionFilesSettings() {
     try {
       await invoke('file_write', { path: fullPath, content: editState.content });
 
-      // Refresh status for this file
       setFileStatuses((prev) =>
         prev.map((s) => (s.pattern === editState.pattern ? { ...s, found: true } : s)),
       );

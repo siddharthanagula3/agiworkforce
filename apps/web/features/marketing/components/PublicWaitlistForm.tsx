@@ -14,19 +14,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type FormState = 'idle' | 'submitting' | 'success' | 'error';
 
-/**
- * Inline anonymous waitlist form for the /waitlist page (and any page that
- * wants an embedded form instead of the modal). Calls /api/waitlist/public ·
- * no account required; the server attaches the Clerk user id when a session
- * exists.
- *
- * The consent block is not decoration. DPDP s.6 makes the address storable only
- * against a purpose the person affirmatively agreed to, so the ticked set below
- * starts EMPTY and both the ticked and the unticked purposes are sent. The
- * server refuses the write when the required purpose is absent or false, which
- * means removing these checkboxes breaks the endpoint rather than silently
- * reverting to unconsented collection.
- */
 export function PublicWaitlistForm({
   source = 'website',
   ctaLabel = 'Join Waitlist',
@@ -41,8 +28,6 @@ export function PublicWaitlistForm({
   const [email, setEmail] = useState('');
   const [state, setState] = useState<FormState>('idle');
   const [errorMsg, setErrorMsg] = useState('');
-  // Starts empty and is never seeded: an unticked box is the initial state, and
-  // a ticked one can only come from a click.
   const [consented, setConsented] = useState<string[]>([]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {

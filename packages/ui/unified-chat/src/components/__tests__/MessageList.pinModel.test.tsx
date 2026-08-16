@@ -1,16 +1,3 @@
-/**
- * MessageList — "Pin to <model>" is reachable.
- *
- * `ProvenanceFooter` has always rendered a Pin button for auto-routed
- * assistant turns, but it only renders when the host passes `onPinModel`.
- * MessageList is the only production renderer of that footer, so if it does
- * not wire the callback the button can never appear for any user.
- *
- * These tests pin BOTH halves of the wiring:
- * - the button renders for a message carrying `routing.source === 'auto'`,
- * - clicking it pins the conversation's model selection to `routing.pinModel`
- *   (which is what `useModelStore.selectModel` means).
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MessageList } from '../MessageList';
@@ -41,7 +28,6 @@ const manual: ChatMessage = {
 };
 
 beforeEach(() => {
-  // jsdom lacks scrollIntoView; MessageList calls it on mount/append.
   Element.prototype.scrollIntoView = vi.fn();
   useChatStore.setState({ messagesByConversation: {}, isStreaming: false } as never);
   useModelStore.setState({ selectedModelId: 'auto', recentModelIds: [] } as never);

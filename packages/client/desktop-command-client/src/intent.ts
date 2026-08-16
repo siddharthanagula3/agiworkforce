@@ -1,10 +1,5 @@
-/**
- * Intent API — typed wrappers for intent_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface DetectedIntentResponse {
   intent: string;
@@ -35,8 +30,6 @@ export interface ComplexityInfo {
 export interface IntentDetectorConfigRequest {
   [key: string]: unknown;
 }
-
-// ---- Commands ----
 
 export async function intentDetect(prompt: string): Promise<DetectedIntentResponse> {
   return command<DetectedIntentResponse>('intent_detect', { prompt });

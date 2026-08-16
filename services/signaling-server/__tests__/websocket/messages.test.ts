@@ -1,17 +1,6 @@
-/**
- * WebSocket Message Handling Tests
- *
- * Tests for WebSocket message validation and handling:
- * - Registration messages
- * - Signal messages (offer/answer/ice)
- * - Heartbeat messages
- * - Error handling
- */
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
 
-// Recreate the validation schemas from the server for testing
-// AUDIT-FIX: H-12 — bumped from 8 to 12 chars (36^12 ≈ 62 bits entropy).
 const PAIRING_CODE_LENGTH = 12;
 const PAIRING_CODE_PATTERN = /^[A-Z0-9]{12}$/;
 const MAX_SDP_SIZE = 65536;
@@ -245,7 +234,6 @@ describe('WebSocket Message Validation', () => {
     });
 
     it('should reject heartbeat with extra fields', () => {
-      // Zod by default allows extra fields, but we can test strict mode
       const messageWithExtra = { type: 'heartbeat', extra: 'field' };
 
       const strictSchema = heartbeatMessageSchema.strict();

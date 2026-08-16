@@ -3,7 +3,6 @@
 import * as React from 'react';
 import { cn } from '../cn';
 
-// Simple native ScrollArea to avoid React 19 + Radix UI compatibility issues
 interface ScrollAreaProps extends React.HTMLAttributes<HTMLDivElement> {
   ref?: React.Ref<HTMLDivElement>;
 }
@@ -30,8 +29,6 @@ interface ScrollBarProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 function ScrollBar(_props: ScrollBarProps) {
-  // This is now a no-op since we're using native scrollbars
-  // Kept for API compatibility
   return null;
 }
 ScrollBar.displayName = 'ScrollBar';

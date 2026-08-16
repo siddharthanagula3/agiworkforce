@@ -1,18 +1,3 @@
-/**
- * Regression: the Quick Access screen (route /(app)/widget-setup) previously
- * advertised integrations with no native target in the repo — long-press Quick
- * Actions, an iOS 18 Control Center tile, and an Android home-screen widget.
- * None of those exist (no expo-quick-actions, no widget extension, no
- * ControlWidget), so the instructions dead-ended for every user — a fake-
- * availability product-rule violation.
- *
- * The screen now describes only what ships:
- *   iOS      — Siri App Shortcuts, native text/link Share Extension, and
- *              universal links.
- *   Android  — share-sheet target + selected-text (ACTION_PROCESS_TEXT)
- *              action (both rewritten by MainActivity.kt onto the
- *              agiworkforce://intent/share deep link) and verified app links.
- */
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
@@ -68,11 +53,9 @@ describe('Quick Access screen — describes only real integrations', () => {
     setPlatform('ios');
     const { getAllByText, getByText, queryByText } = render(<WidgetSetupScreen />);
 
-    // Real Siri phrases (mirror native/ios/AGIAppIntents/AppShortcuts.swift).
     expect(getByText('"Hey Siri, start chat with AGI Workforce"')).toBeTruthy();
     expect(getByText('"Hey Siri, set reminder via AGI Workforce"')).toBeTruthy();
 
-    // All 8 shipped App Intents are listed.
     for (const label of [
       'Start Chat',
       'Ask AGI',
@@ -93,7 +76,6 @@ describe('Quick Access screen — describes only real integrations', () => {
     expect(getByText(/then open AGI Workforce/)).toBeTruthy();
     expect(queryByText(/not yet available on iOS/)).toBeNull();
 
-    // Retired fake-availability copy must not come back.
     expect(queryByText(/Control Center/)).toBeNull();
     expect(queryByText(/Long-press/)).toBeNull();
     expect(queryByText(/widget/i)).toBeNull();
@@ -107,11 +89,9 @@ describe('Quick Access screen — describes only real integrations', () => {
     expect(getByText('Act On Selected Text')).toBeTruthy();
     expect(getByText('Links Open In The App')).toBeTruthy();
 
-    // Retired fake-availability copy must not come back.
     expect(queryByText(/widget/i)).toBeNull();
     expect(queryByText(/Google Assistant/)).toBeNull();
     expect(queryByText(/Control Center/)).toBeNull();
-    // Siri does not exist on Android.
     expect(queryByText(/Hey Siri/)).toBeNull();
   });
 });

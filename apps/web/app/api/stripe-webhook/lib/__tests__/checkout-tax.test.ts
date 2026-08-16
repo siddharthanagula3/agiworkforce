@@ -1,19 +1,3 @@
-/**
- * A completed Checkout Session whose tax Stripe could not calculate is a sale
- * the company owes tax on and did not collect tax for. The webhook used to
- * provision the entitlement without ever reading `automatic_tax`, so the only
- * evidence was inside Stripe. These cases pin the two halves of the policy in
- * lib/billing/tax-policy.ts:
- *
- *   1. an uncalculated sale is recorded loudly, and a calculated one records
- *      the amount that was charged;
- *   2. the buyer's tax identifiers and postal address are never copied into
- *      this database — they stay on the Stripe Customer and the Stripe invoice.
- *
- * Entitlement itself is deliberately unaffected: the customer has already paid,
- * and the fail-closed guard for an unpaid/incomplete checkout is the Stripe
- * subscription status (pinned in __tests__/api/stripe-session-payment-authority.test.ts).
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -148,8 +132,6 @@ describe('checkout tax outcome is recorded for every provisioned sale', () => {
       expect.objectContaining({ taxStatus: 'failed', sessionId: 'cs_tax' }),
       expect.stringContaining('TAX NOT COLLECTED'),
     );
-    // The buyer paid, so access is still granted; the shortfall is an
-    // accounting problem, not a reason to withhold what was sold.
     expect(subscriptionUpsertCalls()).toHaveLength(1);
   });
 

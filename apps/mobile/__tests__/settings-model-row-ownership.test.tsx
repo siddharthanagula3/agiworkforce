@@ -1,16 +1,3 @@
-/**
- * PAR-M21 — the model value belongs to the row that changes it.
- *
- * The Settings root used to render `getShortDisplayName(selectedModel)` as the
- * "General" row's value, so the top-level list advertised a model that the
- * General screen does not own — and because `getShortDisplayName` fell back to
- * the raw id, a persisted selection the catalog no longer knows printed a wire
- * id straight onto the Settings root.
- *
- * These tests hold both halves: nothing on the Settings root carries a catalog
- * id, and the "Models" row inside General carries the display name — falling
- * back to a neutral label rather than an id.
- */
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
@@ -65,8 +52,6 @@ jest.mock('../services/authSession', () => ({
   getCurrentUserId: jest.fn(async () => null),
 }));
 
-// The model catalog service stays REAL here — the fallback under test lives in
-// it. Only the persisted selection is steered.
 jest.mock('../src/features/model-picker/store', () => ({
   useModelStore: (selector: (state: { selectedModel: string }) => unknown) =>
     selector({ selectedModel: mockSelectedModel.id }),
@@ -102,7 +87,6 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useTierStore } from '../src/features/billing/store';
 
-/** Every string the rendered tree can put in front of a user. */
 function collectRenderedStrings(node: unknown, out: string[] = []): string[] {
   if (node == null) return out;
   if (typeof node === 'string') {
@@ -143,8 +127,6 @@ describe('PAR-M21 — Settings model value ownership', () => {
     const { getByLabelText, queryByLabelText } = render(<SettingsTabScreen />);
 
     expect(getByLabelText('General')).toBeTruthy();
-    // The old label was "General. <model name>" — any trailing value here means
-    // the row is advertising something its screen does not own.
     const labelled = queryByLabelText(/^General\. /);
     expect(labelled).toBeNull();
   });

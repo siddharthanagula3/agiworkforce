@@ -1,30 +1,5 @@
 'use client';
 
-/**
- * Drift resolution: this is a merge, not a pick, of two independent and
- * opposite-direction changes found between web and desktop:
- *
- * 1. Desktop's stale-closure fix (kept): desktop stores `onResize`/`minWidth`/
- *    `maxWidth`/`isResizing` in refs updated via a `useEffect` and reads them from
- *    inside the mousemove/mouseup handlers, instead of closing over the render-time
- *    values captured in `handleMouseDown`'s `useCallback` deps. Web's version closes
- *    directly over those props, so an in-flight drag keeps using stale prop values if
- *    they change mid-drag (classic stale-closure bug). Desktop's ref-based version is
- *    a genuine, deliberate bug fix and is kept here.
- *
- * 2. Web's focus-visible ring (restored): desktop's div had dropped the
- *    `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary
- *    focus-visible:ring-offset-1` classes that web has, even though the div keeps
- *    `tabIndex={0}` and full keyboard-arrow-key resize handling — losing the ring
- *    left the keyboard-operable handle with no visible focus indicator on desktop, a
- *    real (if small) accessibility regression that looked unrelated to the
- *    stale-closure fix. Restored here.
- *
- * No test coverage existed for either version's specific behavior on desktop —
- * apps/web/components/ui/ResizeHandle.test.tsx covers ARIA/drag/keyboard behavior but
- * was never ported. Porting that test is left for a later phase.
- */
-
 import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cn } from '../cn';
@@ -51,7 +26,6 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const handlersRef = useRef<{ move?: (e: MouseEvent) => void; up?: () => void }>({});
 
-  // Store latest callback refs to prevent stale closures during active drag
   const onResizeRef = useRef(onResize);
   const minWidthRef = useRef(minWidth);
   const maxWidthRef = useRef(maxWidth);
@@ -104,7 +78,6 @@ export const ResizeHandle: React.FC<ResizeHandleProps> = ({
     [width, direction],
   );
 
-  // Cleanup effect to ensure event listeners are removed on unmount
   useEffect(() => {
     return () => {
       if (handlersRef.current.move) {

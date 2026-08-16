@@ -18,7 +18,6 @@ const DrawerPortal = DrawerPrimitive.Portal;
 
 const DrawerClose = DrawerPrimitive.Close;
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface DrawerOverlayProps extends React.ComponentPropsWithoutRef<
   typeof DrawerPrimitive.Overlay
 > {

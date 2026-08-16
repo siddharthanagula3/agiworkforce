@@ -11,12 +11,6 @@ export interface PullArtifactCloudChangesOptions {
   signal?: AbortSignal;
 }
 
-/**
- * Pull every currently available chat-sync page and apply only its artifact
- * overlay. Web conversations/messages already use their account-backed CRUD
- * APIs; this caller exists specifically so first-class Desktop Cloud artifacts
- * are no longer stranded in `web_artifacts`.
- */
 export async function pullArtifactCloudChanges({
   cursor,
   getToken,

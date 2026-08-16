@@ -1,11 +1,5 @@
-/**
- * Automation API — typed wrappers for automation_*, overlay_*, computer_use_*, screen_watcher_*,
- * ocr_*, and capture_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface UIElementInfo {
   id: string;
@@ -289,8 +283,6 @@ export interface CaptureRecord {
   timestamp: string;
 }
 
-// ---- Core Automation ----
-
 export async function automationListWindows(): Promise<UIElementInfo[]> {
   return command<UIElementInfo[]>('automation_list_windows');
 }
@@ -356,8 +348,6 @@ export async function overlayEmitRegion(payload: OverlayRegionPayload): Promise<
 export async function overlayReplayRecent(limit?: number): Promise<void> {
   return command<void>('overlay_replay_recent', { limit });
 }
-
-// ---- Enhanced Automation (Recording, Inspection, Scripts) ----
 
 export async function automationRecordStart(): Promise<RecordingSession> {
   const session = await command<{
@@ -527,8 +517,6 @@ export async function inspectElementAt(x: number, y: number): Promise<unknown> {
   return command<unknown>('inspect_element_at', { x, y });
 }
 
-// ---- Computer Use ----
-
 export async function computerUseStartSession(): Promise<string> {
   return command<string>('computer_use_start_session');
 }
@@ -593,8 +581,6 @@ export async function computerUseStopSession(sessionId: string): Promise<void> {
   return command<void>('computer_use_stop_session', { sessionId });
 }
 
-// ---- Screen Watcher ----
-
 export async function screenWatcherStart(request?: StartWatcherRequest): Promise<void> {
   return command<void>('screen_watcher_start', { request });
 }
@@ -619,8 +605,6 @@ export async function screenWatcherGetRecent(): Promise<ScreenCapture[]> {
 export async function screenWatcherCaptureNow(): Promise<ScreenCapture> {
   return command<ScreenCapture>('screen_watcher_capture_now');
 }
-
-// ---- OCR ----
 
 export async function ocrProcessImage(
   captureId: string,
@@ -665,8 +649,6 @@ export async function ocrPreprocessImage(imagePath: string, outputPath?: string)
   return command<string>('ocr_preprocess_image', { imagePath, outputPath });
 }
 
-// ---- Screen Capture ----
-
 export async function captureScreenFull(conversationId?: number): Promise<CaptureResult> {
   return command<CaptureResult>('capture_screen_full', { conversationId });
 }
@@ -703,8 +685,6 @@ export async function captureScreenWindow(
 export async function captureFromClipboard(conversationId?: number): Promise<CaptureResult> {
   return command<CaptureResult>('capture_from_clipboard', { conversationId });
 }
-
-// ---- System Permissions ----
 
 export interface AutomationPermissions {
   accessibility: boolean;

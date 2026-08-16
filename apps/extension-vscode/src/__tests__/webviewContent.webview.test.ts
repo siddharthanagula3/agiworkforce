@@ -11,11 +11,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-// AUDIT-FIX: BUILD-BLOCKER
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 
-// Build a minimal stub for the `webview` parameter that getWebviewContent
-// requires. We only need `cspSource` and `asWebviewUri` to return Uri-like.
 function makeWebview() {
   return {
     cspSource: 'vscode-webview://mock',
@@ -33,9 +30,6 @@ function makeExtensionUri() {
 }
 
 function render(tier?: string): string {
-  // The webview/uri parameters are constructed structurally above; cast
-  // through `unknown` to bridge the local stub shape to the imported
-  // vscode types without depending on the real vscode runtime.
   return getWebviewContent(
     makeWebview() as unknown as Parameters<typeof getWebviewContent>[0],
     makeExtensionUri() as unknown as Parameters<typeof getWebviewContent>[1],
@@ -58,8 +52,6 @@ describe('getWebviewContent — F-01 regression: script must parse without Synta
     expect(scripts.length).toBeGreaterThan(0);
     for (const script of scripts) {
       const body = script.textContent ?? '';
-      // Use the Function constructor to parse; throws SyntaxError on bad JS.
-      // llm-guardrail-allow: parser-only use in a test; the constructed function is never invoked
       expect(() => new Function(body)).not.toThrow();
     }
   });
@@ -72,7 +64,6 @@ describe('getWebviewContent — F-01 regression: script must parse without Synta
     );
     for (const script of scripts) {
       const body = script.textContent ?? '';
-      // The specific F-01 footprint plus other common cast targets.
       expect(body).not.toMatch(
         /\bas\s+HTML(?:Option|Div|Button|Input|TextArea|Select|Anchor)Element\b/,
       );
@@ -100,8 +91,6 @@ describe('getWebviewContent — CSP', () => {
 
   it('img-src restricts to cspSource, https, and data', () => {
     const html = render();
-    // Matches "img-src vscode-webview://mock https: data:" — verify the host
-    // allowlist limit (no wildcard).
     expect(html).toMatch(/img-src[^;]*vscode-webview:\/\/mock/);
     expect(html).not.toMatch(/img-src[^;]*\*/);
   });
@@ -112,10 +101,6 @@ describe('getWebviewContent — structural smoke', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
 
-    // Previously asserted a hardcoded "Local host" label here. That label was
-    // the VSCX-06 defect (it claimed a local runtime on every trust boundary),
-    // and the absence of cloud-auth gating is what this test is actually about.
-    // The live boundary is covered by runtimePill.webview.test.ts.
     expect(doc.querySelector('#apiKeyBanner')).toBeNull();
     expect(doc.querySelector('#signInBtn')).toBeNull();
     expect(doc.querySelector('#cloudHistoryBtn')).toBeNull();
@@ -137,9 +122,6 @@ describe('getWebviewContent — structural smoke', () => {
       .map((style) => style.textContent ?? '')
       .join('\n');
 
-    // One stable identity is recomputed from the live boundary and provider.
-    // It must survive the narrowest supported sidebar instead of splitting or
-    // hiding either routing fact in a second badge.
     expect(doc.querySelector('#sessionIdentity')?.getAttribute('role')).toBe('status');
     expect(doc.querySelector('#sessionIdentity')?.getAttribute('aria-live')).toBe('polite');
     expect(doc.querySelector('.provider-badge')).toBeNull();
@@ -191,9 +173,6 @@ describe('getWebviewContent — structural smoke', () => {
       .map((style) => style.textContent ?? '')
       .join('\n');
 
-    // Code follows the same host-derived surface/text aliases as the rest of the
-    // webview. Direct preformat tokens previously drifted from adjacent native
-    // views and could create unmatched foreground/background pairs.
     expect(styles).toContain('pre code { color: var(--text-primary)');
     expect(styles).toContain('pre { background: var(--bg-overlay)');
     expect(styles).not.toContain('var(--vscode-textPreformat-foreground');
@@ -274,8 +253,6 @@ describe('getWebviewContent — structural smoke', () => {
       'Local privacy mode refuses network',
     );
     expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Plan mode');
-    // Mode and effort stay as a direct, compact composer control instead of
-    // being duplicated inside the attachment menu.
     expect(doc.querySelector('#controlsSummary')).not.toBeNull();
     expect(doc.querySelector('#plusMenuActions')).toBeNull();
   });

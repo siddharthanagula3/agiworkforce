@@ -28,10 +28,6 @@ function getRollingResetAt(oldestAt: string | null, windowHours: number): string
   return new Date(oldestTimestamp + windowHours * 60 * 60 * 1000).toISOString();
 }
 
-/**
- * Build the public, percentage-only managed-usage contract for one user.
- * Private allowance operands and ledger rows never cross this service boundary.
- */
 export async function getManagedUsageSummary(userId: string): Promise<ManagedUsageSummaryResponse> {
   const [balance, subscription] = await Promise.all([
     CreditService.getBalance(userId),
@@ -77,8 +73,6 @@ export async function getManagedUsageSummary(userId: string): Promise<ManagedUsa
     plan_tier: planTier,
     usage_percentage: usagePercentage,
     usage_reset_at: usageResetAt,
-    // The flagship ceiling applies only when the selected route is flagship;
-    // exhausting it must not hide otherwise-admissible non-flagship work.
     has_usage_remaining: freeUsage?.hasUsageRemaining ?? hasPaidUsageRemaining,
     period_start: toIsoTimestamp(periodStart),
     period_end: toIsoTimestamp(periodEnd),

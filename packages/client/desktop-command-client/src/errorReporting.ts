@@ -1,10 +1,5 @@
-/**
- * Error Reporting API — typed wrappers for error_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface ErrorReport {
   errorType: string;
@@ -20,8 +15,6 @@ export interface ErrorStats {
   warnings: number;
   logFileSizeBytes: number;
 }
-
-// ---- Commands ----
 
 export async function errorReport(errorData: ErrorReport): Promise<void> {
   return command<void>('error_report', { errorData });

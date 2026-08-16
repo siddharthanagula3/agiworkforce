@@ -1,31 +1,4 @@
 #!/usr/bin/env node
-/* global console */
-/**
- * Reference-integrity gate: every file, package, and script a comment or doc
- * names must actually exist.
- *
- * A hand audit found 60+ contradictions where a comment cited a deleted file, a
- * package that never shipped, or a script from a migrated-away toolchain. Those
- * are not style problems — an agent reading a comment that points at a deleted
- * quota module goes looking for a policy owner that no longer exists. Every
- * detector here answers one question: does the referenced thing resolve?
- *
- * Claims that are true-or-false rather than exists-or-not (counts, prices, "mirrors
- * X exactly") are out of scope by construction — see `check-verified-claims.mjs`
- * for the numeric half, and the human tiers in the audit plan for the rest.
- *
- * Every exception must be declared in
- * `scripts/config/reference-integrity-allowlist.json`:
- *   - `intentional[]` for references that are dangling by design, each with a reason.
- *   - `debt[]` for the pre-existing backlog. Entries that stop reproducing fail as
- *     stale, so fixing a reference forces the same commit to delete its baseline
- *     line and the list only ratchets down.
- *
- * Usage:
- *   node scripts/check-reference-integrity.mjs                  # normal check
- *   node scripts/check-reference-integrity.mjs --write-baseline # seed / regenerate
- *   node scripts/check-reference-integrity.mjs --json           # machine-readable findings
- */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -56,7 +29,6 @@ function escapeRegExp(value) {
 const ROOT_ALT = REPO_ROOTS.map(escapeRegExp).join('|');
 const EXT_ALT = REFERENCE_EXTENSIONS.join('|');
 
-/** Anchored to a repo root AND ending in a known extension — both constraints do the precision work. */
 const CODE_PATH_PATTERN = new RegExp(
   `(?:^|[^A-Za-z0-9_./@-])((?:${ROOT_ALT})\\/(?:[A-Za-z0-9_.-]+\\/)*[A-Za-z0-9_.-]+\\.(?:${EXT_ALT}))(?![A-Za-z0-9_/-])`,
   'g',
@@ -71,19 +43,9 @@ const SCRIPT_PATTERN =
 
 const PACKAGE_PATTERN = /@agiworkforce\/[a-z0-9-]+/g;
 
-/**
- * Comments that deliberately name something that no longer exists: "ported from X",
- * "replaced by Y". The referent was deleted *because* of the change the comment
- * records, so a dangling path there is provenance, not rot.
- */
 const PROVENANCE_VERBS =
   /\b(?:ported|moved|migrated|extracted|replaces?|replaced|formerly|previously|superseded|supersedes|lifted|copied|deleted|removed|retired|renamed|was\s+at|used\s+to|no\s+longer|instead\s+of)\b/i;
 
-/**
- * Historical records legitimately cite files that were later deleted, and defect
- * registers legitimately cite files that do not exist yet — "this component is
- * missing" is the finding, so the unresolvable path is the evidence.
- */
 const EXCLUDED_FILES = new Set(['CHANGELOG.md']);
 const EXCLUDED_PREFIXES = [
   'docs/archive/',
@@ -95,7 +57,6 @@ const EXCLUDED_PREFIXES = [
 
 const TEST_PATH = /(?:^|\/)__tests__\/|\.(?:test|spec|stories|bench)\.[cm]?[jt]sx?$/;
 
-/** JSON keys whose values are path assertions. A value-shape heuristic matches prose and must not be used. */
 const JSON_PATH_KEYS = new Set([
   'path',
   'paths',
@@ -107,7 +68,6 @@ const JSON_PATH_KEYS = new Set([
   'sources',
 ]);
 
-/** Records of what moved — dangling by definition. */
 const JSON_EXCLUDED_KEYS = new Set(['originalPath', 'archivedHistorical']);
 
 const AGENT_CONTEXT_JSON = [
@@ -127,10 +87,6 @@ function findingKey(finding) {
   return `${finding.kind}::${finding.file}::${finding.reference}`;
 }
 
-// ---------------------------------------------------------------------------
-// Reference universes
-// ---------------------------------------------------------------------------
-
 function collectManifestNames(files) {
   const scripts = new Set();
   const packages = new Set();
@@ -145,7 +101,6 @@ function collectManifestNames(files) {
     }
     for (const name of Object.keys(manifest.scripts ?? {})) scripts.add(name);
     if (typeof manifest.name === 'string') packages.add(manifest.name);
-    // Published platform binaries are real dependencies, not workspace members.
     for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
       for (const name of Object.keys(manifest[field] ?? {})) packages.add(name);
     }
@@ -153,19 +108,7 @@ function collectManifestNames(files) {
   return { scripts, packages };
 }
 
-/**
- * One batched `git check-ignore`: a runbook citing an untracked secret is correct, not rot.
- *
- * Each candidate is asked twice, bare and with a trailing slash. A directory-only
- * pattern (`/ios/`, `dist/`) matches a bare path only while that directory exists
- * on disk, so a reference to a generated build output resolved as ignored on a
- * developer machine that had built it and as a dangling reference on a fresh
- * checkout. The trailing-slash form tells git to judge the name as a directory,
- * which makes the answer depend on the ignore rules alone.
- */
 export function ignoreQueryMap(candidates) {
-  // Map every query back to the reference it was derived from, so a candidate that
-  // already ends in a slash is not confused with its bare form.
   const sourceOf = new Map();
   for (const candidate of candidates) {
     sourceOf.set(candidate, candidate);
@@ -190,19 +133,10 @@ function ignoredPaths(candidates) {
         .map((line) => sourceOf.get(line) ?? line),
     );
   } catch {
-    // Exit 1 means nothing matched.
     return new Set();
   }
 }
 
-// ---------------------------------------------------------------------------
-// Detectors
-// ---------------------------------------------------------------------------
-
-/**
- * Map each comment line to the text of the contiguous comment block it belongs to,
- * so a qualifier anywhere in the block applies to every reference inside it.
- */
 export function blockContext(comments) {
   const byLine = new Map();
   let start = 0;
@@ -236,9 +170,6 @@ function scanCodeComments(file, source, index, findings) {
 
   if (TEST_PATH.test(file)) return;
 
-  // Provenance is judged per *block*, not per line: "The X and Y facades\n were
-  // deleted at M8" puts the verb on a different line from the reference, and a
-  // per-line test would report a deliberate historical note as rot.
   const blockText = blockContext(comments);
 
   for (const comment of comments) {
@@ -366,10 +297,6 @@ function scanPackageNames(file, text, line, knownPackages, findings) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Allowlist
-// ---------------------------------------------------------------------------
-
 function loadAllowlist() {
   if (!fs.existsSync(path.join(REPO_ROOT, ALLOWLIST_PATH))) {
     return { schemaVersion: 1, intentional: [], debt: [], knownContradictions: [] };
@@ -377,12 +304,6 @@ function loadAllowlist() {
   return JSON.parse(readText(ALLOWLIST_PATH));
 }
 
-/**
- * Intentional entries may be scoped by `kinds` as well as `pathPrefix`. A bare
- * prefix is usually too coarse: `owner-decision-register.md` legitimately proposes
- * package names that do not exist yet, but its stale *file* references are real
- * findings, and one blanket suppression would hide them.
- */
 export function isIntentional(finding, intentional) {
   return intentional.some((entry) => {
     if (entry.pathPrefix && !finding.file.startsWith(entry.pathPrefix)) return false;
@@ -408,10 +329,6 @@ export function validateAllowlist(allowlist, errors) {
     }
   }
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 export function main() {
   const files = workspaceFiles();
@@ -462,8 +379,6 @@ export function main() {
     scanJsonPaths(file, index, findings);
   }
 
-  // Gitignored targets are correct references to untracked files. `git check-ignore`
-  // rejects anything that escapes the repo, so only ask it about in-tree candidates.
   const ignored = ignoredPaths(
     [...new Set(findings.map((f) => f.reference))].filter(
       (reference) => !reference.startsWith('/') && !reference.includes('..'),
@@ -488,8 +403,6 @@ export function main() {
       path.join(REPO_ROOT, ALLOWLIST_PATH),
       `${JSON.stringify(baseline, null, 2)}\n`,
     );
-    // `JSON.stringify` always expands short arrays; Prettier collapses them. Without
-    // this the seeded file fails `pnpm format:check` on every regeneration.
     try {
       execFileSync('node_modules/.bin/prettier', ['--write', ALLOWLIST_PATH], {
         cwd: REPO_ROOT,

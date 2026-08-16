@@ -1,35 +1,16 @@
 'use client';
 
-/**
- * VoiceInputButton - Mic button for the chat composer
- *
- * States:
- * - Idle: microphone icon
- * - Recording: pulsing red ring + elapsed timer
- * - Processing: spinner
- *
- * Uses the voiceInputStore (Zustand) which handles both Web Speech API
- * and server-side transcription fallback.
- */
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Mic, MicOff, Loader2 } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { VoiceRecordingOverlay } from './VoiceRecordingOverlay';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface VoiceInputButtonProps {
-  /** Called with the final transcript text */
   onTranscript: (text: string) => void;
-  /** Disable the button (e.g. while chat is loading) */
   disabled?: boolean;
-  /** Extra classes on the outer wrapper */
   className?: string;
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatTimer(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -37,10 +18,6 @@ function formatTimer(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-/**
- * AUDIT-FIX BUG-30: client-only capability probe. Called from an effect, never
- * during render, so it can assume a browser environment.
- */
 function detectVoiceInputSupport(): boolean {
   if (typeof window === 'undefined') return false;
   const vendor = window as unknown as Record<string, unknown>;
@@ -51,8 +28,6 @@ function detectVoiceInputSupport(): boolean {
     typeof navigator.mediaDevices.getUserMedia === 'function'
   );
 }
-
-// ─── Component ───────────────────────────────────────────────────────────────
 
 export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInputButtonProps) {
   const mode = useVoiceInputStore((s) => s.mode);
@@ -72,25 +47,10 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
   const isTranscribing = mode === 'transcribing';
   const isActive = isListening || isTranscribing;
 
-  /**
-   * AUDIT-FIX BUG-30: capability detection moved out of the render path.
-   *
-   * The guarded-global expression evaluated to `false` on the server, so the
-   * server HTML shipped a disabled mic labelled "Voice input not supported in
-   * this browser". React keeps the server DOM for the first paint and this
-   * value never recomputed, so the control stayed permanently disabled on
-   * browsers that DO support voice input. Optimistic default + post-mount
-   * correction keeps hydration identical and ends up honest either way.
-   *
-   * The `as any` casts are gone too: the two vendor constructors are read
-   * through a typed record instead.
-   */
   const [isSupported, setIsSupported] = useState(true);
   useEffect(() => {
     setIsSupported(detectVoiceInputSupport());
   }, []);
-
-  // ── Timer for recording duration ───────────────────────────────────────
 
   useEffect(() => {
     if (isListening) {
@@ -113,8 +73,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
     };
   }, [isListening]);
 
-  // ── Consume transcript when it arrives ─────────────────────────────────
-
   useEffect(() => {
     if (transcript && transcript.trim()) {
       onTranscript(transcript.trim());
@@ -123,18 +81,13 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
     }
   }, [transcript, onTranscript, clearTranscript]);
 
-  // ── Close overlay when we leave active states ──────────────────────────
-
   useEffect(() => {
     if (mode === 'idle' && !transcript) {
-      // Small delay so the user can see the transition
       const timeout = setTimeout(() => setShowOverlay(false), 150);
       return () => clearTimeout(timeout);
     }
     return undefined;
   }, [mode, transcript]);
-
-  // ── Actions ────────────────────────────────────────────────────────────
 
   const handleStart = useCallback(async () => {
     if (!isSupported) {
@@ -153,7 +106,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
 
   const handleCancel = useCallback(() => {
     if (isListening) {
-      // Force stop and discard
       stopListening().then(() => {
         clearTranscript();
         setShowOverlay(false);
@@ -170,8 +122,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
       handleStart();
     }
   }, [isListening, mode, handleStop, handleStart]);
-
-  // ── Render ─────────────────────────────────────────────────────────────
 
   const label = !isSupported
     ? 'Voice input not supported in this browser'
@@ -192,7 +142,6 @@ export function VoiceInputButton({ onTranscript, disabled, className }: VoiceInp
         aria-label={label}
         aria-pressed={isListening}
         className={cn(
-          // AUDIT-FIX GOV-38: 44px touch target on phones, compact on pointer viewports.
           'relative flex h-11 w-11 touch-manipulation sm:h-9 sm:w-9 items-center justify-center rounded-full transition-all duration-150',
           'text-muted-foreground hover:text-foreground hover:bg-muted/60',
           isListening && [

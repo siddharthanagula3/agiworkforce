@@ -18,15 +18,9 @@ const mockBack = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>();
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -48,8 +42,6 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// Proxy, not a hand-listed map: a screen adding one more lucide icon should not
-// blow up unrelated assertions with "Cannot read properties of undefined".
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return new Proxy(
@@ -60,8 +52,6 @@ jest.mock('lucide-react-native', () => {
   );
 });
 
-// This suite asserts navigation only; the OS permission poll on focus is
-// covered by the Permissions snapshot suite.
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: jest.fn(),
 }));
@@ -120,9 +110,6 @@ jest.mock('expo-calendar', () => ({
   requestRemindersPermissionsAsync: jest.fn().mockResolvedValue(undetermined),
 }));
 
-// Capabilities dates its Memory row from the memory store; this suite is about
-// navigation, so stub the SQLite/cloud-sync boundary rather than let an async
-// load land after the test finishes.
 jest.mock('../src/features/memory/store', () => ({
   useMemoryStore: (
     selector: (state: { entries: unknown[]; fetchMemories: () => Promise<void> }) => unknown,
@@ -158,9 +145,6 @@ describe('settings sub-screen back navigation', () => {
     mockCanGoBack.mockReturnValue(true);
   });
 
-  // The exact labels matter here: both rows used to end in a constant "Device"
-  // status pill, which read as live state on a screen whose whole job is
-  // reporting what the assistant may do. Navigation-only rows carry no pill.
   it('reaches Permissions and Voice from Capabilities, so their parent is not fixed', () => {
     const { getByLabelText } = render(<CapabilitiesScreen />);
 

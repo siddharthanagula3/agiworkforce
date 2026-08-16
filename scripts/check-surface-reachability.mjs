@@ -1,21 +1,4 @@
 #!/usr/bin/env node
-/* global console */
-/**
- * Surface reachability guardrail (SIX-32 step 1).
- *
- * Walks the real import graph from every shipping surface's entry points and
- * fails when a product module under that surface cannot be reached from any of
- * them. Lexical "the identifier appears somewhere" checks report green for code
- * the app can never load; a reachability walk cannot.
- *
- * Every exception must be declared in
- * `scripts/config/surface-reachability-allowlist.json`:
- *   - `intentional[]` for modules that are unreachable by design (web-build
- *     aliases, flag-gated trees). Each entry carries a reason.
- *   - `unreachableDebt` for the pre-existing backlog. The list may not grow
- *     without an explicit edit, and entries that become reachable or are
- *     deleted fail as stale, so the list only ratchets down.
- */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -35,7 +18,6 @@ export const ALLOWLIST_PATH = 'scripts/config/surface-reachability-allowlist.jso
 
 const absolute = (relativePath) => path.join(repoRoot, relativePath);
 
-/** Next.js App Router treats these basenames as framework entry points. */
 const NEXT_ROUTE_BASENAMES = new Set([
   'apple-icon',
   'default',
@@ -62,7 +44,6 @@ function nextAppRouterEntries(appDirectory) {
   });
 }
 
-/** Chrome MV3 loads code only through the paths named in the manifest. */
 export function chromeManifestEntries(manifest, sourceDirectory) {
   const entries = [];
   const push = (value) => {
@@ -84,7 +65,6 @@ export function chromeManifestEntries(manifest, sourceDirectory) {
   return [...new Set(entries)].map((entry) => path.join(sourceDirectory, '..', entry));
 }
 
-/** Resolve `<script src>` targets out of an extension HTML entry point. */
 function htmlScriptEntries(htmlPath) {
   if (!fs.existsSync(htmlPath)) return [];
   const html = fs.readFileSync(htmlPath, 'utf8');
@@ -102,7 +82,6 @@ function existingFiles(candidates) {
     const resolved = path.resolve(candidate);
     if (seen.has(resolved)) continue;
     seen.add(resolved);
-    // A manifest may name the built `.js`; map it back onto the TypeScript source.
     for (const variant of [resolved, ...jsToTsVariants(resolved)]) {
       if (fs.existsSync(variant) && fs.statSync(variant).isFile()) {
         files.push(variant);

@@ -1,8 +1,3 @@
-/**
- * The cron sweep is the only enforcer that works when the browser is gone.
- * Without it, a user who asks for a human and then closes the tab leaves an
- * escalation sitting in `waiting` that nobody ever reads.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

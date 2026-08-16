@@ -40,8 +40,6 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// Proxy, not a hand-listed map: the drawer adding one more lucide glyph should
-// not fail every assertion in this suite with "reading 'displayName'".
 jest.mock('lucide-react-native', () => {
   const icon = jest.fn().mockReturnValue(null);
   return new Proxy(
@@ -51,13 +49,6 @@ jest.mock('lucide-react-native', () => {
     },
   );
 });
-
-// `jest.mock('@react-navigation/drawer', …)` used to sit here. That package is
-// not a dependency of apps/mobile and nothing under src/ or app/ imports it —
-// this line was the only reference to it left in the whole surface, from before
-// the drawer was rebuilt. jest.mock resolves the module path even when the
-// factory replaces it, so the leftover mock threw "Cannot find module" and took
-// the entire suite down at load.
 
 jest.mock('../src/features/chat/components/ModeSwitchModal', () => {
   const { View, Pressable } = require('react-native');
@@ -104,10 +95,6 @@ describe('DrawerContent', () => {
     jest.clearAllMocks();
     mockPathname = '/chat';
 
-    // Cloud rows live in useChatCloudMessageStore — that is where
-    // loadConversations() writes the server list, and the local store stopped
-    // holding cloud conversations at all. Seeding this into the LOCAL store
-    // would exercise a path the app no longer has.
     useChatCloudMessageStore.setState({
       conversations: [
         {
@@ -210,9 +197,6 @@ describe('DrawerContent', () => {
     expect(getByText('Chats')).toBeTruthy();
     expect(getByText('Library')).toBeTruthy();
     expect(getByText('Remote')).toBeTruthy();
-    // Artifacts, Skills, Tasks and Notifications were de-listed (founder
-    // 2026-08-13): Library already covers generated media, and Notifications
-    // lives in Settings. Their ROUTES still exist — only the drawer rows are gone.
     expect(queryByText('Artifacts')).toBeNull();
     expect(queryByText('AGI Agent')).toBeNull();
     expect(getByText('Recents')).toBeTruthy();
@@ -228,20 +212,13 @@ describe('DrawerContent', () => {
     local.unmount();
 
     useChatAppModeStore.setState({ appMode: 'cloud' });
-    // AGI Work is plan-gated (`agi_work`), so a free tier would hide the row and
-    // the assertion below would pass for the wrong reason.
     useTierStore.setState({ tier: 'max' });
     const cloud = renderDrawer();
 
-    // Cloud mode shows Schedules and AGI Work (which replaced the duplicate
-    // "Tasks" row — both pointed at the same agent runs) plus synced Projects.
     expect(cloud.getByLabelText('AGI Work. Cloud')).toBeTruthy();
     expect(cloud.getByLabelText('Schedules. Cloud')).toBeTruthy();
     expect(cloud.queryByText('Skills')).toBeNull();
-    // Projects nav row is visible in cloud mode (task: unblock cloud projects).
     expect(cloud.getByLabelText('Projects')).toBeTruthy();
-    // The local project "Launch demo" should NOT appear in cloud mode
-    // (cloud mode reads from cloudProjectStore, not local store).
     expect(cloud.queryByText('Launch demo')).toBeNull();
   });
 
@@ -269,8 +246,6 @@ describe('DrawerContent', () => {
     useTierStore.setState({ tier: 'max' });
     const { getByLabelText } = renderDrawer();
 
-    // AGI Work NAVIGATES; it no longer flips a session stance. `workMode` is a
-    // property of a cloud agent run, so "the AGI Work chats" ARE the runs list.
     fireEvent.press(getByLabelText('AGI Work. Cloud'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
@@ -309,8 +284,6 @@ describe('DrawerContent', () => {
   it('opens the full global-search and chat-history surface', () => {
     const { getByLabelText } = renderDrawer();
 
-    // The drawer's separate search row was folded into the Chats destination,
-    // which owns search for chats, projects, files, library and artifacts.
     fireEvent.press(getByLabelText('Chats'));
 
     expect(mockCloseDrawer).toHaveBeenCalled();
@@ -352,15 +325,9 @@ describe('DrawerContent', () => {
     });
   });
 
-  // PAR-M06. The founder complained the old drawer search field's placeholder
-  // widened it; deleting the entry point outright over-corrected. The
-  // replacement is icon-only (so it cannot widen) and hands off to the screen
-  // that owns search, with its field already focused.
   it('opens Chats with the search field focused from the icon-only search button', () => {
     const { getByLabelText, queryByPlaceholderText } = renderDrawer();
 
-    // No search input in the drawer: an icon-only button has no placeholder to
-    // grow, which is the whole point of the fix.
     expect(queryByPlaceholderText(/search/i)).toBeNull();
 
     fireEvent.press(getByLabelText('Search'));
@@ -372,12 +339,6 @@ describe('DrawerContent', () => {
     });
   });
 
-  // PAR-M18 originally added a Notifications row here because
-  // `app/(app)/notifications` had zero inbound navigation. The row was removed
-  // (founder 2026-08-13: "notifications should be in settings") — but the
-  // capability must not regress with it, so this asserts the row is gone AND
-  // that the centre is still reachable from the header badge in DrawerButton,
-  // which is the always-visible half of that entry point.
   it('no longer duplicates Notifications in the drawer', () => {
     const { queryByLabelText } = renderDrawer();
 

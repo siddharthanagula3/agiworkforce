@@ -1,13 +1,3 @@
-/**
- * POST /api/settings/2fa/setup — enrollment guard.
- *
- * Regression: the route's upsert resets `enabled` to false, so before this
- * guard any caller holding a session could silently strip a live second factor
- * by starting a new enrollment. That bypassed DELETE /api/settings/2fa, which
- * deliberately demands a valid TOTP or backup code "to prevent session-hijack
- * escalation" — and a stolen session cookie is precisely the threat 2FA exists
- * to survive.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -45,10 +35,6 @@ function request() {
   });
 }
 
-/**
- * getNeonDb().query<T>() resolves to the row ARRAY itself, not a { rows }
- * envelope — see the destructuring callers in ../route.ts.
- */
 function existingRow(enabled: boolean | null) {
   return enabled === null ? [] : [{ enabled }];
 }
@@ -64,7 +50,6 @@ describe('POST /api/settings/2fa/setup', () => {
     const response = await POST(request());
 
     expect(response.status).toBe(409);
-    // The guard must run BEFORE any write — exactly one query (the select).
     expect(mocks.query).toHaveBeenCalledTimes(1);
     const [sql] = mocks.query.mock.calls[0] as [string];
     expect(sql).toMatch(/select\s+enabled\s+from\s+user_two_factor/i);

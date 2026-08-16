@@ -5,46 +5,22 @@ import react from '@vitejs/plugin-react-swc';
 import { defineConfig, loadEnv, type ConfigEnv, type UserConfig } from 'vite';
 import { ipcCheckPlugin } from './scripts/vite-plugin-ipc-check';
 
-// ESM-compatible __dirname
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const DEFAULT_DEV_PORT = 5173;
 
-/**
- * Vite 7 configuration for AGI Workforce Desktop app.
- *
- * Features:
- * - Environment-based configuration using loadEnv
- * - Optimized build settings for Tauri desktop app
- * - Organized plugin configuration
- * - Modern ESNext build target with fallbacks for older platforms
- */
 export default defineConfig(async ({ mode }: ConfigEnv) => {
-  // Load environment variables based on mode (development, production, test)
   const env = loadEnv(mode, process.cwd(), ['VITE_', 'TAURI_']);
-  // loadEnv only reads .env files; honor a VITE_BUILD_TARGET passed as a process
-  // env var too (CI sets it as a step env; `build:cloud` sets it inline). Without
-  // this, `build:web` falls through to the native safari14 target and esbuild
-  // fails lowering destructuring (368 errors).
   const buildTargetEnv = env['VITE_BUILD_TARGET'] || process.env['VITE_BUILD_TARGET'];
   const isWebBuild = buildTargetEnv === 'web';
-  // Electron cloud shell: the web bundle plus Electron-backed replacements for
-  // the modules whose web stubs are silent no-ops (dialogs answering "no",
-  // dead window controls, deep links that never fire). See
-  // src/lib/tauri-electron/ and apps/desktop/electron/.
   const isElectronBuild = buildTargetEnv === 'electron';
-  // Both are browser-class bundles that never reach the Tauri runtime.
   const isBrowserBundle = isWebBuild || isElectronBuild;
 
-  // Determine port configuration
   const requestedPort = Number(env['VITE_DEV_PORT']) || DEFAULT_DEV_PORT;
   const tauriDevHost = env['TAURI_DEV_HOST'] || '127.0.0.1';
 
-  // Determine build targets based on platform
   const isWindows = env['TAURI_PLATFORM'] === 'windows';
   const isDebug = Boolean(env['TAURI_DEBUG']);
-  // Electron overrides a module only where the browser stub's silent success
-  // would ship as a product defect; event/path/fs keep the web behavior.
   const browserShimDir = (module: string) =>
     isElectronBuild &&
     [
@@ -90,36 +66,16 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       }
     : {};
 
-  // Build target: Use esnext for modern builds, with platform-specific fallbacks.
-  // macOS Tauri uses the WKWebView, which supports ES2020+ natively. `safari14`
-  // was too conservative: Vite 8's esbuild refuses to downlevel some destructuring
-  // to `safari14` (throws "Transforming destructuring … not supported yet"),
-  // breaking the release build even though Safari 14 runs destructuring fine.
-  // `safari15` stops the spurious transform while staying WKWebView-compatible.
   const buildTarget = isWindows ? 'chrome105' : 'safari15';
 
   const config: UserConfig = {
     base: isBrowserBundle ? '/' : undefined,
 
-    // ===================
-    // Plugins
-    // ===================
     plugins: [
-      // React plugin with SWC for faster builds
       react({
-        // Enable React Refresh for Fast HMR
         devTarget: 'esnext',
       }),
-      // Tailwind CSS v4 Vite plugin
       tailwindcss(),
-      // Wave 2 Task 2.1, Stream 2: IPC drift detection at build time.
-      // Scans every invoke('<name>', ...) literal under src/ and verifies
-      // the command exists as a #[tauri::command] under src-tauri/. Default
-      // mode is WARN (see scripts/vite-plugin-ipc-check.ts header for the
-      // rationale and how to flip to FAIL once existing drift is cleaned up).
-      // Skipped for the cloud-web build target — those bundles never reach
-      // the Tauri runtime, so missing #[tauri::command] is not a real bug
-      // (cloud-web routes through tauri-mock.ts's cloudApi fallthrough).
       ...(isBrowserBundle
         ? []
         : [
@@ -131,29 +87,18 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           ]),
     ],
 
-    // ===================
-    // Development Server
-    // ===================
     server: {
       port: requestedPort,
       strictPort: true,
       host: tauriDevHost,
-      // Enable HMR with proper configuration for Tauri
       hmr: {
         protocol: 'ws',
         host: tauriDevHost,
         port: requestedPort,
       },
-      // Watch configuration for better file watching
       watch: {
-        // Ignore Rust source files and build artifacts
         ignored: ['**/src-tauri/**', '**/target/**'],
       },
-      // CSP headers for Tauri dev mode.
-      // In dev mode Tauri injects the CSP from tauri.conf.json as a <meta> tag after the
-      // fact, which means WKWebView may block Vite-injected styles before the tag is parsed.
-      // Sending the matching CSP as an HTTP response header from the Vite server ensures it
-      // is applied immediately, eliminating the "Refused to apply a stylesheet" startup errors.
       headers: {
         'Content-Security-Policy': [
           "default-src 'self'",
@@ -173,54 +118,28 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       },
     },
 
-    // ===================
-    // Preview Server
-    // ===================
     preview: {
       port: 4173,
       strictPort: true,
     },
 
-    // ===================
-    // Environment Variables
-    // ===================
     envPrefix: ['VITE_', 'TAURI_'],
 
-    // ===================
-    // Build Configuration
-    // ===================
     build: {
-      // Modern build target - use esnext for optimal performance
       target: isBrowserBundle ? 'esnext' : buildTarget,
 
-      // Minification settings
       minify: isDebug ? false : 'esbuild',
 
-      // Source maps for debugging - enabled in dev/test only; disabled in production
-      // to avoid shipping source maps that expose original source code to end users (M24)
       sourcemap: mode !== 'production',
 
-      // Output directory
       outDir: 'dist',
 
-      // Report compressed size for build analysis
       reportCompressedSize: true,
 
-      // CSS code splitting for better caching
       cssCodeSplit: true,
 
-      // Rollup-specific options
       rollupOptions: {
         output: {
-          /**
-           * Manual chunk splitting for optimal loading performance.
-           *
-           * PERFORMANCE OPTIMIZATION:
-           * - Separates vendor code from application code for better caching
-           * - Heavy libraries (mermaid, recharts, monaco) are loaded on-demand
-           * - Core dependencies are bundled together to minimize HTTP requests
-           * - Average initial bundle size reduced by ~40% compared to no splitting
-           */
           manualChunks: (id) => {
             if (
               id.includes('/apps/desktop/src/runtime/') ||
@@ -236,22 +155,18 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
               return undefined;
             }
 
-            // Core React ecosystem - loaded immediately
             if (id.includes('/react/') || id.includes('/react-dom/')) {
               return 'react-vendor';
             }
 
-            // Radix UI components - core UI primitives
             if (id.includes('/@radix-ui/')) {
               return 'ui-vendor';
             }
 
-            // Terminal is desktop-only
             if (!isBrowserBundle && id.includes('/@xterm/')) {
               return 'terminal-vendor';
             }
 
-            // Markdown rendering and syntax highlighting
             if (
               id.includes('/react-markdown/') ||
               id.includes('/remark-gfm/') ||
@@ -265,27 +180,22 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
               return 'markdown-vendor';
             }
 
-            // Charting library - only loaded on analytics/dashboard views
             if (id.includes('/recharts/')) {
               return 'charts-vendor';
             }
 
-            // Diagram library - only loaded when diagrams are rendered
             if (id.includes('/mermaid/')) {
               return 'diagram-vendor';
             }
 
-            // Code editing - loaded on-demand for code workspaces
             if (id.includes('/monaco-editor/')) {
               return 'monaco-vendor';
             }
 
-            // Virtualization for large lists
             if (id.includes('/react-window/') || id.includes('/react-virtualized-auto-sizer/')) {
               return 'virtualization-vendor';
             }
 
-            // Utility libraries
             if (
               id.includes('/framer-motion/') ||
               id.includes('/date-fns/') ||
@@ -295,7 +205,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
               return 'utility-vendor';
             }
 
-            // PDF handling - loaded on-demand for document features
             if (id.includes('/pdfjs-dist/')) {
               return 'pdf-vendor';
             }
@@ -303,23 +212,17 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
             return undefined;
           },
 
-          // Asset file naming for better caching
           assetFileNames: 'assets/[name]-[hash][extname]',
           chunkFileNames: 'chunks/[name]-[hash].js',
           entryFileNames: '[name]-[hash].js',
         },
       },
 
-      // Chunk size warning limit (in KB)
       chunkSizeWarningLimit: 1500,
 
-      // Asset inlining threshold (in bytes) - inline small assets
       assetsInlineLimit: 4096,
     },
 
-    // ===================
-    // Module Resolution
-    // ===================
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
@@ -348,14 +251,6 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
           __dirname,
           '../../packages/contracts/trust-boundaries/src/index.ts',
         ),
-        // EVERY `@agiworkforce/utils/<subpath>` used by desktop source must be
-        // listed here, ABOVE the bare-package entry. Vite matches object-form
-        // aliases by PREFIX, so the '@agiworkforce/utils' entry below also
-        // captures subpath imports and rewrites them to `.../src/index.ts/<sub>`
-        // — a path inside a file, which fails at build time with the opaque
-        // "Not a directory (os error 20)". The package's own `exports` map is
-        // correct and is what every other surface resolves through; it is only
-        // bypassed here because this alias block short-circuits resolution.
         '@agiworkforce/utils/uuidv7': path.resolve(
           __dirname,
           '../../packages/platform/utils/src/uuidv7.ts',
@@ -372,11 +267,7 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       },
     },
 
-    // ===================
-    // Dependency Optimization
-    // ===================
     optimizeDeps: {
-      // Pre-bundle these dependencies for faster dev startup
       include: [
         'react',
         'react-dom',
@@ -388,26 +279,17 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         'highlight.js',
         'react-syntax-highlighter',
       ],
-      // Exclude CLI tools from optimization
       exclude: isBrowserBundle ? [] : ['@tauri-apps/cli'],
-      // Force optimization even for linked dependencies
       force: false,
     },
 
-    // ===================
-    // CSS Configuration
-    // ===================
     css: {
       modules: {
         localsConvention: 'camelCase',
       },
-      // Enable CSS sourcemaps in development
       devSourcemap: true,
     },
 
-    // ===================
-    // Global Defines
-    // ===================
     define: {
       __APP_VERSION__: JSON.stringify(env['npm_package_version'] || '0.0.0'),
       __DEV__: JSON.stringify(mode === 'development'),
@@ -416,22 +298,12 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
       __ELECTRON_BUILD__: JSON.stringify(isElectronBuild),
     },
 
-    // ===================
-    // Esbuild Configuration
-    // ===================
     esbuild: {
-      // Drop debugger statements and console calls in production to avoid
-      // leaking internal diagnostics or implementation details (M25)
       drop: mode === 'production' ? ['debugger', 'console'] : [],
-      // Preserve legal comments
       legalComments: 'none',
-      // Keep function/class names to avoid initialization issues
       keepNames: true,
     },
 
-    // ===================
-    // Test Configuration (Vitest)
-    // ===================
     test: {
       globals: true,
       environment: 'jsdom',
@@ -447,12 +319,8 @@ export default defineConfig(async ({ mode }: ConfigEnv) => {
         '**/playwright/**',
         '**/src-tauri/**',
         '**/wdio/**',
-        // Superseded implementations kept for reference under archive/. They are
-        // outside tsconfig's `include` and unreachable from main.tsx, so their
-        // tests would assert against code the app cannot run.
         '**/archive/**',
       ],
-      // Coverage configuration
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],

@@ -1,13 +1,3 @@
-/**
- * Coverage for llama-rn GGUF rows in the model picker + install store:
- *  - the selectability predicate accepts rows with verified GGUF artifacts
- *    (base + mmproj) and still rejects rows without runnable artifacts;
- *  - shipsInV1:false vision rows stay hidden from
- *    the production LOCAL_MODEL_LIST;
- *  - installStore.prepareModel routes preset-less GGUF rows through
- *    services/modelDownload with the mmproj fields and lands on 'ready' with
- *    the same job contract the ExecuTorch path uses.
- */
 
 import type { OnDeviceModel } from '@agiworkforce/types';
 import { getModelsForRole } from '@agiworkforce/local-llm';
@@ -31,9 +21,6 @@ jest.mock('@/storage/installedModels', () => ({
   recordInstalledModel: jest.fn(),
 }));
 
-// The multimodal RAM gate (model-picker-ram-gate.test.ts) fails closed on an
-// unknown RAM reading; these tests exercise the DOWNLOAD branch, so report a
-// vision-capable device.
 jest.mock('@agiworkforce/local-llm', () => ({
   ...jest.requireActual('@agiworkforce/local-llm'),
   getCapabilities: jest.fn().mockResolvedValue({
@@ -188,13 +175,9 @@ describe('installStore.prepareModel GGUF branch', () => {
   it('surfaces download failures as failed jobs (same contract as ExecuTorch path)', async () => {
     (downloadModel as jest.Mock).mockRejectedValue(new Error('checksum mismatch'));
 
-    // The RAW error still propagates to the caller (for logging/diagnostics)…
     await expect(useModelInstallStore.getState().prepareModel(visionModelDef)).rejects.toThrow(
       'checksum mismatch',
     );
-    // …but the failed JOB carries a generic user-safe message by design — the
-    // store deliberately never surfaces internal driver errors (e.g. sqlite
-    // execAsync failures) to the UI (see installStore prepareModel catch).
     expect(useModelInstallStore.getState().jobs[VISION_CATALOG_MODEL.id]).toEqual({
       status: 'failed',
       progress: 0,

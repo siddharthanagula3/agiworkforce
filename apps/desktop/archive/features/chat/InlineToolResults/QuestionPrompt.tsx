@@ -1,14 +1,3 @@
-/**
- * QuestionPrompt -- Inline tool result renderer for the `question` tool.
- *
- * When the agent needs user input, this component displays a card with
- * selectable choices. The user picks one (or several in multi-select mode)
- * and submits. The answer is sent back to the Rust backend via the
- * `question_answer` Tauri command, unblocking the waiting agent tool.
- *
- * Once the tool has completed, the component renders the final answer
- * in read-only mode derived from the tool result data.
- */
 
 import { useState, useEffect, useCallback } from 'react';
 import { listen } from '@/lib/tauri-mock';
@@ -29,7 +18,6 @@ export function QuestionPrompt({ result }: ToolResultProps) {
   const [submitted, setSubmitted] = useState(false);
   const [submittedAnswer, setSubmittedAnswer] = useState<unknown>(null);
 
-  // Listen for incoming question events from the Rust backend
   useEffect(() => {
     const unlisten = listen<QuestionEvent>('question:ask', (event) => {
       setPending(event.payload);
@@ -71,12 +59,10 @@ export function QuestionPrompt({ result }: ToolResultProps) {
     try {
       await agent.questionAnswer(pending.id, answerValue);
     } catch (err) {
-      // Best-effort: the tool executor will timeout if the answer doesn't arrive
       console.error('Failed to submit question answer:', err);
     }
   }, [pending, selected]);
 
-  // If the tool already completed, show the stored answer from result data
   const data = result?.data as Record<string, unknown> | undefined;
   if (data?.['answer'] !== undefined) {
     const rawAnswer = data['answer'];
@@ -96,7 +82,6 @@ export function QuestionPrompt({ result }: ToolResultProps) {
     );
   }
 
-  // Nothing to render yet
   if (!pending) return null;
 
   return (

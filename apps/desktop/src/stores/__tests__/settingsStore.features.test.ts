@@ -1,20 +1,6 @@
-/**
- * settingsStore features system tests (v10 → v11 migration)
- *
- * Covers the CodeRabbit-requested features capability toggle system:
- * - Default state: features is an empty {}
- * - setFeature adds/updates entries
- * - Multiple features can coexist
- * - v10 → v11 migration adds features field to persisted state missing it
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsStore } from '../settingsStore';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Module mocks
-// ─────────────────────────────────────────────────────────────────────────────
-
-// Stub tauri-mock so the store does not try to invoke Rust commands
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
   isTauri: false,
@@ -24,7 +10,6 @@ vi.mock('../../lib/tauri-mock', () => ({
   isTauriContext: vi.fn(() => false),
 }));
 
-// Provide a stable localStorage mock (persisted store reads from it during init)
 const localStorageMock: Storage = {
   length: 0,
   clear: vi.fn(),
@@ -39,14 +24,6 @@ Object.defineProperty(window, 'localStorage', {
   writable: true,
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Reset the store to a clean default state between tests.
- * The features field must start as an empty object.
- */
 function resetStore() {
   useSettingsStore.setState({
     features: {},
@@ -55,18 +32,12 @@ function resetStore() {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tests
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('settingsStore — features capability toggles', () => {
   beforeEach(() => {
     resetStore();
     vi.clearAllMocks();
     (localStorageMock.getItem as ReturnType<typeof vi.fn>).mockReturnValue(null);
   });
-
-  // ── Default state ──────────────────────────────────────────────────────────
 
   describe('default state', () => {
     it('features defaults to an empty object', () => {
@@ -82,8 +53,6 @@ describe('settingsStore — features capability toggles', () => {
     });
   });
 
-  // ── setFeature ─────────────────────────────────────────────────────────────
-
   describe('setFeature', () => {
     it('setFeature("webSearch", true) adds the feature with value true', () => {
       useSettingsStore.getState().setFeature('webSearch', true);
@@ -93,7 +62,6 @@ describe('settingsStore — features capability toggles', () => {
     });
 
     it('setFeature("webSearch", false) sets the feature value to false', () => {
-      // Enable first, then disable
       useSettingsStore.getState().setFeature('webSearch', true);
       useSettingsStore.getState().setFeature('webSearch', false);
 
@@ -105,7 +73,6 @@ describe('settingsStore — features capability toggles', () => {
       useSettingsStore.getState().setFeature('webSearch', true);
       useSettingsStore.getState().setFeature('codeExecution', true);
 
-      // Setting a third feature should not affect the first two
       useSettingsStore.getState().setFeature('imageGen', false);
 
       const { features } = useSettingsStore.getState();
@@ -122,8 +89,6 @@ describe('settingsStore — features capability toggles', () => {
       expect(features['deepResearch']).toBe(true);
     });
   });
-
-  // ── Multiple features coexistence ──────────────────────────────────────────
 
   describe('multiple features coexistence', () => {
     it('multiple features with different keys coexist independently', () => {
@@ -155,14 +120,11 @@ describe('settingsStore — features capability toggles', () => {
       useSettingsStore.getState().setFeature('webSearch', true);
       useSettingsStore.getState().setFeature('webSearch', false);
 
-      // There should still be exactly one key for "webSearch"
       const keys = Object.keys(useSettingsStore.getState().features);
       const webSearchOccurrences = keys.filter((k) => k === 'webSearch').length;
       expect(webSearchOccurrences).toBe(1);
     });
   });
-
-  // ── v10 → v11 migration ────────────────────────────────────────────────────
 
   describe('v10 → v11 migration: adds features field', () => {
     /**
@@ -174,8 +136,6 @@ describe('settingsStore — features capability toggles', () => {
      * returned state includes features: {}.
      */
     it('migrate from v10 adds empty features object when missing', () => {
-      // Retrieve the migrate function from the store config.
-      // The persist config is accessible via the store's _persist property in zustand v5.
       const storeConfig = (
         useSettingsStore as unknown as {
           persist?: {
@@ -185,7 +145,6 @@ describe('settingsStore — features capability toggles', () => {
       ).persist;
 
       if (!storeConfig?.getOptions) {
-        // If the internal API is not available, skip via a soft assertion
         return;
       }
 
@@ -194,7 +153,6 @@ describe('settingsStore — features capability toggles', () => {
         return;
       }
 
-      // Simulate a v10 persisted state that has no features field
       const v10State = {
         llmConfig: {
           defaultProvider: 'managed_cloud',
@@ -232,7 +190,6 @@ describe('settingsStore — features capability toggles', () => {
         return;
       }
 
-      // Simulate a v10 state that somehow already has features (edge case)
       const v10State = {
         features: { webSearch: true },
         customModels: [],
@@ -240,7 +197,6 @@ describe('settingsStore — features capability toggles', () => {
 
       const migrated = options.migrate(v10State, 10) as Record<string, unknown>;
 
-      // The existing features object should be preserved
       expect(migrated['features']).toEqual({ webSearch: true });
     });
 
@@ -273,13 +229,10 @@ describe('settingsStore — features capability toggles', () => {
         features: Record<string, boolean>;
       };
 
-      // Merged features should come from persisted state
       expect(merged.features['webSearch']).toBe(true);
       expect(merged.features['codeExecution']).toBe(false);
     });
   });
-
-  // ── Reactive state updates ─────────────────────────────────────────────────
 
   describe('reactive updates', () => {
     it('subscribers are notified when setFeature is called', () => {

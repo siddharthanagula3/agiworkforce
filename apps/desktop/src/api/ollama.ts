@@ -1,74 +1,26 @@
-/**
- * Ollama API Wrapper
- *
- * Provides TypeScript API for managing local Ollama models.
- * Enables users to select local models for offline operation.
- *
- * Commands exposed:
- * - ollama_check_status - Check if Ollama server is running
- * - ollama_list_models - List all installed models
- * - ollama_get_model_info - Get detailed info about a specific model
- * - ollama_pull_model - Download a new model
- * - ollama_delete_model - Remove an installed model
- */
 
 import { OLLAMA_TIMEOUT_MS } from '../constants/timeouts';
 import { invoke } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * Details about an Ollama model's configuration
- */
 export interface OllamaModelDetails {
-  /** Parameter size (e.g., "7B", "13B") */
   parameter_size: string;
-  /** Quantization level (e.g., "Q4_0", "Q8_0") */
   quantization_level: string;
-  /** Provider-reported model family */
   family: string;
-  /** Model families this model belongs to */
   families: string[];
-  /** Parent model name */
   parent_model: string;
-  /** Model format */
   format: string;
 }
 
-/**
- * Represents an Ollama model with its metadata
- */
 export interface OllamaModel {
-  /** The provider-reported model name */
   name: string;
-  /** Size of the model in bytes */
   size: number;
-  /** ISO 8601 timestamp of when the model was last modified */
   modified_at: string;
-  /** Model digest/hash */
   digest: string;
-  /** Additional model details */
   details: OllamaModelDetails;
 }
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
-// Deliberately not the `OLLAMA_PULL_TIMEOUT_MS` in constants/timeouts.ts: that
-// one is a minute, and a pull streams a whole model over the user's connection,
-// so anything short of a day would abort large downloads on slow links.
 const OLLAMA_MODEL_PULL_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Invoke a Tauri command with timeout
- */
 async function invokeWithTimeout<T>(
   command: string,
   args?: Record<string, unknown>,
@@ -91,19 +43,12 @@ async function invokeWithTimeout<T>(
   });
 }
 
-/**
- * Format model size in human-readable format
- */
 export function formatModelSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
-
-// ============================================================================
-// API Functions
-// ============================================================================
 
 /**
  * Check if Ollama server is running and accessible.
@@ -122,7 +67,6 @@ export async function ollamaCheckStatus(baseUrl?: string): Promise<boolean> {
   try {
     return await invokeWithTimeout<boolean>('ollama_check_status', { baseUrl });
   } catch (error) {
-    // Connection errors mean Ollama isn't running
     console.debug('[Ollama] Status check failed:', error);
     return false;
   }
@@ -234,10 +178,6 @@ export async function ollamaDeleteModel(modelName: string, baseUrl?: string): Pr
   }
 }
 
-// ============================================================================
-// Client Class (Alternative API)
-// ============================================================================
-
 /**
  * OllamaClient provides a class-based interface for Ollama operations.
  *
@@ -250,44 +190,26 @@ export async function ollamaDeleteModel(modelName: string, baseUrl?: string): Pr
  * ```
  */
 export class OllamaClient {
-  /**
-   * Check if Ollama is running
-   */
   static async checkStatus(baseUrl?: string): Promise<boolean> {
     return ollamaCheckStatus(baseUrl);
   }
 
-  /**
-   * List all installed models
-   */
   static async listModels(baseUrl?: string): Promise<OllamaModel[]> {
     return ollamaListModels(baseUrl);
   }
 
-  /**
-   * Get info about a specific model
-   */
   static async getModelInfo(modelName: string, baseUrl?: string): Promise<OllamaModel> {
     return ollamaGetModelInfo(modelName, baseUrl);
   }
 
-  /**
-   * Pull/download a model
-   */
   static async pullModel(modelName: string, baseUrl?: string): Promise<void> {
     return ollamaPullModel(modelName, baseUrl);
   }
 
-  /**
-   * Delete an installed model
-   */
   static async deleteModel(modelName: string, baseUrl?: string): Promise<void> {
     return ollamaDeleteModel(modelName, baseUrl);
   }
 
-  /**
-   * Check if Ollama is available and has at least one model installed
-   */
   static async isReadyForUse(baseUrl?: string): Promise<{
     available: boolean;
     modelCount: number;

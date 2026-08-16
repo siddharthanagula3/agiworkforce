@@ -1,11 +1,3 @@
-/**
- * SkillCard
- *
- * Renders a single skill in either grid or list view.
- * Supports click-to-expand for full details. Skills shown here are loaded by
- * the native runtime; enable/disable controls stay hidden until the runtime
- * owns a persisted execution-admission setting.
- */
 import {
   BookOpen,
   Briefcase,
@@ -29,8 +21,6 @@ import {
   type SkillCategory,
   type ViewMode,
 } from '../../stores/skillMarketplaceStore';
-
-// ── Category icon map ─────────────────────────────────────────────────────────
 
 const CATEGORY_ICONS: Record<Exclude<SkillCategory, 'all'>, ReactNode> = {
   healthcare: <Heart className="h-3.5 w-3.5" />,
@@ -63,8 +53,6 @@ const SOURCE_LABEL: Record<string, string> = {
   unknown: 'Unknown',
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 function humanizeName(name: string): string {
   return name
     .split(/[-_]/)
@@ -83,8 +71,6 @@ function categoryLabel(category: SkillCategory): string {
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
 
-// ── Props ─────────────────────────────────────────────────────────────────────
-
 interface SkillCardProps {
   skill: MarketplaceSkill;
   viewMode: ViewMode;
@@ -98,8 +84,6 @@ interface InnerProps {
   categoryIcon: ReactNode;
   onExpand: () => void;
 }
-
-// ── Main export ───────────────────────────────────────────────────────────────
 
 export function SkillCard({ skill, viewMode }: SkillCardProps) {
   const expandedSkillName = useSkillMarketplaceStore((s) => s.expandedSkillName);
@@ -130,8 +114,6 @@ export function SkillCard({ skill, viewMode }: SkillCardProps) {
 
   return <SkillGridCard {...innerProps} />;
 }
-
-// ── Grid card ─────────────────────────────────────────────────────────────────
 
 function SkillGridCard({
   skill,
@@ -202,8 +184,6 @@ function SkillGridCard({
   );
 }
 
-// ── List row ──────────────────────────────────────────────────────────────────
-
 function SkillListRow({
   skill,
   isExpanded,
@@ -267,8 +247,6 @@ function SkillListRow({
     </article>
   );
 }
-
-// ── Shared detail section ────────────────────────────────────────────────────
 
 function SkillDetails({ skill }: { skill: MarketplaceSkill }) {
   return (

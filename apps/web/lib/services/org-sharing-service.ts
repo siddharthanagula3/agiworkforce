@@ -9,29 +9,6 @@ import {
 } from '@/lib/services/org-entitlements';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
 
-/**
- * Org-scoped sharing of projects (migration 0086).
- *
- * TENANCY CONTRACT — the one thing that must never regress.
- *
- * `organizationId` in this module is ALWAYS derived from
- * `organization_members` for the authenticated subject
- * (`resolveOrgMembership` below). It is never read from a request body, a
- * query string, or a header. A caller therefore cannot name an organization
- * they do not belong to, and every statement below carries that server-derived
- * id as a bound parameter.
- *
- * The routes that call this module use `getUserScopedDb()`, so migration
- * 0086's policies are a real second fence: `organization_shared_projects` is
- * readable only via `app_org_resource_is_readable(organization_id)` and
- * writable only via `app_org_resource_is_manageable(organization_id)`, both of
- * which resolve membership inside the database. Removing the `organization_id`
- * predicate from any statement here would still fail closed at the DB — but the
- * predicate is written anyway, and pinned by
- * `app/api/settings/organization/shared/__tests__/route.cross-org-isolation.test.ts`,
- * because defence-in-depth is the point.
- */
-
 export type OrgRole = 'owner' | 'admin' | 'member' | 'viewer';
 export type SharedProjectAccess = 'read' | 'write';
 export type MemberProjectAccess = 'read' | 'write' | 'none';
@@ -56,17 +33,9 @@ export interface SharedProjectSummary {
   sharedByUserId: string;
   defaultAccess: SharedProjectAccess;
   createdAt: string;
-  /** Explicit per-member overrides. Absent members inherit `defaultAccess`. */
   memberGrants: SharedProjectMemberGrant[];
 }
 
-/**
- * The caller's membership, resolved from the database.
- *
- * Uses the durable account workspace selection. The selected id is joined back
- * to the membership table before it is returned, so stale or forged settings
- * resolve to no organization rather than widening access.
- */
 export async function resolveOrgMembership(
   db: DatabaseAdapter,
   userId: string,
@@ -88,7 +57,6 @@ export function isOrgAdminRole(role: OrgRole): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
-/** Fail closed: no membership, or a non-admin role, is a 403 — never a 404. */
 export function requireOrgAdmin(membership: OrgMembership | null): OrgMembership {
   if (!membership || !isOrgAdminRole(membership.role)) {
     throw createError.forbidden('Only an organization owner or admin can change what is shared.');
@@ -103,8 +71,6 @@ export function requireOrgMember(membership: OrgMembership | null): OrgMembershi
   return membership;
 }
 
-// ─── Reads ──────────────────────────────────────────────────────────────────
-
 interface SharedProjectRow {
   organization_id: string;
   project_id: string;
@@ -115,10 +81,6 @@ interface SharedProjectRow {
   user_id: string;
 }
 
-/**
- * Everything the organization shares, with the per-member overrides that decide
- * who can actually see each one. Backs the org admin sharing view.
- */
 export async function listSharedProjects(
   db: DatabaseAdapter,
   organizationId: string,
@@ -171,12 +133,6 @@ export async function listSharedProjects(
   }));
 }
 
-/**
- * The project ids this member may open through the org, honouring an explicit
- * `access = 'none'` denial. Used by the project list/read paths, which run on
- * the privileged connection — so this predicate IS the tenant boundary there,
- * not merely a filter.
- */
 export async function listReadableSharedProjectIds(
   db: DatabaseAdapter,
   organizationId: string,
@@ -212,22 +168,9 @@ function isMissingRelation(error: unknown): boolean {
 
 export interface SharedProjectScope {
   organizationId: string;
-  /** Project ids the caller may READ through the organization. */
   projectIds: string[];
 }
 
-/**
- * Resolve the shared-project scope for the project list/detail routes.
- *
- * Those routes run on the privileged `getNeonDb()` connection (BYPASSRLS), so
- * this pair — the server-derived `organizationId` and the id set it produces —
- * IS the tenant boundary there, not merely a filter. It is never assembled from
- * request input.
- *
- * Degrades to `null` when the sharing tables do not exist yet (a deployment
- * where 0086 has not been applied), so an un-migrated environment keeps exactly
- * today's personal behaviour instead of failing every project list.
- */
 export async function resolveSharedProjectScope(
   db: DatabaseAdapter,
   userId: string,
@@ -244,8 +187,6 @@ export async function resolveSharedProjectScope(
   }
 }
 
-// ─── Writes ─────────────────────────────────────────────────────────────────
-
 export interface ShareProjectInput {
   organizationId: string;
   projectId: string;
@@ -253,23 +194,6 @@ export interface ShareProjectInput {
   defaultAccess: SharedProjectAccess;
 }
 
-/**
- * Share one of the actor's own projects with the organization.
- *
- * Two invariants, both enforced by the database rather than by a read-then-write
- * in this function:
- *
- *   1. Only a project the ACTOR OWNS can be shared. The insert selects the
- *      project by `(id, user_id)`, so an admin cannot conscript another
- *      member's personal project into the org's shared set. Zero rows inserted
- *      means "not yours" and surfaces as 404, never as a silent success.
- *   2. The org-wide ceiling. `assert_org_resource_limit` takes a
- *      transaction-scoped advisory lock keyed on the organization BEFORE
- *      counting, inside the same transaction as the insert, so two admins
- *      sharing the 25th and 26th project concurrently serialize and the second
- *      one's transaction rolls back. A count-then-insert in TypeScript cannot
- *      close that race.
- */
 export async function shareProject(
   db: DatabaseAdapter,
   input: ShareProjectInput,
@@ -328,8 +252,6 @@ export async function shareProject(
   }
 
   if (!inserted) {
-    // Either the project does not exist, is soft-deleted, or belongs to
-    // somebody else. All three are the same answer to this caller.
     throw createError.notFound('Project not found');
   }
 
@@ -345,11 +267,6 @@ export async function shareProject(
   };
 }
 
-/**
- * Stop sharing. The per-member grants cascade away with the share row, so no
- * stale grant can survive an un-share and silently re-arm if the project is
- * shared again later.
- */
 export async function unshareProject(
   db: DatabaseAdapter,
   organizationId: string,
@@ -373,14 +290,6 @@ export interface SetMemberAccessInput {
   grantedByUserId: string;
 }
 
-/**
- * Grant, downgrade, or explicitly deny one member's access to a shared project.
- *
- * The insert is fenced by the composite FKs from 0086: it fails if the project
- * is not shared with this org, and it fails if the target user is not a member
- * of this org. Neither check is written here, because a check written here
- * could be forgotten by the next caller.
- */
 export async function setProjectMemberAccess(
   db: DatabaseAdapter,
   input: SetMemberAccessInput,
@@ -407,7 +316,6 @@ export async function setProjectMemberAccess(
   return { userId: row.user_id, access: row.access };
 }
 
-/** Drop an override so the member falls back to the share's `default_access`. */
 export async function clearProjectMemberAccess(
   db: DatabaseAdapter,
   organizationId: string,

@@ -1,16 +1,3 @@
-/**
- * In-memory authority for one MV3 service-worker lifetime.
- *
- * Chrome alarms and task mutations can interleave across awaits. An alarm
- * therefore snapshots a task generation before loading storage, then admits
- * work only if that generation is still current. Authorized update/delete
- * mutations invalidate the generation before committing storage and abort any
- * execution that already acquired the lease.
- *
- * The generation does not need to survive a worker restart: promises and stale
- * task snapshots do not survive one either. Server work that does survive is
- * governed separately by the durable scheduled-run cancellation journal.
- */
 
 export interface ScheduledTaskExecutionLease {
   taskId: string;
@@ -64,7 +51,6 @@ export class ScheduledTaskExecutionCoordinator {
     return generation;
   }
 
-  /** Re-open an updated task only after its new storage/alarm state committed. */
   activate(taskId: string, generation: number): boolean {
     if (this.generation(taskId) !== generation) return false;
     this.blocked.delete(taskId);

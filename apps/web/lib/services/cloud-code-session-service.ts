@@ -445,7 +445,6 @@ export async function createCloudCodeSession(
     );
     row = inserted[0]!;
   } catch (error) {
-    // A concurrent retry can win the unique (user_id, request_id) race.
     const raced = await findByRequestId(db, owner, validated.requestId);
     if (raced && sameCreateRequest(raced, validated)) return mapCloudCodeSession(raced);
     throw error;
@@ -478,10 +477,6 @@ export async function createCloudCodeSession(
           REPOSITORY_WORKSPACE_PATH,
         )}`,
         cwd: DEFAULT_WORKSPACE_PATH,
-        // HARD-008: the sandbox command deadline, named once in
-        // `lib/deadline-policy.ts`, not re-picked here. Same number as before —
-        // it is the E2B executor's own ceiling — but it is now the same symbol
-        // the Cloud Code agent loop clamps against.
         timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
       });
       if (!clone.ok) {
@@ -572,7 +567,6 @@ export async function runCloudCodeCommand(
     const result = await executor.runCommand({
       command,
       cwd: session.workspacePath,
-      // HARD-008: see the clone above — one named sandbox command deadline.
       timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
     });
     const completedAt = new Date();

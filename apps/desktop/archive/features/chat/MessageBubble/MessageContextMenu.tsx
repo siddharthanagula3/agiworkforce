@@ -1,8 +1,3 @@
-/**
- * MessageContextMenu Component
- *
- * Right-click context menu for message actions.
- */
 
 import React, { memo, useCallback, useEffect } from 'react';
 import { Bookmark, BookmarkCheck, Copy, Edit2, RotateCw, Trash2 } from 'lucide-react';
@@ -11,18 +6,15 @@ import { ContextMenuPosition } from './types';
 export interface MessageContextMenuProps {
   position: ContextMenuPosition | null;
   onClose: () => void;
-  // Message state
   bookmarked?: boolean;
   isUser: boolean;
   isAssistant: boolean;
   hasError?: boolean;
-  // Handlers
   onCopy: () => void;
   onBookmark: () => void;
   onEdit?: () => void;
   onRegenerate?: () => void;
   onDelete?: () => void;
-  // Conditional rendering
   canEdit: boolean;
 }
 
@@ -40,7 +32,6 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
   onDelete,
   canEdit,
 }) => {
-  // Close context menu on click outside or escape
   useEffect(() => {
     if (!position) return;
 
@@ -49,8 +40,6 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
       if (e.key === 'Escape') onClose();
     };
 
-    // BUG-MCM-003: Defer click listener registration so the right-click that opened
-    // the menu doesn't immediately bubble up and close it in the same tick.
     const timerId = setTimeout(() => {
       window.addEventListener('click', handleClick);
     }, 0);
@@ -73,7 +62,6 @@ const MessageContextMenuComponent: React.FC<MessageContextMenuProps> = ({
 
   if (!position) return null;
 
-  // BUG-MCM-001: Clamp the menu position so it never overflows the viewport edges
   const menuWidth = 200;
   const menuHeight = 150;
   const clampedLeft = Math.min(position.x, window.innerWidth - menuWidth - 8);

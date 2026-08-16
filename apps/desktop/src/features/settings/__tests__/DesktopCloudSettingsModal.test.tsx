@@ -13,16 +13,10 @@ const mocks = vi.hoisted(() => ({
   listCloudSkills: vi.fn(),
 }));
 
-// The real nav, not a hand-listed stand-in. This modal builds its nav BY
-// MAPPING OVER SETTINGS_NAV_GROUPS_WEB, so a stub that omits an entry hides
 // exactly the bug worth catching: 'safety' shipped in the real nav with no
-// section content behind it, and the shared modal rendered its developer
-// fallback ("No content for section ...") to the user.
 vi.mock('@agiworkforce/ui', async () => {
   const actual = await vi.importActual<typeof import('@agiworkforce/ui')>('@agiworkforce/ui');
   return {
-    // Spread the real module so a new export (e.g. shortcutLabel) does not break
-    // every consumer's test; the explicit entries below still override it.
     ...actual,
     SettingsModal: mocks.settingsModal,
     SETTINGS_NAV_GROUPS_WEB: actual.SETTINGS_NAV_GROUPS_WEB,
@@ -81,11 +75,6 @@ describe('DesktopCloudSettingsModal capability honesty', () => {
     }
   });
 
-  /**
-   * The guard the previous test could not provide: every item the nav renders
-   * must resolve to something. Connectors, skills and plugins are the shared
-   * modal's own built-in panels and legitimately have no entry here.
-   */
   it('renders content for every item in its own navigation', () => {
     render(<DesktopCloudSettingsModal open={false} onClose={vi.fn()} />);
 
@@ -105,7 +94,6 @@ describe('DesktopCloudSettingsModal capability honesty', () => {
     const props = latestSettingsProps();
     const navKeys = (props.navGroups ?? []).flatMap((group) => group.items.map((item) => item.key));
 
-    // Desktop can already publish a share; without this it could never revoke one.
     expect(navKeys).toEqual(expect.arrayContaining(['archived', 'shared-links']));
     expect(props.sectionContent['archived']).toBeTruthy();
     expect(props.sectionContent['shared-links']).toBeTruthy();

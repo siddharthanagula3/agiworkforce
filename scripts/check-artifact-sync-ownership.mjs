@@ -333,9 +333,6 @@ for (const fixture of ['cursor-compare.json', 'pull-apply.json', 'push-body.json
   requireFile(`${syncPath}/src/__fixtures__/${fixture}`);
 }
 
-// The @agiworkforce/services and @agiworkforce/stores compatibility facades
-// were deleted at M8 (2026-07-15). Only anti-regression checks remain: the
-// directories must not reappear and nothing may import/depend on the names.
 for (const retiredFacade of [servicesPath, storesPath]) {
   if (exists(retiredFacade)) {
     errors.push(`${retiredFacade} facade was deleted at M8 and must not reappear`);

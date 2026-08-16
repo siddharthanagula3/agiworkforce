@@ -14,17 +14,11 @@ interface GeneratedImageProps {
   revisedPrompt?: string;
   width?: number;
   onPress?: () => void;
-  /** Display-only fallback for an API response explicitly marked persisted:false. */
   allowEphemeral?: boolean;
 }
 
 type LoadState = 'loading' | 'loaded' | 'error';
 
-/**
- * Inline image display component for chat messages.
- * Shows a generated image with rounded corners, optional revised prompt,
- * long-press share, and fade-in animation on load.
- */
 export function GeneratedImage({
   imageUrl,
   revisedPrompt,
@@ -61,7 +55,7 @@ export function GeneratedImage({
   }, [imageUrl]);
 
   const imageWidth = width ?? 280;
-  const imageHeight = imageWidth; // Default to square aspect ratio
+  const imageHeight = imageWidth;
 
   const unavailableMessage =
     sourceStatus === 'signed-out'

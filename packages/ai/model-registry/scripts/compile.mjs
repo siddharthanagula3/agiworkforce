@@ -1,49 +1,4 @@
 #!/usr/bin/env node
-/* global AbortSignal, fetch */
-/**
- * compile.mjs — single-source-of-truth compiler for the model registry.
- *
- * The compatibility catalog (`packages/contracts/types/src/models.json`) is a GENERATED,
- * committed artifact assembled from two inputs owned by this package:
- *
- *   - `catalog/models.curation.json` — the only hand-edited model roster file. Per model it carries
- *     identity + routing/display metadata (id, apiModelId, name, provider,
- *     modelType, qualityTier, bestFor, quality, …) and curation-owned policy
- *     fields (promo_expires_at/post_promo_prices, deprecation_date, tokenizer
- *     drift, supersedes, …). For models NOT present upstream (image/video/audio,
- *     self-hosted, brand-new) it also carries escape-hatch overrides
- *     (costOverride / contextOverride / capabilitiesOverride / benchmarkOverride
- *     / speedOverride / releasedOverride). Plus the top-level sections
- *     (version, lastUpdated, verificationLog, providers, tierAllowedModels,
- *     providersInOrder) verbatim. Auto slot assignments live separately in
- *     `catalog/routing-policies.json`; normal model releases therefore touch one
- *     authored file, or two only when Auto routing changes.
- *
- *   - `catalog/models.synced.json` — a committed snapshot of UPSTREAM-derived fields
- *     (contextWindow, inputCost, outputCost, cached_input, capabilities,
- *     benchmarks, speed, released) for the models that exist on models.dev.
- *     Refreshed by `--refresh` (and the weekly cron); never hand-edited.
- *
- * Generation = merge(curation, synced) → models.json, with curation overrides
- * winning over the synced snapshot, emitted in a single canonical key order and
- * prettier-formatted so the output is byte-stable.
- *
- * Subcommands / flags:
- *   extract     One-time bootstrap: split the CURRENT models.json into
- *               curation.json + synced.json (values copied verbatim; upstream
- *               membership decided via models.dev). Produces a lossless split.
- *   (default)   generate: merge committed inputs → write models.json.
- *   --check     generate in-memory; deep-equal AND byte-compare against the
- *               committed models.json; exit 1 on any drift. Fully OFFLINE +
- *               deterministic — safe for CI.
- *   --refresh   fetch live models.dev (+ Artificial Analysis when
- *               ARTIFICIAL_ANALYSIS_API_KEY is set) → rebuild synced.json for
- *               matched models, gated by a price-delta sanity check, then
- *               generate. This is the cron / maintenance path.
- *   --delta=N   price-delta gate threshold (fraction, default 0.30 = 30%).
- *
- * Pure Node ESM; the only runtime dep is prettier (already a repo dependency).
- */
 
 import { strict as assert } from 'node:assert';
 import console from 'node:console';
@@ -57,8 +12,6 @@ import prettier from 'prettier';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REGISTRY_DIR = path.resolve(SCRIPT_DIR, '..');
-// model-registry lives at packages/ai/model-registry (T-wave 2026-07-16), so
-// repo root is three levels up; types moved to packages/contracts/types.
 const ROOT = path.resolve(REGISTRY_DIR, '..', '..', '..');
 const TYPES_DIR = path.join(ROOT, 'packages', 'contracts', 'types', 'src');
 const MODELS_JSON = path.join(TYPES_DIR, 'models.json');
@@ -101,9 +54,6 @@ const SKILLSPECTOR_PROVIDER_REGISTRY_YAMLS = Object.fromEntries(
 
 const MODELS_DEV_URL = 'https://models.dev/api.json';
 
-// Fields whose source of truth is an upstream snapshot. Everything else on a
-// model is curation-owned. Order here is also the canonical emit order for
-// these fields (see CANONICAL_ORDER).
 const SYNCED_FIELDS = [
   'contextWindow',
   'inputCost',
@@ -117,7 +67,6 @@ const SYNCED_FIELDS = [
   'released',
 ];
 
-// Curation override keys → which synced field they replace.
 const OVERRIDE_KEYS = [
   'costOverride', // { inputCost?, outputCost?, cached_input?, cached_write?, cached_write_1h? }
   'contextOverride', // contextWindow
@@ -127,8 +76,6 @@ const OVERRIDE_KEYS = [
   'releasedOverride', // released
 ];
 
-// One canonical per-model key order for the generated catalog. Chosen to match
-// the dominant existing ordering so the lift-and-shift diff stays minimal.
 const CANONICAL_ORDER = [
   'id',
   'apiModelId',
@@ -157,7 +104,6 @@ const CANONICAL_ORDER = [
   'post_promo_prices',
   'pricingSchedule',
   'inputTokenPricingTiers',
-  // Read compatibility only. Current authored models use the ordered array.
   'longContext',
   'supersedes',
   'supersedes_effective_date',
@@ -177,7 +123,6 @@ const CANONICAL_ORDER = [
   'commercialRestrictions',
 ];
 
-// Top-level key order of models.json (models sits 5th).
 const TOP_LEVEL_ORDER = [
   'version',
   'lastUpdated',
@@ -187,10 +132,6 @@ const TOP_LEVEL_ORDER = [
   'tierAllowedModels',
   'providersInOrder',
 ];
-
-// ---------------------------------------------------------------------------
-// IO helpers
-// ---------------------------------------------------------------------------
 
 function readJson(file) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
@@ -205,8 +146,6 @@ async function writeJson(file, obj) {
   fs.writeFileSync(file, await formatJson(obj, file));
 }
 
-// Drop undefined values; keep nulls (catalog uses null intentionally, e.g.
-// deprecation_date: null).
 function defined(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) if (v !== undefined) out[k] = v;
@@ -236,19 +175,6 @@ function omit(obj, keys) {
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// Upstream loading
-// ---------------------------------------------------------------------------
-
-/**
- * Map our catalog provider keys → the canonical models.dev provider key.
- * The join MUST be provider-scoped: models.dev hosts the same model id under
- * dozens of aggregator providers (often with missing or re-marked-up pricing),
- * so matching the first provider that happens to list an id pulls the wrong
- * data. Providers absent from this map (AGI-managed media adapters, nvidia_nim
- * self-hosted, runway) have no first-party models.dev catalog and are treated
- * as non-upstream — their cost/context/caps live in curation overrides.
- */
 const PROVIDER_MAP = {
   openai: 'openai',
   anthropic: 'anthropic',
@@ -264,16 +190,8 @@ const PROVIDER_MAP = {
   open_router: 'openrouter',
 };
 
-/**
- * Resolve a catalog model against its CANONICAL models.dev provider only.
- * Returns the upstream model object, or null when the model has no first-party
- * models.dev entry that carries pricing (→ curation-override territory).
- */
 function devLookup(dev, model) {
   const apiId = model.apiModelId || model.id;
-  // `:free` aggregator models are free by definition. Never strip the suffix
-  // and inherit the paid variant's pricing — treat them as non-upstream so
-  // their 0/0 pricing stays pinned in curation.
   if (apiId.endsWith(':free')) return null;
   const providerKey = PROVIDER_MAP[model.provider];
   if (!providerKey) return null;
@@ -288,7 +206,6 @@ function devLookup(dev, model) {
 }
 
 async function loadModelsDev() {
-  // Prefer a fresh fetch; fall back to a /tmp snapshot if offline.
   try {
     const res = await fetch(MODELS_DEV_URL, { signal: AbortSignal.timeout(20000) });
     if (res.ok) return await res.json();
@@ -300,11 +217,6 @@ async function loadModelsDev() {
   if (fs.existsSync(snap)) return readJson(snap);
   throw new Error('models.dev unreachable and no /tmp snapshot available');
 }
-
-// ---------------------------------------------------------------------------
-// extract — bootstrap split of the current models.json (lossless, no fetch
-// of VALUES; models.dev consulted only to classify upstream membership)
-// ---------------------------------------------------------------------------
 
 async function extract() {
   const current = readJson(MODELS_JSON);
@@ -324,8 +236,6 @@ async function extract() {
       curationModels[id] = curated;
       if (Object.keys(syncedPart).length) syncedModels[id] = syncedPart;
     } else {
-      // Not on models.dev → fold synced-type fields into curation overrides so
-      // they remain hand-maintained.
       const overrides = {};
       const cost = pick(syncedPart, [
         'inputCost',
@@ -363,21 +273,11 @@ async function extract() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// generate — merge committed inputs → models.json object
-// ---------------------------------------------------------------------------
-
 function resolveSyncedFields(cur, up) {
   const co = cur.costOverride ?? {};
-  // Effective cached-read price: costOverride > curation top-level > synced upstream.
-  // (Some curation entries carry cached_input as a top-level own field rather than
-  // inside costOverride; both must count toward caching eligibility.)
   const cachedInput = co.cached_input ?? cur.cached_input ?? up.cached_input;
   const baseCapabilities = cur.capabilitiesOverride ?? up.capabilities;
-  // Caching eligibility is catalog-driven: a model supports prompt caching iff
   // it has a cached-read price (cached_input). This avoids string-prefix hacks
-  // and keeps the `caching` capability in lockstep with pricing data. An explicit
-  // capabilities.caching in curation always wins (allows opt-out / pre-pricing opt-in).
   const capabilities =
     baseCapabilities && typeof baseCapabilities === 'object'
       ? { ...baseCapabilities, caching: baseCapabilities.caching ?? cachedInput != null }
@@ -599,23 +499,6 @@ function normalizeVideoGeneration(modelKey, video) {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/**
- * Normalize a curation `pricingSchedule` into the registry's dated pricing
- * windows. A schedule entry is a dated `costOverride`: it carries the rates that
- * apply while `effectiveFrom <= date <= effectiveUntil` (both bounds inclusive,
- * both optional — an absent bound means "open ended on that side"). The
- * top-level pricing fields stay the enduring/standard price, so a consumer that
- * is not date-aware keeps reading a real published rate instead of a window that
- * silently expires.
- *
- * `effectiveFrom`/`effectiveUntil` are UTC CALENDAR DAYS, inclusive on both
- * sides: a changeover happens at UTC midnight, so a window ending 2030-03-31
- * covers every instant of that UTC day and the next window starts 2030-04-01.
- *
- * Windows must not overlap. Every consumer resolves a date by taking the FIRST
- * covering window, so an overlap would make the billed price depend on authoring
- * order rather than on the dates — a silent, order-dependent price.
- */
 export function normalizePricingSchedule(modelKey, schedule) {
   if (schedule === undefined) return undefined;
   assert.ok(
@@ -709,13 +592,6 @@ function normalizeInputTokenPricingTier(label, tier) {
   });
 }
 
-/**
- * Normalize ordered provider-published input-length pricing bands. Curation
- * uses the compatibility field names consumed by models.json; the normalized
- * registry uses explicit per-million names. Thresholds must be strictly
- * increasing so authoring order is deterministic and duplicate bands cannot
- * silently disagree.
- */
 export function normalizeInputTokenPricingTiers(modelKey, tiers) {
   if (tiers === undefined) return undefined;
   assert.ok(
@@ -740,15 +616,6 @@ export function normalizeLongContextPricing(modelKey, tier) {
   return normalizeInputTokenPricingTier(`${modelKey} longContext`, tier);
 }
 
-/**
- * Reject a schedule whose windows intersect.
- *
- * Bounds are inclusive UTC calendar days and each side is optional, so a missing
- * `effectiveFrom` is open to the past and a missing `effectiveUntil` is open to
- * the future — both are modelled as sentinel days here. ISO `YYYY-MM-DD` strings
- * sort lexicographically in date order, so plain string comparison is exact.
- * Two windows intersect when each one starts on or before the other one ends.
- */
 function assertNoOverlappingPricingWindows(modelKey, schedule) {
   const OPEN_PAST = '0000-01-01';
   const OPEN_FUTURE = '9999-12-31';
@@ -880,17 +747,6 @@ function validateAutoPolicy(autoPolicy, models, capabilities) {
   validateAutoTaskFamilies(autoPolicy, capabilities);
 }
 
-/**
- * Task families narrow the canonical task taxonomy for the deterministic
- * task-family ordering stage (packages/ai/routing/src/task-family-routing.ts).
- *
- * They never widen admission: a family only reorders the candidate set that
- * its declared task type already produced. The checks below enforce exactly
- * that — every referenced task must exist, and every floor must be expressed
- * against metadata the registry already carries. An unresolvable floor is a
- * build failure rather than a silent no-op, because an absent policy value is
- * not permissive.
- */
 function validateAutoTaskFamilies(autoPolicy, capabilities) {
   const taskFamilies = autoPolicy.taskFamilies;
   if (taskFamilies === undefined) return;
@@ -1064,8 +920,6 @@ function buildNormalizedRegistry(catalog, harnessCatalog, routingPolicies) {
         openRouterSlug: model.openRouterSlug,
         kind: model.modelType,
         familyPartner: model.variantPartner,
-        // Openness metadata is curation-owned and OPTIONAL: an absent field
-        // means "not verified", never "closed" or "unrestricted".
         openWeight: model.openWeight,
         license: model.license,
         commercialRestrictions: model.commercialRestrictions,
@@ -1272,10 +1126,6 @@ async function generate() {
   return catalog;
 }
 
-// ---------------------------------------------------------------------------
-// check — offline deterministic drift detection for CI
-// ---------------------------------------------------------------------------
-
 async function check() {
   const curation = readJson(CURATION_JSON);
   const synced = readJson(SYNCED_JSON);
@@ -1283,7 +1133,6 @@ async function check() {
   const regenerated = await formatJson(built, MODELS_JSON);
   const committed = fs.readFileSync(MODELS_JSON, 'utf8');
 
-  // Deep-equal first (data integrity), then byte-compare (format stability).
   try {
     assert.deepStrictEqual(built, JSON.parse(committed));
   } catch {
@@ -1314,10 +1163,6 @@ async function check() {
   console.log('[sync] ✓ models.json is in sync with curation + synced inputs.');
 }
 
-// ---------------------------------------------------------------------------
-// refresh — pull live upstream into synced.json (cron / maintenance path)
-// ---------------------------------------------------------------------------
-
 function mapDevModel(devModel) {
   const out = {};
   if (devModel.limit?.context != null) out.contextWindow = devModel.limit.context;
@@ -1325,20 +1170,9 @@ function mapDevModel(devModel) {
   if (devModel.cost?.output != null) out.outputCost = devModel.cost.output;
   if (devModel.cost?.cache_read != null) out.cached_input = devModel.cost.cache_read;
   if (devModel.cost?.cache_write != null) out.cached_write = devModel.cost.cache_write;
-  // `released` is intentionally NOT synced: models.dev uses ISO dates while the
-  // catalog uses human strings, and the date is informational — syncing it only
-  // churns formatting. It stays curation-/seed-owned.
   return out;
 }
 
-/**
- * Sanity gate. On a refresh, if an upstream number moves more than `threshold`
- * away from the committed baseline, HALT and report rather than silently
- * accept — drift this large is more likely a units bug or a model-id mismatch
- * than a real change, and silently keeping the local value would entrench
- * whichever side is wrong. Gates price AND context window: a flagship's context
- * silently changing (e.g. 200K→1M) is exactly the kind of drift to surface.
- */
 function deltaTrips(baseline, next, threshold) {
   const trips = [];
   for (const field of ['inputCost', 'outputCost', 'contextWindow']) {
@@ -1375,7 +1209,7 @@ async function refresh(threshold) {
     const trips = deltaTrips(baseline, next, threshold);
     if (trips.length) {
       tripped.push({ id, trips });
-      continue; // halt this model; require adjudication
+      continue;
     }
     synced.models[id] = { ...baseline, ...next };
     refreshed += 1;
@@ -1403,10 +1237,6 @@ async function refresh(threshold) {
   await generate();
 }
 
-// ---------------------------------------------------------------------------
-// main
-// ---------------------------------------------------------------------------
-
 async function main() {
   const args = process.argv.slice(2);
   const deltaArg = args.find((a) => a.startsWith('--delta='));
@@ -1418,8 +1248,6 @@ async function main() {
   return generate();
 }
 
-// Run only when invoked as a script. Importing this file (the pricing-schedule
-// validators are unit-tested directly) must not compile or write anything.
 const isEntrypoint =
   process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 

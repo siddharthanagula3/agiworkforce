@@ -1,10 +1,3 @@
-/**
- * patchEngine.test.ts — Starter coverage for the highest data-loss-risk module.
- *
- * Covers the deterministic parser surface. Apply / undo flow tests against
- * the VS Code mock are deferred to E2 (broader test pass) — they need richer
- * MockTextDocument fixtures than the current mock provides.
- */
 
 import { describe, expect, it } from 'vitest';
 import { parsePatchBlocks, type PatchBlock } from '../integrations/patchEngine';

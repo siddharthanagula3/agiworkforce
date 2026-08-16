@@ -19,7 +19,6 @@ vi.mock('@shared/stores/web-auth-store', () => ({
 
 import { UpgradeWelcome } from './UpgradeWelcome';
 
-/** 2026-09-14T00:00:00Z, as Stripe reports it: seconds, not milliseconds. */
 const PERIOD_END_UNIX = Math.floor(Date.UTC(2026, 8, 14) / 1000);
 
 describe('UpgradeWelcome', () => {
@@ -51,8 +50,6 @@ describe('UpgradeWelcome', () => {
     const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="max_15x" />);
 
     expect(screen.getByRole('heading', { name: /all set/i })).toBeInTheDocument();
-    // The tier belongs beside the price as a fact, not inside the headline
-    // where "Welcome to Basic." reads as a verdict on the product.
     expect(screen.getByText('Max 15x')).toBeInTheDocument();
     expect(screen.getByText('$200/month')).toBeInTheDocument();
     expect(screen.queryByText(/Activating your/i)).toBeNull();
@@ -69,8 +66,6 @@ describe('UpgradeWelcome', () => {
     };
     const { unmount } = render(<UpgradeWelcome checkoutState="paid" expectedPlan="basic" />);
 
-    // Inventing a renewal for a period that is scheduled to lapse is the one
-    // thing a payment confirmation must never do.
     expect(screen.getByText(/^ends /)).toBeInTheDocument();
     expect(screen.queryByText(/^renews /)).toBeNull();
     unmount();

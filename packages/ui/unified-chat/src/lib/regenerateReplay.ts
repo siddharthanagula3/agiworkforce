@@ -1,17 +1,3 @@
-/**
- * Regenerate replay — shared, pure decision helpers.
- *
- * Canonical home for the regenerate mechanism the web surface extracted first
- * (`apps/web/features/chat/lib/regenerateReplay.ts` and the
- * `planRegenerateRollback` half of `apps/web/features/chat/lib/pendingEdit.ts`,
- * both of which now re-export from here). Desktop Cloud needs the identical
- * rules, and two copies of "may this turn be regenerated?" is exactly the kind
- * of drift that produces a Retry button on one surface that silently loses the
- * user's search/tool/style options on the other.
- *
- * Everything here is pure: no store reads, no network, no React. Hosts own the
- * transcript truncation, the durable delete, and the re-send.
- */
 
 import type { CloudWorkMode } from '@agiworkforce/types';
 
@@ -21,11 +7,6 @@ const SKILL_REGENERATE_MESSAGE =
 const LEGACY_TOOL_REGENERATE_MESSAGE =
   'Regenerate is unavailable for this older tool-assisted turn. Re-send the prompt to preserve search, tools, files, or style options.';
 
-/**
- * The send-time options a user turn recorded so a regenerate can reproduce it.
- * Surfaces narrow `styleMode` to their own style vocabulary via the generic
- * parameter on the helpers below; the shared shape keeps it a plain string.
- */
 export interface SendReplayMetadataLike {
   webSearchEnabled?: boolean;
   thinkingEnabled?: boolean;
@@ -40,11 +21,6 @@ export type RegenerateReplayDecision<R extends SendReplayMetadataLike = SendRepl
   | { ok: true; replay?: R }
   | { ok: false; message: string };
 
-/**
- * The subset of a message's metadata bag the decision reads. Hosts whose
- * `metadata` is an untyped `Record<string, unknown>` cast to this at the call
- * site rather than restating the shape.
- */
 export interface RegenerateReplayMetadata<
   R extends SendReplayMetadataLike = SendReplayMetadataLike,
 > {
@@ -69,16 +45,6 @@ function hasLegacyToolAssistedOutput<R extends SendReplayMetadataLike>(
   );
 }
 
-/**
- * Decide whether an assistant turn can be regenerated, and with which recorded
- * send options.
- *
- * Refuses two cases outright rather than silently re-sending a different
- * request: a skill-guided turn (the catalog instruction is not replayable from
- * the client) and a legacy tool-assisted turn recorded before `sendReplay`
- * existed (its search/code/style flags are unknowable, so a replay would
- * quietly drop them).
- */
 export function getRegenerateReplayDecision<
   R extends SendReplayMetadataLike = SendReplayMetadataLike,
 >(params: {
@@ -133,17 +99,6 @@ interface MinimalMessage {
   role: string;
 }
 
-/**
- * Plan the rollback for regenerating the assistant message `assistantId`.
- *
- * Regeneration deletes the user turn being regenerated (the nearest preceding
- * user message), its assistant reply, and anything after, then re-sends the user
- * content. The rollback range MUST start at that user message — rolling back only
- * from the assistant leaves the original user message in place, so re-sending its
- * content produces a duplicate user message. Returns the user message index (so
- * the caller can read its content/attachments/metadata) plus the ids to delete,
- * or `null` if there's no regenerable user turn.
- */
 /**
  * The edit-and-resend counterpart of {@link planRegenerateRollback}, addressed
  * by the USER turn being rewritten rather than by the assistant reply.

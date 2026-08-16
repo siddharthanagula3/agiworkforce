@@ -1,9 +1,3 @@
-/**
- * ImagePreview Component
- *
- * Display screenshots and image results from tool executions.
- * Supports zoom, download, and OCR text extraction display.
- */
 
 import { useEffect, useRef, useState, useMemo } from 'react';
 import { Download, ZoomIn, ZoomOut, Maximize2, X, Copy, Check } from 'lucide-react';
@@ -17,7 +11,7 @@ interface ImagePreviewProps {
   className?: string;
   maxHeight?: string;
   showMetadata?: boolean;
-  ocrText?: string; // OCR extracted text
+  ocrText?: string;
 }
 
 export function ImagePreview({
@@ -39,7 +33,6 @@ export function ImagePreview({
     };
   }, []);
 
-  // Get image source (either data URL or regular URL)
   const imageSrc = useMemo(
     () =>
       artifact.data

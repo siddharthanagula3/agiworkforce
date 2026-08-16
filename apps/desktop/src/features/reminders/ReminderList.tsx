@@ -1,9 +1,3 @@
-/**
- * ReminderList Component
- *
- * Displays all scheduled reminders and tasks with filtering capabilities.
- * Uses schedulerStore for data management.
- */
 import { Bell, Calendar, CheckCircle, Filter, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -25,9 +19,7 @@ import { ReminderDialog } from './ReminderDialog';
 type FilterType = 'all' | 'reminders' | 'recurring' | 'completed';
 
 interface ReminderListProps {
-  /** Optional CSS class name */
   className?: string;
-  /** Callback when a reminder is triggered (reserved for future use) */
   onReminderTriggered?: (job: ScheduledJob) => void;
 }
 
@@ -39,12 +31,10 @@ export function ReminderList({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null);
 
-  // Store state
   const jobs = useSchedulerStore(selectJobs);
   const isLoading = useSchedulerStore(selectSchedulerLoading);
   const error = useSchedulerStore(selectSchedulerError);
 
-  // Store actions
   const listJobs = useSchedulerStore((state) => state.listJobs);
   const addJob = useSchedulerStore((state) => state.addJob);
   const removeJob = useSchedulerStore((state) => state.removeJob);
@@ -53,7 +43,6 @@ export function ReminderList({
   const initEventListeners = useSchedulerStore((state) => state.initEventListeners);
   const cleanupEventListeners = useSchedulerStore((state) => state.cleanupEventListeners);
 
-  // Initialize on mount
   useEffect(() => {
     listJobs().catch(console.error);
     initEventListeners().catch(console.error);
@@ -63,14 +52,12 @@ export function ReminderList({
     };
   }, [listJobs, initEventListeners, cleanupEventListeners]);
 
-  // Filter jobs based on active filter
   const filteredJobs = useMemo(() => {
     switch (activeFilter) {
       case 'reminders':
         return jobs.filter((job) => job.actionType === 'notification');
 
       case 'recurring':
-        // All cron-based jobs are recurring
         return jobs.filter((job) => job.schedule);
 
       case 'completed':
@@ -82,29 +69,24 @@ export function ReminderList({
     }
   }, [jobs, activeFilter]);
 
-  // Sort jobs: enabled first, then by nextRun
   const sortedJobs = useMemo(() => {
     return [...filteredJobs].sort((a, b) => {
-      // Active jobs first
       const aActive = a.status === 'active';
       const bActive = b.status === 'active';
       if (aActive !== bActive) {
         return aActive ? -1 : 1;
       }
 
-      // Then by nextRun
       if (a.nextRun && b.nextRun) {
         return new Date(a.nextRun).getTime() - new Date(b.nextRun).getTime();
       }
       if (a.nextRun) return -1;
       if (b.nextRun) return 1;
 
-      // Then by createdAt
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   }, [filteredJobs]);
 
-  // Handlers
   const handlePause = useCallback(
     async (jobId: string) => {
       await pauseJob(jobId);
@@ -134,7 +116,6 @@ export function ReminderList({
   const handleSave = useCallback(
     async (name: string, schedule: string, actionType: string, actionData: string) => {
       if (editingJob) {
-        // For editing, we need to delete and recreate since the API doesn't support update
         await removeJob(editingJob.id);
       }
       await addJob(name, schedule, actionType, actionData);
@@ -159,7 +140,6 @@ export function ReminderList({
     listJobs().catch(console.error);
   }, [listJobs]);
 
-  // Count jobs for each filter
   const counts = useMemo(
     () => ({
       all: jobs.length,

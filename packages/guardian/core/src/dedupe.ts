@@ -1,12 +1,5 @@
-/**
- * Fingerprint-based deduplication and cross-run reconciliation.
- */
 import { SEVERITY_WEIGHT, type Finding } from './schema.js';
 
-/**
- * Collapse findings sharing a fingerprint into one, keeping the strongest
- * (highest severity, then confidence) and merging deterministic evidence.
- */
 export function dedupeFindings(findings: readonly Finding[]): Finding[] {
   const byFingerprint = new Map<string, Finding>();
   for (const finding of findings) {
@@ -35,26 +28,17 @@ function stronger(a: Finding, b: Finding): Finding {
     return SEVERITY_WEIGHT[a.severity] > SEVERITY_WEIGHT[b.severity] ? a : b;
   }
   if (a.confidence !== b.confidence) return a.confidence > b.confidence ? a : b;
-  // Deterministic sources outrank LLM restatements of the same defect.
   if (a.source_type !== 'llm' && b.source_type === 'llm') return a;
   if (b.source_type !== 'llm' && a.source_type === 'llm') return b;
   return a;
 }
 
 export interface Reconciliation {
-  /** Present in the previous run, absent now: resolved by the new commits. */
   fixed: Finding[];
-  /** Present in both runs. */
   persisting: Finding[];
-  /** First appearance in this run. */
   introduced: Finding[];
 }
 
-/**
- * Compare the previous run's open findings with the current run's verified
- * findings. Fixed findings must be recognized (and their threads resolvable)
- * rather than reposted; new findings are flagged is_new for policy.
- */
 export function reconcileRuns(
   previous: readonly Finding[],
   current: readonly Finding[],

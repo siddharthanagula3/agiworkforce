@@ -1,18 +1,8 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Snapshot tests for the voice composer: RecordingOverlay in idle/recording states,
- * and VoiceInputButton in idle/recording states.
- */
 
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
-// ── Module mocks ──────────────────────────────────────────────────────────────
-
-// The real dark palette, not three hand-listed copies of it. Each copy had
-// drifted from the tokens and omitted whatever a component reached for next —
-// here, the camera-overlay and voice-control tokens, which surfaced as
-// `color: undefined` in the snapshot rather than as a missing-key error.
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
   return {
@@ -135,14 +125,10 @@ jest.mock('expo-linking', () => ({
   openSettings: jest.fn().mockResolvedValue(undefined),
 }));
 
-// ── Imports ───────────────────────────────────────────────────────────────────
-
 import { RecordingOverlay } from '@/src/features/voice/components/RecordingOverlay';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import * as VoiceService from '@/src/features/voice/services/voice';
 import { VoiceCaptureError } from '@/src/features/voice/services/voiceInput';
-
-// ── Snapshot tests ────────────────────────────────────────────────────────────
 
 describe('Composer — voice scaffolding snapshots', () => {
   describe('RecordingOverlay', () => {

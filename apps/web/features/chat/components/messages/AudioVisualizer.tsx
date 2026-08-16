@@ -1,38 +1,18 @@
-/**
- * AudioVisualizer - Real-time audio waveform visualization component
- *
- * Features:
- * - Shows waveform bars during recording
- * - Animated bars based on audio levels
- * - Recording duration timer display
- * - Responsive design with smooth animations
- * - Pause/resume visual feedback
- */
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { cn } from '@shared/lib/utils';
 import { Mic, Pause } from 'lucide-react';
 
 export interface AudioVisualizerProps {
-  /** Audio levels array (0-1 range for each bar) */
   audioLevels: number[];
-  /** Recording duration in seconds */
   duration: number;
-  /** Whether recording is currently active */
   isRecording: boolean;
-  /** Whether recording is paused */
   isPaused: boolean;
-  /** Number of bars to display */
   barCount?: number;
-  /** Custom className */
   className?: string;
-  /** Size variant */
   size?: 'sm' | 'md' | 'lg';
 }
 
-/**
- * Format duration in MM:SS format
- */
 function formatDuration(seconds: number): string {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -48,10 +28,8 @@ export const AudioVisualizer = React.memo(function AudioVisualizer({
   className,
   size = 'md',
 }: AudioVisualizerProps) {
-  // Track animation time with state to avoid impure Date.now() in useMemo
   const [animationTime, setAnimationTime] = useState(0);
 
-  // Update animation time in effect when recording and not paused
   useEffect(() => {
     if (isRecording && !isPaused && audioLevels.length === 0) {
       const interval = setInterval(() => {
@@ -62,11 +40,8 @@ export const AudioVisualizer = React.memo(function AudioVisualizer({
     return undefined;
   }, [isRecording, isPaused, audioLevels.length]);
 
-  // Generate bars to display
   const bars = useMemo(() => {
-    // If we have audio levels, use them
     if (audioLevels.length > 0) {
-      // Resample to match barCount if needed
       if (audioLevels.length === barCount) {
         return audioLevels;
       }
@@ -87,19 +62,14 @@ export const AudioVisualizer = React.memo(function AudioVisualizer({
       return resampled;
     }
 
-    // Generate idle animation bars when not actively receiving audio
     return Array.from({ length: barCount }, (_, i) => {
       if (isPaused) {
-        // Static bars when paused
         return 0.1 + Math.sin(i * 0.3) * 0.1;
       }
-      // Subtle idle animation when recording but no levels
-      // Use animationTime state instead of impure Date.now()
       return 0.1 + Math.sin(animationTime * 2 + i * 0.3) * 0.15;
     });
   }, [audioLevels, barCount, isPaused, animationTime]);
 
-  // Size configurations
   const sizeConfig = {
     sm: {
       height: 'h-8',
@@ -153,7 +123,6 @@ export const AudioVisualizer = React.memo(function AudioVisualizer({
       {/* Waveform visualization */}
       <div className={cn('flex flex-1 items-center justify-center', config.height, config.gap)}>
         {bars.map((level, index) => {
-          // Calculate bar height based on level
           const minHeight = 4;
           const height = Math.max(minHeight, level * config.maxHeight);
 

@@ -17,24 +17,6 @@ import {
   readUserDataRightsRequests,
 } from '@/lib/server/data-rights-requests';
 
-/**
- * POST /api/privacy/requests — record a data-principal rights request.
- * GET  /api/privacy/requests — the signed-in user's own requests.
- *
- * Open to visitors without an account, deliberately. A Data Principal's rights
- * under the DPDP Act do not depend on holding an account with the fiduciary,
- * and the people most likely to need the erasure and grievance routes are
- * exactly those whose address sits on a list they never signed up to an account
- * for. When a Clerk session exists it is attached, which is what lets the same
- * person see their own request history on the GET.
- *
- * WHAT THIS ROUTE PROMISES: the request is stored and a reference is returned.
- * It emails nobody. An email provider is wired in this repository — see
- * `lib/support/handoff/resend-client.ts` — but nothing connects it to this
- * queue. The page says so in those words. Do not add copy here or on the page
- * that implies a notification was sent until something sends one.
- */
-
 const CreateRequestSchema = z.object({
   requestType: z.string().refine(isDataRightsRequestType, 'Unknown request type'),
   contactEmail: z.string().email().max(254),
@@ -43,13 +25,8 @@ const CreateRequestSchema = z.object({
 
 async function handlePost(request: NextRequest): Promise<NextResponse> {
   const csrfResponse = await requireCsrfToken(request);
-  // `requireCsrfToken` is typed to the web `Response`; every route in this app
-  // narrows it the same way rather than widening its own return type.
   if (csrfResponse) return csrfResponse as NextResponse;
 
-  // The same dedicated 'waitlist' limit the other public PII intake uses:
-  // 5/hour per IP, fail-closed. A rights-request form is a plaintext-email
-  // intake open to anonymous callers and warrants the tight limit.
   const rateLimitResponse = await withRateLimit(request, 'waitlist');
   if (rateLimitResponse) return rateLimitResponse;
 
@@ -62,8 +39,6 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
   try {
     userId = (await auth()).userId ?? null;
   } catch {
-    // auth() throws outside Clerk middleware context. An anonymous request is a
-    // valid request, so this is not an error path.
     userId = null;
   }
 
@@ -81,8 +56,6 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
       createdAt: created.createdAt,
     });
   } catch (error) {
-    // Never return a reference for a request that was not stored: the reference
-    // is the requester's only evidence, and a fake one is worse than an error.
     logger.error(
       { error, requestType: parsed.data.requestType },
       'Failed to record rights request',

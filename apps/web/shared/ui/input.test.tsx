@@ -1,13 +1,3 @@
-/**
- * Input Component Tests
- *
- * Tests for the Input UI component including:
- * - Rendering with different types and props
- * - Error states and validation
- * - Accessibility attributes (aria-invalid, aria-describedby)
- * - User interactions (typing, focus, blur)
- * - Controlled and uncontrolled modes
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -71,7 +61,6 @@ describe('Input Component', () => {
     it('should render text input by default', () => {
       render(<Input />);
       const input = screen.getByRole('textbox');
-      // When type is undefined, browsers treat it as text but don't set the attribute
       expect(input.getAttribute('type')).toBeNull();
     });
 
@@ -186,7 +175,6 @@ describe('Input Component', () => {
     it('should have aria-invalid=false when hasError is false', () => {
       render(<Input hasError={false} />);
       const input = screen.getByRole('textbox');
-      // The component sets aria-invalid="false" when hasError is explicitly false
       expect(input).toHaveAttribute('aria-invalid', 'false');
     });
 
@@ -293,8 +281,8 @@ describe('Input Component', () => {
         </>,
       );
 
-      await user.tab(); // Focus input
-      await user.tab(); // Move to button
+      await user.tab();
+      await user.tab();
       expect(handleBlur).toHaveBeenCalledTimes(1);
     });
 
@@ -342,7 +330,6 @@ describe('Input Component', () => {
     it('should not change when value is controlled and no onChange', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
-      // This should show console warning but maintain value
       render(<Input value="fixed" onChange={() => {}} />);
       const input = screen.getByRole('textbox');
 
@@ -453,7 +440,7 @@ describe('Input Component', () => {
       const input = screen.getByRole('textbox');
       expect(input).toHaveClass('my-4');
       expect(input).toHaveClass('text-lg');
-      expect(input).toHaveClass('flex'); // Base class still present
+      expect(input).toHaveClass('flex');
     });
   });
 

@@ -53,42 +53,30 @@ class SEOService {
     };
   }
 
-  /**
-   * Initialize SEO service
-   */
   initialize(): void {
     if (this.isInitialized) return;
 
-    // Set up meta tag management
     this.setupMetaTagManagement();
 
-    // Set up structured data
     this.setupStructuredData();
 
-    // Set up sitemap generation
     this.setupSitemapGeneration();
 
     this.isInitialized = true;
     logger.info('SEO service initialized');
   }
 
-  /**
-   * Update page SEO data
-   */
   updatePageSEO(seoData: Partial<SEOData>, path?: string): void {
     const currentPath = path || window.location.pathname;
     const fullSEO = { ...this.defaultSEO, ...seoData };
 
-    // Update document title
     document.title = fullSEO.title;
 
-    // Update meta tags
     this.updateMetaTag('description', fullSEO.description);
     this.updateMetaTag('keywords', fullSEO.keywords.join(', '));
     this.updateMetaTag('author', fullSEO.author || '');
     this.updateMetaTag('robots', fullSEO.robots || '');
 
-    // Update Open Graph tags
     this.updateMetaTag('og:title', fullSEO.title, 'property');
     this.updateMetaTag('og:description', fullSEO.description, 'property');
     this.updateMetaTag('og:type', fullSEO.ogType || '', 'property');
@@ -96,7 +84,6 @@ class SEOService {
     this.updateMetaTag('og:image', fullSEO.ogImage || '', 'property');
     this.updateMetaTag('og:site_name', 'AGI', 'property');
 
-    // Update Twitter Card tags
     this.updateMetaTag('twitter:card', fullSEO.twitterCard || '');
     this.updateMetaTag('twitter:site', fullSEO.twitterSite || '');
     this.updateMetaTag('twitter:creator', fullSEO.twitterCreator || '');
@@ -104,15 +91,12 @@ class SEOService {
     this.updateMetaTag('twitter:description', fullSEO.description);
     this.updateMetaTag('twitter:image', fullSEO.ogImage || '');
 
-    // Update canonical URL
     this.updateCanonicalUrl(fullSEO.canonicalUrl || this.getCanonicalUrl(currentPath));
 
-    // Update structured data
     if (fullSEO.structuredData) {
       this.updateStructuredData(fullSEO.structuredData);
     }
 
-    // Track SEO update
     monitoringService.trackEvent('seo_update', {
       path: currentPath,
       title: fullSEO.title,
@@ -120,9 +104,6 @@ class SEOService {
     });
   }
 
-  /**
-   * Generate structured data for different page types
-   */
   generateStructuredData(type: string, data: Record<string, unknown>): Record<string, unknown> {
     const baseStructuredData = {
       '@context': 'https://schema.org',
@@ -215,9 +196,6 @@ class SEOService {
     }
   }
 
-  /**
-   * Generate sitemap data
-   */
   generateSitemapData(): PageSEOData[] {
     const pages: PageSEOData[] = [
       {
@@ -279,9 +257,6 @@ class SEOService {
     return pages;
   }
 
-  /**
-   * Update meta tag
-   */
   private updateMetaTag(name: string, content: string, attribute: string = 'name'): void {
     if (!content) return;
 
@@ -296,17 +271,11 @@ class SEOService {
     meta.setAttribute('content', content);
   }
 
-  /**
-   * Get meta tag content
-   */
   private getMetaContent(name: string): string {
     const meta = document.querySelector(`meta[name="${name}"]`) as HTMLMetaElement;
     return meta?.getAttribute('content') || '';
   }
 
-  /**
-   * Update canonical URL
-   */
   private updateCanonicalUrl(url: string): void {
     let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement;
 
@@ -319,33 +288,21 @@ class SEOService {
     canonical.setAttribute('href', url);
   }
 
-  /**
-   * Update structured data
-   */
   private updateStructuredData(data: Record<string, unknown>): void {
-    // Remove existing structured data
     const existingScripts = document.querySelectorAll('script[type="application/ld+json"]');
     existingScripts.forEach((script) => script.remove());
 
-    // Add new structured data
     const script = document.createElement('script');
     script.type = 'application/ld+json';
     script.textContent = JSON.stringify(data);
     document.head.appendChild(script);
   }
 
-  /**
-   * Get canonical URL for a path
-   */
   private getCanonicalUrl(path: string): string {
     return `${this.baseUrl}${path}`;
   }
 
-  /**
-   * Set up meta tag management
-   */
   private setupMetaTagManagement(): void {
-    // Add viewport meta tag if not present
     if (!document.querySelector('meta[name="viewport"]')) {
       const viewport = document.createElement('meta');
       viewport.name = 'viewport';
@@ -353,7 +310,6 @@ class SEOService {
       document.head.appendChild(viewport);
     }
 
-    // Add charset meta tag if not present
     if (!document.querySelector('meta[charset]')) {
       const charset = document.createElement('meta');
       charset.setAttribute('charset', 'utf-8');
@@ -361,11 +317,7 @@ class SEOService {
     }
   }
 
-  /**
-   * Set up structured data
-   */
   private setupStructuredData(): void {
-    // Add organization structured data
     const organizationData = this.generateStructuredData('Organization', {
       name: 'AGI',
       description: 'AI workforce automation platform',
@@ -373,23 +325,15 @@ class SEOService {
     this.updateStructuredData(organizationData);
   }
 
-  /**
-   * Set up sitemap generation
-   */
   private setupSitemapGeneration(): void {
-    // Generate sitemap on page load
     const sitemapData = this.generateSitemapData();
 
-    // Track sitemap generation
     monitoringService.trackEvent('sitemap_generated', {
       pageCount: sitemapData.length,
       lastGenerated: new Date().toISOString(),
     });
   }
 
-  /**
-   * Get current page SEO data
-   */
   getCurrentPageSEO(): SEOData {
     return {
       title: document.title,
@@ -407,9 +351,6 @@ class SEOService {
     };
   }
 
-  /**
-   * Track SEO performance
-   */
   trackSEOPerformance(): void {
     const seoData = this.getCurrentPageSEO();
 
@@ -424,5 +365,4 @@ class SEOService {
   }
 }
 
-// Export singleton instance
 export const seoService = new SEOService();

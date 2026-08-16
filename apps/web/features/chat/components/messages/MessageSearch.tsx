@@ -1,52 +1,20 @@
 'use client';
 
-/**
- * MessageSearch -- Inline search bar for in-session conversation search.
- *
- * Features:
- * - Text input with "Search messages..." placeholder
- * - Match count display ("3 of 12 matches")
- * - Prev/Next navigation arrows
- * - Close button (X)
- * - Keyboard: Escape closes, Enter = next, Shift+Enter = prev
- *
- * The parent (ChatMessageList) is responsible for:
- * - Toggling visibility via Cmd+F
- * - Computing search matches against messages
- * - Scrolling to the current match
- * - Highlighting matched text inside MessageBubble
- */
-
 import { useRef, useEffect, useCallback, memo } from 'react';
 import { motion } from 'framer-motion';
 import { Search, ChevronUp, ChevronDown, X } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface MessageSearchProps {
-  /** Current search query (controlled). */
   query: string;
-  /** Called when the user types in the search input. */
   onQueryChange: (query: string) => void;
-  /** Total number of matches found. */
   totalMatches: number;
-  /** Zero-based index of the currently focused match. */
   currentMatchIndex: number;
-  /** Navigate to next match. */
   onNext: () => void;
-  /** Navigate to previous match. */
   onPrev: () => void;
-  /** Close the search bar. */
   onClose: () => void;
   className?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 const MessageSearchComponent = ({
   query,
@@ -60,9 +28,7 @@ const MessageSearchComponent = ({
 }: MessageSearchProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus the input when the search bar mounts.
   useEffect(() => {
-    // Short delay so the mount animation doesn't interfere with focus.
     const timer = setTimeout(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -180,8 +146,5 @@ const MessageSearchComponent = ({
   );
 };
 
-/**
- * MessageSearch -- memoized inline search bar for chat message lists.
- */
 export const MessageSearch = memo(MessageSearchComponent);
 MessageSearch.displayName = 'MessageSearch';

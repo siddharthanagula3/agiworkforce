@@ -7,7 +7,7 @@ interface FileUploadButtonProps {
   disabled?: boolean;
   accept?: string;
   multiple?: boolean;
-  maxSize?: number; // In MB
+  maxSize?: number;
   maxFiles?: number;
   showFeedback?: boolean;
 }
@@ -41,13 +41,11 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
 
   const validateFile = useCallback(
     (file: File): string | null => {
-      // Check file size
       const fileSizeMB = file.size / (1024 * 1024);
       if (fileSizeMB > maxSize) {
         return `File "${file.name}" (${formatFileSize(file.size)}) exceeds ${maxSize}MB limit`;
       }
 
-      // Check file type if accept is specified
       if (accept && accept !== '*/*') {
         const acceptedTypes = accept.split(',').map((t) => t.trim());
         const fileType = file.type;
@@ -56,7 +54,6 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         const isAccepted = acceptedTypes.some((type) => {
           if (type === '*/*') return true;
           if (type.endsWith('/*')) {
-            // Handle wildcard types like "image/*"
             const prefix = type.replace('/*', '');
             return fileType.startsWith(prefix) || fileType === prefix;
           }
@@ -90,14 +87,12 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
       const newErrors: FileError[] = [];
       const validFiles: File[] = [];
 
-      // Check max files limit
       if (files.length > maxFiles) {
         const errorMsg = `Too many files. Maximum is ${maxFiles} files at once`;
         newErrors.push({ file: 'Limit', message: errorMsg });
         if (showFeedback) {
           toast.error(errorMsg);
         }
-        // Reset input and return early
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
         }
@@ -105,7 +100,6 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         return;
       }
 
-      // Validate each file
       for (const file of files) {
         const error = validateFile(file);
         if (error) {
@@ -115,18 +109,15 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         }
       }
 
-      // Report errors
       setErrors(newErrors);
       const firstError = newErrors[0];
       if (firstError && showFeedback) {
-        // Show first error as toast
         toast.error(firstError.message, {
           description: newErrors.length > 1 ? `and ${newErrors.length - 1} more issues` : undefined,
           duration: 4000,
         });
       }
 
-      // Pass valid files to parent
       if (validFiles.length > 0) {
         setSelectedCount(validFiles.length);
         onFilesSelected(validFiles);
@@ -137,7 +128,6 @@ export const FileUploadButton: React.FC<FileUploadButtonProps> = ({
         }
       }
     } finally {
-      // Reset input to allow selecting same files again
       const input = fileInputRef.current;
       if (input) {
         input.value = '';

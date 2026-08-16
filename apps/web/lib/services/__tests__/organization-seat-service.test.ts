@@ -17,7 +17,6 @@ function mockDb(rows: unknown[]) {
   return { db: { query } as unknown as DatabaseAdapter, query };
 }
 
-/** The shape a Neon/pg driver produces for a failed CHECK constraint. */
 function seatCeilingError() {
   const error = new Error(
     'new row for relation "organizations" violates check constraint "organizations_seats_within_license"',
@@ -64,8 +63,6 @@ describe('getOrganizationSeatState', () => {
 
     const state = await getOrganizationSeatState(db, 'org-a');
 
-    // The number still enforces the ceiling; it just cannot grow until billing
-    // writes it. Claiming 'billing' here would misrepresent a purchase.
     expect(state?.seatSource).toBe('unprovisioned');
     expect(state?.seatsAvailable).toBe(0);
   });
@@ -120,8 +117,6 @@ describe('seat error classification', () => {
   });
 
   it('does NOT treat an unrelated check violation as a seat problem', () => {
-    // Reporting "buy more seats" for, say, a resend_count violation would send
-    // the customer to the wrong remedy.
     const error = new Error(
       'violates check constraint "organization_invitations_resend_count_check"',
     ) as Error & { code?: string };
@@ -151,8 +146,6 @@ describe('withSeatAccountingErrors', () => {
   });
 
   it('turns the ceiling abort into an actionable 409, never a 500', async () => {
-    // This is the concurrent case: the loser of the row-lock race re-evaluates
-    // the CHECK against the committed value and aborts with 23514.
     await expect(
       withSeatAccountingErrors(async () => {
         throw seatCeilingError();

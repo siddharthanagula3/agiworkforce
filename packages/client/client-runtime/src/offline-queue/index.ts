@@ -1,26 +1,3 @@
-/**
- * Shared offline queue factory.
- *
- * Manages a queue of chat messages and tool-execution requests that the
- * user enqueued while offline, with exponential-backoff retries and
- * subscribe-to-changes for reactive UI. Browser-environment APIs
- * (`window`, `navigator`, `localStorage`) are injected via the
- * `OfflineQueueOptions` adapters so this module is testable in a Node
- * environment and reusable across web + desktop without duplication.
- *
- * Each surface creates its own instance via `createOfflineQueue(opts)`,
- * binding its own storage helpers, logger, and (optionally) an
- * `onStorageChange` subscriber + `probeOnline` network check. The
- * canonical types live in `@agiworkforce/types/web-offline`.
- *
- * Surface integration:
- *   - `apps/web/lib/offline/offlineQueue.ts` — uses safeGetJSON/safeSetJSON
- *     from `@/utils/localStorage`, pino-style logger from `@/lib/logger`,
- *     and a `/api/health` HEAD probe.
- *   - `apps/desktop/src/lib/offline/offlineQueue.ts` — same storage,
- *     console-based logger, no network probe (Tauri webview can't reach
- *     the web /api/health route).
- */
 
 import type {
   OfflineQueueState,
@@ -34,8 +11,6 @@ export type { OfflineQueueState, QueuedMessage, QueuedToolExecution, SyncCallbac
 
 export interface OfflineQueueStorage {
   getJSON<T>(key: string, defaultValue: T): T;
-  /** Persist a JSON value. Returns true on success. Implementations that
-   *  return void are accepted (treated as success). */
   setJSON<T>(key: string, value: T): unknown;
   remove(key: string): void;
 }
@@ -49,16 +24,8 @@ export interface OfflineQueueLogger {
 export interface OfflineQueueOptions {
   storage: OfflineQueueStorage;
   logger: OfflineQueueLogger;
-  /** Subscribe to external storage mutations (e.g. another tab edits the
-   *  queue). Returns an unsubscribe function. Default: returns a no-op
-   *  unsubscribe — change notifications are only delivered to in-process
-   *  mutators. */
   onStorageChange?: (storageKey: string, callback: () => void) => () => void;
-  /** Probe whether the network is reachable. Default: always true — the
-   *  surface is responsible for guarding sync at the call site. */
   probeOnline?: () => Promise<boolean>;
-  /** Generate a queue-entry id. Default: combines `Date.now` with
-   *  `Math.random` — local-only client identifier, not an auth token. */
   generateId?: (prefix: 'msg' | 'tool') => string;
   storageKey?: string;
   maxRetries?: number;
@@ -97,7 +64,6 @@ const DEFAULT_INITIAL_BACKOFF_MS = 1000;
 const DEFAULT_MAX_BACKOFF_MS = 30_000;
 
 function defaultGenerateId(prefix: 'msg' | 'tool'): string {
-  // Local-only queue identifier, not an auth token. Math.random is intentional.
   const random = Math.random().toString(36).slice(2, 11);
   return `${prefix}_${Date.now()}_${random}`;
 }

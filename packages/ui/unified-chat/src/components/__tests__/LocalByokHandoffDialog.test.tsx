@@ -5,12 +5,6 @@ import { LocalByokHandoffDialog } from '../LocalByokHandoffDialog';
 
 afterEach(cleanup);
 
-/**
- * This dialog IS the consent record. Whatever destination it names is what the
- * user believes they are approving, so the target label is a correctness
- * property rather than copy — mislabelling it shows a boundary the user is not
- * actually crossing.
- */
 function preview(overrides: Partial<LocalToByokHandoffPreview> = {}): LocalToByokHandoffPreview {
   return {
     draft: {
@@ -75,7 +69,6 @@ describe('LocalByokHandoffDialog target labelling', () => {
 
     expect(screen.getByText('Review what leaves this device')).toBeTruthy();
     expect(screen.queryByText('Review BYOK fork')).toBeNull();
-    // A folder attach is not a fork — there is no second conversation.
     expect(screen.getByRole('button', { name: 'Attach these files' })).toBeTruthy();
   });
 

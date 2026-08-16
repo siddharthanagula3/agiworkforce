@@ -1,9 +1,5 @@
 import { redirect } from 'next/navigation';
 
-/**
- * /sign-up → /signup alias (Clerk default path convention; external links).
- * Preserves query params for the signup page.
- */
 export default async function SignUpAlias({
   searchParams,
 }: {

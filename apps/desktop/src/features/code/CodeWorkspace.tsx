@@ -105,10 +105,6 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
     }
   };
 
-  // First run deliberately has NO root: the panel shows its "Open a folder"
-  // empty state and the native picker grants access. Auto-defaulting to
-  // homeDir() guaranteed a "Failed to load directory" toast on first open —
-  // the sandboxed macOS build cannot list $HOME without a user selection.
   useEffect(() => {
     if (openFiles.length === 0 && persistedOpenPaths.length > 0) {
       void hydrateOpenFiles();
@@ -447,7 +443,6 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
           'flex h-full overflow-hidden border border-border rounded-lg bg-background min-h-0 min-w-0',
           className,
         )}
-        // WRK-008 fix: ARIA labels for accessibility
         role="region"
         aria-label="Code editor workspace"
       >
@@ -458,7 +453,6 @@ export function CodeWorkspace({ className }: CodeWorkspaceProps) {
             sidebarVisible ? 'opacity-100' : 'w-0 opacity-0',
           )}
           style={{ width: sidebarVisible ? sidebarWidth : 0 }}
-          // WRK-008 fix: ARIA labels for accessibility
           role="navigation"
           aria-label="File explorer"
         >

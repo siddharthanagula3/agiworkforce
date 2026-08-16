@@ -23,13 +23,6 @@ import {
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 
-/**
- * Cloud sign-in screen.
- *
- * Renders Clerk's prebuilt native AuthView (combined sign-in-or-up). The native
- * component syncs the Clerk session automatically — no setActive() call. Once
- * signed in, we redirect into the app. Dismissing returns to Local Mode.
- */
 export default function LoginScreen() {
   const router = useRouter();
   const colors = useThemeColors();
@@ -39,9 +32,6 @@ export default function LoginScreen() {
   const params = useLocalSearchParams<{ postAuthIntent?: string | string[] }>();
   const postAuthIntent = parsePostAuthIntent(params[POST_AUTH_INTENT_PARAM]);
 
-  // Layout timing is intentional: on a restored/already-loaded Clerk route,
-  // apply the validated intent before the root auth guard can redirect and
-  // unmount this screen. A signed-out route leaves it staged for ClerkTokenBridge.
   useLayoutEffect(() => {
     if (postAuthIntent) {
       stagePostAuthIntent(postAuthIntent);
@@ -58,9 +48,6 @@ export default function LoginScreen() {
     resetPostAuthDestinationToLocal();
   }, [cloudUnlocked, isLoaded, isSignedIn, postAuthIntent, subscriptionTier, userId]);
 
-  // Covers the native back gesture/system navigation in addition to the
-  // explicit close button. A consumed intent is already null, so successful
-  // handoff cleanup cannot undo the Cloud mode applied by either consumer.
   useEffect(
     () => () => {
       if (clearPostAuthIntent()) resetPostAuthDestinationToLocal();
@@ -74,12 +61,8 @@ export default function LoginScreen() {
     router.replace('/(app)');
   };
 
-  // Build gate: when cloud auth is disabled, Local Mode is the only path.
   if (!FEATURES.auth) return <Redirect href="/(app)" />;
   if (isLoaded && isSignedIn) {
-    // The root Clerk bridge applies/consumes the intent before publishing its
-    // signed-in signal. That signal owns the redirect, keeping mode + model
-    // selection ahead of navigation rather than racing a <Redirect> render.
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>

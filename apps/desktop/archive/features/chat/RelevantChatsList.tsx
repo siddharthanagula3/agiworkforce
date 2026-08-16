@@ -9,7 +9,6 @@ import {
 } from '../../stores/chat/chatStore';
 
 interface RelevantChatsListProps {
-  /** Max conversations to show; defaults to 5 */
   maxItems?: number;
   className?: string;
 }

@@ -27,7 +27,6 @@ const ORB_SOURCE = readFileSync(
   'utf8',
 );
 
-/** Dependency arrays of every `useEffect` in the file, in source order. */
 function effectDependencies(source: string): string[][] {
   const out: string[][] = [];
   const effects = /useEffect\(/g;
@@ -62,8 +61,6 @@ describe('VoiceOrb', () => {
     });
 
     it('keeps audioLevel out of the phase effect', () => {
-      // With audioLevel in here, every metering tick restarts the withRepeat
-      // loops and the idle/thinking pulse never completes a cycle.
       const phaseEffect = deps.find((d) => d.includes('phase'));
       expect(phaseEffect).toBeDefined();
       expect(phaseEffect).not.toContain('audioLevel');
@@ -76,8 +73,6 @@ describe('VoiceOrb', () => {
     });
 
     it('never springs the orb', () => {
-      // withSpring is the defect: re-targeted per metering frame it cannot
-      // settle, and the residual overshoot reads as shaking.
       expect(ORB_SOURCE).not.toMatch(/withSpring\s*\(/);
       expect(ORB_SOURCE).toMatch(/withTiming\(1 \+ level \* /);
     });
@@ -90,8 +85,6 @@ describe('VoiceOrb', () => {
     });
 
     it('cannot let a single-frame spike snap the orb', () => {
-      // Silence, then one full-scale frame, then silence again: the excursion
-      // has to stay far below the spike that produced it.
       const spike = smoothVoiceLevel(0, 1);
       expect(spike).toBeLessThan(0.3);
       expect(smoothVoiceLevel(spike, 0)).toBeLessThan(spike);

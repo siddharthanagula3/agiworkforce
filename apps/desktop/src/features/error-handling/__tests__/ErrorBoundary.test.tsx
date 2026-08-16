@@ -247,7 +247,6 @@ describe('ErrorBoundary', () => {
     it('should show error details in expandable section', () => {
       const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // The error details section is only rendered in DEV mode
       vi.stubEnv('DEV', true);
 
       render(
@@ -256,7 +255,6 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>,
       );
 
-      // The component renders "Error details (development only)" inside a <summary>
       const detailsSection = screen.getByText(/error details/i);
       expect(detailsSection).toBeInTheDocument();
 
@@ -324,7 +322,6 @@ describe('ErrorBoundary', () => {
         </ErrorBoundary>,
       );
 
-      // The component must not crash even when reporting fails.
       await waitFor(() => {
         expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
       });

@@ -11,7 +11,7 @@ describe('extensionOf', () => {
 
   it('returns empty string when there is no usable extension', () => {
     expect(extensionOf('Makefile')).toBe('');
-    expect(extensionOf('.gitignore')).toBe(''); // leading-dot only
+    expect(extensionOf('.gitignore')).toBe('');
     expect(extensionOf('trailingdot.')).toBe('');
     expect(extensionOf('')).toBe('');
   });
@@ -29,8 +29,6 @@ describe('FileTypeIcon', () => {
   });
 
   it('renders a single glyph (no text label) for csv/image/archive types', () => {
-    // FileSpreadsheet / FileImage / FileArchive carry meaning on their own — no
-    // composite extension label should be printed.
     expect(render(<FileTypeIcon filename="rows.csv" />).container.textContent).toBe('');
     expect(render(<FileTypeIcon filename="photo.png" />).container.textContent).toBe('');
     expect(render(<FileTypeIcon filename="bundle.zip" />).container.textContent).toBe('');

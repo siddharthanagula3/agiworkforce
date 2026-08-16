@@ -25,15 +25,9 @@ interface AgentStatusResponse {
   runningAgents: number;
 }
 
-/**
- * Define the background task.
- * Must be called at module load time (top-level), before registerBackgroundFetch.
- */
-/** Max retries for the background fetch API call (with exponential backoff). */
 const BG_FETCH_MAX_RETRIES = 2;
 let lastApprovalNotificationKey: string | null = null;
 
-/** Forget account-scoped notification dedupe state on sign-out/account switch. */
 export function resetBackgroundFetchAccountState(): void {
   lastApprovalNotificationKey = null;
 }
@@ -51,7 +45,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   if (!settings?.backgroundFetchEnabled) {
     return BackgroundTask.BackgroundTaskResult.Success;
   }
-  // notificationsEnabled is mode-specific: check the active mode's store.
   const appMode = useChatAppModeStore.getState?.()?.appMode ?? 'local';
   const modeSettings =
     appMode === 'cloud' ? useCloudSettingsStore.getState?.() : useLocalSettingsStore.getState?.();
@@ -68,9 +61,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
         await new Promise((r) => setTimeout(r, 1000 * Math.pow(2, attempt - 1)));
       }
 
-      // STB-8: /api/mobile/agent-status is served only by the Express
-      // api-gateway. Sending it to API_URL (the Next.js app) 404'd on every
-      // background wake-up, so approval-needed push notifications never fired.
       const result = await api.get<AgentStatusResponse>('/api/mobile/agent-status', {
         baseUrl: GATEWAY_URL,
         timeout: 15_000,
@@ -83,20 +73,11 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
           return BackgroundTask.BackgroundTaskResult.Success;
         }
 
-        // Honor the user's Notification Preferences (Approvals category + quiet
-        // hours). Previously these settings were inert — no live notification path
-        // consulted them. We do NOT record lastApprovalNotificationKey here, so
-        // re-enabling the category (or leaving quiet hours) re-evaluates this batch.
         if (!notificationAllowed('agent_approval_needed')) {
           return BackgroundTask.BackgroundTaskResult.Success;
         }
 
         for (const approval of result.pendingApprovals) {
-          // MED-MOB-08 fix (2026-05-04): the notification body previously
-          // included `toolName: description`, which reveals agent task details
-          // on the lock screen without authentication. We now show only a
-          // generic count notification; full details are behind the biometric
-          // gate inside the app.
           await Notifications.scheduleNotificationAsync({
             content: {
               title: 'AGI Workforce',
@@ -111,8 +92,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
             trigger: null,
           });
           lastApprovalNotificationKey = notificationKey;
-          // Only send one notification per batch — the user taps through to the
-          // app (behind biometric) to see per-approval detail.
           break;
         }
         return BackgroundTask.BackgroundTaskResult.Success;
@@ -122,7 +101,6 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
       return BackgroundTask.BackgroundTaskResult.Success;
     } catch (err) {
       lastError = err;
-      // Don't retry abort errors
       if (err instanceof Error && err.name === 'AbortError') break;
     }
   }
@@ -134,23 +112,10 @@ TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   return BackgroundTask.BackgroundTaskResult.Failed;
 });
 
-/**
- * Register the background fetch task.
- * Call once during app initialization.
- */
 export async function registerBackgroundFetch(): Promise<void> {
   const status = await BackgroundTask.getStatusAsync();
 
-  // expo-background-task collapses the old Denied/Restricted pair into a
-  // single Restricted state — it does not distinguish a user denial from an
-  // OS-level restriction (Low Power Mode, Screen Time, managed device).
   if (status === BackgroundTask.BackgroundTaskStatus.Restricted) {
-    // Debug, not warn: BGTaskScheduler does not exist on the Simulator at all,
-    // so Restricted is the only answer it can ever give and flags nothing about
-    // the app. On real hardware it means Low Power Mode, Screen Time or an MDM
-    // policy — still the user's setting rather than a defect. Distinguishing
-    // the two needs expo-device, which is a native module and a rebuild for a
-    // log level, so name both causes instead.
     console.debug(
       '[backgroundFetch] Background tasks unavailable (Simulator, Low Power Mode, or device policy) — approval polling is off',
     );
@@ -160,9 +125,6 @@ export async function registerBackgroundFetch(): Promise<void> {
   try {
     await registerNotificationCategories();
   } catch (err) {
-    // Background polling is still useful when an OS/build cannot register
-    // categories. Keep the task alive and degrade to a normal tap-to-open
-    // notification instead of disabling approval alerts entirely.
     console.warn(
       '[backgroundFetch] Notification action registration failed:',
       err instanceof Error ? err.message : err,
@@ -171,21 +133,14 @@ export async function registerBackgroundFetch(): Promise<void> {
 
   const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
   if (isRegistered) {
-    return; // already registered
+    return;
   }
 
-  // minimumInterval is MINUTES here, not seconds as in expo-background-fetch —
-  // passing the old `15 * 60` would ask for a 15-hour period. 15 is also the
-  // floor the OS accepts. stopOnTerminate/startOnBoot are gone: registrations
-  // are persisted and restored on launch by default.
   await BackgroundTask.registerTaskAsync(BACKGROUND_FETCH_TASK, {
     minimumInterval: 15,
   });
 }
 
-/**
- * Unregister the background fetch task.
- */
 export async function unregisterBackgroundFetch(): Promise<void> {
   const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
   if (isRegistered) {
@@ -193,9 +148,6 @@ export async function unregisterBackgroundFetch(): Promise<void> {
   }
 }
 
-/**
- * Check if background fetch is currently registered.
- */
 export async function isBackgroundFetchRegistered(): Promise<boolean> {
   return TaskManager.isTaskRegisteredAsync(BACKGROUND_FETCH_TASK);
 }

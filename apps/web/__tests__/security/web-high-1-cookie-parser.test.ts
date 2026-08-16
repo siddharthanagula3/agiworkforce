@@ -1,20 +1,6 @@
-/**
- * web-HIGH-1: Cookie suffix-match regression test
- *
- * The previous implementation in lib/csrf.ts used unanchored regexes
- * (`cookies.match(/anon-session-id=([^;]+)/)`) which matched any cookie name
- * ending with the target string. An attacker able to plant a crafted cookie
- * via subdomain injection could pre-seed the CSRF session ID and forge
- * authenticated requests.
- *
- * The fix anchors all cookie reads to `(?:^|; )` via a shared `readCookie`
- * helper. These tests assert the helper's correctness AND the public
- * session-resolver functions' resilience to the suffix attack.
- */
 
 import { describe, it, expect, vi } from 'vitest';
 
-// Block server-only imports so the module can load in jsdom.
 vi.mock('server-only', () => ({}));
 vi.mock('@clerk/nextjs/server', () => ({
   auth: vi.fn().mockResolvedValue({ userId: null }),
@@ -45,26 +31,15 @@ describe('web-HIGH-1 readCookie() — anchored cookie parser', () => {
     expect(readCookie('', 'anon-session-id')).toBeNull();
   });
 
-  // ── The suffix attack ───────────────────────────────────────────────────────
-
   it('does NOT match a cookie whose name only ENDS WITH the target name', () => {
-    // Attacker plants `x-anon-session-id` via a controlled subdomain.
-    // The unanchored regex would have returned 'attacker-value'.
     expect(readCookie('x-anon-session-id=attacker-value', 'anon-session-id')).toBeNull();
   });
 
   it('does NOT match a cookie name preceded by anything other than "; " or start', () => {
-    // Without the `;` separator, the substring `anon-session-id=` after a
-    // hyphen is part of an unrelated cookie name. Old regex matched; new
-    // anchored regex does not.
     expect(readCookie('crafted-anon-session-id=evil', 'anon-session-id')).toBeNull();
   });
 
   it('returns the legitimate value when both legitimate and suffix cookies are present', () => {
-    // The hijack-attempt cookie comes first in the header; the legitimate
-    // cookie comes after. Old regex would return 'attacker-value' (leftmost
-    // match in the suffix cookie); new regex skips the suffix cookie and
-    // returns 'real-value' from the properly-anchored position.
     expect(
       readCookie(
         'crafted-anon-session-id=attacker-value; anon-session-id=real-value',
@@ -74,8 +49,6 @@ describe('web-HIGH-1 readCookie() — anchored cookie parser', () => {
   });
 
   it('regex-escapes the cookie name argument so a caller cannot widen the match', () => {
-    // A caller passing a name with regex metacharacters (`.`, `*`, etc.)
-    // should match literally, not as a regex pattern.
     expect(readCookie('a.b=value1; ax=value2', 'a.b')).toBe('value1');
     expect(readCookie('a.b=value1; ax=value2', 'a.b')).not.toBe('value2');
   });
@@ -95,17 +68,11 @@ describe('web-HIGH-1 getSessionIdFromRequest — suffix attack resilience', () =
   }
 
   it('returns the legitimate __Host- session id when only the legitimate cookie is present', async () => {
-    // SEV-WEB-M-1 (2026-05-05): the legacy `anon-session-id` cookie was retired
-    // and only the `__Host-` prefixed cookie is honored. Any unprefixed
-    // `anon-session-id` cookie now falls through to a fresh anon UUID.
     const id = await getSessionIdFromRequest(makeRequest('__Host-anon-session-id=legit-1234'));
     expect(id).toBe('legit-1234');
   });
 
   it('does NOT return the attacker-planted suffix cookie value', async () => {
-    // Attacker plants `x-anon-session-id=ATTACKER` via subdomain injection.
-    // No legitimate `anon-session-id` cookie present — the function should
-    // fall through to generating a fresh `anon-<uuid>` ID.
     const id = await getSessionIdFromRequest(makeRequest('x-anon-session-id=ATTACKER'));
     expect(id).not.toBe('ATTACKER');
     expect(id).toMatch(/^anon-[0-9a-f-]+$/);

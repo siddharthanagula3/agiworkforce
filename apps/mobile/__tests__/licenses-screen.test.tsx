@@ -1,12 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * The in-app open-source attribution notice (About → Open Source Licenses).
- *
- * The data is generated from the installed dependency graph, so these tests
- * guard the two things a generator can silently get wrong: dropping packages
- * on the way to the screen, and publishing a license body that no longer reads
- * as the license.
- */
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
@@ -42,7 +34,6 @@ describe('open source attribution data', () => {
       expect(entry.name).not.toHaveLength(0);
       expect(entry.version).toMatch(/\d/);
       expect(entry.license).not.toHaveLength(0);
-      // First-party workspace code is not third-party attribution.
       expect(entry.name.startsWith('@agiworkforce/')).toBe(false);
     }
   });
@@ -66,7 +57,6 @@ describe('open source attribution data', () => {
 
   it('keeps license bodies intact rather than stripped of their own wording', () => {
     // The copyright line is lifted out per package; the grant and warranty
-    // clauses must survive that split or the notice is not the license.
     const bodies = Object.values(OSS_LICENSE_BODIES);
     const mitOrIsc = bodies.filter((body) =>
       /permission is hereby granted, free of charge|permission to use, copy, modify, and\/or distribute/i.test(

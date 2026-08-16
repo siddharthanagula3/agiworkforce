@@ -1,9 +1,3 @@
-/**
- * Stripe Payment Integration Service
- * Handles all Stripe-related operations for AI employee subscriptions
- *
- * UPDATED: January 17, 2026 - Added authorization headers to all API calls
- */
 
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
@@ -14,12 +8,6 @@ import {
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 
-/**
- * Seat count to send with a per-seat plan, or `undefined` for per-account plans.
- * The server schema REJECTS a seat count on a per-account plan and REQUIRES one
- * on a per-seat plan, so this must not guess: a Team call without seats is a
- * client bug and should fail loudly rather than silently bill one seat.
- */
 function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): number | undefined {
   if (!isPerSeatBillingPlan(plan)) return undefined;
   if (typeof seats !== 'number' || !Number.isInteger(seats) || seats < MIN_PURCHASABLE_SEATS) {
@@ -28,17 +16,6 @@ function seatsForPlan(plan: SelfServePaidPlanTier, seats: number | undefined): n
   return seats;
 }
 
-// Employee purchase functions removed - hiring is now free
-
-/**
- * Extract a human-readable message from an API error response. Routes
- * wrapped in withErrorHandler (apps/web/lib/error-handler.ts) return
- * `{ error: { code, message }, requestId }` - `error` is an OBJECT, not a
- * string. Reading `body.error` directly and passing it to `new Error(...)`
- * silently stringifies it to the literal text "[object Object]" (confirmed
- * live on the pricing page's "Get Pro" button before this fix). Falls back
- * to a plain-string `error` field for any route not yet on that wrapper.
- */
 function extractErrorMessage(body: unknown, fallback: string): string {
   if (body && typeof body === 'object') {
     const err = (body as { error?: unknown }).error;
@@ -75,10 +52,6 @@ export class CheckoutRequiredError extends Error {
   }
 }
 
-/**
- * Open Stripe Customer Portal for subscription management
- */
-// Updated: Jan 17th 2026 - Added authorization header
 export async function openBillingPortal(): Promise<void> {
   const authToken = await getAuthToken();
   if (!authToken) {
@@ -102,21 +75,14 @@ export async function openBillingPortal(): Promise<void> {
 
   const { url } = await response.json();
 
-  // Redirect to Stripe Customer Portal
   window.location.href = url;
 }
 
-/**
- * Check if Stripe is properly configured
- */
 export function isStripeConfigured(): boolean {
   const publishableKey = process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY'];
   return !!publishableKey && publishableKey.startsWith('pk_');
 }
 
-/**
- * Get Stripe configuration status for debugging
- */
 export function getStripeConfig() {
   return {
     publishableKey: process.env['NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY']
@@ -126,9 +92,6 @@ export function getStripeConfig() {
   };
 }
 
-/**
- * Create Pro Plan subscription and redirect to Stripe Checkout
- */
 export async function upgradeToProPlan(data: {
   userId: string;
   userEmail: string;
@@ -137,9 +100,6 @@ export async function upgradeToProPlan(data: {
   return upgradeToPlan({ ...data, plan: 'pro' });
 }
 
-/**
- * Create Max Plan subscription and redirect to Stripe Checkout
- */
 export async function upgradeToMaxPlan(data: {
   userId: string;
   userEmail: string;
@@ -148,7 +108,6 @@ export async function upgradeToMaxPlan(data: {
   return upgradeToPlan({ ...data, plan: 'max' });
 }
 
-/** Create Max 15x subscription and redirect to Stripe Checkout. */
 export async function upgradeToMax15xPlan(data: {
   userId: string;
   userEmail: string;
@@ -156,11 +115,6 @@ export async function upgradeToMax15xPlan(data: {
   return upgradeToPlan({ ...data, plan: 'max_15x' });
 }
 
-/**
- * Create Basic Plan subscription and redirect to Stripe Checkout. The server
- * derives currency from trusted deployment geolocation; clients never choose
- * the charged currency.
- */
 export async function upgradeToBasicPlan(data: {
   userId: string;
   userEmail: string;
@@ -168,9 +122,6 @@ export async function upgradeToBasicPlan(data: {
   return upgradeToPlan({ ...data, plan: 'basic' });
 }
 
-/**
- * Generic function to upgrade to any plan
- */
 async function upgradeToPlan(data: {
   userId: string;
   userEmail: string;
@@ -210,7 +161,6 @@ async function upgradeToPlan(data: {
 
   const { url } = await response.json();
 
-  // Redirect to Stripe Checkout
   if (url) {
     window.location.href = url;
   } else {
@@ -232,11 +182,6 @@ export async function startPlanCheckout(data: {
   });
 }
 
-/**
- * Start a one-time Stripe Checkout for separately purchased managed usage.
- * The server owns the dollar-to-unit conversion and returns it for display;
- * client input never decides how much balance the webhook grants.
- */
 export async function startTopUpCheckout(amountUsd: number): Promise<void> {
   const authToken = await getAuthToken();
   if (!authToken) throw new Error('User not authenticated. Please log in to buy a top-up.');
@@ -263,11 +208,6 @@ export async function startTopUpCheckout(amountUsd: number): Promise<void> {
   window.location.href = result.url;
 }
 
-/**
- * Start Team checkout for a chosen number of licensed seats. Team is billed per
- * seat, so the seat count is mandatory and is charged as the Stripe line-item
- * quantity.
- */
 export async function upgradeToTeamPlan(data: {
   seats: number;
   billingPeriod?: 'monthly' | 'yearly';
@@ -281,12 +221,6 @@ export async function upgradeToTeamPlan(data: {
   });
 }
 
-/**
- * Read-only preview of a mid-cycle upgrade's immediate prorated charge, so the
- * UI can show "you'll be charged $X today" and get explicit confirmation BEFORE
- * `upgradePlanMidCycle` actually charges the saved card. Returns the amount due
- * now in the subscription's billing currency.
- */
 export async function previewUpgrade(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';
@@ -350,11 +284,6 @@ export async function previewUpgrade(data: {
   };
 }
 
-/**
- * Upgrade an active subscription immediately. The server preserves the current
- * renewal date, invoices the prorated difference for the remaining period, and
- * activates entitlements only after successful payment.
- */
 export async function upgradePlanMidCycle(data: {
   plan: SelfServePaidPlanTier;
   billingInterval?: 'monthly' | 'yearly';

@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, SectionList, TextInput, View, type SectionListData } from 'react-native';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
-// navigation package, so the raw hook can land on a different context
-// instance than the one expo-router's navigator provides.
 import { useNavigation } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,9 +11,6 @@ import {
   SquarePen,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
-// NativeWind's JSX interop silently drops function-form `style` on Pressable,
-// which stripped the row cards and the New-chat FAB of all styling. See
-// components/ui/pressable-box.tsx.
 import { PressableBox } from '@/components/ui/pressable-box';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
@@ -90,12 +83,6 @@ function groupHistory(conversations: ReadonlyArray<ConversationSummary>): ChatsL
       kind: 'chat',
       id: conversation.id,
       title: conversation.title || 'Untitled chat',
-      // Relative time, not a message preview. Claude's chats list
-      // (claude_reference/117) shows "1 day ago" per row, and a preview of the
-      // last message is frequently noise here — a code fence, or a bare
-      // "1 2 3 4 5 6 7 8 9 10..." — which tells the user nothing about which
-      // conversation this is. Reuses the artifact gallery's formatter rather
-      // than adding a second relative-time implementation.
       subtitle: formatAgeLabel(conversation.updatedAt),
       pinned: conversation.pinned,
     };
@@ -131,9 +118,6 @@ export function ChatsListScreen() {
   const colors = useThemeColors();
   const router = useRouter();
   const navigation = useNavigation();
-  // The drawer's icon-only search button hands off to this screen rather than
-  // keeping a second search implementation of its own, so it arrives with
-  // `focusSearch=1` and expects the field below to already be focused.
   const params = useLocalSearchParams<{ focusSearch?: string | string[] }>();
   const autoFocusSearch =
     (Array.isArray(params.focusSearch) ? params.focusSearch[0] : params.focusSearch) === '1';
@@ -157,14 +141,6 @@ export function ChatsListScreen() {
   const cloudArtifacts = useArtifactStore((state) => state.cloudArtifacts);
   const cloudArtifactsOwnerId = useArtifactStore((state) => state.cloudArtifactsOwnerId);
 
-  // Re-run when the gate inputs change, not only on mount.
-  //
-  // loadConversations no-ops unless Cloud Mode is active AND Clerk has
-  // hydrated, and it swallows failures to stay usable offline. On a cold start
-  // the mount usually wins that race, so the one-shot effect fetched nothing
-  // and the screen kept rendering whatever MMKV had persisted — indefinitely,
-  // since nothing re-triggered it. Chats archived on another surface stayed
-  // visible here for exactly that reason.
   useEffect(() => {
     void loadConversations();
   }, [appMode, isClerkSignedIn, loadConversations]);
@@ -173,24 +149,11 @@ export function ChatsListScreen() {
     searchConversations(query);
   }, [query, searchConversations]);
 
-  // Covers the case the declarative `autoFocus` below cannot: the drawer sits
-  // over an already-mounted Chats screen, so there is no mount for autoFocus to
-  // fire on. Runs whenever the param arrives or changes.
   useEffect(() => {
     if (!autoFocusSearch) return;
     searchInputRef.current?.focus();
   }, [autoFocusSearch]);
 
-  // Read each mode's history from the store that OWNS it.
-  //
-  // Cloud conversations live in useChatCloudMessageStore — that is the store
-  // loadConversations() writes the server list into, and the SEPARATION-FIX in
-  // chatMessageStore.ts stopped cloud rows being written into the local store
-  // at all. This screen was still filtering the LOCAL store for rows tagged
-  // `executionMode: 'cloud'`, so in Cloud Mode it rendered a stale MMKV mirror
-  // that no server response ever touched: chats archived (or deleted, or
-  // renamed) elsewhere stayed exactly as they were, and the `archived=exclude`
-  // filter on the list request could not affect what was displayed.
   const modeConversations = useMemo(() => {
     const source = appMode === 'cloud' ? cloudConversations : conversations;
     return source.filter(
@@ -380,10 +343,6 @@ export function ChatsListScreen() {
             </Text>
           </View>
         ) : (
-          /* Trailing chevron — the row is tappable and Claude's chats list
-             (claude_reference/117) carries this affordance; without it the row
-             reads as a static card rather than a link. Hidden while searching,
-             where the kind badge occupies the same slot. */
           <ChevronRight size={16} color={colors.textMuted} />
         )}
       </PressableBox>
@@ -397,9 +356,6 @@ export function ChatsListScreen() {
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
       <View
         style={{
-          // Two stacked lines (title + mode subtitle) in a fixed 52pt box clipped
-          // the subtitle at accessibility text sizes. minHeight lets the header
-          // grow with the type instead.
           minHeight: 52,
           paddingVertical: 4,
           paddingHorizontal: 12,

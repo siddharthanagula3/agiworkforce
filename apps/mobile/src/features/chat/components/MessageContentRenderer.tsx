@@ -1,7 +1,3 @@
-/**
- * Pure markdown rendering functions extracted from MessageBubble.
- * No state, no hooks — these are deterministic render functions.
- */
 
 import { View, Linking, ScrollView, Alert } from 'react-native';
 import { Text } from '@/components/ui/text';
@@ -15,14 +11,6 @@ import {
 import { tokenizeCode, syntaxTokenColor } from '@/src/features/chat/utils/syntaxHighlight';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 
-/**
- * Opens an assistant-emitted link. http/https opens in the in-app browser
- * sheet, so reading a cited page never backgrounds the app out of the
- * conversation; system-intent schemes (mailto:/sms:/tel:/geo:) are
- * zero-permission handoffs to the default system app but still require a
- * confirmation tap because the URL is untrusted model output. Everything else
- * is silently ignored.
- */
 function openAssistantLink(url: string): void {
   const kind = classifyExternalLink(url);
   if (kind === 'http') {
@@ -38,10 +26,6 @@ function openAssistantLink(url: string): void {
   ]);
 }
 
-/**
- * Render inline math: $...$ (not $$)
- * Returns an array of React Native Text/View nodes.
- */
 export function renderInlineMath(text: string, keyBase: string): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   const mathRegex = /(?<!\$)\$(?!\$)([^$\n]+?)\$(?!\$)/g;
@@ -69,17 +53,12 @@ export function renderInlineMath(text: string, keyBase: string): React.ReactNode
   return parts;
 }
 
-/**
- * Handles inline formatting: **bold**, *italic*, ~~strikethrough~~,
- * `code`, [links](url), and $inline math$.
- */
 export function renderInlineMarkdown(
   text: string,
   keyBase = 'inline',
   renderColors: ColorScheme = defaultColors,
 ): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  // Order matters: bold (**) before italic (*), links before other patterns
   const inlineRegex = /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
   let lastIdx = 0;
   let inlineMatch: RegExpExecArray | null;
@@ -92,7 +71,6 @@ export function renderInlineMarkdown(
     }
 
     if (inlineMatch[2]) {
-      // **bold**
       parts.push(
         <Text
           key={`bold-${keyBase}-${inlineKey++}`}
@@ -102,7 +80,6 @@ export function renderInlineMarkdown(
         </Text>,
       );
     } else if (inlineMatch[3]) {
-      // *italic*
       parts.push(
         <Text
           key={`italic-${keyBase}-${inlineKey++}`}
@@ -112,7 +89,6 @@ export function renderInlineMarkdown(
         </Text>,
       );
     } else if (inlineMatch[4]) {
-      // ~~strikethrough~~
       parts.push(
         <Text
           key={`strike-${keyBase}-${inlineKey++}`}
@@ -122,7 +98,6 @@ export function renderInlineMarkdown(
         </Text>,
       );
     } else if (inlineMatch[5]) {
-      // `inline code`
       parts.push(
         <Text
           key={`code-${keyBase}-${inlineKey++}`}
@@ -137,7 +112,6 @@ export function renderInlineMarkdown(
         </Text>,
       );
     } else if (inlineMatch[6] && inlineMatch[7]) {
-      // [link text](url)
       const linkText = inlineMatch[6];
       const linkUrl = inlineMatch[7];
       parts.push(
@@ -166,10 +140,6 @@ export function renderInlineMarkdown(
   return parts;
 }
 
-/**
- * Renders a plain text segment (between block-level elements) with support for
- * headers, blockquotes, unordered lists, ordered lists, and inline markdown.
- */
 function renderTextSegment(
   text: string,
   keyBase: string,
@@ -182,7 +152,6 @@ function renderTextSegment(
   while (idx < lines.length) {
     const line = lines[idx]!;
 
-    // --- Headers: # through #### ---
     const headerMatch = line.match(/^(#{1,4})\s+(.+)$/);
     if (headerMatch) {
       const level = headerMatch[1]!.length;
@@ -208,18 +177,6 @@ function renderTextSegment(
       continue;
     }
 
-    // --- Blockquote: > text ---
-    //
-    // FIX (audit 2026-05-20, §14): the legacy code matched any line
-    // starting with `> ` and pushed `.slice(2)`. For a line that was
-    // exactly `> ` (the quote marker with no body), this yielded an
-    // empty string that downstream rendered as a blank line inside the
-    // quote box. Worse, it could collapse a `>` followed by trailing
-    // whitespace into a silent empty quote — a renderer-side glitch the
-    // author cannot see.
-    //
-    // Now: skip empty / whitespace-only quote-body lines explicitly so
-    // the rendered blockquote only contains lines that have real content.
     if (line.startsWith('> ')) {
       const quoteLines: string[] = [];
       while (idx < lines.length && lines[idx]!.startsWith('> ')) {
@@ -258,7 +215,6 @@ function renderTextSegment(
       continue;
     }
 
-    // --- Unordered list: - item or * item ---
     const ulMatch = line.match(/^[-*]\s+(.+)$/);
     if (ulMatch) {
       const listItems: string[] = [];
@@ -303,7 +259,6 @@ function renderTextSegment(
       continue;
     }
 
-    // --- Ordered list: 1. item ---
     const olMatch = line.match(/^(\d+)\.\s+(.+)$/);
     if (olMatch) {
       const listItems: { num: string; text: string }[] = [];
@@ -348,48 +303,35 @@ function renderTextSegment(
       continue;
     }
 
-    // --- Markdown table: | cell | cell | (with header separator line) ---
-    // Helper: parse table row, preserving interior empty cells
-    // Input: "| a | | c |" → split → ['', ' a ', ' ', ' c ', '']
-    // Drop first/last if empty (outer pipe artifacts) → [' a ', ' ', ' c ']
-    // Trim each → ['a', '', 'c']
     const parseTableRow = (rowLine: string): string[] => {
       let cells = rowLine.split('|');
-      // Remove first element if it's empty (leading pipe artifact)
       if (cells[0] === '' || (cells[0] && cells[0]!.trim() === '')) {
         cells = cells.slice(1);
       }
-      // Remove last element if it's empty (trailing pipe artifact)
       if (
         cells.length > 0 &&
         (cells[cells.length - 1] === '' || cells[cells.length - 1]!.trim() === '')
       ) {
         cells = cells.slice(0, -1);
       }
-      // Trim each cell but keep empty strings (interior empty cells)
       return cells.map((cell) => cell.trim());
     };
 
     if (line.includes('|') && !line.startsWith('>')) {
-      // Check if this looks like a table header (contains pipes and content)
       const headerCells = parseTableRow(line);
       if (headerCells.length > 0 && idx + 1 < lines.length) {
         const separatorLine = lines[idx + 1];
-        // Check if next line is a table separator: |---|---|--- format
         if (
           separatorLine &&
           /^\s*\|?[\s\-|:]+\|?[\s\-|:]*$/.test(separatorLine) &&
           separatorLine.includes('-')
         ) {
-          // This is a table! Collect all rows until we hit a non-table line
           const tableRows: string[][] = [];
 
-          // Parse header row
           const headerRow = parseTableRow(line);
           tableRows.push(headerRow);
-          idx += 2; // Skip header and separator
+          idx += 2;
 
-          // Parse body rows
           while (idx < lines.length && lines[idx]!.includes('|') && !lines[idx]!.startsWith('>')) {
             const bodyRow = parseTableRow(lines[idx]!);
             if (bodyRow.length > 0) {
@@ -398,15 +340,9 @@ function renderTextSegment(
             idx++;
           }
 
-          // Render table
           if (tableRows.length > 0) {
             const numCols = Math.max(...tableRows.map((row) => row.length));
             nodes.push(
-              // Horizontal scroll, because a phone cannot fit a wide table.
-              // Cells were flex:1 inside an overflow:'hidden' box, so every
-              // column was forced to an equal share of ~360pt — a four-column
-              // table gave each cell ~70pt and the text was clipped with no way
-              // to read it. Both reference apps scroll tables sideways instead.
               <ScrollView
                 key={`${keyBase}-table-${idx}`}
                 horizontal
@@ -434,9 +370,6 @@ function renderTextSegment(
                       <View
                         key={`${keyBase}-td-${idx}-${rowIdx}-${colIdx}`}
                         style={{
-                          // minWidth instead of flex:1 — inside a horizontal
-                          // ScrollView a flexed child collapses to its content,
-                          // and a readable floor is what makes scrolling useful.
                           minWidth: 120,
                           maxWidth: 260,
                           borderRightWidth: colIdx < numCols - 1 ? 1 : 0,
@@ -470,7 +403,6 @@ function renderTextSegment(
       }
     }
 
-    // --- Horizontal rule: --- or *** or ___ ---
     if (/^(---|\*\*\*|___)$/.test(line.trim())) {
       nodes.push(
         <View
@@ -486,7 +418,6 @@ function renderTextSegment(
       continue;
     }
 
-    // --- Plain text with inline markdown ---
     if (line.trim()) {
       nodes.push(
         <Text
@@ -498,7 +429,6 @@ function renderTextSegment(
         </Text>,
       );
     } else if (idx > 0 && idx < lines.length - 1) {
-      // Empty line between content — render as vertical space
       nodes.push(<View key={`${keyBase}-sp-${idx}`} style={{ height: 8 }} />);
     }
     idx++;
@@ -507,19 +437,6 @@ function renderTextSegment(
   return nodes;
 }
 
-/**
- * Renders markdown content with support for:
- * - **bold**, *italic*, ~~strikethrough~~
- * - `inline code` and ```code blocks```
- * - [links](url)
- * - $$...$$ block math and $...$ inline math
- * - # headers (h1 through h4)
- * - > blockquotes
- * - - unordered lists and 1. ordered lists
- * - --- horizontal rules
- *
- * Returns an array of React Native Text/View elements.
- */
 export function renderMarkdownContent(
   content: string,
   renderColors: ColorScheme = defaultColors,
@@ -545,10 +462,6 @@ export function renderMarkdownContent(
     } else if (match[4] !== undefined) {
       const codeContent = match[4].trim();
       const fenceLanguage = match[3];
-      // The fence language used to be handed to the tokenizer and then thrown
-      // away, so a reader could never tell what a block was. It is now the
-      // card's header label; an unlabelled fence reads "Plain text" rather
-      // than leaving the slot blank.
       const languageLabel =
         fenceLanguage && fenceLanguage.trim().length > 0 ? fenceLanguage : 'Plain text';
       const codeTokens = tokenizeCode(codeContent, fenceLanguage);
@@ -556,8 +469,6 @@ export function renderMarkdownContent(
         <View
           key={`code-${keyCounter++}`}
           style={{
-            // The elevated fill alone separates the card from the bubble —
-            // the old 1px border double-drew that edge (PAR-M40).
             backgroundColor: renderColors.surfaceHover,
             borderRadius: 8,
             marginVertical: 6,

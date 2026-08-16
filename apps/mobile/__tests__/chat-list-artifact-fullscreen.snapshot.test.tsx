@@ -1,19 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Snapshot tests for:
- *  - ConversationItem (avatar circle + unread dot polish, round-19)
- *  - ArtifactFullScreen (Refresh button, round-19)
- *
- * Locks the rendered RN tree so visual regressions in these components
- * fire a diff on future changes.
- */
 
 import React from 'react';
 import { render } from '@testing-library/react-native';
-
-// ---------------------------------------------------------------------------
-// Shared mocks
-// ---------------------------------------------------------------------------
 
 jest.mock('@/src/ui/theme', () => {
   const colors = {
@@ -33,9 +21,6 @@ jest.mock('@/src/ui/theme', () => {
     agentSuccess: '#22c55e',
     agentWarning: '#fbbf24',
     purple: '#a78bfa',
-    // Present in src/ui/theme/tokens.ts for every palette. Omitting them here
-    // made components that moved off hardcoded rgba onto these tokens render
-    // `color: undefined` in snapshots — a mock gap, not a product bug.
     white: '#fff',
     scrim: 'rgba(0,0,0,0.6)',
   };
@@ -71,7 +56,6 @@ jest.mock('lucide-react-native', () => {
     Image: factory('image'),
     FileText: factory('file-text'),
     BarChart3: factory('bar-chart'),
-    // new icons added for parity work (preview/source toggle + download)
     Eye: factory('eye'),
     Code: factory('code'),
     Download: factory('download'),
@@ -167,10 +151,6 @@ jest.mock('@/src/features/chat/components/GeneratedFileCard', () => ({
   GeneratedFileCard: jest.fn().mockReturnValue(null),
 }));
 
-// ---------------------------------------------------------------------------
-// ConversationItem snapshots
-// ---------------------------------------------------------------------------
-
 import { ConversationItem } from '../src/features/sidebar/components/ConversationItem';
 import type { ConversationSummary } from '../types/chat';
 
@@ -204,10 +184,6 @@ describe('ConversationItem snapshots', () => {
     expect(toJSON()).toMatchSnapshot();
   });
 });
-
-// ---------------------------------------------------------------------------
-// ArtifactFullScreen snapshots
-// ---------------------------------------------------------------------------
 
 import { ArtifactFullScreen } from '../src/features/chat/components/ArtifactFullScreen';
 import type { Artifact } from '../types/chat';

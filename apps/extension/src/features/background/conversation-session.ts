@@ -23,13 +23,11 @@ interface ConversationOwnerStore {
 
 export interface ClaimedConversationOwner {
   conversationId: string;
-  /** Existing conversation used only to seed a newly-created window owner. */
   seedConversationId?: string;
 }
 
 export interface SelectedConversationOwner {
   conversationId: string;
-  /** True only when another live scope already owns the selected conversation. */
   forked: boolean;
 }
 
@@ -70,9 +68,6 @@ function normalizeOwnerStore(value: unknown): ConversationOwnerStore {
   const owners: Record<string, ConversationOwnerRecord> = {};
   const rawOwners = candidate['owners'] as Record<string, unknown>;
   let scanned = 0;
-  // Avoid Object.entries(): a hostile/corrupt session record can contain far
-  // more keys than Chrome will ever retain, and materializing them all defeats
-  // the write-side cap before validation even starts.
   for (const scope in rawOwners) {
     if (!Object.prototype.hasOwnProperty.call(rawOwners, scope)) continue;
     if (scanned >= MAX_SESSION_OWNER_SCAN) break;
@@ -144,8 +139,6 @@ async function resolveLiveWindowScopes(): Promise<ReadonlySet<string> | null> {
       ),
     );
   } catch {
-    // Failing closed is safer than stealing a conversation from a window whose
-    // liveness Chrome could not establish.
     return null;
   }
 }
@@ -189,9 +182,6 @@ export async function claimConversationOwner(
   }
 
   return mutateOwners(async (store) => {
-    // Window liveness is sampled while the owner lock is held. Taking this
-    // snapshot before entering the serialized mutation allowed a queued claim
-    // from a newly-created window to be pruned by an older snapshot.
     const liveWindowScopes = await resolveLiveWindowScopes();
     pruneClosedWindowOwners(store, liveWindowScopes);
     const existing = store.owners[scope];
@@ -213,8 +203,6 @@ export async function claimConversationOwner(
             candidate.conversationId === seedConversationId,
         )
       : false;
-    // Adopt an unowned seed directly. Only a real live-window collision needs
-    // a new id and a durable seeded copy.
     const conversationId =
       seedConversationId && !seedHasLiveOwner ? seedConversationId : createBrowserConversationId();
     store.owners[scope] = { conversationId, owner: { ...owner }, touchedAt: Date.now() };
@@ -240,11 +228,6 @@ export async function replaceConversationOwner(
   });
 }
 
-/**
- * Make a selected history record the current scope's owner without turning a
- * read into an unconditional copy. A new branch is allocated only when another
- * live Chrome window already owns that exact conversation.
- */
 export async function claimSelectedConversationOwner(
   scope: string,
   owner: ManagedCloudOwner,
@@ -257,8 +240,6 @@ export async function claimSelectedConversationOwner(
   }
 
   return mutateOwners(async (store) => {
-    // Query while serialized with the store read and write. Otherwise a stale
-    // pre-lock snapshot can erase an owner that won an earlier queued claim.
     const liveWindowScopes = await resolveLiveWindowScopes();
     pruneClosedWindowOwners(store, liveWindowScopes);
     const conflictingOwner = Object.entries(store.owners).some(
@@ -290,10 +271,6 @@ export async function assignConversationOwner(
   });
 }
 
-/**
- * Roll back a stale async history claim without overwriting a newer New Chat
- * or restore claim that already won the same scope.
- */
 export async function restoreConversationOwnerIfCurrent(
   scope: string,
   owner: ManagedCloudOwner,

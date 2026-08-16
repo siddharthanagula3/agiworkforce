@@ -1,19 +1,5 @@
 import { waitForDesktopShell } from '../support/desktop-shell';
 
-/**
- * Window-size layout matrix on the real native window.
- *
- * tauri.conf.json declares min 1000×700 / default 1400×850. Each size asserts
- * the structural invariants a user notices instantly when they break:
- *   - the document never scrolls horizontally,
- *   - the composer (or an onboarding/auth entry point) stays visible,
- *   - no fixed shell control lands outside the viewport,
- *   - the sidebar rail stays within its declared widths.
- *
- * A seeded resize fuzz pass then walks pseudo-random sizes in the supported
- * range with the same invariants — boundary bugs live between the named sizes.
- */
-
 const NAMED_SIZES: Array<[number, number, string]> = [
   [1000, 700, 'configured minimum'],
   [1001, 701, 'minimum + 1px boundary'],
@@ -23,7 +9,6 @@ const NAMED_SIZES: Array<[number, number, string]> = [
   [1920, 1080, 'full hd'],
 ];
 
-/** Deterministic LCG so failures reproduce from the logged seed. */
 function seededSizes(seed: number, count: number): Array<[number, number]> {
   let state = seed;
   const next = () => {
@@ -58,7 +43,7 @@ async function probeLayout(): Promise<LayoutProbe> {
     const offscreenControls: string[] = [];
     for (const el of Array.from(document.querySelectorAll('button, [role="tab"], textarea'))) {
       const rect = el.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) continue; // hidden is fine
+      if (rect.width === 0 || rect.height === 0) continue;
       if (
         rect.right < 0 ||
         rect.bottom < 0 ||
@@ -103,7 +88,6 @@ async function resizeTo(width: number, height: number): Promise<void> {
     width,
     height,
   );
-  // Let the layout engine settle before probing.
   await browser.pause(350);
 }
 
@@ -140,8 +124,6 @@ describe('layout · window-size matrix on the real native window', () => {
     for (const [width, height] of seededSizes(seed, 12)) {
       await resizeTo(width, height);
       const probe = await probeLayout();
-      // expect-webdriverio's expect takes exactly one argument at runtime, so
-      // collect labeled violations and assert once on the aggregate.
       const context = `${width}×${height} (seed ${seed})`;
       if (probe.horizontalOverflow) violations.push(`horizontal overflow at ${context}`);
       if (!probe.composerVisible) violations.push(`composer lost at ${context}`);

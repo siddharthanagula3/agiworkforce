@@ -1,24 +1,8 @@
-/**
- * /api/me/routing-preferences endpoint tests.
- *
- * Covers:
- *  - GET returns the stored routing_preferences object (or {} if missing)
- *  - PUT validates the body against RoutingPreferencesSchema
- *  - PUT 404s when no profile row matches (defensive — handle_new_user trigger
- *    should normally guarantee a row, but we surface the failure explicitly
- *    instead of returning a silent 200)
- *  - PUT 401 when unauthenticated
- *  - PUT requires CSRF
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('server-only', () => ({}));
-
-// ---------------------------------------------------------------------------
-// Hoisted mocks
-// ---------------------------------------------------------------------------
 
 const mockClerkAuth = vi.fn(() => Promise.resolve({ userId: 'user-123' }));
 
@@ -47,18 +31,12 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Neon DB mock
-// ---------------------------------------------------------------------------
-
 const mockQuery = vi.fn();
 const mockExecute = vi.fn();
 
 vi.mock('@/lib/server/neon-db', () => ({
   getNeonDb: vi.fn(() => ({
     query: (sql: string, params: unknown[]) => {
-      // assertAccountActive() in getClerkAuthUser issues its own account_status
-      // lookup ahead of the route's real query; keep it out of mockQuery's queue.
       if (typeof sql === 'string' && sql.includes('account_status')) {
         return Promise.resolve([]);
       }
@@ -77,29 +55,19 @@ const mockUser = {
 };
 void mockUser;
 
-// Import after mocks
 import { GET, PUT } from '@/app/api/me/routing-preferences/route';
 
 beforeEach(() => {
   vi.clearAllMocks();
 
-  // Default: Clerk auth succeeds
   mockClerkAuth.mockResolvedValue({ userId: 'user-123' });
 
-  // Default GET: returns a row with routing_preferences
   mockQuery.mockResolvedValue([{ routing_preferences: {} }]);
 
-  // Default PUT: 1 row updated
   mockExecute.mockResolvedValue(1);
 });
 
 describe('GET /api/me/routing-preferences', () => {
-  // Cookie-session request: no Authorization header. This suite mocks
-  // @clerk/nextjs/server's auth() (the cookie path) but never mocks
-  // @clerk/backend's verifyToken, so a placeholder Bearer header here would
-  // be a present-but-unverifiable credential — getClerkAuthUser now rejects
-  // that outright rather than falling back to the mocked cookie session
-  // (WEB-AUTH-BEARER-COOKIE-PRINCIPAL-DIVERGENCE-01).
   function buildSessionRequest() {
     return new NextRequest('http://localhost/api/me/routing-preferences', {
       method: 'GET',
@@ -147,7 +115,6 @@ describe('GET /api/me/routing-preferences', () => {
 });
 
 describe('PUT /api/me/routing-preferences', () => {
-  // See buildSessionRequest() above — same rationale, no Authorization header.
   function buildPutRequest(body: unknown) {
     return new NextRequest('http://localhost/api/me/routing-preferences', {
       method: 'PUT',
@@ -229,7 +196,6 @@ describe('PUT /api/me/routing-preferences', () => {
   });
 
   it('rejects empty body with 400 (no preferences specified is technically valid {} — but malformed JSON is not)', async () => {
-    // Empty {} is valid (all fields optional) — should succeed.
     const response = await PUT(buildPutRequest({}));
     expect(response.status).toBe(200);
   });

@@ -21,36 +21,6 @@ export const metadata = buildMetadata({
   path: '/dpa',
 });
 
-/*
- * DATA PROCESSING ADDENDUM — PUBLISHED IN FULL
- *
- * This page previously described a DPA instead of being one. A reviewer had to
- * email to learn the controller/processor split and could not read the annexes
- * before signing. Everything below is now on the page.
- *
- * TWO RULES FOR ANYONE EDITING THIS FILE
- *
- * 1. The role allocation is NOT flat. It differs per trust boundary, and the
- *    old flat clause ("you are the controller; we are the processor for any
- *    personal data you submit") was wrong in two of the three cases:
- *      - Local: nothing reaches AGI, so no processing by AGI occurs at all.
- *      - BYOK: the request goes from the customer's client to the provider on
- *        the customer's key, so the provider is the customer's processor, not
- *        AGI's sub-processor. /subprocessors already says exactly this.
- *      - Managed Cloud: AGI is the processor. This is the only case the old
- *        clause described correctly.
- *    Signing the flat clause would have AGI accepting processor obligations for
- *    data it never receives.
- *
- * 2. Annex II lists only measures this repository proves, and names the limits
- *    in the same table. Do not restore "encryption at rest, sandboxed tool
- *    execution, RLS-enforced access" as accomplished fact: encryption at rest is
- *    a vendor property nothing here configures, sandboxed execution is operator-
- *    gated and off by default (lib/e2b/gate.ts), and database RLS is enforced on
- *    the user-scoped sync paths rather than universally (db/neon/0037 states the
- *    caveat itself).
- */
-
 const ANNEX_I: { k: string; v: string }[] = [
   {
     k: 'Subject matter',
@@ -167,11 +137,6 @@ const ANNEX_II: { k: string; v: string; limit: string }[] = [
   },
 ];
 
-/**
- * Section list for the contents block. Must stay identical to the rendered
- * eyebrows — they are one piece of copy, not two, and drift makes the contents
- * describe a document that is not there.
- */
 const SECTIONS = [
   '01 &middot; Parties, scope, and precedence',
   '02 &middot; Definitions',

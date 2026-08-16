@@ -108,13 +108,6 @@ class ErrorTrackingService {
     }
   }
 
-  /**
-   * TRUST-BOUNDARY: in a private trust boundary (Local OR BYOK) the desktop must
-   * stay silent — never send crash/error reports regardless of the consent toggle.
-   * Delegates to the shared `isPrivateTrustBoundary` (fail-closed) so the predicate
-   * stays in one place; a `=== 'local'` check previously leaked Sentry telemetry
-   * in BYOK mode.
-   */
   private isPrivateMode(): boolean {
     return isPrivateTrustBoundary();
   }
@@ -127,8 +120,6 @@ class ErrorTrackingService {
       if (config.enabled) {
         this.initialize();
       } else {
-        // Actively tear down so already-installed Sentry integrations stop
-        // auto-capturing errors the moment the user turns reporting off.
         try {
           void Sentry.close();
         } catch {
@@ -322,9 +313,8 @@ export function setupGlobalErrorHandler(): (() => void) | undefined {
   const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
     const errorMessage = String(event.reason);
 
-    // Suppress known Tauri internal errors that occur during cleanup
     if (errorMessage.includes('listeners[eventId]')) {
-      event.preventDefault(); // Prevent the error dialog from showing
+      event.preventDefault();
       return;
     }
 

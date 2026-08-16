@@ -1,13 +1,3 @@
-/**
- * Update-file hunk applicator.
- *
- * Lifted from OpenClaw `src/agents/apply-patch-update.ts` (MIT, Peter Steinberger).
- * See THIRD_PARTY_LICENSES.md at repo root.
- *
- * Adaptation: takes a UTF-8 string contents directly instead of reading via
- * a bridge — that means the caller must read first. This keeps the matcher
- * pure and easy to unit-test.
- */
 
 import type { UpdateFileChunk } from './types';
 
@@ -86,8 +76,6 @@ function applyReplacements(
   replacements: Array<[number, number, string[]]>,
 ): string[] {
   const result = [...lines];
-  // Apply from the end so earlier-index replacements aren't shifted by later
-  // splices. `[...arr].reverse()` instead of `toReversed()` for ES2022 compat.
   const reversed = [...replacements].reverse();
   for (const [startIndex, oldLen, newLines] of reversed) {
     for (let i = 0; i < oldLen; i += 1) {
@@ -123,8 +111,6 @@ function seekSequence(
     return null;
   }
 
-  // Try increasingly relaxed match strategies: exact → trimEnd → trim →
-  // unicode-punctuation-normalized.
   for (let i = searchStart; i <= maxStart; i += 1) {
     if (linesMatch(lines, pattern, i, (value) => value)) return i;
   }

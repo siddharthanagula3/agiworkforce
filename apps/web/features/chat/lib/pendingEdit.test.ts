@@ -30,8 +30,6 @@ describe('planEditRollback', () => {
 
 describe('planRegenerateRollback', () => {
   it('rolls back from the preceding user message (not the assistant) so re-send does not duplicate', () => {
-    // Regenerate the LAST assistant (a2). The rollback must include u2 so that
-    // re-sending its content replaces it instead of adding a second u2.
     const plan = planRegenerateRollback(msgs, 'a2');
     expect(plan).toEqual({ userIndex: 2, rollbackIds: ['u2', 'a2'] });
   });

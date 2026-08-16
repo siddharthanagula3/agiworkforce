@@ -14,7 +14,6 @@ const COOKIE_OPTS = {
   maxAge: 60 * 60 * 24 * 7, // 7 days
 };
 
-// JWTs are typically 200-2000 chars; refresh tokens similar. 4 KB is a generous cap that rejects junk.
 const TOKEN_MAX_BYTES = 4096;
 
 const BodySchema = z.object({
@@ -41,11 +40,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: false, error: 'No token provided' }, { status: 400 });
   }
 
-  // Validate the access token is a real Clerk JWT before writing it as a session cookie.
-  // This blocks forged-auth-cookie attacks that could arise from a valid CSRF token + this
-  // endpoint being reached with an attacker-supplied JWT.
-  // Only ever set from a signature-VERIFIED claim (never from a decoded
-  // payload) so the audit row cannot be attributed to a forged subject.
   let verifiedUserId: string | null = null;
 
   if (parsed.token) {
@@ -69,9 +63,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // Clerk handles token rotation internally; a standalone refreshToken without
-  // an access token is not a supported pattern. If only a refreshToken is
-  // provided, reject rather than silently storing an unvalidated cookie.
   if (parsed.refreshToken && !parsed.token) {
     return NextResponse.json(
       { ok: false, error: 'refreshToken alone is not accepted; provide the access token' },
@@ -90,9 +81,6 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // Audit: successful sign-in. Only the verified subject and the transport are
-  // recorded — the raw Clerk JWT in `parsed.token` must never reach a log row.
-  // recordAuditEvent never throws, so a failed write cannot fail the sign-in.
   await recordAuditEvent({
     userId: verifiedUserId,
     eventType: 'login',

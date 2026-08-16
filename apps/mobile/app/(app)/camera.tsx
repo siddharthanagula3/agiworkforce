@@ -21,10 +21,6 @@ import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 
-/**
- * CameraScreen — Full-screen camera capture screen for vision AI analysis.
- * Flow: Camera view → Capture → Preview with text input → Send to new conversation.
- */
 export default function CameraScreen() {
   const router = useRouter();
   const c = useThemeColors();
@@ -119,7 +115,6 @@ export default function CameraScreen() {
     setCameraSlow(false);
   }, []);
 
-  // Permission not yet determined
   if (!permission) {
     return (
       <View style={styles.centered}>
@@ -128,7 +123,6 @@ export default function CameraScreen() {
     );
   }
 
-  // Permission denied
   if (!permission.granted) {
     return (
       <SafeAreaView style={styles.permissionContainer}>
@@ -171,7 +165,6 @@ export default function CameraScreen() {
     );
   }
 
-  // Post-capture preview + prompt
   if (capturedUri) {
     return (
       <KeyboardAvoidingView
@@ -237,7 +230,6 @@ export default function CameraScreen() {
     );
   }
 
-  // Live camera view
   return (
     <View style={styles.flex}>
       <CameraView
@@ -455,7 +447,6 @@ function createStyles(colors: ColorScheme) {
       borderRadius: 28,
       backgroundColor: colors.cameraOverlayText,
     },
-    // Preview styles
     previewContainer: {
       flex: 1,
       backgroundColor: colors.black,

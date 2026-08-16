@@ -10,7 +10,6 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-// Re-export common utilities from shared package
 export {
   formatBytes,
   formatNumber,

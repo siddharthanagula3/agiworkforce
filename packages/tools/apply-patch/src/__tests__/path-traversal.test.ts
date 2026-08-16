@@ -1,12 +1,3 @@
-/**
- * Regression tests for the `workspaceOnly` enforcement in `applyPatch()`.
- *
- * Background: prior versions of this package shipped `workspaceOnly` as a
- * type-only flag that no code ever read — an LLM-supplied patch could write
- * `../escape.txt` and the bridge would happily resolve it outside the
- * workspace. These tests pin the runtime guard so future refactors don't
- * silently regress the boundary.
- */
 
 import { mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -22,9 +13,6 @@ let workspace: string;
 let outsideAnchor: string;
 
 beforeEach(async () => {
-  // Two sibling tmp dirs: `workspace` (the cwd) and `outsideAnchor`
-  // (a sibling we use to verify nothing landed there). The escape attempts
-  // target paths that resolve relative to `workspace` but climb past it.
   const root = await mkdtemp(join(tmpdir(), 'apply-patch-traversal-'));
   workspace = resolve(root, 'workspace');
   outsideAnchor = resolve(root, 'outside');
@@ -37,7 +25,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  // Best-effort cleanup; tests share /tmp so we do NOT recurse outside.
   if (workspace && existsSync(workspace)) {
     await rm(resolve(workspace, '..'), { recursive: true, force: true });
   }
@@ -55,7 +42,6 @@ describe('applyPatch workspaceOnly enforcement', () => {
     await expect(applyPatch(patch, { cwd: workspace })).rejects.toBeInstanceOf(
       WorkspaceEscapeError,
     );
-    // Confirm no file landed in the sibling directory.
     expect(existsSync(resolve(outsideAnchor, '..', 'escape.txt'))).toBe(false);
   });
 
@@ -89,7 +75,6 @@ describe('applyPatch workspaceOnly enforcement', () => {
   });
 
   it('rejects Update File with movePath that escapes', async () => {
-    // First seed a legitimate file inside the workspace.
     const seed = ['*** Begin Patch', '*** Add File: target.txt', '+hello', '*** End Patch'].join(
       '\n',
     );
@@ -137,7 +122,6 @@ describe('applyPatch workspaceOnly enforcement', () => {
   });
 
   it('allows opt-out with workspaceOnly: false (caller takes responsibility)', async () => {
-    // The caller-supplied bridge enforces its own boundary in this mode.
     const patch = [
       '*** Begin Patch',
       '*** Add File: still-inside.txt',
@@ -150,11 +134,6 @@ describe('applyPatch workspaceOnly enforcement', () => {
   });
 
   it('rejects symlink escape (workspace contains symlink pointing outside)', async () => {
-    // Plant a symlink INSIDE the workspace that points OUTSIDE. A patch
-    // targeting `escape-link/leak.txt` is lexically inside `workspace`
-    // (no `..`, no absolute path) but realpath() resolves it under
-    // `outsideAnchor`. Without canonicalization the bridge would happily
-    // write to /tmp/...outside/leak.txt; with realpath it must reject.
     const linkSource = resolve(workspace, 'escape-link');
     await symlink(outsideAnchor, linkSource, 'dir');
 
@@ -173,8 +152,6 @@ describe('applyPatch workspaceOnly enforcement', () => {
 
   it('rejects path with `..` after a sibling-prefix (no partial-name aliasing)', async () => {
     // If the workspace lives at `/tmp/xxx/workspace`, an attacker might try
-    // `../workspace-evil/file.txt` hoping a naive `startsWith(cwd)` would
-    // match. We append `path.sep` so this MUST reject.
     const patch = [
       '*** Begin Patch',
       '*** Add File: ../workspace-evil/file.txt',
@@ -204,9 +181,6 @@ describe('applyPatch workspaceOnly enforcement', () => {
   });
 
   it('blocks an LLM-supplied custom FS bridge from being used to escape', async () => {
-    // Even if a caller passes a custom FSBridge that would ignore boundaries,
-    // the workspaceOnly check runs BEFORE the bridge is invoked. So a
-    // malicious patch path is rejected without ever touching the bridge.
     const writes: string[] = [];
     const malicious: FSBridge = {
       async readFile() {

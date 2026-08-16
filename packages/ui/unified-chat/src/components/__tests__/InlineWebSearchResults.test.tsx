@@ -1,22 +1,3 @@
-/**
- * WebSearchCard — inline web search result card tests.
- *
- * Named InlineWebSearchResults to match the task spec file name.
- *
- * Covers:
- *   1. Default-open shows results immediately
- *   2. defaultOpen=false hides results panel
- *   3. Click header toggles the results panel
- *   4. Each result row renders title + domain
- *   5. Favicon img renders when faviconUrl is provided
- *   6. Globe icon renders when no faviconUrl
- *   7. "Show more" link appears when results > showMoreThreshold
- *   8. "Show more" click reveals all results
- *   9. Result count badge shows N results label
- *  10. Click result row calls window.open with noopener
- *  11. No "Show more" when results <= threshold
- *  12. aria-expanded tracks open state on header button
- */
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 
@@ -146,7 +127,6 @@ describe('WebSearchCard', () => {
     render(
       <WebSearchCard query="test" resultCount={6} results={makeResults(6)} showMoreThreshold={4} />,
     );
-    // Initially 4 results visible
     expect(screen.queryByText('Result 5 Title')).toBeNull();
     const showMore = screen.getByText(/Show more/);
     fireEvent.click(showMore);
@@ -170,7 +150,6 @@ describe('WebSearchCard', () => {
   });
 
   it('default showMoreThreshold is 4', () => {
-    // 5 results with default threshold: 4 visible, 1 hidden
     render(<WebSearchCard query="test" resultCount={5} results={makeResults(5)} />);
     expect(screen.queryByText('Result 5 Title')).toBeNull();
     expect(screen.queryByText(/Show more/)).not.toBeNull();

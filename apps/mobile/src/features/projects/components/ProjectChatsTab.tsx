@@ -1,9 +1,3 @@
-/**
- * ProjectChatsTab — shows conversations belonging to this project
- * and provides a new-chat CTA.
- *
- * Conversations are filtered by projectId from the local store.
- */
 
 import { useCallback, useMemo } from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
@@ -67,9 +61,6 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
   const colors = useThemeColors();
   const router = useRouter();
 
-  // Mode-aware: cloud projects list cloud conversations and activate via the
-  // cloud project store; local does the same against the local stores. The two
-  // namespaces never cross.
   const isCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const localConversations = useChatMessageStore((s) => s.conversations);
   const cloudConversations = useChatCloudMessageStore((s) => s.conversations);
@@ -85,8 +76,6 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
   const setCloudActive = useCloudProjectStore((s) => s.setActiveCloudProject);
 
   const handleNewChat = useCallback(() => {
-    // Activate the project so the chat tab picks it up, then navigate to the
-    // main chat surface. There is no dedicated chat/new route in v1.
     if (isCloud) setCloudActive(projectId);
     else setLocalActive(projectId);
     router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);

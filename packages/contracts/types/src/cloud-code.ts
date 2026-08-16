@@ -1,10 +1,3 @@
-/**
- * Durable managed-cloud Code session contracts shared by the Web UI and API.
- *
- * These records describe the product-owned session journal. Provider sandbox
- * identifiers and credentials are deliberately excluded from the client wire
- * format.
- */
 
 export const CLOUD_CODE_NETWORK_ACCESS = ['none', 'trusted', 'full'] as const;
 export type CloudCodeNetworkAccess = (typeof CLOUD_CODE_NETWORK_ACCESS)[number];
@@ -44,7 +37,6 @@ export interface CloudCodeTerminalEntry {
 
 export interface CloudCodeAvailability {
   deploymentEnabled: boolean;
-  /** False when the deployment has not applied the Code persistence migration. */
   storageReady: boolean;
   planEntitled: boolean;
   planTier: string;
@@ -61,7 +53,6 @@ export interface CreateCloudCodeSessionInput {
   title: string;
   repositoryUrl?: string | null;
   networkAccess: CloudCodeNetworkAccess;
-  /** Required true when networkAccess is "full"; enforced at the API boundary. */
   fullNetworkAcknowledged?: boolean;
 }
 

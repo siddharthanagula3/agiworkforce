@@ -1,4 +1,3 @@
-// apps/desktop/src/features/chat/ToolLabel.tsx
 import { motion } from 'framer-motion';
 import {
   FileText,
@@ -35,34 +34,25 @@ import { useIsMounted } from '../../hooks/useIsMounted';
 export type { ToolLabelEntry };
 
 const ICON_MAP: Record<string, React.ElementType> = {
-  // Filesystem
   Read: FileText,
   Write: FileText,
   Edit: Edit3,
   MultiEdit: Edit3,
   ApplyPatch: Edit3,
   LS: FolderOpen,
-  // Search
   Search: Search,
   Grep: Search,
   CodeSearch: Code,
   Glob: FolderOpen,
-  // Terminal
   Bash: Terminal,
-  // Web
   WebSearch: Globe,
   WebFetch: Globe,
-  // Data
   Memory: Database,
-  // Git
   Git: GitBranch,
-  // Media
   ImageGen: Image,
   VideoGen: Video,
-  // Interactive
   Question: HelpCircle,
   TodoWrite: ListTodo,
-  // Browser / UI automation — display names from toolDisplayNames.ts
   Click: MousePointerClick,
   Clicking: MousePointerClick,
   Browsing: Globe,
@@ -71,7 +61,6 @@ const ICON_MAP: Record<string, React.ElementType> = {
   'Take screenshot': Image,
   'Scroll page': Globe,
   'Type text': Edit3,
-  // MCP fallback display names
   'Run database query': Database,
   'List tables': Database,
   'Read file': FileText,
@@ -83,7 +72,6 @@ const ICON_MAP: Record<string, React.ElementType> = {
   'Search the web': Globe,
   'Create image': Image,
   'Create video': Video,
-  // MCP source indicator
   MCP: Box,
 };
 
@@ -107,8 +95,6 @@ interface DiffViewProps {
 function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
   const [showAll, setShowAll] = useState(false);
   const [rewinding, setRewinding] = useState(false);
-  // Conversation may scroll the message off-screen / virtualizer unmounts
-  // this label while the rewind API call is in flight. Guard setRewinding.
   const isMounted = useIsMounted();
 
   const lines = diff.split('\n');
@@ -189,7 +175,6 @@ function DiffView({ diff, checkpointId, onRewind }: DiffViewProps) {
   );
 }
 
-/** Terminal output block — monospace pre with dark bg, max-height + scroll. */
 function TerminalOutputView({ output }: { output: string }) {
   const trimmed = output.trim();
   if (!trimmed) return null;
@@ -204,7 +189,6 @@ function TerminalOutputView({ output }: { output: string }) {
   );
 }
 
-/** File content preview — first 10 lines of result_preview text. */
 function FilePreviewView({ content }: { content: string }) {
   const lines = content.split('\n');
   const preview = lines.slice(0, 10).join('\n');
@@ -221,7 +205,6 @@ function FilePreviewView({ content }: { content: string }) {
   );
 }
 
-/** Screenshot thumbnail — renders a base64 image in a small contained box. */
 function ScreenshotView({ imageBase64 }: { imageBase64: string }) {
   return (
     <div className="mt-1.5 rounded-sm border border-white/10 overflow-hidden inline-block max-w-full">
@@ -242,14 +225,11 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
 
   const [outputExpanded, setOutputExpanded] = useState(false);
 
-  // Pull live stream output for running tools (terminal output buffer)
   const activeStream = useToolStore((s) => s.activeToolStreams.get(entry.id));
-  // Pull screenshots matching this tool id
   const screenshot = useToolStore((s) =>
     s.screenshots.find((sc) => sc.id === entry.id || sc.action === entry.id),
   );
 
-  // Classify tool type
   const isEditTool = DIFF_EDIT_NAMES.has(entry.displayName);
   const isTerminalTool = TERMINAL_NAMES.has(entry.displayName);
   const isReadTool = READ_FILE_NAMES.has(entry.displayName);
@@ -258,24 +238,20 @@ export function ToolLabel({ entry }: { entry: ToolLabelEntry }) {
   const resultPreview = entry.resultPreview;
   const checkpointId = entry.checkpointId;
 
-  // Terminal: use live stream buffer while running, resultPreview when done
   const terminalOutput: string | undefined = isTerminalTool
     ? isRunning
       ? activeStream?.outputBuffer || undefined
       : resultPreview || undefined
     : undefined;
 
-  // Diff: Edit/Write tools show diff from resultPreview
   const diffContent: string | undefined =
     isEditTool && !isRunning && resultPreview ? resultPreview : undefined;
 
-  // File preview: Read tools show first lines of resultPreview (skip if it looks like a diff)
   const filePreviewContent: string | undefined =
     isReadTool && !isRunning && resultPreview && !resultPreview.startsWith('---')
       ? resultPreview
       : undefined;
 
-  // Screenshot: from store or resultPreview for screenshot tools
   const screenshotBase64: string | undefined = isScreenshotTool
     ? (screenshot?.imageBase64 ?? resultPreview ?? undefined)
     : undefined;

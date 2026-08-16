@@ -64,10 +64,6 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
   const nowIso = new Date().toISOString();
   const result = await db.transaction<RotationResult>(async (tx) => {
     const rows = await tx.query<RefreshTokenRow>(
-      // The profile join is the account-erasure check: a device credential
-      // lives for 30 days and rotates itself, so without it a deleted account
-      // kept minting access tokens for as long as the desktop app kept asking.
-      // FOR UPDATE OF t: the nullable side of an outer join cannot be locked.
       `SELECT t.id, t.family_id, t.user_id, t.user_email, t.expires_at, t.used_at, t.revoked_at,
               p.id IS NULL AS owner_missing,
               p.deletion_scheduled_for AS owner_deletion_scheduled_for,
@@ -82,10 +78,6 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
     const current = rows[0];
     if (!current) return { kind: 'invalid' };
 
-    // Erased or scheduled for erasure: kill the whole family, not just this
-    // token, so no sibling credential survives the purge. Deletion has no
-    // self-serve cancel (see DELETE /api/user/delete-account); support
-    // reversal restores access through a fresh sign-in.
     if (current.owner_missing || current.owner_deletion_scheduled_for) {
       await tx.execute(
         `UPDATE device_refresh_tokens
@@ -114,9 +106,6 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
       return { kind: 'expired' };
     }
 
-    // Device sessions outlive browser sessions. Revoke the family when the
-    // durable account record does not name the exact live policy revision, so
-    // an already-linked Desktop/CLI cannot bypass a newly published clickwrap.
     if (current.owner_terms_version !== CURRENT_TERMS_VERSION || !current.owner_terms_accepted_at) {
       await tx.execute(
         `UPDATE device_refresh_tokens

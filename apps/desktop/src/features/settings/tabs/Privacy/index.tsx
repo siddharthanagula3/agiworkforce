@@ -28,11 +28,6 @@ const LazyAllowedDirectoriesSettings = lazy(() =>
 const LazyAnalyticsSettings = lazy(() =>
   import('../../AnalyticsSettings').then((m) => ({ default: m.AnalyticsSettings })),
 );
-// The governance workspace this section pointed at never rendered: its only
-// host was DynamicSidecar, which was reachable solely from the orphaned
-// AppLayout, so openSidecar('governance') set store state nothing read and
-// "Open Workspace" did nothing at all. The dashboard itself is complete, so it
-// is shown here on demand instead of behind a destination that does not exist.
 const LazyGovernanceDashboard = lazy(() =>
   import('@/features/governance/GovernanceDashboard').then((m) => ({
     default: m.GovernanceDashboard,

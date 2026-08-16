@@ -1,21 +1,3 @@
-/**
- * Route-level dispatch proof for the OpenAI-compatible providers that have a
- * live, selectable Managed Web route. Providers without one are rejected by
- * canonical registry admission before adapter construction.
- * apps/web/__tests__/api/llm-v1-chat-completions-routing.test.ts already
- * applies to Anthropic/Google/OpenAI: mock each package's create*Adapter,
- * send an explicit model for that provider through the REAL route.ts POST
- * handler, and assert the response content came from THAT provider's own
- * mocked stream specifically (a distinct canned string per provider) --
- * proving route.ts's `ADAPTER_PROVIDERS[provider]` entry is really reached
- * end-to-end (adapter construction reading the right env var, `buildChatRequest`,
- * `drainToLlmResponse`, response-builder.ts), not just present in the table.
- *
- * A separate file from the main routing test rather than 9 more mocks
- * crammed into it: that file's scope is Pro-tier routing/classification
- * metadata (Task #21); this one is purely "does ADAPTER_PROVIDERS[X] wire
- * up," one assertion per provider.
- */
 
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -45,9 +27,6 @@ const PERPLEXITY_TOOLLESS_MODEL_ID = (() => {
   return model.id;
 })();
 
-// GOV-3: route.ts now acquires a per-plan concurrent-turn slot from this module,
-// so the mock must provide it or the handler crashes on an undefined import.
-// Always-admit + no-op release keeps every existing assertion unchanged.
 const admitManagedTurnSlot = () => ({
   admitted: true,
   limit: null,
@@ -88,8 +67,6 @@ vi.mock('@/lib/cors', () => ({
   withCorsRoute: (handler: (...args: unknown[]) => unknown) => handler,
 }));
 
-// One env key per provider, all faked -- adapter-factory.ts's buildCompatAdapter
-// reads `${envKeyPrefix}_API_KEY` for each.
 vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => `mock-${key}`),
   getOptionalEnv: vi.fn((key: string) => `mock-${key}`),
@@ -131,8 +108,6 @@ vi.mock('@agiworkforce/providers-perplexity', () =>
   compatAdapterMock('Perplexity', 'Perplexity says hi.'),
 );
 
-// Anthropic/Google/OpenAI aren't under test here but route.ts imports their
-// adapters unconditionally -- mock minimally so the module loads.
 vi.mock('@agiworkforce/providers-anthropic', () => ({
   createAnthropicAdapter: vi.fn(() => ({
     id: 'anthropic',
@@ -226,9 +201,6 @@ vi.mock('@/lib/services/cloud-agent-run-service', async (importOriginal) => ({
   findActiveCloudAgentRunForConversation: workflowRouteMocks.findActive,
 }));
 
-// GOV-7: route.ts moved from loadUserConnectorToolDefs (array) to
-// loadUserConnectorToolCatalog ({ tools, dropped, limit }) so per-plan
-// truncation can be reported. The mock name and its resolved shape follow.
 vi.mock('@/lib/user-connector-tools', () => ({
   loadUserConnectorToolCatalog: workflowRouteMocks.loadConnectorTools,
   makeUserConnectorExecutor: vi.fn(),
@@ -267,9 +239,6 @@ vi.mock('@/lib/services/credit-service', () => ({
   },
 }));
 
-// Quota downgrade still resolves a provider from a canonical model id through
-// this service. Normal route admission derives provider identity from the
-// registry-backed route decision.
 const mockGetProviderFromModel = vi.fn();
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/services/provider-adapter-service')>();
@@ -429,12 +398,6 @@ describe('Managed Web conversation ownership', () => {
   });
 });
 
-/**
- * Transport matrix for a paid agentic turn. The durable Workflow transport is
- * what lets a run outlive the request that started it; the request-scoped
- * inline stream is the fallback, and both must emit the same run headers so a
- * client cannot tell which one it got except by looking for the workflow id.
- */
 describe('Managed Web AGI Work dispatch', () => {
   function arrangePaidAgenticTurn(): void {
     vi.clearAllMocks();
@@ -504,16 +467,13 @@ describe('Managed Web AGI Work dispatch', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('durable');
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBe('wrun_durable_1');
-    // Same run handle either way: reattachment must not depend on transport.
     expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe('run-durable-1');
     expect(workflowRouteMocks.start).toHaveBeenCalledWith(
       expect.objectContaining({ runId: 'run-durable-1', userId: 'user-1' }),
     );
     expect(workflowRouteMocks.loadConnectorTools).toHaveBeenCalledWith('user-1', {
       customConnectorLimit: undefined,
-      // GOV-7: the per-plan ceiling input.
       planTier: 'max',
-      // CON-1: denied tools must be filtered before they are advertised.
       isToolDenied: expect.any(Function),
     });
   });
@@ -539,8 +499,6 @@ describe('Managed Web AGI Work dispatch', () => {
 
     const response = await POST(makeAgiWorkRequest(MINIMAX_MODEL_ID));
 
-    // Nothing was generated or consumed before the start attempt, so the inline
-    // path picks the turn up whole — the user loses detachability, not the turn.
     expect(response.status).toBe(200);
     expect(response.headers.get('X-AGI-Tool-Loop')).toBe('active');
     expect(response.headers.get('X-AGI-Workflow-Run-Id')).toBeNull();
@@ -611,15 +569,12 @@ describe('Managed Web conversation run concurrency guard', () => {
     });
     expect(response.headers.get('X-AGI-Agent-Run-Id')).toBe('run-active-1');
 
-    // The guard keys on the conversation and excludes the caller's own retry.
     expect(workflowRouteMocks.findActive).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ userId: 'user-1', conversationId }),
     );
-    // No second parallel run is created and no workflow is started.
     expect(workflowRouteMocks.createRun).not.toHaveBeenCalled();
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
-    // The reservation made for the rejected turn is refunded, not charged.
     expect(managedUsageMocks.finalize).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: 'failed' }),
     );
@@ -651,8 +606,6 @@ describe('Per-model tools capability gate', () => {
       estimatedCostCents: input.estimatedCostCents,
     }));
     mockGetProviderFromModel.mockReturnValue('perplexity');
-    // If the gate were absent, these would be loaded and shipped to the model,
-    // which cannot do function calling — the provider would reject the request.
     workflowRouteMocks.loadMcpTools.mockResolvedValue([{ name: 'op_tool' }]);
     workflowRouteMocks.loadConnectorTools.mockResolvedValue({
       tools: [{ name: 'gh_tool' }],
@@ -662,12 +615,9 @@ describe('Per-model tools capability gate', () => {
 
     const response = await POST(makeRequest(PERPLEXITY_TOOLLESS_MODEL_ID, undefined, true));
 
-    // The gate skips tool loading entirely for a tools:false model.
     expect(workflowRouteMocks.loadMcpTools).not.toHaveBeenCalled();
     expect(workflowRouteMocks.loadConnectorTools).not.toHaveBeenCalled();
-    // No durable agent workflow is started; it falls through to the standard path.
     expect(workflowRouteMocks.start).not.toHaveBeenCalled();
-    // The request is not rejected by the tools gate (search model still answers).
     expect(response.status).toBe(200);
   });
 });

@@ -1,15 +1,3 @@
-/**
- * Shared workflow types for the AGI Workforce platform.
- *
- * These types define the workflow engine contract used by desktop, web,
- * and mobile surfaces. They describe workflow definitions, nodes, edges,
- * triggers, and execution state.
- *
- * Canonical source: this file.
- * Previously duplicated in:
- *   - apps/desktop/src/types/workflow.ts
- *   - apps/web/types/workflow.ts
- */
 
 export interface WorkflowDefinition {
   id: string;
@@ -206,7 +194,6 @@ export interface WorkflowExecution {
 }
 
 // Note: WorkflowLogData is exported from './tauri' (pre-existing).
-// Import it here for use in WorkflowExecutionLog.
 import type { WorkflowLogData } from './tauri';
 
 export interface WorkflowExecutionLog {

@@ -1,25 +1,3 @@
-/**
- * Cross-language fixture-corpus generator (design §2.1 "same fixture corpus for
- * both implementations"). Run with `pnpm --filter @agiworkforce/licensing
- * generate:fixtures`.
- *
- * Everything here is DETERMINISTIC: keypairs derive from fixed committed seeds
- * and every timestamp derives from a fixed `REFERENCE_NOW_MS`. Re-running
- * regenerates byte-identical signed fixtures, so the corpus a future Rust
- * `agiworkforce-licensing` crate replays stays honest. (The `manifest.json`
- * files emit as `JSON.stringify(..., 2)` and are normalized by the repo's
- * pre-commit prettier hook — the committed prettier form is canonical; a bare
- * re-run may show a whitespace-only manifest diff that `prettier --write`
- * flattens. The signed `.agilicense`/`.agipolicy` bytes never differ.)
- *
- * It writes TWO corpora:
- *   - license fixtures → packages/contracts/licensing/src/__fixtures__/
- *   - org-policy fixtures → packages/contracts/licensing/src/__fixtures__/org-policy/
- *
- * This package owns the Ed25519 signing helpers, signed-policy verifier, and both
- * fixture corpora. Each corpus ships a machine-readable `manifest.json` (the
- * replay contract) plus a README.
- */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -37,23 +15,15 @@ const here = dirname(fileURLToPath(import.meta.url));
 const licenseFixturesDir = join(here, '..', 'src', '__fixtures__');
 const policyFixturesDir = join(here, '..', 'src', '__fixtures__', 'org-policy');
 
-// ---------------------------------------------------------------------------
-// Deterministic keys (seeds are readable labels, padded to 32 bytes).
-// ---------------------------------------------------------------------------
-
 const rootKey1 = deriveKeyPairFromSeed('agi-license-root-key-1');
-const rootKey2 = deriveKeyPairFromSeed('agi-license-root-key-2'); // rotation key
-const attackerKey = deriveKeyPairFromSeed('agi-attacker-key'); // NOT a root key
-const policyKey1 = deriveKeyPairFromSeed('agi-org-policy-key-1'); // authorized policy signer
-const forgedPolicyKey = deriveKeyPairFromSeed('agi-forged-policy-key'); // NOT in policyKeys
+const rootKey2 = deriveKeyPairFromSeed('agi-license-root-key-2');
+const attackerKey = deriveKeyPairFromSeed('agi-attacker-key');
+const policyKey1 = deriveKeyPairFromSeed('agi-org-policy-key-1');
+const forgedPolicyKey = deriveKeyPairFromSeed('agi-forged-policy-key');
 
 const ROOT_PUBLIC_KEYS = [rootKey1.publicKeyB64, rootKey2.publicKeyB64];
 
-// ---------------------------------------------------------------------------
-// Reference clock. All timestamps are relative to this fixed instant.
-// ---------------------------------------------------------------------------
-
-const REFERENCE_NOW_MS = Date.UTC(2026, 6, 1, 0, 0, 0); // 2026-07-01T00:00:00.000Z
+const REFERENCE_NOW_MS = Date.UTC(2026, 6, 1, 0, 0, 0);
 const DAY = 86_400_000;
 const ORG_ID = 'org_acme';
 
@@ -67,7 +37,6 @@ function baseClaims() {
     issuedAt: REFERENCE_NOW_MS - 30 * DAY,
     expiresAt: REFERENCE_NOW_MS + 30 * DAY,
     graceDays: 14,
-    // Opaque flags — intentionally generic; NOT a product flag enumeration.
     features: ['example-flag-a', 'example-flag-b'],
     policyKeys: [policyKey1.publicKeyB64],
   };
@@ -93,7 +62,6 @@ function addLicense(
   licenseCases.push({ file, nowMs, bytes, expect, note });
 }
 
-// 1. Valid, well inside its term, signed by root key 1.
 addLicense(
   'valid.agilicense',
   makeSignedContainer(baseClaims(), rootKey1.privateKey, LICENSE_CONTAINER_FORMAT),
@@ -102,7 +70,6 @@ addLicense(
   'Honestly signed by root key 1; now is inside [issuedAt, expiresAt].',
 );
 
-// 2. Valid, signed by the ROTATION key (root key 2). Proves the rotatable list.
 addLicense(
   'valid-rotated-key.agilicense',
   makeSignedContainer(
@@ -115,7 +82,6 @@ addLicense(
   'Signed by root key 2 (rotation). Accepted because root key 2 is in rootPublicKeys.',
 );
 
-// 3. Signed by a key that is NOT a root key.
 addLicense(
   'wrong-key.agilicense',
   makeSignedContainer(
@@ -128,7 +94,6 @@ addLicense(
   'Signed by an unauthorized key; no root key verifies it.',
 );
 
-// 4. Valid container whose payload was byte-flipped after signing.
 addLicense(
   'tampered.agilicense',
   tamperContainerPayload(
@@ -139,7 +104,6 @@ addLicense(
   'Payload base64 byte-flipped after signing; signature no longer matches.',
 );
 
-// 5. Expired past the grace window.
 addLicense(
   'expired-past-grace.agilicense',
   makeSignedContainer(
@@ -157,7 +121,6 @@ addLicense(
   'now is past expiresAt + graceDays. Distinct "expired" verdict → caller degrades to free tier.',
 );
 
-// 6. Expired but still inside the grace window.
 addLicense(
   'expired-in-grace.agilicense',
   makeSignedContainer(
@@ -175,7 +138,6 @@ addLicense(
   'now is past expiresAt but within graceDays. Still valid; graceActive=true (renewal warning).',
 );
 
-// 7. Not yet valid (clock before issuedAt).
 addLicense(
   'not-yet-valid.agilicense',
   makeSignedContainer(
@@ -193,7 +155,6 @@ addLicense(
   'issuedAt is in the future relative to now.',
 );
 
-// 8. Not JSON at all.
 addLicense(
   'malformed-json.agilicense',
   new TextEncoder().encode('this is not a license'),
@@ -202,7 +163,6 @@ addLicense(
   'Raw bytes are not a JSON container.',
 );
 
-// 9. Valid signature, but claims fail the schema (missing `seats`).
 {
   const { seats, ...claimsWithoutSeats } = baseClaims();
   void seats;
@@ -215,7 +175,6 @@ addLicense(
   );
 }
 
-// 10. Right structure but wrong container format discriminator.
 addLicense(
   'wrong-format.agilicense',
   makeSignedContainer(baseClaims(), rootKey1.privateKey, POLICY_CONTAINER_FORMAT),
@@ -224,11 +183,7 @@ addLicense(
   'Container format is "agipolicy-v1", not "agilicense-v1".',
 );
 
-// ---------------------------------------------------------------------------
-// Org-policy corpus. Root of trust = the license below (policyKeys=[policyKey1]).
-// ---------------------------------------------------------------------------
-
-const policyLicenseClaims = baseClaims(); // orgId org_acme, policyKeys=[policyKey1]
+const policyLicenseClaims = baseClaims();
 
 function basePolicy() {
   return {
@@ -245,8 +200,6 @@ function basePolicy() {
   };
 }
 
-// A concrete prior-policy baseline used for the over-granting case (version 2
-// tries to loosen what version 1 restricted).
 const priorPolicyBaseline = {
   allowedProviders: ['anthropic'],
   allowedModels: ['local:*'],
@@ -277,7 +230,6 @@ function addPolicy(
   policyCases.push({ file, nowMs: REFERENCE_NOW_MS, bytes, baseline, expect, note });
 }
 
-// 1. Valid tightening policy vs the default baseline.
 addPolicy(
   'valid-tightening.agipolicy',
   makeSignedContainer(basePolicy(), policyKey1.privateKey, POLICY_CONTAINER_FORMAT),
@@ -285,7 +237,6 @@ addPolicy(
   'Restricts providers, forbids BYOK, blocks managed-cloud egress, bounds retention — all tighter than the default baseline.',
 );
 
-// 2. Unrestricted policy equal to the default baseline (equal is allowed).
 addPolicy(
   'valid-unrestricted.agipolicy',
   makeSignedContainer(
@@ -306,7 +257,6 @@ addPolicy(
   'Every field equals the default baseline (not MORE permissive) → accepted.',
 );
 
-// 3. Signed by a key not in the license policyKeys.
 addPolicy(
   'forged-key.agipolicy',
   makeSignedContainer(
@@ -318,7 +268,6 @@ addPolicy(
   'Signed by a key absent from the license policyKeys → not authorized.',
 );
 
-// 4. Tampered after signing.
 addPolicy(
   'tampered.agipolicy',
   tamperContainerPayload(
@@ -328,7 +277,6 @@ addPolicy(
   'Payload byte-flipped after signing.',
 );
 
-// 5. orgId does not match the license.
 addPolicy(
   'org-mismatch.agipolicy',
   makeSignedContainer(
@@ -340,7 +288,6 @@ addPolicy(
   'Signature is valid but the policy binds a different org than the license.',
 );
 
-// 6. issuedAt in the future.
 addPolicy(
   'not-yet-valid.agipolicy',
   makeSignedContainer(
@@ -352,7 +299,6 @@ addPolicy(
   'Policy issuedAt is after now.',
 );
 
-// 7. Over-granting vs a prior tighter policy (version 2 loosens version 1).
 addPolicy(
   'over-granting.agipolicy',
   makeSignedContainer(
@@ -374,7 +320,6 @@ addPolicy(
   priorPolicyBaseline,
 );
 
-// 8. Valid signature, but the policy fails the schema (missing `byok`).
 {
   const { byok, ...policyWithoutByok } = basePolicy();
   void byok;
@@ -389,10 +334,6 @@ addPolicy(
     'Signature valid, but a required field is missing → schema rejects.',
   );
 }
-
-// ---------------------------------------------------------------------------
-// Emit
-// ---------------------------------------------------------------------------
 
 function writeCorpus(
   dir: string,
@@ -441,8 +382,6 @@ writeCorpus(
   },
 );
 
-// Surface the generated key material so the READMEs can document it. Base64 is
-// printed for reference only — private keys derive from the labelled seeds.
 console.log('Generated license fixtures:', licenseCases.length);
 console.log('Generated org-policy fixtures:', policyCases.length);
 console.log('root key 1 (pub):', rootKey1.publicKeyB64);

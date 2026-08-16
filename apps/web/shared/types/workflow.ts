@@ -40,8 +40,6 @@ export type {
   ScheduledWorkflow,
 } from '@agiworkforce/types';
 
-// ---- Web-specific types ----
-
 export interface NodeLibraryItem {
   type: string;
   label: string;

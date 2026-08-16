@@ -1,16 +1,3 @@
-/**
- * Canvas/Whiteboard Workspace Component
- *
- * A full-featured drawing canvas with support for:
- * - Shapes (rectangles, circles, lines)
- * - Freehand drawing
- * - Text elements
- * - Pan and zoom
- * - Undo/Redo
- * - Export to PNG
- *
- * Uses local state management with optional Tauri backend integration.
- */
 
 import {
   Circle,
@@ -39,7 +26,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/ui/Popover';
 import { Slider } from '@/ui/Slider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/ui/Tooltip';
 
-// Types
 export type CanvasToolType = 'select' | 'rect' | 'circle' | 'line' | 'text' | 'freehand' | 'pan';
 
 export interface Point {
@@ -77,7 +63,6 @@ interface CanvasWorkspaceProps {
   className?: string;
 }
 
-// Color presets
 const COLOR_PRESETS = [
   '#000000',
   '#ffffff',
@@ -91,18 +76,15 @@ const COLOR_PRESETS = [
   '#ec4899',
 ];
 
-// Generate unique ID
 const generateId = (): string => {
   return `el_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 };
 
 export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
   const { t } = useTranslation('v3');
-  // Canvas ref
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // State
   const [state, setState] = useState<CanvasState>({
     elements: [],
     selectedId: null,
@@ -110,32 +92,26 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     panOffset: { x: 0, y: 0 },
   });
 
-  // History for undo/redo
   const [history, setHistory] = useState<HistoryEntry[]>([{ elements: [] }]);
   const [historyIndex, setHistoryIndex] = useState(0);
 
-  // Tool state
   const [activeTool, setActiveTool] = useState<CanvasToolType>('select');
   const [strokeColor, setStrokeColor] = useState('#000000');
   const [fillColor, setFillColor] = useState('transparent');
   const [strokeWidth, setStrokeWidth] = useState(2);
 
-  // Drawing state
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState<Point | null>(null);
   const [currentPath, setCurrentPath] = useState<Point[]>([]);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<Point | null>(null);
 
-  // Text input state
   const [textInputPosition, setTextInputPosition] = useState<Point | null>(null);
   const [textInputValue, setTextInputValue] = useState('');
   const textInputRef = useRef<HTMLInputElement>(null);
 
-  // Canvas dimensions
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
 
-  // Update canvas size on container resize
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -158,7 +134,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     };
   }, []);
 
-  // Convert screen coordinates to canvas coordinates
   const screenToCanvas = useCallback(
     (screenX: number, screenY: number): Point => {
       const canvas = canvasRef.current;
@@ -173,7 +148,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     [state.zoom, state.panOffset],
   );
 
-  // Push state to history
   const pushToHistory = useCallback(
     (newElements: CanvasElement[]) => {
       const newHistory = history.slice(0, historyIndex + 1);
@@ -184,7 +158,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     [history, historyIndex],
   );
 
-  // Undo
   const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
       const newIndex = historyIndex - 1;
@@ -200,7 +173,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     }
   }, [historyIndex, history]);
 
-  // Redo
   const handleRedo = useCallback(() => {
     if (historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
@@ -216,26 +188,22 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     }
   }, [historyIndex, history]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const isMeta = e.metaKey || e.ctrlKey;
 
-      // Undo: Ctrl/Cmd + Z
       if (isMeta && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
         handleUndo();
         return;
       }
 
-      // Redo: Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y
       if ((isMeta && e.shiftKey && e.key === 'z') || (isMeta && e.key === 'y')) {
         e.preventDefault();
         handleRedo();
         return;
       }
 
-      // Delete selected element
       if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedId) {
         e.preventDefault();
         const newElements = state.elements.filter((el) => el.id !== state.selectedId);
@@ -244,7 +212,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
         return;
       }
 
-      // Tool shortcuts
       if (!isMeta && !e.shiftKey && !e.altKey) {
         switch (e.key.toLowerCase()) {
           case 'v':
@@ -276,10 +243,8 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo, state.selectedId, state.elements, pushToHistory]);
 
-  // Find element at point
   const findElementAtPoint = useCallback(
     (point: Point): CanvasElement | null => {
-      // Check elements in reverse order (top to bottom)
       for (let i = state.elements.length - 1; i >= 0; i--) {
         const el = state.elements[i];
         if (!el) continue;
@@ -308,7 +273,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
             break;
           case 'line':
             if (el.width !== undefined && el.height !== undefined) {
-              // Simple line hit detection
               const lineLength = Math.sqrt(el.width * el.width + el.height * el.height);
               const d1 = Math.sqrt(Math.pow(point.x - el.x, 2) + Math.pow(point.y - el.y, 2));
               const d2 = Math.sqrt(
@@ -321,7 +285,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
             }
             break;
           case 'text':
-            // Approximate text bounds
             if (
               point.x >= el.x &&
               point.x <= el.x + (el.text?.length || 0) * 10 &&
@@ -333,7 +296,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
             break;
           case 'freehand':
             if (el.points && el.points.length > 0) {
-              // Check if point is near any path segment
               for (const pathPoint of el.points) {
                 const dx = point.x - pathPoint.x;
                 const dy = point.y - pathPoint.y;
@@ -350,7 +312,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     [state.elements],
   );
 
-  // Mouse event handlers
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>) => {
       const canvas = canvasRef.current;
@@ -414,7 +375,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
       }
 
       if (activeTool === 'select' && state.selectedId) {
-        // Move selected element
         const dx = point.x - drawStart.x;
         const dy = point.y - drawStart.y;
         setState((prev) => ({
@@ -454,7 +414,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
       const point = screenToCanvas(e.clientX, e.clientY);
 
       if (activeTool === 'select') {
-        // Finalize move - push to history
         if (state.selectedId) {
           pushToHistory(state.elements);
         }
@@ -564,7 +523,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     ],
   );
 
-  // Handle text input
   const handleTextSubmit = useCallback(() => {
     if (textInputValue.trim() && textInputPosition) {
       const newElement: CanvasElement = {
@@ -585,7 +543,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     setTextInputValue('');
   }, [textInputValue, textInputPosition, strokeColor, state.elements, pushToHistory]);
 
-  // Render canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -593,16 +550,13 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear canvas
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Apply transformations
     ctx.save();
     ctx.translate(state.panOffset.x, state.panOffset.y);
     ctx.scale(state.zoom, state.zoom);
 
-    // Draw grid
     ctx.strokeStyle = '#e5e7eb';
     ctx.lineWidth = 0.5;
     const gridSize = 20;
@@ -624,7 +578,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
       ctx.stroke();
     }
 
-    // Draw elements
     for (const el of state.elements) {
       ctx.strokeStyle = el.stroke;
       ctx.fillStyle = el.fill;
@@ -678,7 +631,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
           break;
       }
 
-      // Draw selection indicator
       if (el.id === state.selectedId) {
         ctx.strokeStyle = '#3b82f6';
         ctx.lineWidth = 2;
@@ -727,7 +679,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
       }
     }
 
-    // Draw current freehand path
     if (activeTool === 'freehand' && currentPath.length > 1) {
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = strokeWidth;
@@ -753,7 +704,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     canvasSize,
   ]);
 
-  // Zoom handlers
   const handleZoomIn = useCallback(() => {
     setState((prev) => ({ ...prev, zoom: Math.min(prev.zoom * 1.2, 5) }));
   }, []);
@@ -766,13 +716,11 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     setState((prev) => ({ ...prev, zoom: 1, panOffset: { x: 0, y: 0 } }));
   }, []);
 
-  // Clear canvas
   const handleClear = useCallback(() => {
     setState((prev) => ({ ...prev, elements: [], selectedId: null }));
     pushToHistory([]);
   }, [pushToHistory]);
 
-  // Delete selected
   const handleDeleteSelected = useCallback(() => {
     if (!state.selectedId) return;
     const newElements = state.elements.filter((el) => el.id !== state.selectedId);
@@ -780,7 +728,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     pushToHistory(newElements);
   }, [state.selectedId, state.elements, pushToHistory]);
 
-  // Export to PNG
   const handleExport = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -798,7 +745,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     }
   }, []);
 
-  // Mouse wheel zoom
   const handleWheel = useCallback((e: React.WheelEvent<HTMLCanvasElement>) => {
     if (e.ctrlKey || e.metaKey) {
       e.preventDefault();
@@ -810,7 +756,6 @@ export function CanvasWorkspace({ className }: CanvasWorkspaceProps) {
     }
   }, []);
 
-  // Tool button component
   const ToolButton = useMemo(() => {
     return function ToolButtonInner({
       tool,

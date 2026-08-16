@@ -1,9 +1,3 @@
-/**
- * ImageTooLargeModal — shown when the user picks an image >10MB or with any
- * dimension >8192px.
- *
- * Informs and dismisses — no action other than acknowledging.
- */
 import { Modal, View, Pressable } from 'react-native';
 import { ImageOff } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';

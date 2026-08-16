@@ -74,8 +74,6 @@ describe('scheduled task notification authority', () => {
       ),
     ).resolves.toBe(false);
     expect(publish).not.toHaveBeenCalled();
-    // The refusal is decided before the storage read, so a signed-out alarm
-    // period costs nothing beyond the fence check.
     expect(isEnabled).not.toHaveBeenCalled();
   });
 
@@ -92,14 +90,6 @@ describe('scheduled task notification authority', () => {
   });
 });
 
-/**
- * `scheduledTaskNotificationAuthority` is the decision background.ts makes at
- * every notification site: it turns (schedule, owner-if-execution-got-that-far)
- * into the fence input. These drive the real builder into the real fence, which
- * is the composition the service worker runs — background.ts itself is a
- * side-effecting service-worker module that cannot be imported into jsdom, so
- * the two halves are exercised together here rather than through it.
- */
 describe('scheduledTaskNotificationAuthority feeding the fence', () => {
   function fence(authority: Parameters<typeof publishAuthorizedScheduledTaskNotification>[0]) {
     const publish = vi.fn();

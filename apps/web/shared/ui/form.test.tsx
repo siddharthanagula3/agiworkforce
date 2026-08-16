@@ -1,13 +1,3 @@
-/**
- * Form Components Tests
- *
- * Tests for Form UI components including:
- * - Form, FormField, FormItem integration with react-hook-form
- * - FormLabel, FormControl, FormDescription, FormMessage
- * - Accessibility (aria-invalid, aria-describedby, label associations)
- * - Error state handling
- * - Context propagation
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -27,7 +17,6 @@ import {
 } from './form';
 import { Input } from '@agiworkforce/ui';
 
-// Test wrapper component that sets up react-hook-form
 interface TestFormProps {
   onSubmit?: (data: { username: string }) => void;
   defaultValues?: { username: string };
@@ -68,7 +57,6 @@ const TestForm: React.FC<TestFormProps> = ({
   );
 };
 
-// Validated form with zod schema
 const schema = z.object({
   email: z.string().email('Please enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -172,7 +160,6 @@ describe('Form Components', () => {
     it('should render with proper spacing', () => {
       render(<TestForm />);
 
-      // FormItem should be a div with space-y-2 class
       const formItem = screen.getByRole('textbox').closest('.space-y-2');
       expect(formItem).toBeInTheDocument();
     });
@@ -183,7 +170,6 @@ describe('Form Components', () => {
       const input = screen.getByRole('textbox');
       const label = screen.getByText('Username');
 
-      // Label should be associated with input
       const labelFor = label.getAttribute('for');
       expect(labelFor).toBeTruthy();
       expect(input.id).toBe(labelFor);
@@ -235,7 +221,6 @@ describe('Form Components', () => {
 
       render(<ValidatedForm />);
 
-      // Submit without filling fields to trigger validation
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() => {
@@ -255,7 +240,6 @@ describe('Form Components', () => {
       await user.type(emailInput, 'test@example.com');
       await user.type(passwordInput, 'password123');
 
-      // Blur to trigger validation
       await user.tab();
 
       const emailLabel = screen.getByText('Email');
@@ -396,7 +380,6 @@ describe('Form Components', () => {
     it('should not render when no error', () => {
       render(<TestForm />);
 
-      // FormMessage renders null when no error
       const messages = document.querySelectorAll('.text-destructive');
       expect(messages.length).toBe(0);
     });
@@ -657,7 +640,6 @@ describe('Form Components', () => {
       await user.click(screen.getByRole('button', { name: 'Submit' }));
 
       await waitFor(() => {
-        // Only password should have error
         expect(screen.queryByText('Please enter a valid email')).not.toBeInTheDocument();
         expect(screen.getByText('Password must be at least 8 characters')).toBeInTheDocument();
       });

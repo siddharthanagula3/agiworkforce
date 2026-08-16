@@ -1,8 +1,3 @@
-/**
- * features/model-picker/ — Model picker UI + state.
- *
- * Phase 6 reorg: moved from services/modelConstants.ts and services/modelMetrics.ts.
- */
 export {
   MODEL_PICKER_OPTIONS,
   MODEL_LOCKED_HINT,

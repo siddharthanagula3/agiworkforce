@@ -1,9 +1,3 @@
-/**
- * FollowUpSuggestions Component
- *
- * Content-aware follow-up suggestion pills that appear at the end of the last
- * assistant message, similar to ChatGPT's follow-up suggestion chips.
- */
 
 import React, { useMemo } from 'react';
 import { BarChart3, Bug, Code, Globe, Lightbulb, Save, Sparkles } from 'lucide-react';
@@ -19,13 +13,9 @@ export interface FollowUpSuggestionsProps {
   onSuggestionClick: (suggestion: string) => void;
 }
 
-/**
- * Analyze message content and return up to 3 contextually relevant suggestions.
- */
 function derivesuggestions(content: string): Suggestion[] {
   const all: Array<{ pattern: RegExp; suggestions: Suggestion[] }> = [
     {
-      // Code blocks (triple backticks)
       pattern: /```/,
       suggestions: [
         { label: 'Run this code', icon: <Code className="h-3 w-3" /> },
@@ -34,7 +24,6 @@ function derivesuggestions(content: string): Suggestion[] {
       ],
     },
     {
-      // Error / stack trace indicators
       pattern:
         /(?:error|exception|traceback|stack trace|at line \d|TypeError|SyntaxError|ReferenceError)/i,
       suggestions: [
@@ -44,7 +33,6 @@ function derivesuggestions(content: string): Suggestion[] {
       ],
     },
     {
-      // Data, numbers, or tables
       pattern: /(?:\|.+\||\d{4,}|%|\$\d|avg|mean|total|count|sum|chart|graph|dataset)/i,
       suggestions: [
         { label: 'Visualize this', icon: <BarChart3 className="h-3 w-3" /> },
@@ -53,7 +41,6 @@ function derivesuggestions(content: string): Suggestion[] {
       ],
     },
     {
-      // URLs or web content
       pattern: /(?:https?:\/\/|search result|web page|source:|reference:)/i,
       suggestions: [
         { label: 'Search deeper', icon: <Globe className="h-3 w-3" /> },
@@ -69,7 +56,6 @@ function derivesuggestions(content: string): Suggestion[] {
     }
   }
 
-  // Default fallback
   return [
     { label: 'Tell me more', icon: <Sparkles className="h-3 w-3" /> },
     { label: 'Save as artifact', icon: <Save className="h-3 w-3" /> },

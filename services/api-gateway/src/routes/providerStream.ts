@@ -1,25 +1,3 @@
-/**
- * @file Provider Stream Routes — direct provider adapters via SSE
- * @security
- * - Authentication: JWT required
- * - Rate limiting: 30/min per user (chat-style action)
- * - Server-side API keys: never echoed back to client
- * - Input validation: Zod schemas with .strict()
- *
- * POST /api/v1/providers/:providerId/stream
- *   - Body: ChatRequest shape (provider-shape messages, tools, thinking)
- *   - Response: text/event-stream emitting one canonical StreamChunk per event
- *
- * GET /api/v1/providers/:providerId/catalog
- *   - Response: ModelInfo[]
- *
- * GET /api/v1/providers
- *   - Response: { providers: [{ id, available, unavailableReason? }] }
- *
- * This route is additive — does NOT replace the existing /api/llm/v1
- * OpenAI-compatible proxy. Eventually that proxy can migrate onto this
- * pipeline, but not in this PR.
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -39,24 +17,6 @@ import { classifyError } from '@agiworkforce/provider-runtime';
 
 const router: Router = Router();
 
-/**
- * GATEWAY-PROVIDER-STREAM-UNMETERED-01 — fail-closed billing guard.
- *
- * `/:providerId/stream` calls real, paid providers but performs NO usage
- * accounting. The metered path in `routes/llm.ts` parses `Idempotency-Key`
- * and runs the managed-usage reserve → settle cycle around every provider
- * call; this route does neither, so a turn served here costs real provider
- * money and is never reserved, settled, or counted against any allowance.
- * `requireManagedComputeEligibility` below gates WHO may call it — it does
- * not meter WHAT they spend.
- *
- * Until this route reuses the same reserve/settle path, it must not be
- * reachable by default. Operators who understand the exposure can opt in with
- * `AGI_GATEWAY_PROVIDER_STREAM_UNMETERED=1`; everyone else gets an honest 503
- * instead of free paid inference. The VS Code client that calls it already
- * defaults its `useProviderStream` setting to off, so failing closed here
- * matches the shipped client default rather than removing working behavior.
- */
 const PROVIDER_STREAM_UNMETERED_ENV = 'AGI_GATEWAY_PROVIDER_STREAM_UNMETERED';
 
 function providerStreamEnabled(): boolean {
@@ -74,10 +34,6 @@ function requireProviderStreamEnabled(): void {
 
 router.use(authenticateToken);
 router.use(createRateLimiter('default'));
-
-// ---------------------------------------------------------------------------
-// Validation schemas
-// ---------------------------------------------------------------------------
 
 const textBlockSchema = z
   .object({
@@ -180,16 +136,10 @@ const chatRequestSchema = z
   })
   .strict();
 
-// ---------------------------------------------------------------------------
-// Routes
-// ---------------------------------------------------------------------------
-
-/** GET /api/v1/providers — list providers and their availability. */
 router.get('/', createRateLimiter('default'), (_req: Request, res: Response) => {
   res.json({ providers: listProviderAvailability() });
 });
 
-/** GET /api/v1/providers/:providerId/catalog — list a provider's model catalog. */
 router.get(
   '/:providerId/catalog',
   createRateLimiter('default'),
@@ -210,7 +160,6 @@ router.get(
   },
 );
 
-/** POST /api/v1/providers/:providerId/stream — stream a chat completion. */
 router.post(
   '/:providerId/stream',
   createRateLimiter('device-command'),
@@ -219,8 +168,6 @@ router.post(
     model: typeof req.body?.model === 'string' ? req.body.model : 'unknown',
   })),
   async (req: Request, res: Response) => {
-    // Billing guard first: refuse before any provider work is done or any
-    // credential is touched. See GATEWAY-PROVIDER-STREAM-UNMETERED-01.
     requireProviderStreamEnabled();
 
     const user = req.user;
@@ -242,8 +189,6 @@ router.post(
     }
 
     const parsed = chatRequestSchema.parse(req.body);
-    // Cast through unknown to satisfy ChatRequest's narrower types; Zod has
-    // already validated the wire shape.
     const chatRequest = parsed as unknown as ChatRequest;
 
     const ctrl = new AbortController();
@@ -255,7 +200,7 @@ router.post(
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // disable Nginx buffering
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
     const writeEvent = (chunk: StreamChunk): void => {

@@ -14,7 +14,6 @@ import { useUser } from '@clerk/expo';
 const MMKV_PAIRING_BANNER_KEY = 'dismissedDesktopPairingBanner';
 
 interface ChatEmptyStateProps {
-  /** Whether to show the desktop pairing banner (first launch). */
   showPairingBanner?: boolean;
   onPairDesktop?: () => void;
 }

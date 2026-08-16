@@ -100,37 +100,16 @@ function getRoutingContext(
   return null;
 }
 
-/**
- * Data-loss-safe turn replacement, used by `regenerate` (and any future
- * edit-and-resend). Mirrors web's `sendReplacingMessages`: the caller has
- * ALREADY removed `messageIds` from the local transcript so the UI is clean
- * while the replacement streams, but the DURABLE rows are still on the server.
- * They are deleted only once the replacement send has actually run; if the send
- * throws before committing anything, `snapshot` is written back so the exchange
- * is never lost. Worst case degrades from data-loss to at most a duplicate row.
- */
 interface SendReplacement {
-  /** Durable row ids the replacement send supersedes. */
   messageIds: string[];
-  /** Exact transcript to restore if the replacement send throws. */
   snapshot: ChatMessage[];
-  /** Send options recovered from the replaced user turn's `sendReplay`. */
   replay?: SendReplayMetadataLike | undefined;
 }
 
 interface UseChatOptions {
   hostBridge?: ChatHostBridge | null;
   externalAddMessage?: (msg: { role: string; content: string; id?: string }) => void;
-  /**
-   * Send-pipeline queue. Defaults to the per-surface singleton from
-   * `getSendQueue(surfaceId)`. Tests inject a fresh instance for isolation.
-   */
   sendQueue?: MessageQueue;
-  /**
-   * Surface identifier used to scope the queue when `sendQueue` is omitted.
-   * Defaults to `'default'` — host apps should pass their own (`'web'`,
-   * `'desktop'`, etc.) so persistence keys don't collide.
-   */
   surfaceId?: string;
 }
 
@@ -142,10 +121,6 @@ const TERMINAL_CLOUD_RUN_STATES = new Set<string>([
   'archived',
 ]);
 
-/**
- * Read the durable-run checkpoint off a persisted assistant turn, or return
- * null when this turn is finished business and not worth a server round trip.
- */
 function readCloudRunReattachment(message: ChatMessage): CloudRunReattachment | null {
   const raw = message.metadata?.['cloudAgentRun'];
   if (!raw || typeof raw !== 'object') return null;
@@ -176,8 +151,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   hostBridgeRef.current = options?.hostBridge ?? null;
   const cloudAgentRunRef = useRef<{ runId: string; runPath: string } | null>(null);
 
-  // Resolve the send-pipeline queue once per hook instance. Default to the
-  // per-surface singleton; storage falls back to localStorage when available.
   const surfaceIdRef = useRef(options?.surfaceId ?? 'default');
   const sendQueueRef = useRef<MessageQueue>(
     options?.sendQueue ??
@@ -186,21 +159,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       }),
   );
 
-  /**
-   * Add message to the host bridge when provided, then to the package store
-   * for rendering. Forwards every field the caller passes (isStreaming,
-   * toolCalls, thinking/thinkingBlock, artifacts, webSearchResults,
-   * generatedFiles, ...) rather than a hardcoded subset -- a message created
-   * on a tool_call/artifact/thinking-first event used to render as a bare
-   * empty bubble until a SECOND event for it arrived, because those fields
-   * were silently dropped on creation.
-   *
-   * `conversationIdOverride` lets stream-event handlers target the
-   * conversation the turn was actually sent to (see streamConvIdRef's doc
-   * comment) instead of whatever is currently active. Omit it for the
-   * user's own outgoing message -- that add is synchronous with the send
-   * click, so activeConversationId is still correct there.
-   */
   const addMsg = useCallback(
     (
       msg: Partial<ChatMessage> & { role: string; content: string },
@@ -210,12 +168,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const timestamp = new Date().toISOString();
       const hostBridge = hostBridgeRef.current;
 
-      // Empty assistant rows are a shared rendering concern used to show
-      // Thinking/activity before the first token. Do not mirror them into a
-      // legacy host store: doing so blanks its conversation summary and emits
-      // a host snapshot with no durable assistant content. The runtime owns
-      // assistant persistence; user/system turns still reach the host so
-      // optimistic creation and title generation remain intact.
       const shouldMirrorToHost = msg.role !== 'assistant' || msg.content.trim().length > 0;
       if (hostBridge?.addMessage && shouldMirrorToHost) {
         hostBridge.addMessage({ role: msg.role, content: msg.content, id: msgId });
@@ -256,34 +208,20 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   const assistantMessageIdRef = useRef<string | null>(null);
   const assistantMessageIdsRef = useRef(new Map<string, string>());
   const cloudAgentRunsRef = useRef(new Map<string, { runId: string; runPath: string }>());
-  /**
-   * The conversation the CURRENTLY in-flight turn was sent to -- pinned at
-   * each turn-start site (sendMessage / continueGeneration /
-   * resolveToolApproval) and read by onStream / stopGeneration instead of
-   * the live activeConversationId. Nothing prevents navigating to a
-   * different conversation mid-turn (see ConversationItem's onClick). Legacy
-   * runtimes use this single pin. Concurrent runtimes stamp every event with
-   * its conversation id and use the per-conversation maps above.
-   */
   const streamConvIdRef = useRef<string | null>(null);
   const aggregateIsStreaming = useChatStore((s) => s.isStreaming);
   const streamingConversationIds = useChatStore((s) => s.streamingConversationIds);
   const isStreaming = runtime?.supportsConcurrentTurns
     ? Boolean(activeConversationId && streamingConversationIds[activeConversationId])
     : aggregateIsStreaming;
-  // Use a ref for active-conversation streaming state to avoid stale callback closures.
   const isStreamingRef = useRef(false);
   isStreamingRef.current = isStreaming;
 
-  // Register stream callback on runtime to receive assistant responses
   useEffect(() => {
     if (!runtime?.onStream) return;
 
     const unsubscribe = runtime.onStream((event) => {
       const store = useChatStore.getState();
-      // Concurrent runtimes must stamp every event. Falling back to the active
-      // conversation in that mode could leak one turn into another transcript,
-      // so fail closed if the runtime breaks its declared contract.
       const convId = runtime.supportsConcurrentTurns
         ? event.conversationId
         : (event.conversationId ?? streamConvIdRef.current ?? store.activeConversationId);
@@ -310,7 +248,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'content': {
-          // Create or append to assistant message
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
@@ -325,7 +262,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               convId,
             );
           } else {
-            // Append content to existing assistant message
             const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
             if (msg) {
@@ -347,7 +283,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                 },
               ]
             : [];
-          // Store thinking text in the assistant message
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
@@ -451,7 +386,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'tool_call': {
-          // Store tool call info in the assistant message
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
@@ -497,7 +431,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'tool_result': {
-          // Update an existing tool call with its result
           if (assistantMessageIdRef.current) {
             const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
@@ -521,9 +454,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'tool_approval_request': {
-          // The server suspended this turn pending a user decision. Surface
-          // an awaiting_approval card — `resolveToolApproval` (below) drives
-          // the approve/reject round-trip via `runtime.resolveToolApproval`.
           if (!assistantMessageIdRef.current) {
             const id = crypto.randomUUID();
             assistantMessageIdRef.current = id;
@@ -679,9 +609,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'code_execution_result': {
-          // Surface-specific (web-only precedent: MessageMetadata.codeExecutionResult
-          // in apps/web/shared/stores/web-chat-store.ts) -- goes in the generic metadata bag per
-          // ChatMessage.metadata's own doc comment, not a dedicated typed field.
           if (assistantMessageIdRef.current) {
             const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
@@ -694,9 +621,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'research_status': {
-          // Managed-cloud runtimes emit progress here after forwarding the
-          // capability-gated `research: true` request. Local runtimes never
-          // expose the control or claim the capability.
           if (assistantMessageIdRef.current) {
             const msgs = store.messagesByConversation[convId];
             const msg = msgs?.find((m) => m.id === assistantMessageIdRef.current);
@@ -709,7 +633,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'done': {
-          // Mark the message as no longer streaming
           let awaitingApproval = false;
           if (assistantMessageIdRef.current) {
             const msgs = store.messagesByConversation[convId];
@@ -733,22 +656,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                     })
                   : currentActivity;
               const doneUpdates: Partial<ChatMessage> = { isStreaming: false };
-              // Record the turn's finish_reason (cloud/WebRuntime supplies it;
-              // local/native runtimes omit it) so the Continue-Generation
-              // affordance is honest and survives across the turn. Always write
-              // it — an undefined value clears any stale 'stopped'/'length'
-              // marker left by an interrupted prior attempt. Same treatment
-              // for streamError (mid-stream provider failure, additive
-              // x_stream_error — see the StreamEvent 'done' doc comment):
-              // always write it so a retry of the SAME message id clears any
-              // stale marker from a prior failed attempt.
               doneUpdates.metadata = {
                 ...msg.metadata,
                 ...(completedActivity ? { agentActivity: completedActivity } : {}),
                 finishReason: event.finishReason,
                 streamError: event.streamError,
               };
-              // Mark thinking block as done
               if (msg.thinkingBlock) {
                 const hasCompletionStep = msg.thinkingBlock.steps.some((s) => s.type === 'done');
                 if (!hasCompletionStep) {
@@ -774,12 +687,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               store.updateMessage(convId, assistantMessageIdRef.current, doneUpdates);
             }
           }
-          // The server suspends the turn (closes the stream, no final answer
-          // yet) rather than finishing it when a tool call needs approval —
-          // `onDone` still fires. Keep the ref pointed at this message so the
-          // eventual `resolveToolApproval` resume appends its continuation
-          // onto the SAME bubble instead of orphaning it. Global `isStreaming`
-          // still clears so the composer is usable while the card is pending.
           if (!awaitingApproval) {
             assistantMessageIdRef.current = null;
           }
@@ -787,17 +694,10 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           break;
         }
         case 'error': {
-          // Managed quota / rate-limit refusals are not generic failures: the
-          // user needs the reason, the reset time, and (when one exists) an
-          // upgrade path, all IN the transcript. A toast that disappears over
-          // an empty bubble is the behaviour this replaces. Same classifier and
-          // same `metadata.paywall` shape web writes (GOV-20).
           const quotaBlock = classifyManagedQuotaErrorCode(event.code);
           if (quotaBlock && assistantMessageIdRef.current) {
             const blockedId = assistantMessageIdRef.current;
             const blocked = store.messagesByConversation[convId]?.find((m) => m.id === blockedId);
-            // Null on the top self-serve tier / a sales-assisted plan: there is
-            // no self-serve upgrade to offer, so no CTA is rendered.
             const nextTier = getNextUpgradeTier(useTierStore.getState().tier);
             store.updateMessage(convId, blockedId, {
               isStreaming: false,
@@ -827,11 +727,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
             const currentActivity = current?.metadata?.['agentActivity'] as
               | AgentActivityState
               | undefined;
-            // A tool call approved just before this error (e.g.
-            // resolveToolApproval's resume itself failing outright) was
-            // optimistically patched to 'running' and would otherwise stay
-            // stuck there forever -- the turn that would report its real
-            // result never gets to run.
             const stillRunning = current?.toolCalls?.some((t) => t.status === 'running');
             store.updateMessage(convId, failingId, {
               isStreaming: false,
@@ -933,10 +828,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       let resolvedModelId = preflightModelState.selectedModelId;
       let resolvedProvider: string | undefined = selectedModel.provider;
       const isAutoSelection = resolvedModelId.startsWith('auto');
-      // Per-message routing provenance for the assistant turn we are about to
-      // create. Populated only when the Auto router actually chose the model,
-      // so the footer's "Auto routed: … · Pin to <model>" row appears on the
-      // turns it describes and nowhere else.
       let autoRouting: MessageRouting | undefined;
       const requiresRegistryAdmission =
         isAutoSelection || executionMode === 'cloud_managed' || executionMode === 'byok';
@@ -980,13 +871,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           previousTaskType: previousDecision?.taskType,
         });
         if (decision.status === 'unavailable') {
-          // BYOK catalogs can be populated dynamically from a provider after
-          // startup (OpenRouter and compatible private gateways are the common
-          // cases). Those model ids cannot exist in AGI's static registry, but
-          // the host already marked them as direct-provider models and the
-          // privileged runtime performs its own provider/model validation.
-          // Every known canonical model, every managed-cloud model, and every
-          // Auto alias still fails closed through the registry policy.
           const isAdmittedDynamicByokModel =
             executionMode === 'byok' &&
             !isAutoSelection &&
@@ -1013,22 +897,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
               source: 'auto',
               reason: routingReason,
               task: decision.taskType,
-              // The concrete model the router landed on — pinning replaces the
-              // `auto` alias with this id for subsequent turns.
               pinModel: decision.modelKey,
             };
           }
         }
       }
 
-      // Route the prompt through the priority send queue first. This is the
-      // single entry point for every LLM-bound user input: it provides
-      // backpressure (lane cap), cancellation (AbortSignal), and round-trip
-      // editing (popAllEditable) on top of the existing send pipeline.
-      //
-      // For direct user-typed input we use the `next` lane (default for user
-      // input) so it never starves behind a queued task notification, but
-      // also doesn't preempt an in-flight `now`-priority interrupt.
       const queue = sendQueueRef.current;
       try {
         enqueuePrompt(queue, content);
@@ -1039,17 +913,11 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         }
         throw err;
       }
-      // Drain immediately — current behavior is direct send. The queue layer
-      // captures the command for cancellation / replay; we don't defer it.
       const queued = queue.dequeue();
       if (!queued) return;
 
       const store = useChatStore.getState();
 
-      // Add user message — desktop store auto-creates conversation if needed.
-      // The id is minted HERE and forwarded to the runtime so the rendered row
-      // and its durable row share one identity: regenerate/edit have to delete
-      // superseded server rows by the ids the transcript actually holds.
       const userMessageId = crypto.randomUUID();
       addMsg({
         id: userMessageId,
@@ -1077,7 +945,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           : {}),
       });
 
-      // Re-read after addMsg (which may have synced the convId from desktop store)
       const convId = useChatStore.getState().activeConversationId;
 
       if (!convId) {
@@ -1085,10 +952,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         return;
       }
 
-      // Pin the turn to its origin conversation -- see streamConvIdRef's
-      // doc comment. Must be set before the runtime call so onStream's
-      // first event (which can fire before this function returns) already
-      // resolves against the right conversation.
       streamConvIdRef.current = convId;
       store.startStreaming(convId);
 
@@ -1099,12 +962,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         .filter((instruction): instruction is string => Boolean(instruction))
         .join('\n\n');
       const modelState = useModelStore.getState();
-      // Capability-clamp thinking/effort against the SELECTED model's catalog
-      // reasoning contract before anything reaches the wire. The composer's
-      // persisted "off" is only an intent: the Managed Cloud route answers a
-      // `thinking_mode: false` on an always-on reasoning model with a 422
-      // `invalid_thinking_configuration`, so an unclamped send fails the whole
-      // turn before generation. See lib/thinkingPolicy.ts.
       const thinkingPolicy = resolveThinkingSendPolicy({
         modelId: resolvedModelId,
         requestedThinking: replacement?.replay?.thinkingEnabled ?? modelState.thinkingEnabled,
@@ -1112,22 +969,9 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       });
       const requestedWebSearch = replacement?.replay?.webSearchEnabled ?? store.webSearchEnabled;
 
-      // Resolve the selected model's provider so the backend can route it.
-      // Without this, a host-discovered Local model that is NOT in the static
-      // catalog reaches the Rust
-      // resolver (resolve_provider_and_model) with provider=None and is never
-      // routed to Ollama: the send silently no-ops (no /api/chat, no response,
-      // no error). The model store carries each model's provider; forward it.
       resolvedProvider ??= modelState.models.find((m) => m.id === resolvedModelId)?.provider;
       const settingsState = useSettingsStore.getState();
 
-      // Re-check search at send time so a persisted automatic intent cannot
-      // survive a model/deployment or trust-boundary change. `local_only`
-      // conversations are deliberately excluded: automatic search is network
-      // egress, and a Local session must not turn an ordinary prompt into a
-      // native tool/network turn without an explicit user-facing opt-in.
-      // Managed Cloud and BYOK already cross their named network boundary, so
-      // their existing capability gates remain authoritative.
       const selectedModelMetadata = getModelMetadataById(resolvedModelId);
       const webSearchEnabled =
         executionMode === 'local_only'
@@ -1145,13 +989,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
                 genericBackendConfigured: settingsState.genericWebSearchDeploymentEnabled,
               }));
 
-      // Code execution: forward the persisted composer preference ONLY when
-      // it is currently honest — the selected model's catalog capability,
-      // provider (native vs. E2B-gated), and this deployment's E2B cut-over
-      // flag all agree it will actually run, AND the active runtime forwards
-      // it at all (TauriRuntime doesn't). Recomputed here (not trusted from
-      // the toggle's rendered `checked` state) so a stale persisted "on" from
-      // a previously-capable model never silently reaches an unsupported one.
       const modelCapabilities = getModelMetadataById(resolvedModelId)?.capabilities;
       const codeExecution =
         Boolean(runtime.supportsCodeExecution) &&
@@ -1165,18 +1002,11 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       const research = Boolean(runtime.supportsResearch && researchEnabled);
       const effectiveWorkMode = workMode ?? replacement?.replay?.workMode;
 
-      // Reset assistant message ref for new response, then create the shared
-      // pre-token row immediately. Without this row, a Local model that takes
-      // several seconds before its first delta leaves the transcript visually
-      // unchanged even though the native runtime is working. AGI Work enriches
-      // the same row with the canonical activity timeline; ordinary chat keeps
-      // the lightweight "Thinking…" placeholder rendered by MessageBubble.
       assistantMessageIdRef.current = null;
       cloudAgentRunRef.current = null;
       assistantMessageIdsRef.current.delete(convId);
       cloudAgentRunsRef.current.delete(convId);
 
-      // Build full conversation history for multi-turn context
       const allMessages = store.messagesByConversation[convId] ?? [];
       const messageHistory = allMessages.map((m) => ({
         role: m.role,
@@ -1195,8 +1025,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           content: '',
           timestamp: new Date(startedAtMs).toISOString(),
           isStreaming: true,
-          // Read by ProvenanceFooter to show what Auto picked and to offer
-          // "Pin to <model>". Absent on manual selections.
           ...(autoRouting ? { routing: autoRouting } : {}),
           ...(effectiveWorkMode === 'agiwork'
             ? {
@@ -1227,8 +1055,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           ...(effectiveWorkMode ? { workMode: effectiveWorkMode } : {}),
           ...(skillName ? { skillName } : {}),
           ...(projectId !== undefined ? { projectId } : {}),
-          // `undefined` means the model declares no thinking contract — the
-          // field must be OMITTED, not sent as false (DES-C03).
           ...(thinkingPolicy.thinkingEnabled !== undefined
             ? { thinkingEnabled: thinkingPolicy.thinkingEnabled }
             : {}),
@@ -1239,8 +1065,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
           ...(attachments && attachments.length > 0 ? { attachments } : {}),
         })
         .then(() => {
-          // The replacement turn has run, so its user row is durable on the
-          // server. Only now drop the rows it superseded.
           if (replacement && replacement.messageIds.length > 0) {
             void runtime.deleteMessages?.(convId, replacement.messageIds).catch(() => {
               // A failed durable delete leaves at most a stale row that the
@@ -1251,9 +1075,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
           const failedStore = useChatStore.getState();
-          // The replacement never committed: put the exact transcript back
-          // rather than leaving the user with a silently truncated thread. The
-          // superseded server rows were never touched, so nothing is lost.
           if (replacement) {
             failedStore.setMessages(convId, replacement.snapshot);
           }
@@ -1307,25 +1128,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   );
 
   const stopGeneration = useCallback(() => {
-    // Target the conversation the in-flight turn actually belongs to, not
-    // whatever the user currently has open -- see streamConvIdRef's doc
-    // comment. Nothing stops navigating to a different conversation mid-turn
-    // and clicking Stop there; it must still stop the real turn rather than
-    // silently targeting the wrong (unrelated) conversation id.
     const currentStore = useChatStore.getState();
     const convId = runtime?.supportsConcurrentTurns
       ? currentStore.activeConversationId
       : streamConvIdRef.current;
     if (runtime && convId) {
       runtime.stopGeneration(convId);
-      // Continue-Generation (cloud/Web runtime only): the abort path emits no
-      // 'done' event, so settle the in-flight assistant message here and, when
-      // it has partial text already streamed, mark finish_reason 'stopped'
-      // (mirrors web's useChatStream) so the Continue affordance is offered
-      // honestly. Gated on the runtime capability — local/native runtimes
-      // (TauriRuntime) can't resume in place, so they must NOT get the marker
-      // (it would surface a fake, broken Continue button in the Tauri build,
-      // which uses TauriRuntime for both local and cloud).
       const partialId = assistantMessageIdsRef.current.get(convId) ?? null;
       if (runtime.supportsContinueGeneration && partialId) {
         const store = useChatStore.getState();
@@ -1357,44 +1165,22 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     }
   }, [runtime]);
 
-  /**
-   * Continue Generation (ChatGPT/Claude parity, cloud mode): resume a truncated
-   * (finish_reason 'length'/'max_tokens') or user-stopped ('stopped') assistant
-   * turn. Reuses the normal streaming path — the request thread ends with the
-   * partial assistant message followed by an ephemeral user instruction to
-   * continue in place (never stored/rendered). The assistant-message ref is
-   * pre-seeded to the partial's id so streamed tokens APPEND to the SAME bubble
-   * instead of creating a new one. No-op unless the message is continuable
-   * (see isMessageContinuable) — no fake availability.
-   */
   const continueGeneration = useCallback(
     (assistantMessageId: string) => {
-      // Only the cloud/Web runtime can resume a turn in place; never reissue
-      // through a runtime that would persist the instruction as a new turn.
       if (!runtime || !runtime.supportsContinueGeneration || isStreamingRef.current) return;
       const convId = useChatStore.getState().activeConversationId;
       if (!convId) return;
-      // Pin the turn to its origin conversation -- see streamConvIdRef's
-      // doc comment.
       streamConvIdRef.current = convId;
 
       const store = useChatStore.getState();
       const conversationMessages = store.messagesByConversation[convId] ?? [];
       const messageIndex = conversationMessages.findIndex((m) => m.id === assistantMessageId);
       const message = messageIndex >= 0 ? conversationMessages[messageIndex] : undefined;
-      // Only a truncated/stopped assistant turn with non-empty partial content
-      // can continue; continuing an earlier turn would fork history.
       if (!message || messageIndex !== conversationMessages.length - 1) return;
       if (!isMessageContinuable(message)) return;
 
-      // Continue with the model that produced the partial answer so voice and
-      // capabilities stay coherent; fall back to the current selection.
       const model = message.model || useModelStore.getState().selectedModelId || 'auto';
 
-      // Thread: everything up to AND INCLUDING the partial assistant turn, then
-      // the ephemeral continue instruction (request-only, never stored). The
-      // cloud wire uses messageHistory as the full thread (content arg ignored
-      // when history is present), so append the instruction as the last turn.
       const messageHistory: Array<{
         role: 'user' | 'assistant' | 'system';
         content: string;
@@ -1408,9 +1194,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
         { role: 'user', content: CONTINUE_GENERATION_INSTRUCTION },
       ];
 
-      // Pre-seed the ref so 'content' events append to the SAME bubble, and
-      // clear the continuable marker while streaming (re-recorded honestly at
-      // stream end — re-offered if truncated again).
       assistantMessageIdRef.current = assistantMessageId;
       assistantMessageIdsRef.current.set(convId, assistantMessageId);
       const persistedRun = message.metadata?.['cloudAgentRun'];
@@ -1475,30 +1258,8 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     [runtime],
   );
 
-  /**
-   * Regenerate (web parity): re-run the user turn that produced
-   * `assistantMessageId`, replacing the old exchange instead of appending a
-   * duplicate one.
-   *
-   * Rolls back from the PRECEDING user message (see `planRegenerateRollback` —
-   * rolling back only the assistant would leave the original prompt in place
-   * and re-sending it would duplicate the user turn), then re-sends through the
-   * normal pipeline with the send options the original turn recorded. The
-   * durable rows are deleted only after the replacement send has run, and the
-   * exact transcript is restored if it throws (see `SendReplacement`).
-   *
-   * Refuses rather than silently sending a different request when the replay
-   * cannot be reproduced: skill-guided turns, legacy tool-assisted turns
-   * (`getRegenerateReplayDecision`), and turns whose prompt carried file
-   * attachments — a persisted row holds attachment metadata, not the bytes, so
-   * a resend would quietly drop the files.
-   */
   const regenerate = useCallback(
     (assistantMessageId: string) => {
-      // Without a durable delete the replacement would sit BESIDE the turn it
-      // replaces on the server — a duplicated user message and a stale answer
-      // on the next reload. Refuse rather than half-regenerate; hosts gate the
-      // affordance on the same capability.
       if (!runtime || !runtime.deleteMessages || isStreamingRef.current) return;
       const store = useChatStore.getState();
       const convId = store.activeConversationId;
@@ -1528,9 +1289,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       }
 
       const snapshot = messages.map((message) => ({ ...message }));
-      // Drop the replaced exchange from the transcript up front so the
-      // replacement streams into a clean thread; sendMessage re-adds the user
-      // turn. Restored verbatim by SendReplacement if the send throws.
       store.setMessages(convId, messages.slice(0, plan.userIndex));
 
       sendMessage(
@@ -1554,17 +1312,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     [runtime, sendMessage],
   );
 
-  /**
-   * Rewrite one of the user's own turns and re-run the conversation from there.
-   *
-   * Deliberately edit-and-RESEND, not edit-in-place: the assistant answered the
-   * old wording, so leaving its reply next to new text produces a transcript
-   * that answers a question nobody asked. `deleteMessages` is required for the
-   * same reason regenerate requires it — without a durable delete the rewrite
-   * would sit beside the turn it replaces on the next reload. Hosts gate the
-   * Edit affordance on the same capability, so this refusal is a backstop, not
-   * the primary guard.
-   */
   const editAndResend = useCallback(
     (userMessageId: string, newContent: string) => {
       if (!runtime || !runtime.deleteMessages || isStreamingRef.current) return;
@@ -1580,10 +1327,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       if (!userMessage) return;
       if (trimmed === userMessage.content.trim()) return;
 
-      // Same limitation as regenerate: the attachments were uploaded against
-      // the original turn and re-sending the text alone would silently drop
-      // them, so refuse loudly instead of sending a different prompt than the
-      // transcript shows.
       if (userMessage.attachments && userMessage.attachments.length > 0) {
         toast.error(
           'Editing is unavailable for a turn with attachments. Send a new message with the files attached.',
@@ -1626,25 +1369,12 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     [runtime, sendMessage],
   );
 
-  /**
-   * Resolve one pending tool-approval card. Partial decisions remain visibly
-   * awaiting approval and are persisted on the card. Once every call has a
-   * decision, the runtime sends the durable run id plus decision set and the
-   * continuation extends the same assistant message. Hosts
-   * must gate the approve/reject UI on `runtime?.resolveToolApproval` being
-   * present — never call this against a runtime that lacks it (no fake
-   * availability).
-   */
   const resolveToolApproval = useCallback(
     (assistantMessageId: string, toolCallId: string, decision: 'approved' | 'rejected') => {
       if (!runtime?.resolveToolApproval) return;
       const store = useChatStore.getState();
       const convId = store.activeConversationId;
       if (!convId) return;
-      // Pin the turn to its origin conversation -- see streamConvIdRef's
-      // doc comment. The user is necessarily viewing this conversation right
-      // now (the approve/reject button lives in its rendered messages), but
-      // the resume's stream can outlast them navigating away afterward.
       streamConvIdRef.current = convId;
 
       const msgs = store.messagesByConversation[convId];
@@ -1673,8 +1403,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       }
 
       if (allDecided) {
-        // Re-point the ref at this message so continuation events append onto
-        // the same bubble. A partial decision does not start a fake stream.
         assistantMessageIdRef.current = assistantMessageId;
         assistantMessageIdsRef.current.set(convId, assistantMessageId);
         const persistedRun = msg?.metadata?.['cloudAgentRun'];
@@ -1730,21 +1458,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     [runtime],
   );
 
-  /**
-   * Rejoin a durable run when its conversation is opened.
-   *
-   * A Managed Cloud run outlives the app: the answer may have been finished, or
-   * an approval asked for, while this client was closed. The server saves the
-   * turn in that case, so what the transcript shows on reopen is a real but
-   * possibly unfinished record. Reattaching streams only what happened AFTER the
-   * cursor stored on that message, and the runtime no-ops for a run that has
-   * since ended.
-   *
-   * The two cheap skips below matter: without them every reopened conversation
-   * with any cloud history would ask the server about a run that finished weeks
-   * ago. A recorded `finishReason` means a client watched this turn end, and a
-   * terminal recorded state means the server already said so.
-   */
   const lastAssistantMessageId = useChatStore((state) => {
     const messages = activeConversationId
       ? state.messagesByConversation[activeConversationId]
@@ -1760,9 +1473,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
   useEffect(() => {
     const reattach = runtime?.reattachConversation;
     if (!reattach || !activeConversationId || !lastAssistantMessageId) return;
-    // Messages arrive after the conversation is selected, so this effect keys on
-    // the last assistant turn rather than the conversation alone — keying on the
-    // conversation would run once against an empty transcript and never again.
     const attemptKey = `${activeConversationId}:${lastAssistantMessageId}`;
     if (reattachedTurnsRef.current.has(attemptKey)) return;
     const messages = useChatStore.getState().messagesByConversation[activeConversationId] ?? [];
@@ -1773,8 +1483,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
     if (!reattachment) return;
     reattachedTurnsRef.current.add(attemptKey);
 
-    // Point the stream refs at the persisted row so replayed content and any
-    // rebuilt approval card append to it instead of opening a second bubble.
     assistantMessageIdRef.current = message.id;
     assistantMessageIdsRef.current.set(activeConversationId, message.id);
     streamConvIdRef.current = activeConversationId;
@@ -1783,8 +1491,6 @@ export function useChat(runtime: ChatRuntime | null, options?: UseChatOptions) {
       try {
         await reattach.call(runtime, activeConversationId, reattachment);
       } catch (error) {
-        // A run we could not rejoin is not a failed turn: what is on screen is
-        // still what the server has. Say so quietly and leave the transcript be.
         console.warn('[useChat] Could not reattach to the Cloud run:', error);
       }
     })();

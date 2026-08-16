@@ -11,20 +11,6 @@ export const metadata = buildMetadata({
   path: '/legal',
 });
 
-/**
- * Revision date per document, keyed by route.
- *
- * Built from CANONICAL_POLICY_ROUTES and POLICY_LAST_UPDATED rather than typed
- * here, so the index cannot claim a date the document itself does not print.
- * A route with no entry renders an em dash instead of a guess — /mobile/legal
- * and the EU-representative statement have their own dates in the same
- * constant, and anything genuinely undated should look undated.
- *
- * Why an index needs dates at all: a reviewer's first question about a policy
- * set is not what it says, it is whether it has been touched since the product
- * changed. A stale date is itself a finding, and hiding it one click deeper
- * does not make it less true.
- */
 const REVISED: Readonly<Record<string, string>> = Object.fromEntries(
   (Object.keys(CANONICAL_POLICY_ROUTES) as (keyof typeof CANONICAL_POLICY_ROUTES)[])
     .filter((key) => key in POLICY_LAST_UPDATED)
@@ -97,9 +83,6 @@ const DOCS: { href: string; label: string; body: string }[] = [
     label: 'Security',
     body: 'Operational posture across the trust boundaries, plus the coordinated vulnerability disclosure policy: scope, safe harbour, and response targets.',
   },
-  // Both of these were published and reachable, but only from the sitemap or a
-  // cross-link buried inside another policy. A procurement reviewer starts here,
-  // so every published legal document has to be listed here.
   {
     href: '/legal/eu-representative',
     label: 'EU representative',
@@ -110,9 +93,6 @@ const DOCS: { href: string; label: string; body: string }[] = [
     label: 'Mobile app terms and privacy',
     body: 'Surface-specific terms for AGI Mobile on iOS and Android, including platform disclosures. The documents above govern where they overlap.',
   },
-  // India. The DPDP Act makes the notice a standalone instrument and the
-  // grievance route a statutory precondition for complaining to the Board, so
-  // neither can be a paragraph inside another document.
   {
     href: '/data-use',
     label: 'How we use your data',

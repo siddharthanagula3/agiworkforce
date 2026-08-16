@@ -12,30 +12,6 @@ import { requireOrgAdmin, resolveOrgMembership } from '@/lib/services/org-sharin
 import { shareConnector, unshareConnector } from '@/lib/services/org-shared-connector-service';
 import { evictOrgSharedConnectorCaches } from '@/lib/user-connector-tools';
 
-/**
- * Share / un-share one custom remote MCP connector with the caller's
- * organization.
- *
- *   PUT    /api/settings/organization/shared/connectors/:connectorId
- *   DELETE /api/settings/organization/shared/connectors/:connectorId
- *
- * `connectorId` is `user_custom_connectors.id`. It is client-supplied and
- * treated as untrusted: shape-validated as a uuid here, then paired in every
- * statement with the SERVER-DERIVED organization from `organization_members`,
- * and re-checked by 0086's `app_org_resource_is_manageable(organization_id)`
- * policy on the non-BYPASSRLS connection.
- *
- * Only a connector the CALLER owns can be shared. Sharing hands every member
- * the EFFECT of that connector's bearer token, so an admin must not be able to
- * publish another member's credential — the ownership predicate lives in the
- * SQL (org-shared-connector-service.ts), not in a check a future caller could
- * skip.
- *
- * Un-sharing evicts the cached catalog and closes the open MCP handle
- * immediately. Without that, a member keeps invoking a connector the org has
- * already withdrawn until the process restarts.
- */
-
 export const runtime = 'nodejs';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

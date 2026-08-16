@@ -1,10 +1,5 @@
-/**
- * Media API — typed wrappers for media generation Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface MediaHistoryItem {
   id: string;
@@ -37,8 +32,6 @@ export interface MediaVideoResponse {
   url: string;
   status: string;
 }
-
-// ---- Commands ----
 
 export async function mediaGetHistory(): Promise<MediaHistoryItem[]> {
   return command<MediaHistoryItem[]>('media_get_history');

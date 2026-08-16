@@ -22,20 +22,6 @@ import { useManagedCloudProjects } from '@/features/projects';
 import { saveProjectChatHandoff } from '@/features/projects/lib/project-chat-handoff';
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 
-/**
- * /projects/[id] - per-project detail view.
- *
- * Layout: single centered column (ChatGPT-style).
- * - FolderOpen icon + project name title
- * - "New chat in <name>" composer
- * - Chats / Sources tab bar
- * - Chat list or empty state
- *
- * Top-right: "..." menu with "Project settings" and "Pin project".
- * "Project settings" opens ProjectSettingsDialog (same modal the sidebar gear uses).
- * Knowledge files live inside the settings modal under "Files".
- */
-
 type Tab = 'chats' | 'sources';
 
 const VALID_ACCENT_COLORS = new Set<ProjectAccentColor>([
@@ -54,7 +40,6 @@ function normalizeAccent(value: string | undefined): ProjectAccentColor | null {
     : null;
 }
 
-/** Format a date string into a short human-readable label. */
 function formatChatDate(dateStr: string | undefined | null): string {
   if (!dateStr) return '';
   try {
@@ -74,9 +59,6 @@ function formatChatDate(dateStr: string | undefined | null): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Capacity thresholds
-// ---------------------------------------------------------------------------
 const MAX_CONVERSATIONS_WARN = 80;
 
 export default function ProjectDetailPage() {
@@ -107,14 +89,11 @@ export default function ProjectDetailPage() {
 
   const [tab, setTab] = useState<Tab>('chats');
 
-  // "..." overflow menu
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Settings modal
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  // Close menu when clicking outside
   useEffect(() => {
     if (!menuOpen) return;
     function handleClick(e: MouseEvent) {
@@ -155,9 +134,6 @@ export default function ProjectDetailPage() {
         return false;
       }
       setActiveProject(project.id);
-      // `?projectId=` is the ONE canonical project entry param for /chat
-      // (matches the sidebar project-row "New chat"); WebChatPage reads it to
-      // preselect the project and the composer opens in AGI Work mode.
       router.push(`/chat?projectId=${encodeURIComponent(project.id)}`);
     },
     [project, router, setActiveProject],
@@ -198,7 +174,6 @@ export default function ProjectDetailPage() {
     return summarizeProjectHeader({ project: record });
   }, [accountId, project]);
 
-  // Loading state while hydrating from server
   if (projectStatus === 'loading' || projectStatus === 'idle') {
     return (
       <WebAppShell>
@@ -736,7 +711,6 @@ export default function ProjectDetailPage() {
                 </>
               )
             ) : (
-              /* Sources tab: ChatGPT-style sources experience */
               <SourcesPanel projectId={project.id} />
             )}
           </div>
@@ -756,10 +730,6 @@ export default function ProjectDetailPage() {
     </WebAppShell>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Empty state
-// ---------------------------------------------------------------------------
 
 interface EmptyChatsStateProps {
   projectName: string;

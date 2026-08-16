@@ -1,12 +1,3 @@
-/**
- * The composer's "you are in image/video mode" chip.
- *
- * Entering a media mode swaps the selected model out from under the user, so
- * there has to be a persistent, obvious way back — otherwise someone taps Image
- * once and their next text question silently goes to a model that cannot answer
- * it. The chip names the active model for the same reason: the mode IS a model
- * change, and hiding that is what made the old boolean toggles confusing.
- */
 
 import { View, Pressable } from 'react-native';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
@@ -17,7 +8,6 @@ import type { MediaMode } from '@/stores/chat/chatViewStore';
 
 export interface MediaModeChipProps {
   mode: Exclude<MediaMode, 'text'>;
-  /** Short display name of the media model now selected. */
   modelName?: string | null;
   onExit: () => void;
 }

@@ -46,11 +46,6 @@ const AUTO_MODE_ICONS: Readonly<Record<ModelTier, string>> = {
   premium: 'Crown',
 };
 
-/**
- * Mobile-owned icon treatment over registry-owned Auto identity and copy.
- * Model/routing knowledge must stay in the canonical registry; only visual
- * presentation belongs in this platform adapter.
- */
 export const AUTO_MODES: AutoModeDef[] = getAutoRoutingProfiles().map((profile) => ({
   id: profile.id,
   name: profile.label,
@@ -59,7 +54,6 @@ export const AUTO_MODES: AutoModeDef[] = getAutoRoutingProfiles().map((profile) 
   tier: profile.profile,
 }));
 
-/** Canonical default Auto selection; identity is owned by the routing registry. */
 export const DEFAULT_AUTO_MODE_ID = getDefaultAutoRoutingProfile().id;
 
 const PROVIDER_META: Partial<Record<Provider | string, Pick<ProviderDef, 'icon'>>> = {
@@ -75,22 +69,11 @@ const PROVIDER_META: Partial<Record<Provider | string, Pick<ProviderDef, 'icon'>
 };
 
 const MOBILE_MODEL_OPTIONS = {
-  // Some general-purpose, vision-capable models are cataloged as `code`
-  // because coding is their primary catalog-declared strength.
-  // Mobile chat can still run them, so excluding the type hid a current model
-  // even though the registry admitted it to this runtime profile.
   modelTypes: ['chat', 'reasoning', 'multimodal', 'search', 'code'] as const,
 };
 
 type MobileChatPickerModel = PickerModelView & { contextWindow: number };
 
-/**
- * Mobile context budgeting needs a provider-published token window. Media APIs
- * may intentionally omit that field because they are bounded by characters,
- * duration, or output size instead; never turn those contracts into a fake
- * token count. A chat row without a proven token window therefore fails closed
- * at this projection boundary.
- */
 function hasTokenContextWindow(model: PickerModelView): model is MobileChatPickerModel {
   return (
     typeof model.contextWindow === 'number' &&
@@ -131,7 +114,6 @@ function toModelDef(model: MobileChatPickerModel): ModelDef {
 
 export const MODEL_LIST: ModelDef[] = MOBILE_PICKER_MODELS.map(toModelDef);
 
-/** Canonical Mobile Cloud rows for one subscription tier. */
 export function getCloudModelsForTier(subscriptionTier: string): ModelDef[] {
   return getModelsForTierAndSurface(subscriptionTier, 'mobile/cloud-chat', {
     modelTypes: [...MOBILE_MODEL_OPTIONS.modelTypes],

@@ -1,16 +1,3 @@
-/**
- * Phase A Slice 5 — Chat UX shell smoke tests
- *
- * Covers:
- *   BrandedGreeting, AdvancedEmptyState, BriefStatus + FloatingBriefStatus + useBriefStatus,
- *   ChatNotificationBadge, BrowserActivityBadge,
- *   KeyboardShortcutsDialog, KeyboardShortcutsOverlay, SlashCommandMenu,
- *   SkillMentionPicker, FileMentionPicker, PromptStash, PromptSuggestionsDropdown,
- *   ChatInputToolbar, ChatStream (empty + messages)
- *
- * Uses renderToStaticMarkup for pure-presentational components (no hooks).
- * Store-reading components are tested via store mutation + direct render checks.
- */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot } from 'react-dom/client';
@@ -18,7 +5,6 @@ import { createRoot } from 'react-dom/client';
 import * as _React from 'react';
 import { act } from 'react';
 
-// ── Components under test ─────────────────────────────────────────────────────
 import { BrandedGreeting } from '../BrandedGreeting';
 import { AdvancedEmptyState } from '../AdvancedEmptyState';
 import { ChatInterface } from '../ChatInterface';
@@ -38,7 +24,6 @@ import { SkillMentionPicker, type MentionSkill } from '../SkillMentionPicker';
 import { FileMentionPicker, type MentionFile } from '../FileMentionPicker';
 import { PromptSuggestionsDropdown, type PromptSuggestion } from '../PromptSuggestionsDropdown';
 
-// ── Stores under test ─────────────────────────────────────────────────────────
 import { useMentionStore } from '../../stores/mentionStore';
 import { usePromptStashStore } from '../../stores/promptStashStore';
 import { usePlanModeStore } from '../../stores/planModeStore';
@@ -46,10 +31,6 @@ import { useChatStore } from '../../stores/chatStore';
 import { useArtifactStore } from '../../stores/artifactStore';
 import { useUIStore } from '../../stores/uiStore';
 import type { ChatRuntime } from '../../lib/runtime';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Store reset helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function resetStores() {
   useMentionStore.setState({ activeTrigger: null, query: '', cursorIndex: 0 });
@@ -62,10 +43,6 @@ function resetStores() {
     isStreaming: false,
   });
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BrandedGreeting
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('BrandedGreeting', () => {
   it('renders without user name', () => {
@@ -81,7 +58,6 @@ describe('BrandedGreeting', () => {
   it('uses only first word of multi-word name', () => {
     const html = renderToStaticMarkup(<BrandedGreeting userName="Alice Wonderland" />);
     expect(html).toContain('Alice');
-    // "Wonderland" should not appear (first name only)
     expect(html).not.toContain('Wonderland');
   });
 
@@ -95,10 +71,6 @@ describe('BrandedGreeting', () => {
     expect(html).toContain('from-violet-500');
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AdvancedEmptyState
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('AdvancedEmptyState', () => {
   it('renders an empty flex spacer', () => {
@@ -125,18 +97,10 @@ describe('ChatInterface host ownership slots', () => {
       />,
     );
 
-    // The host slot owns the content area: it renders, and it REPLACES the
-    // package's default <EmptyState> greeting ("What can I help with?").
     expect(html).toContain('Desktop empty');
     expect(html).not.toContain('What can I help with?');
   });
 
-  /**
-   * The composer-area sample-prompt chips (Code / Research / Image / Video /
-   * Computer) were removed on every surface — web, desktop, and mobile —
-   * per the founder on 2026-08-06. The empty state is the greeting alone.
-   * This guards the removal so they cannot quietly come back on one surface.
-   */
   it('renders no quick-action chips on an empty chat, whatever the runtime declares', () => {
     const runtime = {
       supportsResearch: true,
@@ -186,10 +150,6 @@ describe('ChatInterface host ownership slots', () => {
     expect(html).not.toContain('Cloud Sync');
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BriefStatus
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('BriefStatus', () => {
   it('renders null when message is null', () => {
@@ -245,7 +205,6 @@ describe('FloatingBriefStatus', () => {
 
 describe('useBriefStatus (logic only)', () => {
   it('createStatus creates non-complete, non-error status', () => {
-    // Test the hook factory inline (no React rendering needed)
     const createStatus = (message: string): BriefStatusState => ({
       message,
       isComplete: false,
@@ -278,14 +237,9 @@ describe('actionMessages', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ChatNotificationBadge
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('ChatNotificationBadge', () => {
   it('renders nothing when count is 0', () => {
     const html = renderToStaticMarkup(<ChatNotificationBadge count={0} />);
-    // AnimatePresence renders empty when no children
     expect(html).not.toContain('bg-blue-500');
   });
 
@@ -318,10 +272,6 @@ describe('ChatNotificationBadge', () => {
     expect(html).toContain('bg-green-500');
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BrowserActivityBadge
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('BrowserActivityBadge', () => {
   it('renders nothing when not connected and idle with no URL', () => {
@@ -365,10 +315,6 @@ describe('BrowserActivityBadge', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// KeyboardShortcutsDialog
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('KeyboardShortcutsDialog', () => {
   it('renders nothing when closed', () => {
     const html = renderToStaticMarkup(
@@ -389,10 +335,6 @@ describe('KeyboardShortcutsDialog', () => {
     expect(html).toContain('Escape');
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// KeyboardShortcutsOverlay
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('KeyboardShortcutsOverlay', () => {
   it('renders nothing when closed', () => {
@@ -430,10 +372,6 @@ describe('KeyboardShortcutsOverlay', () => {
     expect(html).toContain('Customize shortcuts');
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SlashCommandMenu
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('SlashCommandMenu', () => {
   const suggestions: CommandSuggestion[] = [
@@ -478,15 +416,10 @@ describe('SlashCommandMenu', () => {
         onHover={() => {}}
       />,
     );
-    // Count aria-selected="true" (only the selected item)
     const trueMatches = html.match(/aria-selected="true"/g) ?? [];
     expect(trueMatches).toHaveLength(1);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SkillMentionPicker
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('SkillMentionPicker', () => {
   const skills: MentionSkill[] = [
@@ -519,10 +452,6 @@ describe('SkillMentionPicker', () => {
     expect(html).not.toContain('Data Analyst');
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FileMentionPicker
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('FileMentionPicker', () => {
   const staticEntries: MentionFile[] = [
@@ -571,10 +500,6 @@ describe('FileMentionPicker', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PromptSuggestionsDropdown
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('PromptSuggestionsDropdown', () => {
   const suggestions: PromptSuggestion[] = [
     { text: 'Add unit tests', description: 'Add test coverage', type: 'expansion', icon: '🧪' },
@@ -620,10 +545,6 @@ describe('PromptSuggestionsDropdown', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// mentionStore
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('mentionStore', () => {
   beforeEach(() => resetStores());
 
@@ -652,20 +573,16 @@ describe('mentionStore', () => {
     useMentionStore.getState().openMention('@skill');
     useMentionStore.setState({ cursorIndex: 2 });
     useMentionStore.getState().moveCursor('down', 3);
-    expect(useMentionStore.getState().cursorIndex).toBe(0); // wraps
+    expect(useMentionStore.getState().cursorIndex).toBe(0);
   });
 
   it('moveCursor wraps around upward', () => {
     useMentionStore.getState().openMention('@skill');
     useMentionStore.setState({ cursorIndex: 0 });
     useMentionStore.getState().moveCursor('up', 3);
-    expect(useMentionStore.getState().cursorIndex).toBe(2); // wraps to last
+    expect(useMentionStore.getState().cursorIndex).toBe(2);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// promptStashStore
-// ─────────────────────────────────────────────────────────────────────────────
 
 describe('promptStashStore', () => {
   beforeEach(() => resetStores());
@@ -708,10 +625,6 @@ describe('promptStashStore', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ChatInputToolbar (plan-mode toggle — Task #18)
-// ─────────────────────────────────────────────────────────────────────────────
-
 import { ChatInputToolbar } from '../ChatInputToolbar';
 
 describe('ChatInputToolbar plan-mode toggle (Task #18)', () => {
@@ -719,9 +632,8 @@ describe('ChatInputToolbar plan-mode toggle (Task #18)', () => {
 
   it('renders toolbar with plan mode button', () => {
     const html = renderToStaticMarkup(<ChatInputToolbar />);
-    // In SSR, zustand reads initial state (planMode=false) or server snapshot
-    expect(html).toContain('plan mode'); // aria-label contains "plan mode"
-    expect(html).toContain('lucide-book-open'); // icon svg class in HTML output
+    expect(html).toContain('plan mode');
+    expect(html).toContain('lucide-book-open');
   });
 
   it('toolbar has model slot placeholder', () => {
@@ -745,10 +657,6 @@ describe('ChatInputToolbar plan-mode toggle (Task #18)', () => {
     expect(usePlanModeStore.getState().planMode).toBe(false);
   });
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ChatStream (basic render)
-// ─────────────────────────────────────────────────────────────────────────────
 
 import { ChatStream } from '../ChatStream';
 
@@ -805,39 +713,8 @@ describe('ChatStream', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Artifact panel wiring — DESKTOP-ARTIFACTS-ENTIRELY-UNWIRED-01
-//
-// Proves the frontend half of the fix: once a message carries `artifacts`
-// (populated by useChat's `chat:artifact` handler — see TauriRuntime.test.ts
-// for the event-listener-level proof), the inline chip renders and, once the
-// panel is open, ChatInterface's ArtifactPanel mount actually shows the real
-// content and the Edit affordance (`onSaveEdit`) that was previously always
-// absent.
-//
-// NOTE: these tests render via `react-dom/client`'s `createRoot`, NOT
-// `renderToStaticMarkup` like the rest of this file. `useChatStore` is
-// `persist`-wrapped, and zustand's persist middleware gives
-// `useSyncExternalStore` a `getServerSnapshot` that intentionally returns the
-// pre-hydration default state (to avoid SSR/client hydration mismatches in a
-// real app) — so `renderToStaticMarkup` (a server render) always sees
-// `activeConversationId: null` / empty `messagesByConversation` regardless of
-// `setState()`, even though `useChatStore.getState()` reflects the write
-// correctly. Confirmed empirically: none of the OTHER tests in this file
-// exercise "mutate useChatStore then assert it renders" (they either assert
-// on props or on non-persisted stores), so this divergence went unnoticed
-// until these tests. A real client render exercises `getSnapshot` instead,
-// matching what the actual app sees in the browser.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// React's act() only suppresses "not wrapped in act" warnings when this flag
-// is set — @testing-library/react sets it automatically; since this package
-// has no RTL dependency, set it explicitly for this file's client renders.
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// jsdom does not implement scrollIntoView (used by MessageList's
-// auto-scroll-to-bottom effect); stub it so a real client render doesn't
-// throw and fall into ChatErrorBoundary.
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
 }
@@ -930,13 +807,9 @@ describe('ChatInterface artifact panel wiring', () => {
       <ChatInterface runtime={null} enableSearchOverlay={false} />,
     );
     try {
-      // The panel is mounted and renders the REAL artifact content, not a
-      // "No artifact selected" placeholder.
       expect(html).not.toContain('No artifact selected');
       expect(html).toContain('# Hello Artifact');
 
-      // Before the fix, ChatInterface never passed `onSaveEdit` to
-      // ArtifactPanel, so this button never rendered regardless of state.
       expect(html).toContain('Edit artifact');
     } finally {
       unmount();
@@ -944,19 +817,10 @@ describe('ChatInterface artifact panel wiring', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ChatInput composer — web-parity control row (2026-07-10)
-// The shared ChatInput was aligned to web's ChatComposerNew: a single
-// non-wrapping control row, a round "+" trigger, and the shared 3-state
-// SendButton. These structural assertions guard that look from regressing.
-// ─────────────────────────────────────────────────────────────────────────────
-
 describe('ChatInput composer structure (web parity)', () => {
   beforeEach(resetStores);
 
   function markup() {
-    // runtime={null} still renders the composer (disabled). This is the same
-    // path the ChatInterface host-ownership tests above exercise.
     return renderToStaticMarkup(
       <ChatInterface runtime={null} sidebarSlot={null} enableSearchOverlay={false} />,
     );
@@ -965,7 +829,6 @@ describe('ChatInput composer structure (web parity)', () => {
   it('renders the round "+" attachment trigger', () => {
     const html = markup();
     expect(html).toContain('aria-label="Add attachment"');
-    // Round trigger (rounded-full), matching web's composer — not the old rounded-lg.
     expect(html).toMatch(/aria-label="Add attachment"[^>]*class="[^"]*rounded-full/);
   });
 
@@ -976,9 +839,7 @@ describe('ChatInput composer structure (web parity)', () => {
 
   it('lays the control cluster out as a single non-wrapping row (flex-nowrap)', () => {
     const html = markup();
-    // web deliberately uses flex-nowrap so the send button never drops a line.
     expect(html).toContain('flex-nowrap');
-    // The old wrapping layout used gap-y-1 on a flex-wrap row; it must be gone.
     expect(html).not.toContain('flex-wrap items-center gap-x-2 gap-y-1');
   });
 });

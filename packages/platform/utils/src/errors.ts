@@ -14,7 +14,6 @@ import type {
 } from '@agiworkforce/types';
 import { ErrorCode, type ErrorCodeValue } from '@agiworkforce/types';
 
-// Re-export types and constants from @agiworkforce/types to avoid duplication
 export type ApiError = ApiErrorType;
 export type FriendlyError = FriendlyErrorType;
 export { ErrorCode };
@@ -52,9 +51,6 @@ export class AppError extends Error {
     Object.setPrototypeOf(this, AppError.prototype);
   }
 
-  /**
-   * Convert to API error response format.
-   */
   toJSON(): ApiError {
     return {
       code: this.code,
@@ -64,10 +60,6 @@ export class AppError extends Error {
     };
   }
 
-  /**
-   * Check if this error should be exposed to clients.
-   * Internal errors should not leak implementation details.
-   */
   isClientSafe(): boolean {
     return this.statusCode < 500;
   }
@@ -84,61 +76,46 @@ export class AppError extends Error {
  * ```
  */
 export const createError = {
-  /** Create an unauthorized (401) error */
   unauthorized: (message = 'Unauthorized'): AppError =>
     new AppError(ErrorCode.UNAUTHORIZED, message, 401),
 
-  /** Create a forbidden (403) error */
   forbidden: (message = 'Forbidden'): AppError => new AppError(ErrorCode.FORBIDDEN, message, 403),
 
-  /** Create a not found (404) error */
   notFound: (message = 'Resource not found'): AppError =>
     new AppError(ErrorCode.NOT_FOUND, message, 404),
 
-  /** Create a validation (400) error */
   validation: (message: string, details?: unknown): AppError =>
     new AppError(ErrorCode.VALIDATION_ERROR, message, 400, details),
 
-  /** Create a conflict (409) error */
   conflict: (message: string): AppError => new AppError(ErrorCode.CONFLICT, message, 409),
 
-  /** Create a rate limit (429) error */
   rateLimit: (message = 'Rate limit exceeded'): AppError =>
     new AppError(ErrorCode.RATE_LIMIT_EXCEEDED, message, 429),
 
-  /** Create a Stripe (502) error */
   stripe: (message: string, details?: unknown): AppError =>
     new AppError(ErrorCode.STRIPE_ERROR, message, 502, details),
 
-  /** Create a cloud DB/API (502) error */
   cloudDatabase: (message: string, details?: unknown): AppError =>
     new AppError(ErrorCode.CLOUD_DB_ERROR, message, 502, details),
 
-  /** Create an internal server (500) error */
   internal: (message = 'Internal server error', details?: unknown): AppError =>
     new AppError(ErrorCode.INTERNAL_ERROR, message, 500, details),
 
-  /** Create a service unavailable (503) error */
   serviceUnavailable: (message = 'Service unavailable'): AppError =>
     new AppError(ErrorCode.SERVICE_UNAVAILABLE, message, 503),
 
-  /** Create a timeout (504) error */
   timeout: (message = 'Operation timed out'): AppError =>
     new AppError(ErrorCode.TIMEOUT, message, 504),
 
-  /** Create a network error */
   network: (message = 'Network error'): AppError =>
     new AppError(ErrorCode.NETWORK_ERROR, message, 503),
 
-  /** Create a payload too large (413) error */
   payloadTooLarge: (message = 'Payload too large'): AppError =>
     new AppError(ErrorCode.PAYLOAD_TOO_LARGE, message, 413),
 
-  /** Create a bad request (400) error - alias for validation */
   badRequest: (message: string, details?: unknown): AppError =>
     new AppError(ErrorCode.VALIDATION_ERROR, message, 400, details),
 
-  /** Create a payment required (402) error */
   paymentRequired: (message = 'Payment required'): AppError =>
     new AppError(ErrorCode.PAYMENT_REQUIRED, message, 402),
 };
@@ -171,10 +148,6 @@ export function toAppError(error: unknown): AppError {
   return createError.internal(String(error));
 }
 
-/**
- * ERR-001: Error code to friendly message mapping.
- * Maps structured error codes to user-friendly messages.
- */
 const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
   [ErrorCode.UNAUTHORIZED]: {
     title: 'Sign In Required',
@@ -317,7 +290,6 @@ export function getFriendlyErrorByCode(code: ErrorCodeValue): FriendlyError {
  * ```
  */
 export function getFriendlyError(error: Error | string): FriendlyError {
-  // ERR-001: If this is an AppError with a code, use the code mapping first
   if (isAppError(error)) {
     return getFriendlyErrorByCode(error.code);
   }
@@ -325,10 +297,7 @@ export function getFriendlyError(error: Error | string): FriendlyError {
   const errorMessage = typeof error === 'string' ? error : error.message;
   const errorLower = errorMessage.toLowerCase();
 
-  // MCP errors - ERR-002: Never show "MCP" to users, translate to friendly messages
-  // These patterns match various MCP-related errors and translate them appropriately
   if (errorLower.includes('mcp')) {
-    // MCP server connection issues
     if (
       errorLower.includes('econnrefused') ||
       errorLower.includes('connection refused') ||
@@ -344,7 +313,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       };
     }
 
-    // MCP tool execution failures
     if (
       errorLower.includes('tool') ||
       errorLower.includes('execution') ||
@@ -358,7 +326,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       };
     }
 
-    // MCP authentication/credential issues
     if (
       errorLower.includes('auth') ||
       errorLower.includes('credential') ||
@@ -373,7 +340,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       };
     }
 
-    // MCP server startup/initialization issues
     if (
       errorLower.includes('start') ||
       errorLower.includes('init') ||
@@ -388,7 +354,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       };
     }
 
-    // MCP timeout
     if (errorLower.includes('timeout') || errorLower.includes('timed out')) {
       return {
         title: 'Service Too Slow',
@@ -398,7 +363,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
       };
     }
 
-    // Generic MCP error fallback
     return {
       title: 'Service Error',
       message: 'There was a problem communicating with the service.',
@@ -407,7 +371,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Tool execution errors (may not contain "mcp" but are MCP-related)
   if (
     errorLower.includes('tool_call') ||
     errorLower.includes('tool call') ||
@@ -422,7 +385,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Stream watchdog timeout — AI is working but stream went quiet
   if (errorLower.includes('stream_watchdog_timeout') || errorLower.includes('watchdog')) {
     return {
       title: 'Response Is Taking Longer Than Expected',
@@ -432,8 +394,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Provider capability mismatches: common with Bedrock, Vertex, and gateway models
-  // when structured output, thinking, or effort fields are sent to unsupported models.
   if (
     (errorLower.includes('output_config') &&
       (errorLower.includes('extra inputs') ||
@@ -455,7 +415,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Invalid API key / unauthorized
   if (
     errorLower.includes('invalid_api_key') ||
     errorLower.includes('invalid api key') ||
@@ -469,7 +428,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Quota exceeded / insufficient credits
   if (
     errorLower.includes('quota_exceeded') ||
     errorLower.includes('insufficient_credits') ||
@@ -484,7 +442,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Model not found
   if (errorLower.includes('model_not_found') || errorLower.includes('model not found')) {
     return {
       title: 'Model Unavailable',
@@ -494,7 +451,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Network errors
   if (
     errorLower.includes('network') ||
     errorLower.includes('fetch') ||
@@ -510,7 +466,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Timeout errors
   if (errorLower.includes('timeout') || errorLower.includes('timed out')) {
     return {
       title: 'Taking Too Long',
@@ -520,7 +475,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Authentication errors
   if (
     errorLower.includes('401') ||
     errorLower.includes('unauthorized') ||
@@ -534,7 +488,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Rate limit errors
   if (errorLower.includes('429') || errorLower.includes('rate limit')) {
     const retryAfterHint = extractRetryAfterHint(errorMessage);
     return {
@@ -547,7 +500,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Payment/billing errors
   if (
     errorLower.includes('billing') ||
     errorLower.includes('payment') ||
@@ -562,7 +514,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Server errors (5xx)
   if (
     errorLower.includes('500') ||
     errorLower.includes('server error') ||
@@ -576,7 +527,6 @@ export function getFriendlyError(error: Error | string): FriendlyError {
     };
   }
 
-  // Default fallback
   return {
     title: 'Something Went Wrong',
     message: "We weren't able to complete your request.",
@@ -603,28 +553,15 @@ export function formatErrorForChat(error: Error | string, _isSimpleMode: boolean
   return formatted;
 }
 
-/**
- * ERR-003: Context for contextual error suggestions.
- */
 export interface ErrorContext {
-  /** The component or feature where the error occurred */
   component?: string;
-  /** The operation being attempted (e.g., 'send_message', 'save_settings') */
   operation?: string;
-  /** The service involved (e.g., 'gmail', 'slack', 'notion') */
   service?: string;
-  /** Whether the operation can be retried */
   canRetry?: boolean;
-  /** Additional context data */
   extra?: Record<string, unknown>;
 }
 
-/**
- * ERR-003: Contextual suggestion mappings based on operation and error type.
- * Maps [operation, error_type] to specific suggestions.
- */
 const CONTEXTUAL_SUGGESTIONS: Record<string, Record<string, string>> = {
-  // Chat operations
   send_message: {
     network:
       'Your message was not sent. Please check your internet connection and try sending again.',
@@ -632,13 +569,11 @@ const CONTEXTUAL_SUGGESTIONS: Record<string, Record<string, string>> = {
     rate_limit: 'Too many messages sent. Please wait a moment before sending another message.',
     auth: 'Your session may have expired. Please sign in again to continue chatting.',
   },
-  // Settings operations
   save_settings: {
     network: 'Your settings were not saved. Please check your connection and try again.',
     validation: 'Some settings have invalid values. Please check the highlighted fields.',
     default: 'Unable to save settings. Try again or restart the app if the problem persists.',
   },
-  // File operations
   upload_file: {
     network: 'File upload failed. Please check your connection and try again.',
     payload_too_large:
@@ -649,20 +584,17 @@ const CONTEXTUAL_SUGGESTIONS: Record<string, Record<string, string>> = {
     network: 'Download failed. Please check your connection and try again.',
     not_found: 'The file is no longer available. It may have been deleted or moved.',
   },
-  // Service connection operations
   connect_service: {
     network: 'Could not connect to the service. Please check your internet connection.',
     auth: 'Authentication failed. Please try reconnecting your account in Settings.',
     timeout: 'The service is not responding. Try again later.',
     default: 'Could not connect. Please check your credentials and try reconnecting.',
   },
-  // Search operations
   search: {
     network: 'Search failed. Please check your connection and try again.',
     timeout: 'Search is taking too long. Try a more specific search term.',
     rate_limit: 'Too many searches. Please wait a moment before searching again.',
   },
-  // Tool execution
   tool_execution: {
     network: 'The action failed due to a connection issue. Please try again.',
     timeout: 'The action took too long. Try a simpler request.',
@@ -671,9 +603,6 @@ const CONTEXTUAL_SUGGESTIONS: Record<string, Record<string, string>> = {
   },
 };
 
-/**
- * Service-specific suggestions for reconnection.
- */
 const SERVICE_SUGGESTIONS: Record<string, string> = {
   gmail: 'Try reconnecting your Gmail account in Settings > Integrations.',
   google_drive: 'Try reconnecting your Google Drive in Settings > Integrations.',
@@ -704,7 +633,6 @@ const SERVICE_SUGGESTIONS: Record<string, string> = {
  * ```
  */
 export function getContextualError(error: Error | string, context?: ErrorContext): FriendlyError {
-  // Start with the base friendly error
   const friendly = getFriendlyError(error);
 
   if (!context) {
@@ -714,7 +642,6 @@ export function getContextualError(error: Error | string, context?: ErrorContext
   const errorMessage = typeof error === 'string' ? error : error.message;
   const errorLower = errorMessage.toLowerCase();
 
-  // Determine error type for lookup
   let errorType = 'default';
   if (
     errorLower.includes('network') ||
@@ -740,7 +667,6 @@ export function getContextualError(error: Error | string, context?: ErrorContext
     errorType = 'payload_too_large';
   }
 
-  // Look up contextual suggestion based on operation
   if (context.operation) {
     const operationSuggestions = CONTEXTUAL_SUGGESTIONS[context.operation];
     if (operationSuggestions) {
@@ -752,14 +678,12 @@ export function getContextualError(error: Error | string, context?: ErrorContext
     }
   }
 
-  // Add service-specific reconnection hint for auth errors
   if (errorType === 'auth' && context.service) {
     const serviceSuggestion =
       SERVICE_SUGGESTIONS[context.service] || SERVICE_SUGGESTIONS['default'];
     friendly.suggestion = `${friendly.suggestion || ''} ${serviceSuggestion}`.trim();
   }
 
-  // Add retry hint if applicable
   if (context.canRetry === false && friendly.suggestion) {
     friendly.suggestion = friendly.suggestion.replace(
       /try again/gi,

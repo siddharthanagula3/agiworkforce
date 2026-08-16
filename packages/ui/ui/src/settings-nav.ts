@@ -27,17 +27,6 @@ import {
   LifeBuoy,
 } from 'lucide-react';
 
-/**
- * Canonical settings navigation — the single source of truth for the grouped,
- * icon'd settings nav shared by the desktop Settings modal and the web settings
- * page. Pure config (no IO / no store): each surface maps `key` to its own
- * routing (desktop tab id, web route href) and renders its own list.
- *
- * Source of truth: apps/desktop/src/features/settings/SettingsPanel.tsx
- * (SETTINGS_NAV + NAV_GROUPS). Keep the desktop config importing from here so
- * the two surfaces cannot drift.
- */
-
 export type SettingsNavKey =
   | 'general'
   | 'account'
@@ -79,16 +68,9 @@ export interface SettingsNavEntry {
   key: SettingsNavKey;
   label: string;
   icon: LucideIcon;
-  /**
-   * Extra search aliases so settings search matches common terms that differ
-   * from the visible label — e.g. "theme"/"dark"/"light" resolve to the
-   * Personalization tab, which also houses the Appearance/Themes section.
-   * Without these, searching the obvious term ("theme") returns no results.
-   */
   keywords?: string[];
 }
 
-/** Flat list of every settings entry (key/label/icon), in canonical order. */
 export const SETTINGS_NAV: SettingsNavEntry[] = [
   {
     key: 'general',
@@ -189,13 +171,6 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
   },
 ];
 
-/**
- * Search aliases keyed by nav key, derived from SETTINGS_NAV so the aliases
- * authored above stay the single source of truth for every surface.
- *
- * AUDIT-FIX PAR-16: settings search filtered on visible labels only, so these
- * keywords were dead data — searching "theme" or "shortcuts" returned nothing.
- */
 export const SETTINGS_NAV_KEYWORDS: Partial<Record<SettingsNavKey, string[]>> = SETTINGS_NAV.reduce<
   Partial<Record<SettingsNavKey, string[]>>
 >((map, entry) => {
@@ -204,13 +179,10 @@ export const SETTINGS_NAV_KEYWORDS: Partial<Record<SettingsNavKey, string[]>> = 
 }, {});
 
 export interface SettingsNavGroup {
-  /** Optional section heading (omitted for the first/default group). */
   label?: string;
-  /** Keys referencing entries in SETTINGS_NAV. */
   keys: SettingsNavKey[];
 }
 
-/** Grouped navigation — the section structure both surfaces render. */
 export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   {
     keys: [
@@ -241,41 +213,18 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
   { label: 'Advanced', keys: ['developer'] },
 ];
 
-// ---------------------------------------------------------------------------
-// Web projection — grouped nav rendered by the shared SettingsModal shell.
-// ---------------------------------------------------------------------------
-
-/**
- * A resolved nav entry (key + label + icon) — the shape the shared shell
- * renders directly, so a surface can inject its own groups without the shell
- * needing to know about SETTINGS_NAV lookups.
- */
 export interface SettingsNavItem {
   key: SettingsNavKey;
   label: string;
   icon: LucideIcon;
-  /**
-   * Optional per-surface search aliases. When omitted, settings search falls
-   * back to SETTINGS_NAV_KEYWORDS for this key (AUDIT-FIX PAR-16).
-   */
   keywords?: string[];
 }
 
-/** A rendered group: optional heading + its items, in order. */
 export interface SettingsNavGroupResolved {
   label?: string;
   items: SettingsNavItem[];
 }
 
-/**
- * Web settings IA (founder directive, 2026-07-10): ONE flat, unlabeled list.
- * Skills / Connectors / Plugins are plain items directly after the core
- * settings items — deliberately NO "Customize" group heading (unlike
- * claude.ai's sidebar, which groups them; we drop that heading). Memory is
- * folded into Capabilities (reachable via a chevron link, deep-linkable at
- * /settings/memory). AGI Code is omitted: web has no AGI-Code settings
- * surface to back it.
- */
 export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
   {
     items: [

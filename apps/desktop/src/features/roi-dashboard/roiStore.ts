@@ -216,7 +216,6 @@ export const useROIStore = create<ROIState>()(
         }
       });
 
-      // Set initial state synchronously
       set((state) => {
         state.isConnected = true;
       });

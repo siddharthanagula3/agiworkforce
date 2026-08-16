@@ -1,10 +1,3 @@
-/**
- * BrowserActivityBadge — Phase A Slice 5 (ported from UAC)
- *
- * Shows a pill indicator for browser extension / AGI Work integration status.
- * Uses optional props instead of Tauri/desktop-specific hooks.
- * Hosts supply the state from their extension-events hook.
- */
 import { Globe, Loader2, WifiOff } from 'lucide-react';
 import { useMemo } from 'react';
 import { cn } from '../lib/utils';
@@ -12,19 +5,12 @@ import { cn } from '../lib/utils';
 export type BrowserAgentStatus = 'idle' | 'planning' | 'executing' | 'done';
 
 export interface BrowserActivityBadgeProps {
-  /** Current page URL (null when browser not connected or no page active). */
   currentPageUrl?: string | null;
-  /** Current page title (used for tooltip). */
   currentPageTitle?: string | null;
-  /** Last action performed by the agent (used for tooltip). */
   lastAction?: string | null;
-  /** Current browser agent status. */
   agentStatus?: BrowserAgentStatus;
-  /** Whether the Chrome extension is connected. */
   extensionConnected?: boolean;
-  /** Whether there is a browser error. */
   hasError?: boolean;
-  /** Called when the user clicks the badge (e.g., to open the browser sidecar). */
   onClick?: () => void;
 }
 
@@ -68,7 +54,6 @@ export function BrowserActivityBadge({
     return host;
   }, [agentStatus, currentPageUrl, extensionConnected, hasError]);
 
-  // Don't render when nothing to show
   if (!extensionConnected && agentStatus === 'idle' && !currentPageUrl) {
     return null;
   }

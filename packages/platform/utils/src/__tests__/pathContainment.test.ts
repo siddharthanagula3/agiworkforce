@@ -48,9 +48,6 @@ describe('resolveContained — rejection cases', () => {
     if (!r.ok) expect(r.reason).toBe('traversal');
   });
 
-  // The classic F-05 case: /home/u/project should NOT contain
-  // /home/u/project-evil/foo (without separator check, naive startsWith
-  // would accept this).
   it('rejects adjacent-directory bypass (F-05)', () => {
     const r = resolveContained(root, '../project-evil/foo.txt');
     expect(r.ok).toBe(false);

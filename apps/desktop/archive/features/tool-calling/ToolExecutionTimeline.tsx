@@ -1,9 +1,3 @@
-/**
- * ToolExecutionTimeline Component
- *
- * Visualize multi-step agent workflows with a timeline view.
- * Shows tool execution steps, dependencies, and overall progress.
- */
 
 import { useMemo } from 'react';
 import {
@@ -153,14 +147,12 @@ export function ToolExecutionTimeline({
   className,
   compact = false,
 }: ToolExecutionTimelineProps) {
-  // Calculate overall progress
   const progress = useMemo(() => {
     const totalSteps = workflow.total_steps || workflow.steps.length;
     const completedSteps = workflow.current_step || 0;
     return totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
   }, [workflow]);
 
-  // Get status icon and color
   const getStatusDisplay = () => {
     switch (workflow.status) {
       case 'pending':
@@ -204,7 +196,6 @@ export function ToolExecutionTimeline({
 
   const status = getStatusDisplay();
 
-  // Format duration
   const formatDuration = (ms?: number): string => {
     if (!ms) return '-';
     if (ms < 1000) return `${ms}ms`;

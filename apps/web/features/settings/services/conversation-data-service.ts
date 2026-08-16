@@ -9,11 +9,6 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
-/**
- * Page size comes from the conversations wire contract, which is also the
- * fallback `GET /api/chat/conversations` applies when `limit` is absent, so the
- * archived and deleted lists here page exactly like Desktop and Mobile.
- */
 const ARCHIVED_PAGE_SIZE = MANAGED_CLOUD_CHAT_DEFAULT_PAGE_SIZE;
 
 const BulkConversationResponseSchema = z.object({
@@ -93,13 +88,6 @@ export async function listArchivedConversations(
   };
 }
 
-/**
- * Soft-deleted conversations, newest first.
- *
- * `DELETE` only sets `deleted_at` and nothing purges those rows, so before this
- * a deleted conversation was permanently unreachable while its messages stayed
- * in the database indefinitely.
- */
 export async function listDeletedConversations(
   offset = 0,
   signal?: AbortSignal,
@@ -127,13 +115,6 @@ export async function listDeletedConversations(
   };
 }
 
-/**
- * Clear `deleted_at`, putting the conversation back exactly as it was.
- *
- * Returns the restored conversation because the caller needs it: unlike an
- * archived chat — which is already in the sidebar store — a deleted one was
- * filtered out of every read, so it has to be ADDED back, not just updated.
- */
 export async function restoreDeletedConversation(id: string) {
   const response = await fetch(`${managedCloudConversationPath(id)}/restore`, {
     method: 'POST',
@@ -143,9 +124,6 @@ export async function restoreDeletedConversation(id: string) {
   if (!response.ok) {
     throw await responseError(response, 'Failed to restore deleted chat');
   }
-  // The raw wire row is returned so the caller can use the SAME
-  // `toWebConversation` mapper the sidebar uses; a second hand-written mapping
-  // is how fields get silently dropped.
   return ManagedCloudUpdateConversationResponseSchema.parse(await response.json()).conversation;
 }
 
@@ -206,15 +184,6 @@ export async function revokeSharedLink(token: string): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Published artifacts (CAP-015 slice 4)
-//
-// A published artifact has NO expiry — migration 0095 ships no TTL because no
-// expiry policy has been approved — so unpublishing here is the user's only way
-// to take a public page down. That makes this list a requirement of the
-// feature, not a nicety.
-// ---------------------------------------------------------------------------
-
 const PublishedArtifactSchema = z.object({
   token: z.string().min(1),
   artifactId: z.string(),
@@ -225,7 +194,6 @@ const PublishedArtifactSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   shareUrl: z.string().url(),
-  /** True when the page serves this artifact inside the cross-origin sandbox. */
   sandboxed: z.boolean(),
 });
 

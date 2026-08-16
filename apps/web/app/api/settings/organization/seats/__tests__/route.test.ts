@@ -56,8 +56,6 @@ describe('GET /api/settings/organization/seats', () => {
   });
 
   it('exposes NO mutation, because licensed seats are what the customer paid for', () => {
-    // A PATCH here would let an org admin grant themselves seats they never
-    // bought. 0085 also rejects the write at the database from the app role.
     expect(seatsRoute).not.toHaveProperty('PATCH');
     expect(seatsRoute).not.toHaveProperty('PUT');
     expect(seatsRoute).not.toHaveProperty('POST');
@@ -127,12 +125,11 @@ describe('GET /api/settings/organization/seats', () => {
   });
 
   it('refuses to report another organization seat count', async () => {
-    mockQuery.mockResolvedValueOnce([]); // no membership in ORG_B
+    mockQuery.mockResolvedValueOnce([]);
 
     const response = await GET(get(ORG_B));
 
     expect(response.status).toBe(403);
-    // No seat row was read at all.
     expect(mockQuery.mock.calls.some(([sql]) => String(sql).includes('licensed_seats'))).toBe(
       false,
     );

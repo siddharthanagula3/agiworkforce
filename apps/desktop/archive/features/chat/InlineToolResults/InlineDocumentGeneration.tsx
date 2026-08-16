@@ -122,7 +122,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     ],
   );
 
-  // Load file metadata (size + creation time) once the file path is available
   const [fileMeta, setFileMeta] = useState<FileMetadata | null>(null);
   useEffect(() => {
     if (!resolvedPath || failed) return;
@@ -140,7 +139,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     };
   }, [resolvedPath, failed]);
 
-  // Must be declared before all early returns to satisfy rules of hooks
   const createdAtDisplay = useMemo(() => {
     if (!fileMeta?.createdAt) return null;
     try {
@@ -153,9 +151,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     }
   }, [fileMeta?.createdAt]);
 
-  // Effective summary merges the Tauri-fetched fileMeta size in when the
-  // canonical generatedFile presentation does not carry one yet. Declared
-  // above the render early-returns to satisfy rules-of-hooks.
   const effectiveSummary = useMemo(
     () => ({
       ...generatedFileSummary,
@@ -168,7 +163,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     [generatedFileSummary, fileName, fileMeta],
   );
 
-  // Check running state before null guard so the spinner is reachable
   if (status === 'running') {
     return (
       <div className="mt-3 flex items-center gap-2 p-3 rounded-lg bg-surface-elevated border border-border/50">
@@ -183,7 +177,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
     );
   }
 
-  // Show error state if status indicates failure, even if data is null
   if (status === 'failed' || status === 'error') {
     return (
       <div className="mt-3 p-3 rounded-lg bg-surface-elevated border border-destructive/30">
@@ -219,7 +212,6 @@ export const InlineDocumentGeneration: React.FC<ToolResultProps> = ({ result, st
 
   const handleSaveAs = async () => {
     try {
-      // Web fallback: use blob download or link
       if (!isTauri) {
         if (downloadUrl) {
           const link = document.createElement('a');

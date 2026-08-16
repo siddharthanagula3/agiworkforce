@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * The panel body.
- *
- * MODALITY. Below 640px the panel covers the page, so it is a real modal:
- * `aria-modal="true"` plus a Tab trap. At ≥640px it is a 380px card beside the
- * content, so it is deliberately NOT modal — the user can keep reading the docs
- * page behind it while asking about it. Escape closes in both cases and returns
- * focus to the launcher.
- *
- * The panel is rendered inline (not portalled) because the widget root is
- * already `position: fixed` at the document level; a portal would buy nothing
- * and would complicate focus return.
- */
-
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import type { SupportSurface } from '../lib/contract';
 import { useSupportAccountContext } from '../hooks/useSupportAccountContext';
@@ -64,8 +50,6 @@ export function SupportPanel({
     return undefined;
   }, []);
 
-  // Only ask for the action allowlist once we know there is an account behind
-  // the request. A signed-out visitor never fetches it and never sees actions.
   useEffect(() => {
     if (!signedIn) return;
     let cancelled = false;
@@ -125,8 +109,6 @@ export function SupportPanel({
     (turnId: string) => {
       setShowHandoff(true);
       const turn = session.turns.find((candidate) => candidate.id === turnId);
-      // Remember why we are escalating so the human sees it in the transcript
-      // email, rather than a generic "user asked for help".
       escalationReasonRef.current = handoffReasonForReply(turn);
     },
     [session.turns],

@@ -1,20 +1,3 @@
-/**
- * Tests for check-db-isolation.mjs.
- *
- * A guard that cannot fail is decoration, and this one grew two passes whose
- * whole job is to fail on a shape nobody has written yet. So the sandbox tests
- * write that shape.
- *
- * Every pass resolves its inputs from `process.cwd()`, so a test drives the
- * REAL script — no patched copy, no second implementation that can drift from
- * the one CI runs — by pointing cwd at a throwaway tree.
- *
- * Several tests below are regressions for holes an adversarial review opened by
- * hand: a scope token supplied by an unrelated join, an interpolated SELECT list
- * standing in for a predicate, a file+table exemption retiring the owner-scoped
- * queries it claimed to leave policed, and a table recorded as "app-enforced"
- * that no pass could actually read. Each one was green before the fix.
- */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -26,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GUARD = join(REPO_ROOT, 'scripts', 'check-db-isolation.mjs');
 
-/** Run the real guard against a throwaway tree of `{ relPath: contents }`. */
 function runOnSandbox(files) {
   const sandbox = mkdtempSync(join(tmpdir(), 'crit015-'));
   try {
@@ -43,7 +25,6 @@ function runOnSandbox(files) {
 
 const NEON = 'apps/web/db/neon';
 
-/** A table nobody has classified: tenant column, no RLS, not in either list. */
 const UNDECIDED_TABLE = `create table if not exists public.holiday_plans (
   id uuid primary key default gen_random_uuid(),
   user_id text not null,
@@ -51,10 +32,6 @@ const UNDECIDED_TABLE = `create table if not exists public.holiday_plans (
   created_at timestamptz not null default now()
 );
 `;
-
-// ---------------------------------------------------------------------------
-// Pass 2 — every live tenant-scoped table needs an isolation decision.
-// ---------------------------------------------------------------------------
 
 test('the real guard passes on the repository as it stands', () => {
   const result = spawnSync(process.execPath, [GUARD], { cwd: REPO_ROOT, encoding: 'utf8' });
@@ -78,7 +55,6 @@ test('enabling RLS in the migration is an accepted decision', () => {
 });
 
 test('a table listed in USER_OWNED_TABLES is an accepted decision without RLS', () => {
-  // web_conversations is app-enforced in the real gate; no RLS statement here.
   const result = runOnSandbox({
     [`${NEON}/0001_chat.sql`]: `create table if not exists public.web_conversations (
   id uuid primary key default gen_random_uuid(),
@@ -134,8 +110,6 @@ test('a tenant column added by a LATER migration still demands a decision', () =
 });
 
 test('`user_code` is a credential, not a tenant column, and demands no decision', () => {
-  // Suffix-anchored matching is the difference between classifying the device
-  // flow correctly and demanding an owner for a row that has none yet.
   const result = runOnSandbox({
     [`${NEON}/0001_codes.sql`]: `create table if not exists public.pairing_codes (
   id uuid primary key default gen_random_uuid(),
@@ -146,10 +120,6 @@ test('`user_code` is a credential, not a tenant column, and demands no decision'
   });
   assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
 });
-
-// ---------------------------------------------------------------------------
-// Pass 1 — statements.
-// ---------------------------------------------------------------------------
 
 const SHARES_MIGRATION = `create table if not exists public.shared_sessions (
   id uuid primary key default gen_random_uuid(),
@@ -188,9 +158,6 @@ test('an unscoped read of a user-owned table over the owner connection fails', (
 });
 
 test('SQL written in a single-quoted string is scanned, not just backticks', () => {
-  // app/api/shared/route.ts writes both of its statements this way, so a
-  // backtick-only extractor read ZERO statements over shared_conversations
-  // while the table was recorded as app-enforced.
   const result = runOnSandbox({
     'apps/web/lib/shares.ts': [
       "import { getNeonDb } from './db';",
@@ -219,9 +186,6 @@ test('SQL written in a double-quoted string is scanned too', () => {
 });
 
 test('a service that receives its db handle as a parameter is scanned', () => {
-  // cloud-code-agent-service.ts takes a DatabaseAdapter and never names
-  // getNeonDb(), so the old file filter skipped five writes to an RLS-less
-  // user-owned table without reading them.
   const result = runOnSandbox({
     'apps/web/lib/services/turns.ts': [
       "import type { DatabaseAdapter } from '@agiworkforce/data-layer';",
@@ -235,9 +199,6 @@ test('a service that receives its db handle as a parameter is scanned', () => {
 });
 
 test('a scope token inside a LONGER identifier does not scope a statement', () => {
-  // `p.agent_user_id = s.agent_user_id` in a display-name subselect satisfied
-  // `user_id` as a substring, so deleting the real owner predicate from an
-  // owner-scoped read left the gate green.
   const result = runOnSandbox({
     'apps/web/lib/shares.ts': [
       "import { getNeonDb } from './db';",
@@ -266,8 +227,6 @@ test('an interpolated WHERE clause still scopes a statement', () => {
 });
 
 test('an interpolated SELECT list is not a predicate', () => {
-  // This is the shape that hid the handoff regression: `select ${COLUMNS} ...`
-  // where COLUMNS merely NAMES the owner column.
   const result = runOnSandbox({
     'apps/web/lib/shares.ts': [
       "import { getNeonDb } from './db';",
@@ -283,8 +242,6 @@ test('an interpolated SELECT list is not a predicate', () => {
 });
 
 test("an INSERT's interpolated column list still scopes the statement", () => {
-  // api/projects/route.ts builds its insert this way and is correct: the
-  // interpolated column list is how the row gets an owner.
   const result = runOnSandbox({
     'apps/web/lib/shares.ts': [
       "import { getNeonDb } from './db';",
@@ -297,10 +254,6 @@ test("an INSERT's interpolated column list still scopes the statement", () => {
   });
   assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
 });
-
-// ---------------------------------------------------------------------------
-// Function-scoped allowlist entries.
-// ---------------------------------------------------------------------------
 
 const HANDOFF_STORE = 'apps/web/lib/support/handoff/store.ts';
 
@@ -318,9 +271,6 @@ test('a function-scoped exemption covers the functions it names', () => {
 });
 
 test('a function-scoped exemption leaves the SAME table policed elsewhere in the file', () => {
-  // The whole point of narrowing. As a bare file+table entry this passed, and
-  // deleting `and owner_session_key = $2` from the real getSessionForOwner was
-  // invisible to the gate whose own comment promised it stayed policed.
   const result = runOnSandbox({
     [HANDOFF_STORE]: [
       "import { getNeonDb } from '@/lib/server/neon-db';",
@@ -339,9 +289,6 @@ test('a function-scoped exemption leaves the SAME table policed elsewhere in the
 });
 
 test('a bare call at the top of a body does not shadow the enclosing function', () => {
-  // `validateCloudCodeSessionId(sessionId);` looks exactly like a method
-  // declaration to a textual scan, and it stole the enclosing name from every
-  // statement below it — silently voiding the exemption.
   const result = runOnSandbox({
     [HANDOFF_STORE]: [
       "import { getNeonDb } from '@/lib/server/neon-db';",
@@ -357,10 +304,6 @@ test('a bare call at the top of a body does not shadow the enclosing function', 
   });
   assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
 });
-
-// ---------------------------------------------------------------------------
-// Pass 3 — an "app-enforced" table that nothing actually polices.
-// ---------------------------------------------------------------------------
 
 const REFERRALS_MIGRATION = `create table if not exists public.referrals (
   id uuid primary key default gen_random_uuid(),
@@ -385,8 +328,6 @@ test('an app-enforced table with zero policed statements fails as a hollow decis
 });
 
 test('a declared zero-coverage table is accepted', () => {
-  // `referrals` is in UNPOLICED_APP_ENFORCED_TABLES with the reason "no query
-  // site at all", so a live table nothing touches is fine.
   const result = runOnSandbox({
     [`${NEON}/0001_referrals.sql`]: REFERRALS_MIGRATION,
     'apps/web/lib/shares.ts': [
@@ -417,8 +358,6 @@ test('a zero-coverage reason that has stopped being true fails as stale', () => 
 });
 
 test('pass 3 stays quiet when there is no TypeScript surface to scan at all', () => {
-  // Migration-only sandboxes (most of the pass-2 tests above) must not have to
-  // declare the production table list.
   const result = runOnSandbox({ [`${NEON}/0001_shares.sql`]: SHARES_MIGRATION });
   assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
 });

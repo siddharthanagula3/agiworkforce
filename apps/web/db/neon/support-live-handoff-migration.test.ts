@@ -1,22 +1,3 @@
-/**
- * 0089_support_live_handoff.sql — SQL shape.
- *
- * SCOPE AND HONEST LIMITS: this is a static assertion over the migration text.
- * Every DB test in apps/web mocks the adapter, so nothing here proves runtime
- * behaviour — not that the CHECK constraints actually reject a bad row, not that
- * `app_rls` is really shut out, not that the conditional UPDATE is really
- * single-flight under concurrency. Those MUST be rehearsed manually on a
- * throwaway Neon branch using the checklist at the bottom of the migration. A
- * green run of this file is not that proof.
- *
- * What it does prove is that the migration keeps the properties the feature
- * depends on, so a future edit cannot quietly drop one:
- *   - a `waiting` session cannot be stored without a deadline;
- *   - there is no `connecting` status to store;
- *   - presence carries a heartbeat column, so liveness is not a bare boolean;
- *   - no privilege is granted to the user-context role, and there is no blanket
- *     schema-wide GRANT.
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,8 +6,6 @@ import { describe, expect, it } from 'vitest';
 const MIGRATION_PATH = path.resolve(import.meta.dirname, '0089_support_live_handoff.sql');
 const migration = fs.readFileSync(MIGRATION_PATH, 'utf8');
 
-// Strip `--` comments so no assertion can be satisfied by prose or by the
-// commented-out manual verification checklist.
 const executable = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/u, ''))

@@ -1,14 +1,6 @@
-/**
- * compactToolSummary — build a short human-readable phrase from a ThinkingBlock's
- * step list, e.g. "Ran 5 commands, created 2 files, read 3 files".
- *
- * Used by ThinkingBlock's compact summary mode (auto-enabled when steps > 3
- * and no step is actively running).
- */
 
 import type { ThinkingStep } from './types';
 
-/** Maps a step type to a canonical action bucket. */
 function bucketStep(type: ThinkingStep['type']): string {
   switch (type) {
     case 'script':
@@ -27,7 +19,6 @@ function bucketStep(type: ThinkingStep['type']): string {
       return 'thinking';
     case 'tool':
       return 'tool';
-    // 'done', 'complete' — skip from counts (they are terminal markers, not work steps)
     case 'done':
     case 'complete':
       return '__skip__';
@@ -36,7 +27,6 @@ function bucketStep(type: ThinkingStep['type']): string {
   }
 }
 
-/** Produce a human phrase for a bucket + count pair. */
 function phraseFor(bucket: string, count: number): string {
   const n = count === 1;
   switch (bucket) {
@@ -67,7 +57,6 @@ function phraseFor(bucket: string, count: number): string {
  *   // => "Ran 5 commands, created 2 files, read 3 files"
  */
 export function buildCompactSummary(steps: ThinkingStep[]): string {
-  // Preserve insertion order of first appearance
   const order: string[] = [];
   const counts: Record<string, number> = {};
 

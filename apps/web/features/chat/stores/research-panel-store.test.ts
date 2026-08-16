@@ -23,7 +23,6 @@ describe('research panel store (per-conversation scoping)', () => {
     const store = useResearchPanelStore.getState();
     expect(store.sourcesFor('conv-a').sources).toHaveLength(2);
     expect(store.sourcesFor('conv-a').query).toBe('anthropic news');
-    // A different chat (e.g. one that ran no web search) sees nothing — not stale sources.
     expect(store.sourcesFor('conv-b').sources).toHaveLength(0);
     expect(store.sourcesFor('conv-b').query).toBeUndefined();
   });
@@ -41,7 +40,6 @@ describe('research panel store (per-conversation scoping)', () => {
     store.setSources('conv-b', SRC_B);
 
     const after = useResearchPanelStore.getState();
-    // conv-a no longer matches the stored conversation -> empty (no leak).
     expect(after.sourcesFor('conv-a').sources).toHaveLength(0);
     expect(after.sourcesFor('conv-b').sources).toHaveLength(1);
   });

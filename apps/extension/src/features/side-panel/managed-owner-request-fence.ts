@@ -4,9 +4,7 @@ import {
 } from '../cloud-bridge/managedCloudAuthority';
 
 export interface ManagedCloudOwnerRequestSnapshot {
-  /** Monotonic side-panel epoch. A newer refresh or owner transition supersedes it. */
   generation: number;
-  /** Exact account/session incarnation visible when the request started. */
   owner: ManagedCloudOwner | null;
 }
 
@@ -17,14 +15,6 @@ function sameNullableOwner(
   return (left === null && right === null) || sameManagedCloudOwner(left, right);
 }
 
-/**
- * Fences async side-panel reads to the owner incarnation that admitted them.
- *
- * Starting a newer read supersedes an older read even for the same owner, and
- * `invalidate` retires every outstanding read during an account/session
- * transition. This keeps delayed extension-message callbacks from repainting
- * a new account's UI with the previous account's data.
- */
 export class ManagedCloudOwnerRequestFence {
   private generation = 0;
 

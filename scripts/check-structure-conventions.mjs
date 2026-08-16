@@ -115,12 +115,6 @@ const completedPackageRenames = [
 
 const trackedTextFiles = workspaceTextFiles();
 
-// T-wave regrouping moved shared packages under stable domain groups. A plain
-// existence check is insufficient for names such as `packages/ui`: that old
-// package path now exists as a grouping directory, so stale comments and docs
-// can look valid while pointing developers at the wrong owner. Scan active
-// operational sources and current docs, while preserving point-in-time plans,
-// decisions, research, and changelog history.
 const activeOperationalFiles = trackedTextFiles.filter((file) => {
   if (file === 'scripts/check-structure-conventions.mjs') return false;
 
@@ -271,9 +265,6 @@ for (const rename of completedPackageRenames) {
   }
 }
 
-// The orphan apps/web/src skeleton was deleted in the W8 dead-code sweep
-// (2026-07-15). Web product code lives in apps/web/{app,features,components,
-// lib}; a reappearing src/ tree is a structure regression.
 if (exists('apps/web/src')) {
   errors.push('apps/web/src was deleted in W8 and must not reappear (use apps/web/features)');
 }
@@ -459,10 +450,6 @@ for (const retiredMobileFeaturePath of retiredMobileFeaturePaths) {
 }
 
 for (const file of walk('apps/web/features')) {
-  // These markers target apps/web's own retired src/features/ layout. A web
-  // feature doc may still legitimately cite another surface's real path — the
-  // CLI genuinely lives at apps/cli/src/features/… — so drop other-app paths
-  // before scanning rather than forcing docs to obscure a true location.
   const body = readText(file).replace(
     /apps\/(?:cli|desktop|mobile|extension|extension-vscode)\/\S*/g,
     '',
@@ -606,11 +593,6 @@ const mobileFeatureForbiddenImports = [
 ];
 
 const retiredDesktopFeatureShimPaths = [
-  // SCALE-PURE-003: the Phase 5 reorg moved this hook to
-  // src/features/updates/useUpdater.ts and left a `export * from` forwarder
-  // behind so old import paths kept resolving. Its one caller
-  // (features/settings/UpdateSettings.tsx) now imports the real module, the
-  // forwarder is deleted, and this line stops it coming back.
   'apps/desktop/src/hooks/useUpdater.ts',
   'apps/desktop/src/components/Analytics/index.ts',
   'apps/desktop/src/components/Errors/ErrorToast.tsx',
@@ -626,12 +608,6 @@ const retiredDesktopFeatureShimPaths = [
   'apps/desktop/src/components/Updates/index.tsx',
 ];
 
-// SCALE-PURE-003: forwarding modules the Extension reorg left at the old paths.
-// Each was a one-line `export * from` onto the real module under
-// `src/features/**`, so the app carried two import paths for one
-// implementation. `src/pairing.ts` was the inverse — the implementation stayed
-// at the retired path and `features/native-bridge/pairing.ts` forwarded to it —
-// and moved into the feature directory when its forwarder was removed.
 const retiredExtensionShimPaths = [
   'apps/extension/src/inPagePanel/launcher.ts',
   'apps/extension/src/inPagePanel/panel.ts',
@@ -641,11 +617,6 @@ const retiredExtensionShimPaths = [
   'apps/extension/src/sendQueue.ts',
 ];
 
-// Only markers that cannot collide with a legitimate path are listed. Bare
-// `'./pairing'` and `'./sendQueue'` are excluded on purpose: those are how
-// `src/features/native-bridge/index.ts` re-exports its own directory, which is
-// a barrel rather than a second path to one module. Re-creating either deleted
-// file is caught by retiredExtensionShimPaths above instead.
 const extensionForbiddenImports = [
   './inPagePanel/launcher',
   './inPagePanel/panel',
@@ -717,13 +688,6 @@ const retiredDesktopComponentDomains = [
   'Voice',
   'Workflows',
   'editing',
-  // SCALE-PURE-003: `src/components/ui/` was a 39-file forwarding layer left
-  // behind by the Phase 5 reorg — every file was `export * from '../../ui/X'`
-  // and its own header promised a "Step B (deferred)" deletion with no owner
-  // and no date, so it never happened. All 172 importers now name
-  // `@/ui/X` (or `./ui/X`) directly and the directory is gone. Listing the
-  // domain here keeps the directory empty and makes any re-introduced
-  // `@/components/ui` import fail this check.
   'ui',
   'v3',
 ];
@@ -860,11 +824,7 @@ for (const file of walk('apps/desktop/src')) {
   }
 }
 
-// SCALE-PURE-003 (Extension arm). These five modules were `export * from` the
 // real implementation under `src/features/**`, each carrying an `@deprecated`
-// note and no owner or removal date, so callers kept resolving through the old
-// path indefinitely. The implementations never moved back; only the forwarders
-// are gone, and every caller now imports the feature path directly.
 for (const retiredExtensionShimPath of retiredExtensionShimPaths) {
   if (exists(retiredExtensionShimPath)) {
     errors.push(`Retired Extension shim must stay removed: ${retiredExtensionShimPath}`);

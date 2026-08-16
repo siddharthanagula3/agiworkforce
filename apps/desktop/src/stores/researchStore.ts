@@ -1,19 +1,9 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Research Store
- *
- * Zustand store for managing research state, including:
- * - Active research sessions
- * - Research history
- * - Progress tracking
- * - Configuration preferences
- */
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, listen, isTauri } from '@/lib/tauri-mock';
 
-// Types matching the Rust backend
 export type ResearchModeId = 'quick' | 'standard' | 'deep' | 'exhaustive';
 export type ResearchPhase =
   | 'initializing'
@@ -98,7 +88,6 @@ export interface ResearchMode {
 }
 
 interface ResearchState {
-  // Current research session
   activeSession: {
     id: string | null;
     query: string;
@@ -110,60 +99,40 @@ interface ResearchState {
     startedAt: number | null;
   };
 
-  // Research history (persisted)
   history: ResearchHistoryEntry[];
 
-  // Configuration
   config: ResearchConfig | null;
   availability: ResearchAvailability | null;
 
-  // Available research modes (from backend)
   availableModes: ResearchMode[];
 
-  // UI state
   isConfigLoading: boolean;
   isHistoryLoading: boolean;
 }
 
 interface ResearchActions {
-  // Session actions
   startResearch: (query: string, mode?: ResearchModeId) => Promise<ResearchResponse>;
   quickResearch: (query: string) => Promise<ResearchResponse>;
   cancelResearch: () => Promise<void>;
   resetSession: () => void;
 
-  // Progress handling (called from event listeners)
   updateProgress: (progress: ResearchProgress) => void;
   setError: (error: string) => void;
 
-  // History actions
   addToHistory: (result: ResearchResponse) => void;
   clearHistory: () => void;
   removeFromHistory: (id: string) => void;
 
-  // Configuration
   loadConfig: () => Promise<void>;
   updateConfig: (config: Partial<ResearchConfig>) => Promise<void>;
   checkAvailability: () => Promise<ResearchAvailability>;
   loadModes: () => Promise<ResearchMode[]>;
 
-  // Initialization
   initialize: () => Promise<void>;
 }
 
-/**
- * `initialize()` runs from a component effect (DeepResearchPage), so every time
- * the panel is mounted it would register another pair of native listeners on
- * this app-lifetime singleton store — one progress update would then be applied
- * once per past mount. The listeners are never torn down (the store outlives
- * any panel), so registration has to happen exactly once per process.
- */
 let nativeListenersRegistered = false;
 
-// Session ids the user cancelled, consulted when the corresponding
-// research_start promise settles (the orchestrator resolves Ok on
-// cancellation). Process-lifetime like the listener guard — deliberately not
-// part of persisted store state.
 const cancelRequestedSessions = new Set<string>();
 
 const DEFAULT_CONFIG: ResearchConfig = {
@@ -181,7 +150,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
   devtools(
     persist(
       immer((set, get) => ({
-        // Initial state
         activeSession: {
           id: null,
           query: '',
@@ -199,7 +167,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
         isConfigLoading: false,
         isHistoryLoading: false,
 
-        // Session actions
         startResearch: async (query: string, mode?: ResearchModeId) => {
           const researchMode = mode || get().config?.default_mode || 'standard';
 
@@ -225,11 +192,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
               },
             });
 
-            // The Rust orchestrator resolves Ok even when the run was
-            // cancelled (handle_cancellation returns a "Research cancelled"
-            // summary), so without this guard a cancelled run would overwrite
-            // cancelResearch's idle state with 'complete' and pollute Recent
-            // Research with a phantom entry.
             if (cancelRequestedSessions.has(result.session_id)) {
               cancelRequestedSessions.delete(result.session_id);
               set((state) => {
@@ -246,7 +208,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
               state.activeSession.result = result;
             });
 
-            // Add to history
             get().addToHistory(result);
 
             return result;
@@ -307,9 +268,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
 
           try {
             await invoke('research_cancel', { sessionId });
-            // Remember the cancellation so the still-pending research_start
-            // promise (which resolves Ok with a cancellation summary) does not
-            // re-mark this session as completed. See startResearch.
             cancelRequestedSessions.add(sessionId);
             set((state) => {
               state.activeSession.status = 'idle';
@@ -335,7 +293,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           });
         },
 
-        // Progress handling
         updateProgress: (progress: ResearchProgress) => {
           set((state) => {
             state.activeSession.progress = progress;
@@ -352,7 +309,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           });
         },
 
-        // History actions
         addToHistory: (result: ResearchResponse) => {
           const entry: ResearchHistoryEntry = {
             id: result.session_id,
@@ -368,7 +324,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           };
 
           set((state) => {
-            // Keep only last 50 entries
             state.history = [entry, ...state.history].slice(0, 50);
           });
         },
@@ -385,7 +340,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           });
         },
 
-        // Configuration
         loadConfig: async () => {
           set((state) => {
             state.isConfigLoading = true;
@@ -459,14 +413,11 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
           }
         },
 
-        // Initialization
         initialize: async () => {
           if (!isTauri) return;
 
-          // Load config, availability, and modes in parallel
           await Promise.all([get().loadConfig(), get().checkAvailability(), get().loadModes()]);
 
-          // Set up event listeners (once per process — see the flag's docstring)
           if (nativeListenersRegistered) return;
           nativeListenersRegistered = true;
 
@@ -491,7 +442,6 @@ export const useResearchStore = create<ResearchState & ResearchActions>()(
   ),
 );
 
-// Selectors for optimized re-renders
 export const selectActiveSession = (state: ResearchState) => state.activeSession;
 export const selectHistory = (state: ResearchState) => state.history;
 export const selectConfig = (state: ResearchState) => state.config;

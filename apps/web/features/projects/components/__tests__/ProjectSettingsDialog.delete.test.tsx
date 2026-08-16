@@ -1,14 +1,3 @@
-/**
- * Regression test for the "delete project is a fake success" data-integrity bug.
- *
- * Live audit (2026-07-10, section 9): clicking Project settings > Delete project
- * > confirm showed a green "Project deleted" toast but fired ZERO DELETE
- * requests — the project survived a full reload. Root cause: `handleDelete`
- * only mutated the local store and toasted success without ever calling the
- * server. These tests pin the fix: a real DELETE /api/projects/[id] must fire,
- * the local removal + success toast must happen only AFTER the server confirms,
- * and a failed request must surface an error toast without removing the project.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -28,8 +17,6 @@ vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: vi.fn(async (headers: HeadersInit = {}) => headers),
 }));
 
-// KnowledgeFilesPanel fires its own network requests on mount; stub it out so
-// the test observes only the delete request.
 vi.mock('../KnowledgeFilesPanel', () => ({
   KnowledgeFilesPanel: () => null,
 }));
@@ -64,7 +51,6 @@ function renderDialog(overrides: Partial<React.ComponentProps<typeof ProjectSett
 
 async function openConfirmAndDelete(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /delete project/i }));
-  // Confirm button inside the AlertDialog.
   const confirm = await screen.findByRole('button', { name: /^delete$/i });
   await user.click(confirm);
 }

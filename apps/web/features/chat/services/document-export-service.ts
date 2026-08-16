@@ -1,9 +1,3 @@
-/**
- * Document Export Service
- *
- * Handles exporting documents to various formats: MD, PDF, DOCX
- * Converts markdown content to formatted documents
- */
 
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
@@ -13,18 +7,14 @@ export interface ExportOptions {
   title?: string;
   author?: string;
   metadata?: Record<string, string>;
-  pageBreaks?: number[]; // Line numbers where to insert page breaks
+  pageBreaks?: number[];
 }
 
-/**
- * Downloads markdown content as a .md file
- */
 export async function downloadAsMarkdown(
   content: string,
   filename: string = 'document.md',
   options?: ExportOptions,
 ): Promise<void> {
-  // Add metadata header if provided
   let finalContent = content;
   if (options?.metadata) {
     const metadataHeader = Object.entries(options.metadata)
@@ -37,9 +27,6 @@ export async function downloadAsMarkdown(
   downloadBlob(blob, filename);
 }
 
-/**
- * Downloads markdown content as a PDF file
- */
 export async function downloadAsPDF(
   content: string,
   filename: string = 'document.pdf',
@@ -57,7 +44,6 @@ export async function downloadAsPDF(
   const maxWidth = pageWidth - margin * 2;
   let yPosition = margin;
 
-  // Add title if provided
   if (options?.title) {
     pdf.setFontSize(20);
     pdf.setFont('helvetica', 'bold');
@@ -65,7 +51,6 @@ export async function downloadAsPDF(
     yPosition += 15;
   }
 
-  // Add author and date if provided
   if (options?.author) {
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
@@ -76,11 +61,9 @@ export async function downloadAsPDF(
   pdf.text(new Date().toLocaleDateString(), margin, yPosition);
   yPosition += 15;
 
-  // Parse markdown and render to PDF
   const lines = parseMarkdownForPDF(content);
 
   for (const line of lines) {
-    // Check if we need a new page
     if (yPosition > pageHeight - margin) {
       pdf.addPage();
       yPosition = margin;
@@ -126,7 +109,6 @@ export async function downloadAsPDF(
         pdf.setTextColor(0, 0, 0);
     }
 
-    // Handle text wrapping
     const splitText = pdf.splitTextToSize(line.text, maxWidth);
 
     for (const textLine of splitText) {
@@ -138,19 +120,14 @@ export async function downloadAsPDF(
       yPosition += 7;
     }
 
-    // Add extra spacing after headings
     if (line.type.startsWith('h')) {
       yPosition += 3;
     }
   }
 
-  // Save the PDF
   pdf.save(filename);
 }
 
-/**
- * Downloads markdown content as a DOCX file
- */
 export async function downloadAsDOCX(
   content: string,
   filename: string = 'document.docx',
@@ -174,9 +151,6 @@ export async function downloadAsDOCX(
   downloadBlob(blob, filename);
 }
 
-/**
- * Parses markdown content for PDF rendering
- */
 function parseMarkdownForPDF(content: string): Array<{
   type: 'h1' | 'h2' | 'h3' | 'text' | 'bold' | 'code' | 'quote' | 'list';
   text: string;
@@ -192,13 +166,11 @@ function parseMarkdownForPDF(content: string): Array<{
   let inCodeBlock = false;
 
   for (const line of lines) {
-    // Skip empty lines
     if (!line.trim()) {
       parsed.push({ type: 'text', text: '' });
       continue;
     }
 
-    // Code blocks
     if (line.trim().startsWith('```')) {
       inCodeBlock = !inCodeBlock;
       continue;
@@ -209,7 +181,6 @@ function parseMarkdownForPDF(content: string): Array<{
       continue;
     }
 
-    // Headers
     if (line.startsWith('# ')) {
       parsed.push({ type: 'h1', text: line.substring(2) });
     } else if (line.startsWith('## ')) {
@@ -217,21 +188,17 @@ function parseMarkdownForPDF(content: string): Array<{
     } else if (line.startsWith('### ')) {
       parsed.push({ type: 'h3', text: line.substring(4) });
     } else if (line.startsWith('> ')) {
-      // Blockquote
       parsed.push({ type: 'quote', text: line.substring(2), indent: 5 });
     } else if (line.match(/^[*\-+]\s/)) {
-      // Unordered list
       parsed.push({ type: 'list', text: `• ${line.substring(2)}`, indent: 5 });
     } else if (line.match(/^\d+\.\s/)) {
-      // Ordered list
       parsed.push({ type: 'list', text: line, indent: 5 });
     } else {
-      // Regular text - strip markdown formatting for PDF
       const cleanText = line
-        .replace(/\*\*(.+?)\*\*/g, '$1') // Bold
-        .replace(/\*(.+?)\*/g, '$1') // Italic
-        .replace(/`(.+?)`/g, '$1') // Inline code
-        .replace(/\[(.+?)\]\(.+?\)/g, '$1'); // Links
+        .replace(/\*\*(.+?)\*\*/g, '$1')
+        .replace(/\*(.+?)\*/g, '$1')
+        .replace(/`(.+?)`/g, '$1')
+        .replace(/\[(.+?)\]\(.+?\)/g, '$1');
 
       parsed.push({ type: 'text', text: cleanText });
     }
@@ -240,14 +207,10 @@ function parseMarkdownForPDF(content: string): Array<{
   return parsed;
 }
 
-/**
- * Parses markdown content for DOCX rendering
- */
 function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragraph[] {
   const lines = content.split('\n');
   const paragraphs: Paragraph[] = [];
 
-  // Add title if provided
   if (options?.title) {
     paragraphs.push(
       new Paragraph({
@@ -258,7 +221,6 @@ function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragra
     );
   }
 
-  // Add author and date
   if (options?.author) {
     paragraphs.push(
       new Paragraph({
@@ -290,10 +252,8 @@ function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragra
   let codeBlockLines: string[] = [];
 
   for (const line of lines) {
-    // Code blocks
     if (line.trim().startsWith('```')) {
       if (inCodeBlock) {
-        // End of code block
         paragraphs.push(
           new Paragraph({
             children: [
@@ -320,13 +280,11 @@ function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragra
       continue;
     }
 
-    // Skip empty lines
     if (!line.trim()) {
       paragraphs.push(new Paragraph({ text: '' }));
       continue;
     }
 
-    // Headers
     if (line.startsWith('# ')) {
       paragraphs.push(
         new Paragraph({
@@ -352,7 +310,6 @@ function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragra
         }),
       );
     } else if (line.startsWith('> ')) {
-      // Blockquote
       paragraphs.push(
         new Paragraph({
           children: [
@@ -367,7 +324,6 @@ function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragra
         }),
       );
     } else if (line.match(/^[*\-+]\s/)) {
-      // Unordered list
       paragraphs.push(
         new Paragraph({
           text: line.substring(2),
@@ -377,7 +333,6 @@ function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragra
         }),
       );
     } else if (line.match(/^\d+\.\s/)) {
-      // Ordered list
       paragraphs.push(
         new Paragraph({
           text: line.substring(line.indexOf('.') + 2),
@@ -388,7 +343,6 @@ function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragra
         }),
       );
     } else {
-      // Regular text with inline formatting
       const children = parseInlineMarkdown(line);
       paragraphs.push(
         new Paragraph({
@@ -402,16 +356,12 @@ function parseMarkdownForDOCX(content: string, options?: ExportOptions): Paragra
   return paragraphs;
 }
 
-/**
- * Parses inline markdown formatting (bold, italic, code, links)
- */
 function parseInlineMarkdown(text: string): TextRun[] {
   const runs: TextRun[] = [];
   let currentText = '';
   let i = 0;
 
   while (i < text.length) {
-    // Bold **text**
     if (text[i] === '*' && text[i + 1] === '*') {
       if (currentText) {
         runs.push(new TextRun({ text: currentText }));
@@ -474,8 +424,8 @@ function parseInlineMarkdown(text: string): TextRun[] {
         linkText += text[i];
         i++;
       }
-      i++; // Skip ]
-      i++; // Skip (
+      i++;
+      i++;
       let _url = '';
       while (i < text.length && text[i] !== ')') {
         _url += text[i];
@@ -502,9 +452,6 @@ function parseInlineMarkdown(text: string): TextRun[] {
   return runs.length > 0 ? runs : [new TextRun({ text: '' })];
 }
 
-/**
- * Helper function to download a blob
- */
 function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -516,16 +463,12 @@ function downloadBlob(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-/**
- * Export all formats at once
- */
 export async function exportDocument(
   content: string,
   format: DocumentFormat,
   filename: string,
   options?: ExportOptions,
 ): Promise<void> {
-  // Ensure filename has correct extension
   const baseFilename = filename.replace(/\.(md|pdf|docx)$/, '');
 
   switch (format) {

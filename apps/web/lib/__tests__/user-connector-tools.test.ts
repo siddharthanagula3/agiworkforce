@@ -1,16 +1,3 @@
-/**
- * Unit tests for the per-user connector → tool-loop bridge
- * (fixes WEB-CONNECTORS-NO-RUNTIME-EFFECT-01).
- *
- * Proves:
- *   - github built-in tools appear ONLY when the user has a usable installation;
- *   - a user with no installation and no connected remote connectors gets no tools;
- *   - operator-mapped remote connectors appear namespaced only when the user has
- *     an ACTIVE user_connectors row for them (disconnected → absent);
- *   - an SSRF-invalid remote endpoint is rejected + logged, not crashed;
- *   - the executor dispatches github tools to the GitHub integration and remote
- *     connector tools to the MCP handle, and re-validates authorization.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -64,7 +51,6 @@ import { EgressPolicyError } from '@/lib/egress-policy';
 
 const ORGANIZATION_ID = '11111111-1111-4111-8111-111111111111';
 
-/** Route the neon query mock by SQL fragment so both tables can be stubbed. */
 function stubDb(opts: {
   installations?: Array<{ installation_id: number; account_login: string }>;
   activeConnectors?: string[];
@@ -170,7 +156,7 @@ describe('loadUserConnectorToolDefs — remote connector gate', () => {
     process.env['CONNECTOR_MCP_SERVERS_JSON'] = JSON.stringify({
       connectors: [{ connectorId: 'notion', url: 'https://mcp.notion.example/mcp' }],
     });
-    stubDb({ activeConnectors: [] }); // user connected nothing
+    stubDb({ activeConnectors: [] });
     const defs = await loadUserConnectorToolDefs('user-1');
     expect(defs).toEqual([]);
     expect(mockBuildMcpToolCatalog).not.toHaveBeenCalled();

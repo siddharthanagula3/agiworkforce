@@ -27,9 +27,6 @@ import {
   type ConnectorToolPermission,
   type ConnectorToolPermissionLevel,
 } from '@/services/connectors';
-// Provider-hosted consent screen — third-party host, so the untrusted-URL
-// in-app browser helper (scheme allowlist + system-browser fallback), matching
-// the directory's connect flow.
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import {
   captureCloudAccountEpoch,
@@ -316,14 +313,6 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
     [isActionCurrent],
   );
 
-  /**
-   * Re-run the hosted authorization-code flow for an OAuth grant.
-   *
-   * Only the server can turn a completed consent into a grant, so this never
-   * reports success on its own: it opens the provider's consent screen, and
-   * when the browser sheet closes it re-reads `/api/connectors`. If the grant
-   * still reports `needsReauthorization`, the banner below simply stays up.
-   */
   const reconnect = useCallback(() => {
     if (!connection || connection.source !== 'oauth' || reconnecting) return;
     const account = captureCloudAccountEpoch();
@@ -479,8 +468,6 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
               isLast={!(connection.scopes && connection.scopes.length > 0)}
             />
             {connection.scopes && connection.scopes.length > 0 ? (
-              // The scopes the provider actually granted, straight from the
-              // grant row — not the scopes the deployment asked for.
               <SettingsRow
                 label="Granted access"
                 value={connection.scopes.join(', ')}

@@ -68,8 +68,6 @@ describe('post-auth Cloud intent', () => {
     const expectedModelId = getDefaultCloudModelIdForTier(tier);
     expect(expectedModelId).toBeDefined();
 
-    // ClerkTokenBridge grants this signed-in entitlement before applying the
-    // intent; model-store validation must still reject Cloud ids before it.
     useWaitlistStore.getState().setCloudAccess(true);
     const applied = applyPostAuthIntentAfterSignIn(CLOUD_CHAT_POST_AUTH_INTENT, tier);
 

@@ -1,18 +1,3 @@
-/**
- * Onboarding — local demo flow with gated Cloud continuation.
- *
- * 3-screen flow:
- *   Screen 1: Hero   → disclosure modal → Screen 2
- *   Screen 2: Device-tier detection + model recommendation → Screen 3
- *   Screen 3: First model download progress → chat
- *
- * Current product rules:
- *   - Local mode is free and demo-ready first.
- *   - Managed Cloud is public alpha (open by default); signing in is the entitlement.
- *     Onboarding stays local-first — Cloud sign-in happens after setup.
- *   - Device tier and model name/size come from the catalog.
- *   - Compliance disclosure fires before screen 2.
- */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Pressable, Platform, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -49,10 +34,8 @@ import {
 import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 
-// Mobile first-run has no public cloud provider routing.
 const DISCLOSURE_PROVIDERS: string[] = [];
 
-// Website brand mark geometry from apps/web/components/agi/AgiMark.tsx.
 const AGI_MARK_SPOKE_COUNT = 12;
 const AGI_MARK_INNER_R = 4.6;
 const AGI_MARK_OUTER_R = 9;
@@ -69,9 +52,6 @@ const AGI_MARK_SPOKES = Array.from({ length: AGI_MARK_SPOKE_COUNT }, (_, i) => {
   };
 });
 
-// ---------------------------------------------------------------------------
-// Device tier derived from DeviceCapabilities
-// ---------------------------------------------------------------------------
 type DeviceTierInfo = {
   tier: LocalRuntimeTier;
   tier1Runtime: DeviceCapabilities['tier1Runtime'];
@@ -90,11 +70,6 @@ function tierFromCapabilities(
   return 3;
 }
 
-// ---------------------------------------------------------------------------
-// Pick recommended downloadable model for a tier.
-// The catalog model with role='default' is the primary recommendation.
-// Tier 1 = Apple Foundation Models / AICore (no download).
-// ---------------------------------------------------------------------------
 type RecommendedModel = OnDeviceModel & { needsDownload: boolean };
 
 function pickRecommendedModel(
@@ -102,9 +77,6 @@ function pickRecommendedModel(
   tier1Runtime: DeviceCapabilities['tier1Runtime'] = null,
 ): RecommendedModel {
   if (tier === 1 && tier1Runtime) {
-    // The OS owns the Tier-1 model. Resolve the exact catalog row for the
-    // detected runtime so Android never receives Apple's row (or vice versa),
-    // then let the normal picker/install readiness gate verify it again.
     const sysModel = getSystemModelForTier1Runtime(tier1Runtime);
     if (sysModel) return { ...sysModel, needsDownload: false };
   }
@@ -145,14 +117,8 @@ function formatBytes(bytes: number): string {
   return `${Math.round(mb)} MB`;
 }
 
-// ---------------------------------------------------------------------------
-// Screen state machine
-// ---------------------------------------------------------------------------
 type ScreenId = 'hero' | 'device-tier' | 'download';
 
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
 export default function OnboardingScreen() {
   const { colors, isDark } = useTheme();
   const router = useRouter();
@@ -174,8 +140,6 @@ export default function OnboardingScreen() {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSpeedMBs, setDownloadSpeedMBs] = useState(0);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  // True while tier2LoadModel is in flight — gates the skip button so the user
-  // cannot enter chat model-less before the ExecuTorch load completes.
   const [tier2Loading, setTier2Loading] = useState(false);
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const modelPickerRef = useRef<BottomSheet>(null);
@@ -195,16 +159,9 @@ export default function OnboardingScreen() {
       setDownloadError(null);
       setRecommendedModel(nextModel);
     },
-    // `tier1Runtime` is read above but was not listed. It starts null and is set
-    // together with `tier` by one setDeviceInfo call, so the omission is hidden
-    // whenever detection also changes the tier — but when it resolves to the
-    // SAME tier, this callback kept the initial null and
-    // pickModelForPickerSelection took the non-runtime branch on exactly the
-    // Tier-1 devices the runtime exists to serve.
     [deviceInfo.tier, deviceInfo.tier1Runtime],
   );
 
-  // Detect device capabilities once on mount
   useEffect(() => {
     let isMounted = true;
 
@@ -263,18 +220,10 @@ export default function OnboardingScreen() {
 
   const finishOnboarding = useCallback(() => {
     storage.set('onboarding-done', 'true');
-    // Retire the pre-intent preference key. It was write-only and could not
-    // carry an auth handoff; the validated route intent below owns that job.
     storage.delete('onboarding-mode');
     router.replace({ pathname: '/(app)' as const });
   }, [router]);
 
-  // Cloud path from first run: Managed Cloud is public alpha (no invite, no
-  // waitlist — signing in IS the entitlement, ClerkTokenBridge flips cloudUnlocked
-  // on success). Let a new user reach catalog-selected hosted models + cloud
-  // tools/web-search without first downloading a local model. Marks onboarding
-  // done so they never bounce back here, records the cloud preference, and routes
-  // to the same Clerk sign-in the in-app cloud gate uses.
   const handleContinueToCloud = useCallback(() => {
     if (downloadTimerRef.current) {
       clearInterval(downloadTimerRef.current);
@@ -286,9 +235,6 @@ export default function OnboardingScreen() {
     router.replace(beginCloudPostAuthIntent());
   }, [recommendedModel.id, router]);
 
-  // ---------------------------------------------------------------------------
-  // Hero CTA → disclosure gate
-  // ---------------------------------------------------------------------------
   const handleHeroCTA = useCallback(() => {
     const alreadySatisfied = isDisclosureSatisfied(mmkvDisclosureLedger, false);
     if (alreadySatisfied) {
@@ -311,9 +257,6 @@ export default function OnboardingScreen() {
       ledger: mmkvDisclosureLedger,
       copy: disclosureCopy,
       surface: 'mobile',
-      // The first-run disclosure is not the Cloud sign-in consent step. We keep
-      // managedCloudAccepted true here so returning users are not blocked by a
-      // disclosure they already accepted before the separate Cloud sign-in appears.
       managedCloudAccepted: true,
       chineseHqProvidersAccepted: [],
     });
@@ -325,9 +268,6 @@ export default function OnboardingScreen() {
     // Stay on hero — user can try again; app is fully usable on re-tap
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Device tier → download
-  // ---------------------------------------------------------------------------
   const handleStartDownload = useCallback(
     (cellularEnabled = false) => {
       if (!recommendedModel.needsDownload) {
@@ -339,19 +279,13 @@ export default function OnboardingScreen() {
       setDownloadSpeedMBs(0);
       setDownloadError(null);
 
-      // ExecuTorch path — catalog has an executorchPreset with HF URLs. This
-      // takes priority over the generic downloadUrl path because ExecuTorch
-      // models never populate downloadUrl / checksum / format on OnDeviceModel.
       if (recommendedModel.executorchPreset) {
         const preset = recommendedModel.executorchPreset;
         setTier2Loading(true);
         tier2LoadModel(preset, (fractional) => {
-          // react-native-executorch reports progress as 0..1.
           setDownloadProgress(fractional * 100);
         })
           .then(async () => {
-            // Record the model as installed so resolveLocalModelRef accepts it
-            // on the first chat turn (format='pte', no local_path).
             await recordInstalledModel({
               id: recommendedModel.id,
               display_name: recommendedModel.displayName,
@@ -376,8 +310,6 @@ export default function OnboardingScreen() {
       }
 
       if (recommendedModel.downloadUrl && recommendedModel.checksum && recommendedModel.format) {
-        // Generic GGUF / safetensors download path — catalog has full fields.
-        // ModelFormat in storage/types uses the same string literals as OnDeviceModel.format.
         downloadModel({
           modelId: recommendedModel.id,
           displayName: recommendedModel.displayName,
@@ -386,8 +318,6 @@ export default function OnboardingScreen() {
           fileSizeBytes: recommendedModel.fileSizeBytes,
           runtime: 'local',
           format: recommendedModel.format,
-          // Multimodal models ship a second mmproj artifact; passing the catalog
-          // fields through makes downloadModel install + verify both files.
           mmprojUrl: recommendedModel.mmprojUrl,
           mmprojChecksum: recommendedModel.mmprojChecksum,
           mmprojSizeBytes: recommendedModel.mmprojSizeBytes,
@@ -416,18 +346,12 @@ export default function OnboardingScreen() {
         return;
       }
 
-      // No download path available — catalog is not yet populated and no
-      // executorchPreset is present. Show an error instead of silently landing
-      // in chat with no model ready.
       setDownloadError('This model cannot be downloaded yet. Pick a different model to continue.');
     },
     [recommendedModel, finishOnboarding],
   );
 
   const handleSkipToChat = useCallback(() => {
-    // Block skip while the ExecuTorch model is loading — allowing the user to
-    // enter chat before tier2LoadModel resolves would leave them model-less
-    // (resolveLocalModelRef would throw "not downloaded yet").
     if (tier2Loading) return;
     if (downloadTimerRef.current) {
       clearInterval(downloadTimerRef.current);
@@ -492,9 +416,6 @@ export default function OnboardingScreen() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen 1: Hero
-// ---------------------------------------------------------------------------
 function HeroScreen({
   colors,
   primaryButtonTextColor,
@@ -580,9 +501,6 @@ function AgiNativeMark({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen 2: Device-tier detection
-// ---------------------------------------------------------------------------
 function DeviceTierScreen({
   colors,
   primaryButtonTextColor,
@@ -713,9 +631,6 @@ function DeviceTierScreen({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen 3: Download progress
-// ---------------------------------------------------------------------------
 function DownloadScreen({
   colors,
   progress,
@@ -731,7 +646,6 @@ function DownloadScreen({
   model: RecommendedModel;
   onSkip: () => void;
   error?: string | null;
-  /** True while the ExecuTorch model is loading — disables skip to prevent model-less chat. */
   skipDisabled?: boolean;
 }) {
   const pct = Math.round(progress);
@@ -816,9 +730,6 @@ function DownloadScreen({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Radial progress ring (terracotta stroke on neutral track).
-// ---------------------------------------------------------------------------
 function RadialProgress({
   progress,
   size,
@@ -868,11 +779,7 @@ function RadialProgress({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
 const styles = StyleSheet.create({
-  // Hero
   heroRoot: {
     flex: 1,
     alignItems: 'center',
@@ -925,7 +832,6 @@ const styles = StyleSheet.create({
     bottom: Platform.OS === 'android' ? 24 : 16,
   },
 
-  // Device tier
   deviceTierRoot: {
     paddingHorizontal: 24,
     paddingTop: 56,
@@ -991,7 +897,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 
-  // Download
   downloadRoot: {
     flex: 1,
     alignItems: 'center',

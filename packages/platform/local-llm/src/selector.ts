@@ -12,7 +12,6 @@ import { tier3Generate } from './tier3';
 import { getDefaultModel, getModelById, getSystemModelForTier1Runtime } from './catalog';
 import type { ExecutorchPreset } from '@agiworkforce/types';
 
-// Cached capability snapshot — refreshed on demand or app resume.
 let _caps: DeviceCapabilities | null = null;
 
 export async function getCapabilities(): Promise<DeviceCapabilities> {
@@ -97,7 +96,6 @@ function canUseTier1ForModel(
   return getSystemModelForTier1Runtime(runtime)?.id === modelId;
 }
 
-// Top-level generate: selects tier then dispatches to the right adapter.
 export async function localGenerate(
   modelPathOrId: string | undefined,
   opts: GenerateOptions,

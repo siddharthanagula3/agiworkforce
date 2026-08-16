@@ -6,13 +6,6 @@ import { BYOK_PROVIDER_IDS, byokProviderLabels } from './byok-providers';
 
 const catalogProviderIds = Object.keys(modelsCatalogJson.providers);
 
-/**
- * DOC-026: public provider claims must be backed by the canonical catalog.
- *
- * The /byok page tells visitors its chips come "straight from the catalog"
- * while the list was hand-typed, and it advertised Mistral AI and Groq for
- * weeks after `5a165d78b` deleted both providers from models.json.
- */
 describe('/byok provider chips', () => {
   it('only advertises providers the canonical catalog still carries', () => {
     for (const id of BYOK_PROVIDER_IDS) {
@@ -35,8 +28,6 @@ describe('/byok provider chips', () => {
   it('keeps retired providers out of the rendered page source', () => {
     const source = readFileSync(join(__dirname, 'page.tsx'), 'utf8');
 
-    // Retired in 5a165d78b (2026-07-22): every mistral-*/groq-* model id now
-    // canonicalizes to a different provider's fallback model.
     expect(source, '/byok must not advertise the retired Mistral provider').not.toMatch(/Mistral/i);
     expect(source, '/byok must not advertise the retired Groq provider').not.toMatch(/Groq/i);
   });

@@ -1,8 +1,3 @@
-/**
- * Redaction and capping. Redaction runs before both the database write and the
- * email body, so a user who pastes their own key does not have it stored or
- * mailed — and is not rejected either, which is what `assertNoLeaks` would do.
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -29,7 +24,6 @@ describe('redactSecrets', () => {
     const out = redactSecrets(`before ${secret} after`);
     expect(out).not.toContain(secret);
     expect(out).toContain(`[redacted:${label}]`);
-    // Surrounding context survives, so the human still understands the message.
     expect(out).toContain('before');
     expect(out).toContain('after');
   });
@@ -69,7 +63,6 @@ describe('normalizeTranscript', () => {
 
     expect(turns).toHaveLength(MAX_TRANSCRIPT_TURNS);
     expect(droppedTurns).toBe(10);
-    // Recent context is what a human needs.
     expect(turns.at(-1)?.content).toBe(`turn-${MAX_TRANSCRIPT_TURNS + 9}`);
     expect(turns.at(0)?.content).toBe('turn-10');
   });

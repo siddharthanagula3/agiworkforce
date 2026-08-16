@@ -26,11 +26,6 @@ export const meta = {
 
 const DATE = (args && args.date) || '2026-06-01';
 
-// Repo root, resolved without hardcoding a developer machine path so the
-// harness runs for any contributor / CI runner. Priority:
-//   1. explicit --repo arg (args.repo)
-//   2. process.cwd() when the harness is launched from the repo root
-//   3. last-resort fallback for the original author's layout
 const REPO =
   (args && args.repo) ||
   (typeof process !== 'undefined' && process.cwd && process.cwd()) ||
@@ -69,7 +64,6 @@ const SYNTH = {
 const J = (phase, label, prompt) => ({ phase, label, prompt });
 const cross = (a, b, fn) => a.flatMap((x) => b.map((y) => fn(x, y)));
 
-// ---- Phase: Approval (12) --------------------------------------------------
 const APPROVAL_CTX =
   ' Review the landed change that makes TUI tool-approval non-blocking. At ' +
   REPO +
@@ -169,17 +163,8 @@ const approvalJobs = [
   ),
 ];
 
-// ---- Phase: RefStudy (72) --------------------------------------------------
-// External reference checkouts live outside the repo and are not present on
-// most machines (CI, other contributors). Allow overriding the base dir via
-// --refRoot and existence-check each entry so missing references are skipped
-// (logged) instead of dispatching agents against non-existent paths that would
-// silently produce empty/garbage findings.
 const REF_ROOT = (args && args.refRoot) || '/Users/siddhartha/Desktop';
 
-// Best-effort synchronous existence check. Loaded once; if the fs module is
-// unavailable in the harness sandbox we keep all entries (preserving prior
-// behavior) rather than silently dropping every reference.
 let fsExistsSync = null;
 try {
   fsExistsSync = (await import('node:fs')).existsSync;
@@ -236,7 +221,6 @@ const refJobs = cross(REF, REF_FACETS, (r, f) =>
   ),
 );
 
-// ---- Phase: AGIAudit (80) --------------------------------------------------
 const AGI = [
   ['tui_app', 'apps/cli/src/tui/tui_app.rs'],
   ['w-command_popup', 'apps/cli/src/tui/widgets/command_popup.rs'],
@@ -280,7 +264,6 @@ const agiJobs = cross(AGI, AUDIT_FACETS, (a, f) =>
   ),
 );
 
-// ---- Phase: Panels (108) ---------------------------------------------------
 const PANELS = [
   '/mcp',
   '/tasks',
@@ -322,7 +305,6 @@ const panelJobs = cross(PANELS, PANEL_FACETS, (p, f) =>
   ),
 );
 
-// ---- Phase: Cells (65) -----------------------------------------------------
 const CELLS = [
   'UserCell',
   'AssistantCell',
@@ -358,7 +340,6 @@ const cellJobs = cross(CELLS, CELL_FACETS, (c, f) =>
   ),
 );
 
-// ---- Phase: Composer (48) --------------------------------------------------
 const COMPOSER = [
   'multiline editing',
   'history up/down',
@@ -395,7 +376,6 @@ const composerJobs = cross(COMPOSER, COMP_FACETS, (c, f) =>
   ),
 );
 
-// ---- Phase: Snapshots (96) -------------------------------------------------
 const VIEWS = [
   'idle composer',
   'streaming response',
@@ -436,7 +416,6 @@ const snapJobs = cross(VIEWS, WIDTHS, (v, w) =>
   ),
 );
 
-// ---- Phase: Research (96) --------------------------------------------------
 const SUBSYS = [
   'Claude Code permissions',
   'Claude Code slash commands',
@@ -476,7 +455,6 @@ const researchJobs = cross(SUBSYS, QUESTIONS, (s, q) =>
   ),
 );
 
-// ---- Phase: Security (44) --------------------------------------------------
 const SEC = [
   'run_command approval',
   'write_file approval',
@@ -518,7 +496,6 @@ const secJobs = cross(SEC, SEC_FACETS, (s, f) =>
   ),
 );
 
-// ---- Phase: Keybindings (84) -----------------------------------------------
 const KEYS = [
   'Enter submit',
   'Shift+Enter newline',
@@ -563,7 +540,6 @@ const keyJobs = cross(KEYS, CLIS, (k, c) =>
   ),
 );
 
-// ---- Phase: ToolCells (66) -------------------------------------------------
 const TOOLS = [
   'read_file',
   'write_file',
@@ -606,7 +582,6 @@ const toolCellJobs = cross(TOOLS, TC_FACETS, (t, f) =>
   ),
 );
 
-// ---- Phase: MCP (42) -------------------------------------------------------
 const MCP = [
   'server config & discovery',
   'tool namespacing mcp__server__tool',
@@ -641,7 +616,6 @@ const mcpJobs = cross(MCP, MCP_FACETS, (m, f) =>
   ),
 );
 
-// ---- Phase: EdgeCases (68) -------------------------------------------------
 const SCEN = [
   'empty input submit',
   'very long single line',
@@ -692,7 +666,6 @@ const edgeJobs = cross(SCEN, EDGE_FACETS, (s, f) =>
   ),
 );
 
-// ---- Phase: TerminalCompat (48) --------------------------------------------
 const TERMS = [
   'Terminal.app',
   'iTerm2',
@@ -726,7 +699,6 @@ const termJobs = cross(TERMS, TERM_FACETS, (t, f) =>
   ),
 );
 
-// ---- Phase: Chips (36) -----------------------------------------------------
 const CHIPS = [
   'model',
   'provider',
@@ -761,7 +733,6 @@ const chipJobs = cross(CHIPS, CHIP_FACETS, (c, f) =>
   ),
 );
 
-// ---- Phase: SlashParity (45) -----------------------------------------------
 const SLASH = [
   '/help',
   '/model',
@@ -820,7 +791,6 @@ const slashJobs = SLASH.map((s) =>
   ),
 );
 
-// ---- Phase: Settings (34) --------------------------------------------------
 const SETTINGS = [
   'approval mode',
   'sandbox backend',
@@ -868,11 +838,6 @@ const settingsJobs = SETTINGS.map((s) =>
   ),
 );
 
-// ---- 990 workers across 10 ordered buckets (high-value first). Each bucket
-// ---- runs its workers in parallel (8 effective concurrent), then its
-// ---- synthesis agent writes the artifact IMMEDIATELY — so output is durable
-// ---- at 10 checkpoints, not all-or-nothing at the end of a multi-hour run.
-// ---- 990 workers + 10 synthesis = exactly 1000 agents.
 const BUCKETS = [
   { name: 'security-and-approval', jobs: [].concat(approvalJobs, secJobs) },
   { name: 'reference-architecture-map', jobs: refJobs },
@@ -886,7 +851,6 @@ const BUCKETS = [
   { name: 'slash-and-settings', jobs: [].concat(slashJobs, settingsJobs) },
 ];
 
-// Trim to exactly 990 workers, dropping from the tail (lowest-value padding).
 let remaining = 990;
 for (const b of BUCKETS) {
   if (remaining <= 0) {
@@ -944,8 +908,6 @@ for (let bi = 0; bi < BUCKETS.length; bi++) {
     )
   ).filter(Boolean);
 
-  // Incremental durability: write this bucket's artifact now, before the next
-  // bucket starts. A crash/interruption keeps every completed bucket's file.
   const path = ART + '/' + b.name + '.md';
   const body = compact(found).slice(0, 28000);
   const s = await agent(

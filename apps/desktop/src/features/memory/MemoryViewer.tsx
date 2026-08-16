@@ -1,9 +1,3 @@
-/**
- * MemoryViewer Component
- *
- * Main memory browser component with tabs for category filtering,
- * search functionality, and sorting options.
- */
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDownAZ, ArrowUpDown, Brain, Clock, RefreshCw, Star } from 'lucide-react';
 
@@ -51,9 +45,6 @@ const SORT_OPTIONS: { value: SortOption; label: string; icon: React.ReactNode }[
   { value: 'topic-asc', label: 'Alphabetical', icon: <ArrowDownAZ className="h-4 w-4" /> },
 ];
 
-/**
- * Sort memories based on selected option
- */
 function sortMemories(memories: MemoryEntry[], sortBy: SortOption): MemoryEntry[] {
   const sorted = [...memories];
 
@@ -77,9 +68,6 @@ function sortMemories(memories: MemoryEntry[], sortBy: SortOption): MemoryEntry[
   }
 }
 
-/**
- * Filter memories by category
- */
 function filterByCategory(memories: MemoryEntry[], category: TabValue): MemoryEntry[] {
   if (category === 'all') {
     return memories;
@@ -88,13 +76,9 @@ function filterByCategory(memories: MemoryEntry[], category: TabValue): MemoryEn
 }
 
 export interface MemoryViewerProps {
-  /** Additional class names */
   className?: string;
-  /** Initial tab to display */
   initialTab?: TabValue;
-  /** Initial sort option */
   initialSort?: SortOption;
-  /** Maximum height for the scroll area */
   maxHeight?: string;
 }
 
@@ -116,31 +100,23 @@ export const MemoryViewer = memo(function MemoryViewer({
     })),
   );
 
-  // Category selectors for tab counts
   const preferences = useMemoryStore(selectPreferences);
   const facts = useMemoryStore(selectFacts);
   const decisions = useMemoryStore(selectDecisions);
   const contextMemories = useMemoryStore(selectContextMemories);
 
-  // Search state
   const { query, results, handleSearch, handleResults } = useMemorySearch();
 
-  // Load memories on mount
   useEffect(() => {
     loadAll();
   }, [loadAll]);
 
-  // Process and display memories
   const displayedMemories = useMemo(() => {
-    // Start with search results or all memories
     const baseMemories = query.trim() ? results : memories;
-    // Filter by category
     const filtered = filterByCategory(baseMemories, activeTab);
-    // Sort
     return sortMemories(filtered, sortBy);
   }, [memories, results, query, activeTab, sortBy]);
 
-  // Category counts
   const categoryCounts = useMemo(
     () => ({
       all: memories.length,
@@ -242,7 +218,6 @@ export const MemoryViewer = memo(function MemoryViewer({
         <TabsContent value={activeTab} className="flex-1 mt-4">
           <ScrollArea style={{ maxHeight }} className="pr-4">
             {isLoading && memories.length === 0 ? (
-              // Loading skeleton
               <div className="space-y-4">
                 {[1, 2, 3].map((i) => (
                   <div key={i} className="space-y-3 p-4 border rounded-lg">
@@ -256,10 +231,8 @@ export const MemoryViewer = memo(function MemoryViewer({
                 ))}
               </div>
             ) : displayedMemories.length === 0 ? (
-              // Empty state
               <EmptyState query={query} category={activeTab} />
             ) : (
-              // Memory cards
               <div className="space-y-3">
                 {displayedMemories.map((memory) => (
                   <MemoryCard key={memory.id} memory={memory} highlightText={query || undefined} />
@@ -273,9 +246,6 @@ export const MemoryViewer = memo(function MemoryViewer({
   );
 });
 
-/**
- * Empty state component
- */
 function EmptyState({ query, category }: { query: string; category: TabValue }) {
   if (query) {
     return (

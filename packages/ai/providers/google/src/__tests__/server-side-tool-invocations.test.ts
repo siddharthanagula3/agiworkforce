@@ -1,15 +1,3 @@
-/**
- * Regression tests for combining Gemini built-in tools with function calling.
- *
- * Live repro (2026-07-10, then-current route, Web search toggle + url_fetch):
- * a request carrying BOTH a built-in tool ({ google_search: {} } via
- * rawVendorTools) AND functionDeclarations fails with 400 INVALID_ARGUMENT
- * ("Please enable tool_config.include_server_side_tool_invocations to use
- * Built-in tools with Function calling."). The translate layer must set
- * `toolConfig.includeServerSideToolInvocations: true` for exactly that
- * combination — and ONLY that combination, so single-kind requests keep their
- * byte-identical bodies.
- */
 import { describe, expect, it } from 'vitest';
 import type { ChatRequest } from '@agiworkforce/types';
 import { translateChatRequest } from '../translate';
@@ -69,9 +57,6 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
   });
 
   it('replays assistant functionCall parts with the documented injected-call dummy signature', () => {
-    // Current provider models 400 on replayed functionCall parts without a thought
-    // signature; the OpenAI-compat wire cannot carry the real one, so the
-    // translate layer attaches the documented skip value for injected calls.
     const out = translateChatRequest({
       model: GOOGLE_DEFAULT_MODEL_ID,
       messages: [
@@ -98,7 +83,6 @@ describe('toolConfig.includeServerSideToolInvocations', () => {
     const modelTurn = out.contents.find((c) => c.role === 'model');
     const fcPart = modelTurn?.parts.find((p) => p.functionCall);
     expect(fcPart?.thoughtSignature).toBe('skip_thought_signature_validator');
-    // The paired functionResponse keeps the resolved function name.
     const responsePart = out.contents.flatMap((c) => c.parts).find((p) => p.functionResponse);
     expect(responsePart?.functionResponse?.name).toBe('url_fetch');
   });

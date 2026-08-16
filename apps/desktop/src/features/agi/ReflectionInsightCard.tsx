@@ -1,12 +1,3 @@
-/**
- * ReflectionInsightCard
- *
- * Displays insights from the AGI ReflectionEngine including:
- * - Execution assessments
- * - Failed steps analysis
- * - Suggested corrections
- * - Strategy recommendations
- */
 import { useState } from 'react';
 import { Card } from '@/ui/Card';
 import { Badge } from '@/ui/Badge';
@@ -49,7 +40,6 @@ export type {
   SubGoal,
 } from './reflectionTypes';
 
-// Failure category icons and colors
 const FAILURE_CATEGORY_CONFIG: Record<
   FailureCategory,
   { icon: React.ElementType; color: string; label: string }
@@ -65,7 +55,6 @@ const FAILURE_CATEGORY_CONFIG: Record<
   Unknown: { icon: AlertTriangle, color: 'text-gray-400', label: 'Unknown' },
 };
 
-// Correction type icons and colors
 const CORRECTION_TYPE_CONFIG: Record<
   CorrectionType,
   { icon: React.ElementType; color: string; label: string }
@@ -80,7 +69,6 @@ const CORRECTION_TYPE_CONFIG: Record<
   AdjustResourceLimits: { icon: TrendingUp, color: 'text-pink-400', label: 'Adjust Resources' },
 };
 
-// Failed Step Card
 function FailedStepCard({ step }: { step: FailedStep }) {
   const [expanded, setExpanded] = useState(false);
   const config = FAILURE_CATEGORY_CONFIG[step.failureCategory];
@@ -131,7 +119,6 @@ function FailedStepCard({ step }: { step: FailedStep }) {
   );
 }
 
-// Correction Card
 function CorrectionCard({ correction }: { correction: Correction }) {
   const [expanded, setExpanded] = useState(false);
   const config = CORRECTION_TYPE_CONFIG[correction.correctionType];
@@ -181,7 +168,6 @@ function CorrectionCard({ correction }: { correction: Correction }) {
   );
 }
 
-// Sub-goal Card
 function SubGoalCard({ subGoal }: { subGoal: SubGoal }) {
   return (
     <div className="bg-surface-base rounded-lg p-3 border border-purple-500/20">
@@ -226,7 +212,6 @@ function SubGoalCard({ subGoal }: { subGoal: SubGoal }) {
   );
 }
 
-// Main Component
 interface ReflectionInsightCardProps {
   insight: ReflectionInsight;
   compact?: boolean;

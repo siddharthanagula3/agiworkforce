@@ -1,6 +1,3 @@
-/**
- * Regression coverage for OCR fallback routing and native AGIVisionOCR consumption.
- */
 
 import { runVisionQuery } from '../src/features/image/services/vision';
 import {

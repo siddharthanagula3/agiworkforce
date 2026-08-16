@@ -26,14 +26,12 @@ export const logger = pino({
   level: logLevel,
   ...(isProduction
     ? {
-        // Production: JSON output for log aggregation
         formatters: {
           level: (label) => ({ level: label }),
         },
         timestamp: pino.stdTimeFunctions.isoTime,
       }
     : {
-        // Development: pretty printing
         transport: {
           target: 'pino-pretty',
           options: {
@@ -45,18 +43,11 @@ export const logger = pino({
       }),
 });
 
-/**
- * Create a child logger with a correlation ID
- */
 export function createChildLogger(correlationId: string) {
   return logger.child({ correlationId });
 }
 
-/**
- * Generate a short correlation ID for request tracing
- */
 export function generateCorrelationId(): string {
-  // Use a short random string for readability
   return Math.random().toString(36).substring(2, 10);
 }
 

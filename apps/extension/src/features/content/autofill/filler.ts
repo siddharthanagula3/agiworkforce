@@ -1,10 +1,3 @@
-/**
- * Field filler — programmatically fills detected job application form fields
- * with values from a user profile, dispatching the events that
- * React/Vue/Angular frameworks need to register the change.
- *
- * IMPORTANT: This module never auto-submits forms. It only fills values.
- */
 
 import type { DetectedField } from './detector';
 import type { JobApplicationProfile } from '../../../types';
@@ -22,17 +15,6 @@ import {
   ASHBY_ALWAYS_ESCALATE_KEYS,
 } from './ashby';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-/**
- * Canonical skip reason used for ALL file-input fields, shared by both the
- * generic fillFields() path and the platform-specific orchestrators
- * (autofillLinkedIn / autofillLever / autofillGreenhouse / autofillAshby).
- *
- * escalationEngine.detectFieldTriggers() compares result.reason against this
- * constant to detect file-upload escalation triggers — the string must match
- * exactly in both places.
- */
 export const FILE_INPUT_SKIP_REASON = 'File inputs cannot be filled programmatically';
 
 export interface FillResult {
@@ -51,42 +33,19 @@ export interface AutofillResult {
   errors: string[];
 }
 
-// ─── Profile value sanitization ──────────────────────────────────────────────
-
-/** Maximum length for any single profile field value. */
 const MAX_PROFILE_FIELD_LENGTH = 2000;
 
-/**
- * Sanitize a profile field value before filling it into a form.
- * - Strips control characters (except newline/tab for textareas)
- * - Rejects HTML tags (prevents XSS if ATS renders submitted data unsafely)
- * - Enforces a length limit
- * - Trims whitespace
- */
 function sanitizeProfileValue(value: string): string {
-  // Strip control chars except \n (\u000A) and \t (\u0009) which are useful in textareas.
   // eslint-disable-next-line no-control-regex
   let sanitized = value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
-  // Strip any HTML tags — profile values should be plain text.
-  // Loop to handle nested/recursive patterns like "<<script>alert(1)</script>"
-  // where a single pass leaves residual tags.
   let previous: string;
   do {
     previous = sanitized;
     sanitized = sanitized.replace(/<[^>]*>/g, '');
   } while (sanitized !== previous);
-  // Trim and enforce length limit
   return sanitized.trim().substring(0, MAX_PROFILE_FIELD_LENGTH);
 }
 
-// ─── Native input value setter (React/Vue compatible) ────────────────────────
-
-/**
- * Sets the value of a React-controlled input without React swallowing the change.
- *
- * React overrides the native value descriptor to track changes; we bypass that
- * by using Object.getOwnPropertyDescriptor to call the original setter.
- */
 function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
     el instanceof HTMLInputElement
@@ -102,28 +61,14 @@ function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: strin
   }
 }
 
-// ─── Event dispatch sequence ──────────────────────────────────────────────────
-
-/**
- * Dispatches the sequence of events a user would normally produce when typing
- * a value into a field: focus → input → change → blur.
- *
- * This is required for React controlled components to re-render.
- */
 function dispatchFillEvents(el: HTMLElement): void {
   el.dispatchEvent(new FocusEvent('focus', { bubbles: true }));
-  // beforeinput is required by React 19+ and Vue 3.4+ for input validation hooks.
   el.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: true }));
   el.dispatchEvent(new Event('input', { bubbles: true }));
   el.dispatchEvent(new Event('change', { bubbles: true }));
   el.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
 }
 
-// ─── Individual field fillers ─────────────────────────────────────────────────
-
-/**
- * Fills a plain text / email / tel / url input or a textarea.
- */
 function fillTextField(el: HTMLInputElement | HTMLTextAreaElement, value: string): boolean {
   try {
     setNativeValue(el, value);
@@ -134,13 +79,8 @@ function fillTextField(el: HTMLInputElement | HTMLTextAreaElement, value: string
   }
 }
 
-/**
- * Selects an option in a <select> element by exact value, then by
- * case-insensitive partial text match as fallback.
- */
 function fillSelectField(el: HTMLSelectElement, value: string): boolean {
   try {
-    // Try exact value match first
     const options = Array.from(el.options);
     const exactMatch = options.find(
       (o) => o.value === value || o.value.toLowerCase() === value.toLowerCase(),
@@ -151,7 +91,6 @@ function fillSelectField(el: HTMLSelectElement, value: string): boolean {
       return true;
     }
 
-    // Partial text match
     const textMatch = options.find((o) => o.text.toLowerCase().includes(value.toLowerCase()));
     if (textMatch) {
       el.value = textMatch.value;
@@ -165,17 +104,11 @@ function fillSelectField(el: HTMLSelectElement, value: string): boolean {
   }
 }
 
-/**
- * Handles boolean-like profile values for select fields (yes/no, true/false,
- * require/not-required, etc.).
- */
 function normaliseBooleanValue(value: boolean | string | undefined): string {
   if (value === true || value === 'true' || value === 'yes' || value === '1') return 'yes';
   if (value === false || value === 'false' || value === 'no' || value === '0') return 'no';
   return String(value ?? '');
 }
-
-// ─── Profile key → value resolver ────────────────────────────────────────────
 
 /**
  * Extracts the string value from a JobApplicationProfile for a given normalised key.
@@ -235,25 +168,14 @@ export function resolveProfileValue(
     case 'resumeText':
       return profile.resumeText ?? null;
     default:
-      // Handle customAnswers.* keys
       if (key.startsWith('customAnswers.')) {
         const subKey = key.slice('customAnswers.'.length);
         return profile.customAnswers?.[subKey] ?? null;
       }
-      // files.* keys are handled separately in fillFields()
       return null;
   }
 }
 
-// ─── Main fill function ───────────────────────────────────────────────────────
-
-/**
- * Fills a list of detected fields with values from a profile.
- *
- * File inputs (resume, cover letter) are skipped here because the browser
- * security model prevents programmatic file input filling — those are handled
- * separately via the `files` property on the profile if data-URLs are provided.
- */
 export async function fillFields(
   fields: DetectedField[],
   profile: JobApplicationProfile,
@@ -262,7 +184,6 @@ export async function fillFields(
   const results: FillResult[] = [];
 
   for (const field of fields) {
-    // File inputs cannot be filled programmatically via the value property
     if (field.fieldType === 'file') {
       results.push({
         key: field.key,
@@ -300,8 +221,6 @@ export async function fillFields(
       continue;
     }
 
-    // Skip readonly or disabled fields — filling them has no effect and can
-    // confuse form validation logic.
     const isReadonly =
       (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) && el.readOnly;
     const isDisabled =
@@ -346,7 +265,6 @@ export async function fillFields(
       reason: success ? undefined : 'Fill function returned false',
     });
 
-    // Small delay between fields to avoid race conditions in JS frameworks
     if (delayMs > 0) {
       await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
     }
@@ -355,14 +273,6 @@ export async function fillFields(
   return results;
 }
 
-// ─── Platform-aware autofill orchestrator ────────────────────────────────────
-
-/**
- * Runs the complete LinkedIn autofill for the currently open Easy Apply modal.
- *
- * Uses the prioritised LinkedIn selector map rather than the generic detector,
- * because LinkedIn's modal may only expose a subset of fields per page step.
- */
 export async function autofillLinkedIn(
   profile: JobApplicationProfile,
   delayMs: number = 80,
@@ -437,12 +347,6 @@ export async function autofillLinkedIn(
   };
 }
 
-/**
- * Runs the complete Lever autofill for the currently open job application form.
- *
- * Also detects and fills custom Lever questions when the profile carries
- * matching `customAnswers` entries.
- */
 export async function autofillLever(
   profile: JobApplicationProfile,
   delayMs: number = 80,
@@ -450,7 +354,6 @@ export async function autofillLever(
   const filled: FillResult[] = [];
   const errors: string[] = [];
 
-  // Standard fields
   for (const key of Object.keys(LEVER_SELECTORS)) {
     if (key.startsWith('files.')) {
       filled.push({
@@ -509,7 +412,6 @@ export async function autofillLever(
     }
   }
 
-  // Custom questions
   const container =
     document.querySelector('.application-form') ??
     document.querySelector('#application-form') ??
@@ -572,11 +474,6 @@ export async function autofillLever(
   };
 }
 
-// ─── Greenhouse autofill orchestrator ────────────────────────────────────────
-
-/**
- * Runs the complete Greenhouse autofill for the currently open application form.
- */
 export async function autofillGreenhouse(
   profile: JobApplicationProfile,
   delayMs: number = 80,
@@ -641,7 +538,6 @@ export async function autofillGreenhouse(
     }
   }
 
-  // Custom questions
   const container = document.querySelector('#application_form') ?? document.querySelector('form');
   if (container && profile.customAnswers && Object.keys(profile.customAnswers).length > 0) {
     const customFields = detectGreenhouseCustomFields(container);
@@ -690,13 +586,6 @@ export async function autofillGreenhouse(
   };
 }
 
-// ─── Ashby autofill orchestrator ──────────────────────────────────────────────
-
-/**
- * Runs the complete Ashby autofill for the currently open application form.
- * Always waits for React render-settle before attempting fills.
- * Fields in ASHBY_ALWAYS_ESCALATE_KEYS are always marked skipped.
- */
 export async function autofillAshby(
   profile: JobApplicationProfile,
   delayMs: number = 80,
@@ -761,7 +650,6 @@ export async function autofillAshby(
     }
   }
 
-  // Custom questions
   const container = document.querySelector('form');
   if (container && profile.customAnswers && Object.keys(profile.customAnswers).length > 0) {
     const customFields = detectAshbyCustomFields(container);
@@ -810,22 +698,8 @@ export async function autofillAshby(
   };
 }
 
-// ─── Profile storage helpers ──────────────────────────────────────────────────
-
-/**
- * The chrome.storage.LOCAL key used to persist the autofill profile.
- *
- * SECURITY (audit batch-220 [HIGH] PII leakage, fixed 2026-06-13): the profile
- * holds PII (full name, email, phone, location, salary expectation,
- * work-authorization status, custom answers). It MUST be device-scoped
- * (`chrome.storage.local`) — NOT `chrome.storage.sync`, which replicates the
- * data to the user's Chrome Sync / Google account off-device. This aligns with
- * the local-only storage rule used by `memory-bridge.ts`. The one-time
- * `migrateAutofillProfile()` move handles any profile previously stored in sync.
- */
 export const AUTOFILL_PROFILE_STORAGE_KEY = 'agi_autofill_profile';
 
-/** Loads the autofill profile from device-local storage. */
 export async function loadAutofillProfile(): Promise<JobApplicationProfile> {
   try {
     const result = await chrome.storage.local.get(AUTOFILL_PROFILE_STORAGE_KEY);
@@ -839,25 +713,12 @@ export async function loadAutofillProfile(): Promise<JobApplicationProfile> {
   return {};
 }
 
-/** Persists the autofill profile to device-local storage (never synced off-device). */
 export async function saveAutofillProfile(profile: JobApplicationProfile): Promise<void> {
   await chrome.storage.local.set({ [AUTOFILL_PROFILE_STORAGE_KEY]: profile });
 }
 
-/**
- * Marker key set after a successful sync → local migration so the migrator
- * runs at most once. Stored alongside the profile in local.
- */
 const AUTOFILL_MIGRATION_DONE_KEY = 'agi_autofill_profile_migrated';
 
-/**
- * One-shot migrator: copy autofill profile from `chrome.storage.sync` into
- * `chrome.storage.local`, then clear sync. Idempotent — guarded by the
- * AUTOFILL_MIGRATION_DONE_KEY marker. Silent on any storage error so the
- * extension boot path stays resilient.
- *
- * Returns true when a migration write actually occurred, false otherwise.
- */
 export async function migrateAutofillProfile(): Promise<boolean> {
   try {
     const localResult = await chrome.storage.local.get([
@@ -865,15 +726,13 @@ export async function migrateAutofillProfile(): Promise<boolean> {
       AUTOFILL_PROFILE_STORAGE_KEY,
     ]);
     if (localResult[AUTOFILL_MIGRATION_DONE_KEY] === true) {
-      return false; // already migrated
+      return false;
     }
 
     const syncResult = await chrome.storage.sync.get(AUTOFILL_PROFILE_STORAGE_KEY);
     const syncProfile = syncResult[AUTOFILL_PROFILE_STORAGE_KEY];
     const localProfile = localResult[AUTOFILL_PROFILE_STORAGE_KEY];
 
-    // Only copy from sync into local when local is empty — never clobber a
-    // post-migration write the user has made.
     let copied = false;
     if (
       (!localProfile ||
@@ -886,12 +745,10 @@ export async function migrateAutofillProfile(): Promise<boolean> {
       copied = true;
     }
 
-    // Always clear sync and stamp the marker so subsequent boots skip this path.
     await chrome.storage.sync.remove(AUTOFILL_PROFILE_STORAGE_KEY).catch(() => {});
     await chrome.storage.local.set({ [AUTOFILL_MIGRATION_DONE_KEY]: true });
     return copied;
   } catch {
-    // Storage unavailable (test / SSR / locked profile) — leave state as-is.
     return false;
   }
 }

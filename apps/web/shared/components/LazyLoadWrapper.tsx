@@ -8,13 +8,11 @@ export const lazyWithRetry = <T extends ComponentType<Record<string, unknown>>>(
   return lazy(() =>
     importFunc().catch((error) => {
       console.error('Failed to load component:', error);
-      // Retry once after a delay
       return new Promise<{ default: T }>((resolve) => {
         setTimeout(() => {
           importFunc()
             .then(resolve)
             .catch((retryError) => {
-              // If retry fails, log and show error component
               logger.error('[LazyLoadWrapper] Component load failed after retry', retryError);
               resolve({
                 default: (() => (
@@ -37,7 +35,6 @@ export const lazyWithRetry = <T extends ComponentType<Record<string, unknown>>>(
   );
 };
 
-// Higher-order component for lazy loading with suspense
 export const withLazyLoading = <P extends object>(Component: ComponentType<P>) => {
   const WrappedComponent = (props: P) => (
     <Suspense fallback={<LazyFallback />}>

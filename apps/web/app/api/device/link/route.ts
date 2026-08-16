@@ -13,20 +13,14 @@ import { getClerkAuthUser } from '@/lib/api-auth';
 import { getNeonDb } from '@/lib/server/neon-db';
 
 async function handleDeviceLink(request: NextRequest) {
-  // CSRF protection - prevent cross-site device pairing
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
-  // Rate limiting - prevent abuse of device code generation
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
 
-  // SECURITY: Require authenticated session to prevent device-code phishing attacks.
-  // Without authentication, an attacker can pre-seed a device_id, trick a victim into
-  // approving, and collect session tokens. Requiring auth ensures only legitimate users
-  // can initiate device linking.
   let authUser: { userId: string; email?: string };
   try {
     authUser = await getClerkAuthUser(request);
@@ -39,7 +33,6 @@ async function handleDeviceLink(request: NextRequest) {
   }
 
   try {
-    // Parse and validate request body
     let body: unknown;
     try {
       body = await request.json();
@@ -57,7 +50,6 @@ async function handleDeviceLink(request: NextRequest) {
 
     const db = getNeonDb();
 
-    // Validate NEXT_PUBLIC_APP_URL to prevent verification links pointing to wrong domains
     const appUrlRaw = getEnv('NEXT_PUBLIC_APP_URL', 'https://agiworkforce.com');
     let appUrl: string;
     try {
@@ -75,8 +67,6 @@ async function handleDeviceLink(request: NextRequest) {
     let link_code = '';
     let lastError: unknown = null;
 
-    // Generate device code with 64-bit entropy (8 bytes = 16 hex chars = 2^64 possibilities)
-    // Retry on rare uniqueness conflicts to avoid transient pairing failures.
     for (let attempt = 0; attempt < 3; attempt++) {
       link_code = randomBytes(8).toString('hex').toUpperCase();
       try {
@@ -119,7 +109,6 @@ async function handleDeviceLink(request: NextRequest) {
         break;
       } catch (err) {
         lastError = err;
-        // Only retry on unique constraint violations
         const isUniqueViolation =
           err instanceof Error && (err.message.includes('23505') || err.message.includes('unique'));
         if (!isUniqueViolation) {
@@ -133,11 +122,10 @@ async function handleDeviceLink(request: NextRequest) {
       throw createError.internal('Failed to create device authorization code');
     }
 
-    void authUser; // authenticated; user identity not stored at link time
+    void authUser;
 
     const verify_url = `${appUrl}/verify?code=${encodeURIComponent(link_code)}`;
 
-    // Generate QR code in-process to avoid leaking verification URLs to external services
     const qr_code_url = await QRCode.toDataURL(verify_url, { width: 200, margin: 1 });
 
     return NextResponse.json(

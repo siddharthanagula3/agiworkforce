@@ -26,8 +26,6 @@ function toDesktopProject(project: ManagedCloudProject): Project {
     name: project.name,
     description: project.description ?? '',
     customInstructions: project.instructions ?? '',
-    // Device paths and extracted local file contents never cross into the
-    // managed project projection.
     files: [],
     conversationIds: [],
     conversationCount: project.conversationCount ?? 0,

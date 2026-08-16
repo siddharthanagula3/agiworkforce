@@ -1,4 +1,3 @@
-/** Authenticated download for one included, first-party SKILL.md bundle entry. */
 
 import { NextRequest, NextResponse } from 'next/server';
 

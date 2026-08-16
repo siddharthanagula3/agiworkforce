@@ -1,20 +1,3 @@
-/**
- * Manual-approval SUSPEND → RESUME behaviour for runToolLoop (fixes known-flaw
- * MCP-APPROVAL-RESUME). Proves the stateless resume path:
- *
- *   - manual mode SUSPENDS: emits x_tool_approval_request + [DONE], executes nothing.
- *   - resume with a VALID approval executes exactly the approved+pending tool
- *     (through the same guards) and continues the model to a final answer.
- *   - resume with a mismatched/forged tool_call_id is REJECTED and executes nothing.
- *   - resume that REJECTS a tool appends a denial result and the model continues.
- *   - resume that approves a tool NOT in the offered catalog fails closed (error
- *     result, no execution) — a hallucinated/forged qualified name cannot run.
- *   - Anthropic + extended-thinking resume is refused cleanly (documented
- *     stateless-resume remainder), executing nothing.
- *
- * Mirrors tool-loop.connector.e2e.test.ts's mocking approach (buildToolLoopStream
- * mocked at its ReadableStream boundary); no real MCP server or network.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseAgentEventDelta } from '@agiworkforce/cloud-contracts';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -84,7 +67,6 @@ describe('isToolOffered — resume authorization boundary', () => {
   );
 });
 
-/** Build a fresh (pre-suspend) request whose provider will emit a tool_call. */
 function makeFreshProcessed(
   overrides: Partial<ProcessedRequest['chatRequest']> = {},
 ): ProcessedRequest {
@@ -116,10 +98,6 @@ function makeFreshProcessed(
   };
 }
 
-/**
- * Build a RESUME request: the thread carries the suspended assistant tool_call
- * turn as the last message (standard OpenAI continue-after-tool shape).
- */
 function makeResumeProcessed(
   provider = 'openai',
   chatOverrides: Partial<ProcessedRequest['chatRequest']> = {},
@@ -213,13 +191,11 @@ describe('runToolLoop — manual approval suspend', () => {
       }),
     );
 
-    // Approval event surfaced; the provider was called exactly once (no re-invoke).
     expect(output).toContain('x_tool_approval_request');
     expect(output).toContain('"tool_call_id":"call_1"');
     expect(output).toContain(`"name":"${GITHUB_TOOL}"`);
     expect(output).toContain('data: [DONE]');
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
-    // Nothing executed.
     expect(connectorExecutor).not.toHaveBeenCalled();
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
     expect(onApprovalCheckpoint).toHaveBeenCalledWith({
@@ -298,9 +274,6 @@ describe('runToolLoop — manual approval resume', () => {
   });
 
   it('executes the approved+pending tool and continues to a final answer', async () => {
-    // Resume does NOT call the provider before executing — the model already
-    // produced the tool_call in the suspended turn. Exactly one provider call:
-    // the continuation after the tool result is appended.
     const continuation = sseStreamFrom([
       chunk({ content: 'The PR renames a function.' }),
       chunk({}, 'stop'),
@@ -327,7 +300,6 @@ describe('runToolLoop — manual approval resume', () => {
       }),
     );
 
-    // The approved tool executed exactly once through the connector executor.
     expect(connectorExecutor).toHaveBeenCalledTimes(1);
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
     expect(agentEvents(output)[0]).toMatchObject({
@@ -336,8 +308,6 @@ describe('runToolLoop — manual approval resume', () => {
       sequence: 6,
     });
 
-    // Exactly one provider call (the continuation), and its thread carried the
-    // executed tool result.
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
     const contRequest = mockBuildToolLoopStream.mock.calls[0]?.[2] as {
       messages: Array<{ role: string; content: string; tool_call_id?: string }>;
@@ -346,7 +316,6 @@ describe('runToolLoop — manual approval resume', () => {
     expect(toolResult?.content).toContain('diff --git');
     expect(toolResult?.tool_call_id).toBe('call_1');
 
-    // Client saw the tool status/result + final answer.
     expect(output).toContain('"status":"completed"');
     expect(output).toContain('The PR renames a function.');
     expect(output).toContain('data: [DONE]');
@@ -404,7 +373,6 @@ describe('runToolLoop — manual approval resume', () => {
       }),
     );
 
-    // No provider call, no execution — just an error + DONE.
     expect(mockBuildToolLoopStream).not.toHaveBeenCalled();
     expect(connectorExecutor).not.toHaveBeenCalled();
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
@@ -435,7 +403,6 @@ describe('runToolLoop — manual approval resume', () => {
       }),
     );
 
-    // The tool was NOT executed; a denial result was appended and the model ran.
     expect(connectorExecutor).not.toHaveBeenCalled();
     expect(mockBuildToolLoopStream).toHaveBeenCalledTimes(1);
     const contRequest = mockBuildToolLoopStream.mock.calls[0]?.[2] as {
@@ -458,7 +425,6 @@ describe('runToolLoop — manual approval resume', () => {
     }));
 
     const output = await drain(
-      // mcpTools EMPTY: the approved tool was never offered on this request.
       runToolLoop(makeResumeProcessed(), {
         approvalMode: 'manual',
         userId: 'user-1',
@@ -468,7 +434,6 @@ describe('runToolLoop — manual approval resume', () => {
       }),
     );
 
-    // Nothing executed; an error tool-result was appended instead.
     expect(connectorExecutor).not.toHaveBeenCalled();
     expect(mockExecuteWebMcpTool).not.toHaveBeenCalled();
     expect(output).toContain('is not available and was not executed');
@@ -480,9 +445,6 @@ describe('runToolLoop — manual approval resume', () => {
   });
 
   it('resumes an Anthropic turn normally (approve endpoint drops thinking; no special case)', async () => {
-    // The approve endpoint forces thinking OFF on the resume, so at the loop
-    // level an Anthropic resume behaves like any other: the approved tool runs
-    // and the model continues. No refusal, no Anthropic-specific branch.
     const continuation = sseStreamFrom([
       chunk({ content: 'The PR renames a function.' }),
       chunk({}, 'stop'),

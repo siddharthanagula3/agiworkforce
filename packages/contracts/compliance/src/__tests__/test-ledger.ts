@@ -1,7 +1,3 @@
-/**
- * Tiny in-memory ledger doubles used by every test file. Lives under
- * __tests__ so it ships zero bytes to dist.
- */
 
 import type { DisclosureLedger, DisclosureRecord } from '../article50-disclosure';
 import type { ConsentLedger, NamedProviderConsent } from '../provider-jurisdiction';

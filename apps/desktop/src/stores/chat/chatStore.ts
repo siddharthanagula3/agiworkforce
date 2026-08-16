@@ -1,10 +1,3 @@
-/**
- * Chat Store
- *
- * Thin barrel: conversation/message/backend domain lives here as useChatMessageStore.
- * View state → chatViewStore. Execution/streaming/tools → chatExecutionStore.
- * useChatStore is the combined hook that merges all three — all consumer imports unchanged.
- */
 import { create } from 'zustand';
 import { devtools, persist, subscribeWithSelector, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
@@ -47,7 +40,6 @@ import {
 } from './chatViewStore';
 import { useChatExecutionStore, registerExecutionMessagePatcher } from './chatExecutionStore';
 
-// Re-export types for backwards compatibility
 export type {
   EnhancedMessage,
   ConversationSummary,
@@ -81,11 +73,6 @@ function isCurrentCloudAccount(userId: string): boolean {
 
 export const LOCAL_DESKTOP_USER_ID = 'local-desktop-user';
 
-/**
- * Resolve the owner used by the native Local/BYOK conversation database.
- * Managed Cloud never uses this fallback; its shared client requires the
- * authenticated tenant identity at the network boundary.
- */
 export function resolveDesktopChatOwnerId(): string {
   return useUnifiedAuthStore.getState().user?.id ?? LOCAL_DESKTOP_USER_ID;
 }
@@ -230,8 +217,6 @@ import type { ToolLabelEntry } from '@agiworkforce/types';
 import { STORAGE_KEYS } from '../../constants/storageKeys';
 export type { ToolLabelEntry };
 
-// === Message domain state (core store) ===
-
 export interface ChatMessageState {
   conversations: ConversationSummary[];
   activeConversationId: string | null;
@@ -334,8 +319,6 @@ export interface ChatMessageState {
   resetOnLogout: () => void;
 }
 
-// === Backend response types ===
-
 export interface ChatSearchResult {
   messageId: number;
   conversationId: number;
@@ -394,8 +377,6 @@ export interface ContextCompactionResponse {
   message: string;
 }
 
-// === Core message-domain store ===
-
 export const useChatMessageStore = create<ChatMessageState>()(
   devtools(
     persist(
@@ -420,12 +401,6 @@ export const useChatMessageStore = create<ChatMessageState>()(
                   return;
                 }
 
-                // A concurrent Cloud list hydration can replace the summary array
-                // after an empty-boundary draft has been seeded while leaving its
-                // active id and messages intact. Repair that dangling summary with
-                // the same id so a Strict Mode hydration race cannot expose a
-                // composer whose Send action silently fails closed — and never
-                // discard text already attached to the draft.
                 const id = state.activeConversationId ?? crypto.randomUUID();
                 const existingMessages = state.messagesByConversation[id] ?? [];
                 const created: ConversationSummary = {
@@ -461,21 +436,10 @@ export const useChatMessageStore = create<ChatMessageState>()(
                 state.conversations.unshift(convo);
 
                 if (isCloudMode()) {
-                  // The managed API accepts the client UUID. Keeping one id
-                  // removes the create/send race and avoids remapping UI state
-                  // while the user is already typing.
                   ensureCloudConversation(id, title).catch((error) => {
                     console.error('[ChatStore] Failed to create cloud conversation:', error);
                     set(
                       (s) => {
-                        // DESKTOP-CLOUDROLLBACK-01: only discard the optimistic
-                        // conversation if it holds NO user data. If the user already
-                        // sent a message into it, deleting it here SILENTLY LOSES that
-                        // message. Preserve it locally instead (it keeps the same
-                        // cloud id it already had during the optimistic window);
-                        // the message send's own failure is surfaced by the
-                        // normal message-error path, so the user is not left with a
-                        // vanished message and no feedback.
                         const hasUserData = (s.messagesByConversation[id]?.length ?? 0) > 0;
                         if (hasUserData) return;
                         s.conversations = s.conversations.filter((c) => c.id !== id);
@@ -772,10 +736,6 @@ export const useChatMessageStore = create<ChatMessageState>()(
               'chat/renameConversation',
             );
             if (!trimmed) return;
-            // DESKTOP-CHAT-CONVO-ACTIONS-PERSIST-01: the local mutation above is
-            // optimistic UI only — without this call the rename is lost on the
-            // next `loadConversations()` (app restart / conversation switch),
-            // same silent-no-persist class as DESKTOP-CHAT-SILENT-FAIL-01.
             if (isCloudMode()) {
               updateCloudConversationTitle(id, trimmed).catch((error) => {
                 console.error('[ChatStore] Failed to rename cloud conversation:', error);
@@ -946,8 +906,6 @@ export const useChatMessageStore = create<ChatMessageState>()(
               undefined,
               'chat/archiveConversation',
             );
-            // DESKTOP-CHAT-CONVO-ACTIONS-PERSIST-01: local-only mutation above
-            // does not survive `loadConversations()` without this backend call.
             if (isCloudMode()) {
               void updateCloudConversation(id, { archived: true, pinned: false }).catch((error) => {
                 console.error('[ChatStore] Failed to archive cloud conversation:', error);
@@ -1534,7 +1492,6 @@ export const useChatMessageStore = create<ChatMessageState>()(
             };
           },
 
-          // Backend-wired commands
           getConversationFromBackend: async (dbId: number, userId: string) => {
             try {
               return await invoke<BackendConversation>('chat_get_conversation', {
@@ -1849,23 +1806,14 @@ export const useChatMessageStore = create<ChatMessageState>()(
   ),
 );
 
-// Wire the message patcher so chatExecutionStore can mutate message arrays
 registerExecutionMessagePatcher((fn) => {
   const { messages, messagesByConversation, activeConversationId } = useChatMessageStore.getState();
   fn(messages, activeConversationId ? messagesByConversation[activeConversationId] : undefined);
 });
 
-// The mode-switch guard needs the store that actually owns `isStreaming`.
-// `useChatMessageStore` never carries it (every read/write targets the
-// execution store), so registering the message store left
-// `isChatStoreStreaming()` permanently false and a Local↔Cloud toggle could be
-// clicked mid-answer.
 registerChatStoreStateReader(useChatExecutionStore);
 
-// === Combined ChatState interface (unchanged for consumers) ===
-
 export interface ChatState extends ChatMessageState {
-  // View state (from chatViewStore)
   focusMode: FocusMode;
   activeView: ActiveView;
   conversationMode: ConversationMode;
@@ -1890,7 +1838,6 @@ export interface ChatState extends ChatMessageState {
   updateTokenUsage: (usage: Partial<TokenUsage>) => void;
   getTokenPercentage: () => number;
 
-  // Execution state (from chatExecutionStore)
   isLoading: boolean;
   isLoadingMessages: boolean;
   isStreaming: boolean;
@@ -1953,9 +1900,7 @@ function buildCombinedState(
   view: ReturnType<typeof useChatViewStore.getState>,
 ): ChatState {
   return {
-    // Message domain
     ...msg,
-    // Execution domain
     isLoading: exec.isLoading,
     isLoadingMessages: exec.isLoadingMessages,
     isStreaming: exec.isStreaming,
@@ -1992,7 +1937,6 @@ function buildCombinedState(
     startStreamWatchdog: exec.startStreamWatchdog,
     stopStreamWatchdog: exec.stopStreamWatchdog,
     handleStreamInactivityTimeout: exec.handleStreamInactivityTimeout,
-    // View domain
     focusMode: view.focusMode,
     activeView: view.activeView,
     conversationMode: view.conversationMode,
@@ -2049,11 +1993,6 @@ type SettableChatState = Partial<
   >
 >;
 
-/**
- * Combined useChatStore hook — preserves original API for all 39 consumers.
- * Merges message, execution, and view sub-stores into the legacy ChatState shape.
- * Pass a selector to extract a slice, or omit to get the full combined state.
- */
 export function useChatStore<T = ChatState>(selector?: (state: ChatState) => T): T {
   const msgSlice = useChatMessageStore();
   const execSlice = useChatExecutionStore();
@@ -2130,13 +2069,8 @@ useChatStore.setState = (
   if (Object.keys(execUpdate).length > 0) useChatExecutionStore.setState(execUpdate);
 };
 
-/**
- * subscribe — delegates to useChatMessageStore (which has subscribeWithSelector).
- * For selector-based subscriptions (App.tsx uses `useChatStore.subscribe(selector, listener)`).
- */
 useChatStore.subscribe = useChatMessageStore.subscribe as typeof useChatMessageStore.subscribe;
 
-// Selectors — delegate to sub-stores for execution + view, message store for data
 export const selectConversations = (state: ChatState) => state.conversations;
 export const selectActiveConversationId = (state: ChatState) => state.activeConversationId;
 export const selectMessages = (state: ChatState) => state.messages;
@@ -2165,7 +2099,6 @@ export const selectToolTimelineByMessage = (state: ChatState) => state.toolTimel
 export const selectThinkingByMessage = (state: ChatState) => state.thinkingByMessage;
 export const selectAgenticLoopStatus = (state: ChatState) => state.agenticLoopStatus;
 
-// Cross-store subscriptions
 const IS_TEST_ENVIRONMENT =
   typeof process !== 'undefined' && (process.env['NODE_ENV'] === 'test' || process.env['VITEST']);
 
@@ -2248,10 +2181,6 @@ export function teardownChatStoreModelStoreSubscription(): void {
 }
 
 if (typeof window !== 'undefined' && !IS_TEST_ENVIRONMENT) {
-  // App.tsx owns mode-boundary reset and hydration because it can coordinate
-  // auth readiness, settings persistence, chats, projects, and Cloud sync as
-  // one transition. A module-level mode listener here used to race that owner
-  // and issue duplicate conversation loads.
   void initializeChatStoreModelStoreSubscription();
   initializeChatViewModelSubscription();
 }

@@ -1,8 +1,3 @@
-/**
- * InputToolbar Component
- *
- * Left side toolbar containing folder selector, attachment, and voice input buttons.
- */
 
 import React from 'react';
 import { Globe, Paperclip, Zap } from 'lucide-react';
@@ -14,45 +9,25 @@ import { ScreenCaptureButton } from '@/features/screen-capture/ScreenCaptureButt
 import type { CaptureResult } from '../../types/capture';
 
 export interface InputToolbarProps {
-  /** Whether input is disabled */
   disabled?: boolean;
-  /** Whether attachments are enabled */
   enableAttachments?: boolean;
-  /** Currently selected model */
   selectedModel?: string | null;
-  /** Whether in simple mode */
   isSimpleMode?: boolean;
-  /** Whether voice is supported */
   isVoiceSupported: boolean;
-  /** Whether currently recording */
   isRecording: boolean;
-  /** Whether currently transcribing */
   isTranscribing: boolean;
-  /** Whether Whisper upload mode is selected */
   preferWhisperCloud?: boolean;
-  /** Available local Whisper runtimes */
   availableLocalWhisper?: string[];
-  /** Whether the mode selector is open */
   showTranscriptionModeSelector?: boolean;
-  /** Callback to open file picker */
   onAttachClick: () => void;
-  /** Callback to toggle recording */
   onToggleRecording: () => void;
-  /** Callback to toggle transcription mode selector */
   onModeSelectorChange?: (open: boolean) => void;
-  /** Callback to change Whisper preference */
   onPreferWhisperCloudChange?: (prefer: boolean) => void;
-  /** Callback when screenshot is captured */
   onScreenCapture?: (result: CaptureResult) => void;
-  /** Current conversation ID for screenshot association */
   conversationId?: number;
-  /** Whether the research panel is open */
   researchOpen?: boolean;
-  /** Callback to toggle the research panel */
   onToggleResearch?: () => void;
-  /** Whether agent mode is enabled for the current message */
   agentModeEnabled?: boolean;
-  /** Callback to toggle agent mode */
   onToggleAgentMode?: () => void;
 }
 

@@ -1,32 +1,3 @@
-/**
- * runTests.ts — Entry point for `@vscode/test-electron` integration tests.
- *
- * Invoke via `pnpm test:integration` for the source bundle, or
- * `pnpm test:integration:package` to verify, extract, and launch the exact
- * packaged VSIX bytes. The packaged path can accept an explicit AGI CLI with
- * `--cli=/absolute/path/to/agi` (or `AGI_VSCODE_E2E_CLI`) for the real local
- * runtime restart probe. It installs the VSIX through VS Code's CLI into an
- * isolated extension registry, but never downloads or installs the AGI CLI.
- *
- * IMPORTANT: the `test:integration` script runs `node esbuild.js` AFTER the
- * tsc test compile so `out/extension.js` is the real shipped esbuild bundle.
- * The tsc-emitted per-file `out/extension.js` is NOT loadable in the extension
- * host — it `require()`s workspace packages (`@agiworkforce/types`, …) whose
- * entry points are ESM TypeScript source, so module load throws, VS Code marks
- * the extension "active" anyway, and zero commands register. Always test the
- * bundle that ships.
- *
- * The packaged path uses isolated user-data/extensions directories, a separate
- * development-only test-runner extension, and an empty PATH. AGI itself loads
- * from the normal installed-extension registry. This proves both the VSIX
- * installer path and that the configured absolute CLI, rather than an ambient
- * developer install, owns the runtime process when the probe is used.
- *
- * Prerequisites (one-time install):
- *   pnpm add -D mocha @types/mocha glob @types/glob
- *
- * The `@vscode/test-electron` dep is already declared in package.json:devDependencies.
- */
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -349,9 +320,6 @@ async function main(): Promise<void> {
         console.debug(
           `[vsix-e2e] localFixture=${localModelFixture.baseUrl}; model=${localModelFixture.modelId}; holdAfterFirstDeltaMs=${localModelFixture.holdAfterFirstDeltaMs}; control=${fixtureControlPath}`,
         );
-        // app-server correctly fails closed for unknown projects. `agi init`
-        // is the CLI's documented explicit trust action, scoped here to the
-        // disposable workspace and disposable AGIWORKFORCE_HOME.
         const isolatedEnvironment = isolatedRuntimeEnvironment(
           isolatedHomeDir,
           agiHomeDir,

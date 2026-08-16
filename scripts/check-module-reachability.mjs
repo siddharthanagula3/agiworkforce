@@ -168,20 +168,6 @@ function checkRustTarget({ label, sourceRoot, knownUnreachable }) {
   }
 }
 
-/**
- * TypeScript reachability targets.
- *
- * This check covered Rust only, which is why the UNWIRED class accumulated
- * almost entirely in TypeScript: the 2026-08-05 audit found ~26 complete
- * components with no mount point, and nothing mechanical could see them. A
- * lexical "the file exists" check reports green for a module no entry point can
- * ever load; a reachability walk from the real entry point cannot.
- *
- * `knownUnreachable` is a RATCHET, matching the Rust targets above and
- * `reference-integrity-allowlist.json`: an entry that stops reproducing fails
- * as stale, so deleting or wiring a module forces its baseline line out in the
- * same commit. The list may only shrink.
- */
 const tsTargets = [
   {
     label: 'Desktop renderer',
@@ -201,13 +187,6 @@ const tsTargets = [
         '@lib/*': path.join(desktopSrc, 'lib'),
       };
     },
-    // BASELINE seeded 2026-08-06 from the first TypeScript run of this check.
-    //
-    // These are NOT approved. They are the pre-existing debt this gate exists
-    // to drain, captured so the check can go green and then only ratchet down.
-    // Each one is a module `main.tsx` cannot reach: either wire it or cut it,
-    // and delete its line here in the same commit. Adding a line to this list
-    // is a regression and needs a reviewer to say why.
     knownUnreachable: [
       'apps/desktop/src/api/apiManagement.ts',
       'apps/desktop/src/api/automation.ts',
@@ -238,10 +217,6 @@ const tsTargets = [
       'apps/desktop/src/api/undo.ts',
       'apps/desktop/src/api/workflow.ts',
       'apps/desktop/src/constants/index.ts',
-      // constants/timeouts.ts was here and is not any more: wave 4 pointed the
-      // four api modules that actually execute at these constants, so the file
-      // is reachable and the ratchet — which only shrinks — refused to keep the
-      // exemption. Removing it is what makes the improvement permanent.
       'apps/desktop/src/core/index.ts',
       'apps/desktop/src/data/index.ts',
       'apps/desktop/src/features/agent-collaboration/AgentCollaborationPanel.tsx',
@@ -501,8 +476,6 @@ function checkTsTarget({ label, sourceRoot, entries, aliases, knownUnreachable }
     reachable.add(path.resolve(file));
   }
 
-  // Tests and their fixtures are entry points in their own right (vitest loads
-  // them directly), so they are never "unreachable" in the sense this guards.
   const allFiles = listSourceFiles(absoluteRoot)
     .map((file) => path.resolve(file))
     .filter((file) => !isTestPath(toRepoRelative(root, file)));

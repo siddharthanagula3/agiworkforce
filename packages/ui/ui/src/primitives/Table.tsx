@@ -3,7 +3,6 @@
 import * as React from 'react';
 import { cn } from '../cn';
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
   ref?: React.Ref<HTMLTableElement>;
 }

@@ -1,11 +1,3 @@
-/**
- * DesktopTasks.test.tsx — the desktop half of the Tasks transport.
- *
- * The shared list is covered in @agiworkforce/unified-chat. Desktop's own part
- * is the transport: that it uses the desktop run client (bearer token + guarded
- * egress) rather than web's Clerk/CSRF one, and that "open this conversation"
- * switches the shell instead of pushing a route it does not have.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
@@ -38,7 +30,6 @@ vi.mock('@agiworkforce/unified-chat', () => ({
   },
 }));
 
-/** Fail loudly rather than optional-chaining past a transport that never arrived. */
 function transport(): CapturedTasksTransport {
   if (!captured.transport) throw new Error('TasksPage was never rendered with a transport');
   return captured.transport;

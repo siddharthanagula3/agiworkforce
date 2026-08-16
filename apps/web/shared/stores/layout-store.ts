@@ -29,7 +29,6 @@ import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 
 export interface UIState {
-  /** Read by `WebChatPage` to collapse the conversation rail. */
   sidebarCollapsed: boolean;
 }
 
@@ -71,11 +70,6 @@ export const useUIStore = create<UIStore>()(
       })),
       {
         name: 'agi-ui-store',
-        // v1 blobs carry the retired `sidebarOpen`/`theme`/`dashboard`/
-        // `notifications` keys. zustand merges persisted state over the initial
-        // state, so without this migration a returning browser would resurrect
-        // those fields on the live store object — dead data that outlived the
-        // code that wrote it.
         version: 2,
         migrate: (persisted: unknown) => ({
           sidebarCollapsed:

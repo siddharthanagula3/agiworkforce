@@ -68,11 +68,6 @@ async function restoreLocalProviders(): Promise<string[]> {
   );
 }
 
-/**
- * Native-only, immediately-applied LLM network settings. The password never
- * enters the Zustand settings store or localStorage; the backend returns only
- * whether encrypted native storage already contains one.
- */
 export function NetworkProxySettings() {
   const [value, setValue] = useState<NetworkProxySettingsValue>(EMPTY_SETTINGS);
   const [password, setPassword] = useState('');

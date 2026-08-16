@@ -7,13 +7,6 @@
 
 import { invoke, isTauri } from '../lib/tauri-mock';
 
-// ============================================================================
-// Types
-// ============================================================================
-
-/**
- * Risk level for a tool execution.
- */
 export type RiskLevel = 'Low' | 'Medium' | 'High' | 'Critical';
 
 /**
@@ -36,9 +29,6 @@ export interface ToolSafetyTierInfo {
   risk_level: RiskLevel | null;
 }
 
-/**
- * Summary of a tool confirmation request for display.
- */
 export interface ToolConfirmationSummary {
   request_id: string;
   tool_name: string;
@@ -57,10 +47,6 @@ export interface ToolConfirmationSummary {
 export interface ToolConfirmationResolution {
   allowedDirectories: string[] | null;
 }
-
-// ============================================================================
-// API Functions
-// ============================================================================
 
 /**
  * Respond to a tool confirmation request.
@@ -97,8 +83,6 @@ export async function respondToolConfirmation(
   }
 
   try {
-    // Tauri converts snake_case Rust params to camelCase in TypeScript
-    // So request_id in Rust becomes requestId in TypeScript
     return await invoke<ToolConfirmationResolution>('respond_tool_confirmation', {
       requestId: requestId,
       approved,
@@ -162,9 +146,6 @@ export async function getRememberedToolChoices(): Promise<Record<string, boolean
   }
 }
 
-/**
- * Clear all remembered tool choices.
- */
 export async function clearRememberedToolChoices(): Promise<void> {
   if (!isTauri) {
     console.debug('[toolConfirmation] clearRememberedToolChoices (mock)');
@@ -179,12 +160,6 @@ export async function clearRememberedToolChoices(): Promise<void> {
   }
 }
 
-/**
- * Revoke approvals that are intentionally limited to the active chat task.
- *
- * This also removes session-only folder roots from the native ToolGuard and
- * live filesystem MCP server.
- */
 export async function clearSessionToolApprovals(): Promise<void> {
   if (!isTauri) {
     console.debug('[toolConfirmation] clearSessionToolApprovals (mock)');
@@ -256,10 +231,6 @@ export async function cancelToolConfirmation(requestId: string): Promise<void> {
   }
 }
 
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
 /**
  * Get a user-friendly description for a safety tier.
  */
@@ -274,9 +245,6 @@ export function getSafetyTierDescription(tier: SafetyTier): string {
   return descriptions[tier] || tier;
 }
 
-/**
- * Get a user-friendly label for a risk level.
- */
 export function getRiskLevelLabel(level: RiskLevel): string {
   const labels: Record<RiskLevel, string> = {
     Low: 'Low Risk',
@@ -287,9 +255,6 @@ export function getRiskLevelLabel(level: RiskLevel): string {
   return labels[level] || level;
 }
 
-/**
- * Get a color class for a risk level (for UI styling).
- */
 export function getRiskLevelColor(level: RiskLevel): string {
   const colors: Record<RiskLevel, string> = {
     Low: 'text-green-500',

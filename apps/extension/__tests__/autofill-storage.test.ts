@@ -1,20 +1,6 @@
-/**
- * Storage-migration tests for the autofill profile (H-04 promoted Critical).
- *
- * The profile previously lived in chrome.storage.sync, which replicates to
- * Google's servers. We moved it to chrome.storage.local and added a one-shot
- * migrator. These tests stub both storage areas and validate:
- *   1. Reads come from local.
- *   2. Writes go to local.
- *   3. Migration runs once, copies sync → local, clears sync, sets a marker.
- *   4. Migration is idempotent.
- *   5. Migration does not clobber an existing local profile.
- */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { JobApplicationProfile } from '../src/types';
-
-// ─── chrome.storage stub ────────────────────────────────────────────────────
 
 interface StorageArea {
   store: Record<string, unknown>;
@@ -56,8 +42,6 @@ function installChromeStub(): { local: StorageArea; sync: StorageArea } {
 beforeEach(() => {
   vi.resetModules();
 });
-
-// ─── Tests ──────────────────────────────────────────────────────────────────
 
 describe('autofill profile storage — H-04', () => {
   it('loadAutofillProfile reads from chrome.storage.local', async () => {
@@ -110,7 +94,6 @@ describe('migrateAutofillProfile — H-04', () => {
     const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
     expect(await migrateAutofillProfile()).toBe(true);
 
-    // Simulate a stray sync write after migration (e.g. an older client).
     await sync.set({ agi_autofill_profile: { email: 'should-not-copy@x' } });
     expect(await migrateAutofillProfile()).toBe(false);
     expect((local.store['agi_autofill_profile'] as { email?: string })?.email).toBe('first@x');
@@ -124,9 +107,8 @@ describe('migrateAutofillProfile — H-04', () => {
     await sync.set({ agi_autofill_profile: syncProfile });
     const { migrateAutofillProfile } = await import('../src/features/content/autofill/filler');
     const copied = await migrateAutofillProfile();
-    expect(copied).toBe(false); // local non-empty, no copy
+    expect(copied).toBe(false);
     expect(local.store['agi_autofill_profile']).toEqual(localProfile);
-    // Sync key still gets cleared so future client writes can't replicate.
     expect(sync.store['agi_autofill_profile']).toBeUndefined();
   });
 

@@ -1,4 +1,3 @@
-// @hidden
 function MessageLoading() {
   return (
     <svg

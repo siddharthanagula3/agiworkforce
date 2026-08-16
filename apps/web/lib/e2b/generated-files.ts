@@ -1,22 +1,3 @@
-/**
- * E2B generated-file harvest — the bridge from "the model wrote a file in the
- * sandbox" to "the user sees a renderable file card in chat".
- *
- * The execution loop (tool-loop.ts) snapshots the sandbox workspace when the
- * E2B executor is first resolved, and at turn end diffs a fresh listing against
- * that baseline. New/changed files are read out of the sandbox and persisted
- * through the SHARED generated-file persistence core
- * (lib/server/generated-file-persist.ts — same seam OpenAI container files and
- * Anthropic code-execution files use), then emitted to the client as an
- * `x_generated_files` SSE delta. The wire `uri` is the authenticated
- * same-origin `/api/files/{id}` route, which the web renderer gates (PDF
- * viewer, inline images, spreadsheet fetch) accept — the sandbox itself is
- * ephemeral and the raw R2 URL is cross-origin.
- *
- * Best-effort by design: every failure degrades to "no file card" plus an
- * honest note from the caller, never to a broken turn. Caps bound the work:
- * max files per turn, max bytes per file.
- */
 import 'server-only';
 
 import { logger } from '@/lib/logger';
@@ -30,13 +11,9 @@ import type { E2BExecutor, SandboxFileEntry } from './types';
 
 export type { GeneratedFileWire };
 
-/** Workspace root the sandbox code contexts run in (E2B default home). */
 const WORKSPACE_ROOT = '/home/user';
-/** Directory-recursion depth bound for the workspace listing. */
 const MAX_LIST_DEPTH = 3;
-/** Max files harvested per turn — beyond this, later files are dropped (logged). */
 const MAX_FILES_PER_TURN = 8;
-/** Never harvest these (runtime noise, hidden files, package dirs). */
 const IGNORED_DIR_NAMES = new Set([
   'node_modules',
   '__pycache__',
@@ -75,7 +52,6 @@ function mimeFor(fileName: string): string {
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 }
 
-/** Recursively list workspace files (bounded depth, ignore dirs skipped). */
 async function listWorkspace(executor: E2BExecutor): Promise<SandboxFileEntry[]> {
   if (!executor.listFiles) return [];
   const out: SandboxFileEntry[] = [];
@@ -96,12 +72,6 @@ async function listWorkspace(executor: E2BExecutor): Promise<SandboxFileEntry[]>
   return out;
 }
 
-/**
- * Snapshot the workspace (path → size) BEFORE any execution tool runs this
- * turn, so files that already existed (previous turns on a resumed sandbox)
- * are not re-emitted. Empty map on failure — worst case a pre-existing file
- * is re-harvested, which the client UPSERTs by name harmlessly.
- */
 export async function snapshotSandboxFiles(executor: E2BExecutor): Promise<SandboxSnapshot> {
   const snapshot: SandboxSnapshot = new Map();
   try {
@@ -114,25 +84,16 @@ export async function snapshotSandboxFiles(executor: E2BExecutor): Promise<Sandb
 
 export interface HarvestResult {
   files: GeneratedFileWire[];
-  /** Count of new/changed files that could NOT be persisted (caller surfaces an honest note). */
   failedCount: number;
 }
 
-/**
- * Diff the workspace against `baseline`, persist new/changed files durably,
- * and return their wire descriptors plus how many files failed to persist.
- * Best-effort: failures skip that file but are COUNTED so the caller can
- * surface an honest "file could not be retrieved" note instead of silence.
- */
 export async function harvestGeneratedFiles(params: {
   executor: E2BExecutor;
   baseline: SandboxSnapshot;
   userId: string;
-  /** Workspace captured when the generating turn was admitted. */
   organizationId: string | null;
   model?: string;
   prompt?: string;
-  /** Conversation provenance for the Library (migration 0081). */
   conversationId?: string;
 }): Promise<HarvestResult> {
   const { executor, baseline, userId, organizationId, model, prompt, conversationId } = params;
@@ -149,9 +110,6 @@ export async function harvestGeneratedFiles(params: {
   const changed = files.filter((f) => baseline.get(f.path) !== f.byteSize);
   if (changed.length === 0) return { files: [], failedCount: 0 };
   if (!canPersist) {
-    // The model DID write files the user was promised; silence here would let the
-    // turn claim success with nothing delivered. Count them so the caller emits
-    // its honest "could not be retrieved" note.
     logger.warn(
       { changed: changed.length, storageConfigured: isGeneratedMediaStorageConfigured() },
       '[e2b] generated files present but persistence unavailable; surfacing honest failure note',

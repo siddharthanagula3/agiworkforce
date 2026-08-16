@@ -1,13 +1,3 @@
-/**
- * Minimal pure-JS syntax tokenizer for the raw-source code views
- * (MessageContentRenderer code blocks + ArtifactFullScreen source view).
- *
- * Deliberately NOT a real parser: a single-pass regex alternation splits
- * code into comment / string / number spans, then a word scan marks
- * keywords in the remaining plain text. Every regex is written without
- * nested quantifiers so no input can trigger catastrophic backtracking,
- * and inputs above MAX_HIGHLIGHT_LENGTH render as a single plain token.
- */
 
 import type { ColorScheme } from '@/src/ui/theme';
 
@@ -25,13 +15,10 @@ interface RgbaColor {
   alpha: number;
 }
 
-/** Beyond ~50KB, tokenizing (and rendering thousands of spans) is not worth it. */
 export const MAX_HIGHLIGHT_LENGTH = 50_000;
 const MINIMUM_CODE_CONTRAST = 4.5;
 const syntaxPaletteCache = new WeakMap<object, Record<SyntaxTokenType, string>>();
 
-// ── Shared regex fragments (all backtracking-safe: disjoint alternatives,
-//    no nested quantifiers) ──
 const DQ_STRING = String.raw`"(?:[^"\\\n]|\\.)*"`;
 const SQ_STRING = String.raw`'(?:[^'\\\n]|\\.)*'`;
 const TEMPLATE_STRING = '`(?:[^`\\\\]|\\\\.)*`';
@@ -42,10 +29,8 @@ const BLOCK_COMMENT = String.raw`\/\*[\s\S]*?\*\/`;
 const HASH_COMMENT = String.raw`#[^\n]*`;
 
 interface LanguageSpec {
-  /** Alternation with 3 capture groups: (comment)|(string)|(number). */
   pattern: RegExp;
   keywords: ReadonlySet<string>;
-  /** SQL keywords match regardless of case. */
   caseInsensitiveKeywords?: boolean;
 }
 
@@ -114,7 +99,6 @@ const SPEC_PYTHON = makeSpec(
 const SPEC_JSON = makeSpec('(?!)', DQ_STRING, 'true false null');
 const SPEC_HTML = makeSpec(String.raw`<!--[\s\S]*?-->`, `${DQ_STRING}|${SQ_STRING}`, '');
 const SPEC_CSS = makeSpec(BLOCK_COMMENT, `${DQ_STRING}|${SQ_STRING}`, '');
-// Shell single-quoted strings have no escapes and may span lines.
 const SPEC_SHELL = makeSpec(HASH_COMMENT, String.raw`"(?:[^"\\]|\\.)*"|'[^']*'`, SHELL_KEYWORDS);
 const SPEC_SQL = makeSpec(
   String.raw`--[^\n]*|${BLOCK_COMMENT}`,
@@ -165,7 +149,6 @@ const LANGUAGE_SPECS: Record<string, LanguageSpec> = {
 
 const WORD_REGEX = /[A-Za-z_][A-Za-z0-9_]*/g;
 
-/** Splits a non-comment/string/number span into keyword and plain tokens. */
 function pushPlainWithKeywords(text: string, spec: LanguageSpec, tokens: SyntaxToken[]): void {
   let last = 0;
   let match: RegExpExecArray | null;
@@ -180,7 +163,6 @@ function pushPlainWithKeywords(text: string, spec: LanguageSpec, tokens: SyntaxT
   if (last < text.length) pushToken(tokens, text.slice(last), 'plain');
 }
 
-/** Appends a token, merging into the previous one when the type matches. */
 function pushToken(tokens: SyntaxToken[], text: string, type: SyntaxTokenType): void {
   if (text.length === 0) return;
   const prev = tokens[tokens.length - 1];
@@ -191,11 +173,6 @@ function pushToken(tokens: SyntaxToken[], text: string, type: SyntaxTokenType): 
   tokens.push({ text, type });
 }
 
-/**
- * Tokenizes code into highlightable spans. Unknown languages and oversize
- * inputs return a single plain token, so callers can always render the
- * result without a separate fallback branch.
- */
 export function tokenizeCode(code: string, language: string | undefined): SyntaxToken[] {
   if (code.length === 0) return [];
   const spec = LANGUAGE_SPECS[language?.trim().toLowerCase() ?? ''];
@@ -215,8 +192,6 @@ export function tokenizeCode(code: string, language: string | undefined): Syntax
       match[1] !== undefined ? 'comment' : match[2] !== undefined ? 'string' : 'number';
     pushToken(tokens, match[0], type);
     last = match.index + match[0].length;
-    // Zero-length matches cannot occur with these patterns, but guard anyway
-    // so a future pattern edit can never hang the exec loop.
     if (match[0].length === 0) spec.pattern.lastIndex++;
   }
   if (last < code.length) pushPlainWithKeywords(code.slice(last), spec, tokens);
@@ -308,11 +283,6 @@ function formatRgb(color: RgbaColor): string {
   return `rgb(${color.red}, ${color.green}, ${color.blue})`;
 }
 
-/**
- * Preserve the theme's semantic hue, but pull it toward primary text until it
- * reaches WCAG AA on both code surfaces: inline blocks use `surfaceHover`,
- * while the fullscreen artifact source view uses `surfaceBase`.
- */
 function accessibleCodeColor(candidate: string, colors: ColorScheme): string {
   const canvas = parseCssColor(colors.background);
   const parsedHover = parseCssColor(colors.surfaceHover);
@@ -334,9 +304,6 @@ function accessibleCodeColor(candidate: string, colors: ColorScheme): string {
     backgrounds.every((background) => contrastRatio(color, background) >= MINIMUM_CODE_CONTRAST);
 
   if (meetsContrast(start)) {
-    // Preserve an already-accessible opaque semantic token verbatim. Besides
-    // avoiding needless churn in rendered styles, this keeps theme identity
-    // stable for snapshots and consumers that compare color strings.
     return parsedCandidate.alpha === 1 ? candidate : formatRgb(start);
   }
   for (let step = 1; step <= 100; step++) {
@@ -360,7 +327,6 @@ function syntaxPalette(colors: ColorScheme): Record<SyntaxTokenType, string> {
   return palette;
 }
 
-/** Maps a token type to an accessible theme-derived code color. */
 export function syntaxTokenColor(type: SyntaxTokenType, colors: ColorScheme): string {
   return syntaxPalette(colors)[type];
 }

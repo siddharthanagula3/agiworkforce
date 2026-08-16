@@ -1,23 +1,3 @@
-/**
- * DCL-3 — Cloud chat persistence egress CONTRACT test.
- *
- * Ties the REAL shared persistence client (`@agiworkforce/cloud-contracts`) to the
- * REAL desktop egress guard (`guardedFetch`) and proves the trust boundary on
- * every path desktop Cloud mode will use (`<WEB_APP_URL>/api/chat/conversations*`,
- * including the per-message `.../:id/messages` save route added to the shared
- * client to mirror `useChatStream.ts`'s `saveMessageToDb()`):
- *
- *   (a) LOCAL  mode  → every cloud persistence call is BLOCKED (no non-local egress).
- *   (b) BYOK   mode  → every cloud persistence call is BLOCKED.
- *   (c) MANAGED mode → calls are ALLOWED and reach ONLY the allowed cloud host.
- *
- * This is a contract, not a wiring test: it does not import the desktop seam, it
- * exercises the client+guard composition end to end so a denylist gap, a base-URL
- * regression, or a guard bypass re-trips here.
- *
- * Mocks `appModeStore` to drive `privacyMode` deterministically (same pattern as
- * `egressGuard.test.ts`), since the guard branches on `selectPrivacyMode`.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { getStateMock } = vi.hoisted(() => ({ getStateMock: vi.fn() }));
@@ -25,9 +5,6 @@ vi.mock('../../stores/appModeStore', () => ({
   useAppModeStore: { getState: getStateMock },
   selectPrivacyMode: (state: { privacyMode: unknown }) => state.privacyMode,
 }));
-// Keep this trust-boundary contract independent of a developer's local Vite
-// endpoint. Environment-specific config has its own validation; this suite
-// must always exercise a real non-local AGI cloud origin.
 vi.mock('../../api/config', () => ({ WEB_APP_URL: 'https://agiworkforce.com' }));
 
 import { createManagedCloudChatClient } from '@agiworkforce/cloud-contracts';
@@ -38,7 +15,6 @@ const CLOUD_HOST = 'agiworkforce.com';
 
 let fetchSpy: ReturnType<typeof vi.fn>;
 
-/** The URL string passed to `fetch` on call `n` (guards strict index access). */
 function fetchUrlAt(n: number): string {
   const call = fetchSpy.mock.calls.at(n);
   if (!call) throw new Error(`fetch was not called ${n + 1} time(s)`);
@@ -55,8 +31,6 @@ function makeClient() {
 
 beforeEach(() => {
   getStateMock.mockReset();
-  // Return a FRESH Response per call — a Response body can only be read once, so
-  // a single shared instance would throw "Body is unusable" across verbs.
   fetchSpy = vi.fn().mockImplementation(async (input: string, init?: RequestInit) => {
     const path = new URL(input).pathname;
     const conversation = {

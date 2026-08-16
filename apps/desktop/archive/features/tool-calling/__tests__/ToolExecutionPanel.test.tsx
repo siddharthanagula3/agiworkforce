@@ -3,7 +3,6 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { ToolExecutionTimeline } from '@/features/tool-calling/ToolExecutionTimeline';
 import type { ToolExecutionWorkflow, ToolExecutionStep, ToolCallUI } from '@/types/toolCalling';
 
-// Mock the canonical ToolCallCard (consolidated in R25 V7)
 vi.mock('@/features/chat/MessageBubble/ToolCallCard', () => ({
   ToolCallCard: ({
     messageId,
@@ -173,10 +172,8 @@ describe('ToolExecutionTimeline', () => {
 
     render(<ToolExecutionTimeline workflow={workflow} />);
 
-    // Both steps should render via the canonical badge-mode card (mock uses data-testid="tool-call-{id}")
     expect(screen.getByTestId('tool-call-tc-1')).toBeInTheDocument();
     expect(screen.getByTestId('tool-call-tc-2')).toBeInTheDocument();
-    // Both tool names should be visible
     expect(
       screen.getByTestId('tool-call-tc-1').querySelector('[data-testid="tool-name"]'),
     ).toHaveTextContent('File Read');
@@ -304,7 +301,6 @@ describe('ToolExecutionTimeline', () => {
 
     render(<ToolExecutionTimeline workflow={workflow} />);
 
-    // Canonical badge-mode card should render for in-progress step
     expect(screen.getByTestId('tool-call-tc-1')).toBeInTheDocument();
     expect(screen.getByTestId('tool-call-tc-1')).toHaveAttribute('data-icon-style', 'badge');
   });

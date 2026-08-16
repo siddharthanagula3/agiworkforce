@@ -1,11 +1,3 @@
-/**
- * Image EDIT request validation.
- *
- * Every "edit" in the product used to be a fresh text-to-image call built from
- * a modified prompt — the original pixels were never sent anywhere, because no
- * field on the wire could carry them. These rules exist so a caller can never
- * be left believing an edit was applied when it structurally could not be.
- */
 import { describe, expect, it } from 'vitest';
 
 import { ManagedMediaImageGenerationRequestSchema } from './managed-media';
@@ -39,8 +31,6 @@ describe('managed image generation — operation validation', () => {
   );
 
   it('rejects a source image sent with operation "generate"', () => {
-    // Silently ignoring it would leave the caller believing their image was
-    // used when the request was a plain text-to-image call.
     const result = parse({ operation: 'generate', source_image: SOURCE });
     expect(result.success).toBe(false);
   });

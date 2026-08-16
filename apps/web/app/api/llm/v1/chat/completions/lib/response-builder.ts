@@ -37,10 +37,7 @@ export async function buildNonStreamResponse(
   },
   processed: ProcessedRequest,
   userId: string,
-  // Auth token is passed for signature parity / future authenticated calls;
-  // deduction is keyed on userId, so the token is not read in this builder.
   _token: string,
-  /** Optional server-owned work that runs only after durable success settlement. */
   onSuccessfulTurn?: () => Promise<void>,
 ): Promise<NextResponse> {
   const {
@@ -57,7 +54,6 @@ export async function buildNonStreamResponse(
     freeTrial,
   } = processed;
 
-  // Cost reconciliation
   const actualCostCents = freeTrial
     ? 0
     : LLMCostCalculator.calculateCost(provider, llmResponse.model, {
@@ -69,19 +65,9 @@ export async function buildNonStreamResponse(
         cacheCreation1hInputTokens: llmResponse.cacheCreation1hInputTokens,
       });
 
-  // CPST Stage-0 telemetry, MANAGED CLOUD ONLY
-  // (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, phase 1:
-  // additive keys in the existing `usage` jsonb, no migration). Built once here
-  // because `finalize_managed_usage_request` REPLACES the usage column rather
-  // than merging into it, so these keys must ride the same single call as the
-  // token counters. `taskOutcome` is 'unknown' on a successful charge: billing
-  // success is not task success.
   const cpstUsage = buildCpstUsageFields(processed, { billingOutcome: 'completed' });
 
   if (processed.managedUsage) {
-    // Financial terminal state is durable before the successful HTTP response
-    // is constructed. Do not swallow this failure and hand out an unmetered
-    // completion; stale recovery will refund customer-favorably instead.
     await finalizeManagedUsageRequest({
       ...processed.managedUsage,
       outcome: 'completed',
@@ -104,10 +90,6 @@ export async function buildNonStreamResponse(
     );
   }
 
-  // Cache analytics. All three rates — input, cache write, and the cache read
-  // `calculateCacheSavings` resolves internally — are read for THIS request's
-  // instant, so a model with dated pricing is reported at the same rates it is
-  // billed at even across a UTC day boundary.
   const pricedAt = new Date();
   let cacheMetrics = { tokensSavedByCache: 0, savedCostCents: 0, cacheWriteCostCents: 0 };
   try {
@@ -147,7 +129,6 @@ export async function buildNonStreamResponse(
     logger.warn({ error: analyticsError, userId, requestId }, 'Cache analytics logging failed');
   }
 
-  // Fire-and-forget cost tracking + OTel attribute emit (must not block response).
   try {
     const usage = {
       inputTokens: llmResponse.promptTokens,
@@ -190,35 +171,9 @@ export async function buildNonStreamResponse(
 
   await onSuccessfulTurn?.();
 
-  // BILLING FIX (0044): reconcileUsage/increment_usage was a SECOND, buggy
-  // charge path that added the raw token count to credits_used_cents (a cents
-  // ledger), double-charging on top of the authoritative managed reservation
-  // reservation/reconciliation below. Removed — deduct_credits is the single
-  // source of truth for credits_used_cents.
-
-  // WEB-13 (audit 2026-05-19): switched from Math.random to a CSPRNG token.
-  // chatcmpl-* ids are not secrets but downstream observability tools dedupe
-  // by them; cryptographic uniqueness is a strict superset of "random enough".
   const responseId = `chatcmpl-${Date.now()}-${secureToken(7)}`;
   const responseModel = usedFallback ? chatRequest.model : requestedModel;
 
-  /*
-   * json_object enforcement. The directive in the system prompt is a request,
-   * not a guarantee — models wrap output in code fences and add prose often
-   * enough that shipping the raw completion would recreate exactly the silent
-   * wrongness this mode replaced (200 OK, `json_object` asked for, prose
-   * returned, caller's parser fails downstream with no explanation).
-   *
-   * `extractJsonObject` unwraps fences and surrounding prose but never REPAIRS
-   * malformed JSON: guessing at a missing brace would hand the caller a
-   * document the model did not produce. When it cannot produce an object we
-   * return 502 rather than prose, because the caller asked for a contract this
-   * response does not satisfy.
-   *
-   * Note this runs AFTER settlement above: the provider call happened and was
-   * billed, so failing here does not silently refund — the error names what
-   * went wrong so the caller can retry deliberately.
-   */
   if (wantsJsonObject(chatRequest.response_format)) {
     const extraction = extractJsonObject(llmResponse.content ?? '');
     if (!extraction.ok) {
@@ -313,9 +268,6 @@ export async function buildNonStreamResponse(
   );
 
   if (processed.managedUsage) {
-    // Financial settlement already succeeded. Delivery marking is audit-only;
-    // a transient audit failure must not turn a paid provider success into a
-    // client-visible error.
     await markManagedUsageClientDelivered(processed.managedUsage).catch((error) => {
       logger.warn({ error, userId, requestId }, 'Managed usage delivery marker failed');
     });
@@ -324,35 +276,13 @@ export async function buildNonStreamResponse(
   return response;
 }
 
-/**
- * Client-visible failure shape for an upstream provider error.
- *
- * AUDIT-FIX SYS-16/17/18/19: this used to map only 401/402/404/429 by
- * SUBSTRING-MATCHING ENGLISH ERROR TEXT (`errorMessage.includes('rate limit')`),
- * and everything else collapsed to `500 server_error` with the RAW provider
- * message as `publicMessage` — which leaked the managed-cloud provider's
- * identity, its internal error payloads, and occasionally upstream account
- * detail straight into the browser. Meanwhile `adapter-errors.ts` had already
- * been setting a structured `error.status` for years that nothing ever read.
- *
- * It now classifies through `classifyError` (which reads that structured
- * status first and only falls back to text) and maps each category to a
- * distinct, ACTIONABLE client code. `publicMessage` is always server-authored:
- * upstream text is logged, never returned.
- */
 interface UpstreamErrorShape {
   status: number;
-  /** OpenAI-compatible `error.type`. Kept stable for existing consumers. */
   type: string;
-  /** Specific, stable machine code the client can branch on. */
   code: string;
   message: string;
 }
 
-/**
- * Category → client contract. Every branch returns a message the USER can act
- * on; none of them contain provider names, payloads, or stack detail.
- */
 function mapClassifiedUpstreamError(
   classified: ReturnType<typeof classifyError>,
   provider: string,
@@ -376,9 +306,6 @@ function mapClassifiedUpstreamError(
       };
 
     case 'rate_limit': {
-      // Retained verbatim (including the provider label) because it is an
-      // intentional, actionable recovery instruction and the serving provider
-      // is already visible in the model picker for explicit selections.
       const providerLabel = provider === 'google' ? 'Google' : provider;
       return {
         status: 429,
@@ -461,9 +388,6 @@ function mapClassifiedUpstreamError(
       };
 
     case 'auth':
-      // An upstream 401/403 is OUR credential problem, not the caller's. The
-      // status is preserved (existing clients branch on it) but the message no
-      // longer implies the USER needs to re-authenticate with us.
       return {
         status: 401,
         type: 'authentication_error',
@@ -521,8 +445,6 @@ export function buildUpstreamErrorResponse(
   const errorMessage = error instanceof Error ? error.message : `${context} request failed`;
   const classified = classifyError(error);
 
-  // The raw upstream text stays HERE, in the server log, with everything an
-  // operator needs to debug it. It is deliberately not part of the response.
   logger.error(
     {
       error,
@@ -540,9 +462,6 @@ export function buildUpstreamErrorResponse(
     context === 'streaming' ? 'Streaming request failed' : 'LLM request failed',
   );
 
-  // Billing failures are not a provider taxonomy category: `classifyError`
-  // sees an upstream 402 as a generic client error, but the caller needs the
-  // distinct insufficient-credits contract that already exists.
   const shape: UpstreamErrorShape =
     classified.status === 402
       ? {
@@ -559,8 +478,6 @@ export function buildUpstreamErrorResponse(
         message: shape.message,
         type: shape.type,
         code: shape.code,
-        // Retryability is already computed by the classifier; surfacing it
-        // saves every client from re-deriving it from the status code.
         retryable: classified.retryable,
       },
     },

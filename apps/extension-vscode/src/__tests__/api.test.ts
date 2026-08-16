@@ -320,7 +320,6 @@ describe('getApiKey / setApiKey / clearApiKey round-trip', () => {
 
   it('clearApiKey is idempotent when no key is stored', async () => {
     const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
-    // Should not throw even when nothing is stored
     await expect(clearApiKey(secrets)).resolves.toBeUndefined();
     expect(await getApiKey(secrets)).toBeUndefined();
   });
@@ -334,7 +333,6 @@ describe('withRetry pattern', () => {
       if (retries <= 0) {
         throw err;
       }
-      // Simulate checking for client errors (< 500) that should not retry
       if (err instanceof Error && err.message.startsWith('CLIENT:')) {
         throw err;
       }
@@ -361,7 +359,7 @@ describe('withRetry pattern', () => {
   it('throws after exhausting retries', async () => {
     const fn = vi.fn().mockRejectedValue(new Error('SERVER: 500'));
     await expect(withRetry(fn, 2, 1)).rejects.toThrow('SERVER: 500');
-    expect(fn).toHaveBeenCalledTimes(3); // initial + 2 retries
+    expect(fn).toHaveBeenCalledTimes(3);
   });
 
   it('does not retry on client errors', async () => {
@@ -441,11 +439,6 @@ describe('AgiWorkforcePaywallError', () => {
 });
 
 describe('paywall 429 JSON parsing — pattern test', () => {
-  /**
-   * Mirror the paywall-detection logic from httpsPostStream / httpsPost.
-   * We test the parsing pattern in isolation since the full HTTP stack
-   * requires a live server.
-   */
   function parsePaywallBody(statusCode: number, body: string): AgiWorkforcePaywallError | null {
     if (statusCode !== 429) return null;
     try {
@@ -546,16 +539,6 @@ describe('SSE parsing pattern', () => {
   });
 });
 
-/**
- * VSCODE-MANAGED-CHAT-IDEMPOTENCY-MISSING-01 — static wiring invariant.
- *
- * Managed Cloud rejects a missing Idempotency-Key with 400
- * `idempotency_key_required` (apps/web/lib/services/managed-usage-request-service.ts),
- * so its absence broke every cloud editor utility before it reached a model.
- * The request builder is not directly exercisable here (it needs live sockets
- * and SecretStorage), so this asserts the wiring at the source level — the
- * established pattern in this repo for cross-boundary header contracts.
- */
 describe('managed chat Idempotency-Key wiring', () => {
   const source = readFileSync(new URL('../utils/api.ts', import.meta.url), 'utf8');
 
@@ -564,7 +547,6 @@ describe('managed chat Idempotency-Key wiring', () => {
   });
 
   it('uses a key shape the server accepts', () => {
-    // Server contract: 8-128 chars of [A-Za-z0-9._:-].
     const literal = source.match(/const idempotencyKey = `([^`]+)`/)?.[1];
     expect(literal).toBeDefined();
     const sample = literal!.replace('${randomUUID()}', '123e4567-e89b-42d3-a456-426614174000');
@@ -572,21 +554,14 @@ describe('managed chat Idempotency-Key wiring', () => {
   });
 
   it('mints the key once, before the chat request retries', () => {
-    // A key generated per attempt makes every retry a NEW request to the
-    // server, defeating idempotency and letting a retried turn bill twice.
-    // Anchor to the chat request specifically — unrelated helpers earlier in
-    // this file use withRetry too, so a whole-file ordering check is meaningless.
     const requestIndex = source.indexOf('const bodyStr = JSON.stringify(requestBody)');
     const keyIndex = source.indexOf('const idempotencyKey =');
     expect(requestIndex).toBeGreaterThan(-1);
     expect(keyIndex).toBeGreaterThan(requestIndex);
 
-    // The chat request does retry, and every one of its retries is downstream
-    // of the single mint above.
     const retryAfterKey = source.indexOf('withRetry(', keyIndex);
     expect(retryAfterKey).toBeGreaterThan(keyIndex);
 
-    // Exactly one mint site overall, so no per-attempt regeneration crept back.
     expect(source.match(/randomUUID\(\)/g)?.length).toBe(1);
   });
 });

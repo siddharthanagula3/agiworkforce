@@ -90,7 +90,6 @@ export function ShareCardDialog({
     firstMessage.length > 120 ? `${firstMessage.slice(0, 120)}\u2026` : firstMessage;
 
   return (
-    /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => {

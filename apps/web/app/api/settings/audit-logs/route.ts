@@ -25,12 +25,6 @@ type AuditRowWithProfile = SecurityAuditLogRow & {
   profile_name: string | null;
 };
 
-/**
- * GET /api/settings/audit-logs
- * Audit log entries · scoped to the current user unless they are an admin
- * viewing org-wide logs (org-wide admin gating is a future enhancement;
- * for now each user sees their own entries).
- */
 async function handleGetAuditLogs(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-audit-logs');
   if (rateLimitResponse) return rateLimitResponse;

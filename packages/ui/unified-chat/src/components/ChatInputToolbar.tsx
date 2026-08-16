@@ -1,26 +1,9 @@
-/**
- * ChatInputToolbar — Phase A Slice 5 (ported from UAC, Task #18 plan-mode toggle)
- *
- * Composer toolbar row below the text area:
- *   Left:  Model label + optional slot for host model selector
- *   Right: Thinking toggle | Incognito toggle | Auto/Manual mode | Plan-mode toggle (Task #18)
- *
- * Dependencies replaced:
- *   - useUnifiedChatStore → useChatStore (package)
- *   - useThinkingStore    → local state (no desktop-only store)
- *   - useChatStore (desktop) → useChatStore (package)
- *   - QuickModelSelector, SpeedQualitySelector → optional render props
- *
- * Task #18 wiring: Plan-mode toggle button reads/writes usePlanModeStore.
- */
 
 import { Brain, EyeOff, Hand, Zap, BookOpen } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { usePlanModeStore, selectPlanMode } from '../stores/planModeStore';
 
 // Re-exported primitive types (host-app Button / Tooltip — hosts supply their own
-// UI primitives via CSS variables; these stubs render accessible semantic HTML
-// when host primitives are not injected).
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'default' | 'ghost' | 'outline';
   size?: 'sm' | 'icon';
@@ -56,43 +39,28 @@ function ToolbarButton({
 }
 
 export interface ChatInputToolbarProps {
-  /** Whether extended thinking is enabled. Host manages this state. */
   thinkingEnabled?: boolean;
-  /** Thinking budget label (e.g. "medium"). */
   thinkingBudget?: string;
-  /** Toggle thinking mode. */
   onThinkingToggle?: () => void;
 
-  /** Whether incognito mode is active for the current conversation. */
   isIncognito?: boolean;
-  /** Toggle incognito mode. */
   onIncognitoToggle?: () => void;
 
-  /** Whether autonomous (auto) mode is active (as opposed to manual). */
   isAutoMode?: boolean;
-  /** Toggle auto/manual mode. */
   onAutoModeToggle?: () => void;
 
-  /** Slot for a host-provided model selector component. */
   modelSelector?: React.ReactNode;
-  /** Slot for a host-provided speed/quality selector. */
   speedSelector?: React.ReactNode;
 
   className?: string;
 }
 
 export interface PlanModeToggleProps {
-  /** Controlled state. Omit to use the package plan proposal store. */
   active?: boolean;
-  /** Controlled toggle. Omit to toggle the package plan proposal store. */
   onToggle?: () => void;
   className?: string;
 }
 
-/**
- * Shared plan-mode toolbar control. Shipping composers use the controlled form
- * so the visual state is the exact `AgentMode` forwarded to the runtime.
- */
 export function PlanModeToggle({ active, onToggle, className }: PlanModeToggleProps) {
   const storedPlanMode = usePlanModeStore(selectPlanMode);
   const toggleStoredPlanMode = usePlanModeStore((state) => state.togglePlanMode);

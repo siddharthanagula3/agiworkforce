@@ -1,11 +1,3 @@
-/**
- * Tests for GET /api/usage.
- *
- * Covers the 2026-07-05 addition of session (rolling 5h) / weekly /
- * flagship-weekly usage fields, layered on top of the existing monthly
- * percentage-only public response. Exact managed-compute allowances stay in
- * the server-owned policy and must not be serialized to clients.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const {
@@ -87,8 +79,6 @@ describe('GET /api/usage', () => {
       period_start: '2026-07-01T00:00:00.000Z',
       period_end: '2026-08-01T00:00:00.000Z',
     });
-    // Exact inputs are intentionally test fixtures only; the response exposes
-    // percentages and reset times, never those operands.
     mockGetRollingUsage
       .mockResolvedValueOnce({ usedCents: 20, oldestAt: '2026-07-05T03:00:00.000Z' })
       .mockResolvedValueOnce({ usedCents: 50, oldestAt: '2026-07-01T12:00:00.000Z' })
@@ -115,7 +105,6 @@ describe('GET /api/usage', () => {
     expect(json).not.toHaveProperty('flagship_weekly_used_cents');
     expect(json).not.toHaveProperty('flagship_weekly_cap_cents');
 
-    // Real rolling-window queries were actually called (not skipped) for a paid tier.
     expect(mockGetRollingUsage).toHaveBeenCalledTimes(3);
   });
 
@@ -170,8 +159,6 @@ describe('GET /api/usage', () => {
       period_start: '2026-07-01T00:00:00.000Z',
       period_end: '2026-08-01T00:00:00.000Z',
     });
-    // Pro's private five-hour allowance is exhausted while billing-period and
-    // weekly balances remain. The public response exposes only the decision.
     mockGetRollingUsage
       .mockResolvedValueOnce({ usedCents: 100, oldestAt: '2026-07-18T16:00:00.000Z' })
       .mockResolvedValueOnce({ usedCents: 100, oldestAt: '2026-07-15T00:00:00.000Z' })

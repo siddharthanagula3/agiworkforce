@@ -1,9 +1,3 @@
-/**
- * KeyboardShortcutsDialog — Phase A Slice 5 (ported from UAC)
- *
- * Compact modal dialog listing keyboard shortcuts grouped by category.
- * Surface-agnostic: no Tauri or desktop-only imports.
- */
 import { X, Keyboard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect } from 'react';
@@ -61,7 +55,6 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
 ];
 
 export function KeyboardShortcutsDialog({ isOpen, onClose }: KeyboardShortcutsDialogProps) {
-  // Close on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) {

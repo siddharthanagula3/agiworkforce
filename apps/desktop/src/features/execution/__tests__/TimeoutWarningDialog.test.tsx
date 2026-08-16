@@ -1,17 +1,12 @@
-/**
- * TimeoutWarningDialog Component Tests
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TimeoutWarningDialog, type TimeoutWarningData } from '../TimeoutWarningDialog';
 
-// Mock @tauri-apps/api/core
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
 }));
 
-// Mock toast hook
 vi.mock('../../../hooks/useToast', () => ({
   toast: vi.fn(),
 }));

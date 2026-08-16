@@ -1,13 +1,3 @@
-/**
- * Contract test for GET /api/me.
- *
- * Asserts the live route handler's JSON output parses against the shared
- * `MeResponseSchema` from @agiworkforce/cloud-contracts — the single schema that
- * desktop (`cloudAccountAuth`), mobile (tier store), and web
- * (`authentication-manager`) all validate against. This test is the
- * enforcement anchor: if the route's response shape drifts, it fails here
- * first, before any client breaks in production.
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts';
@@ -103,8 +93,6 @@ describe('GET /api/me — shared cloud contract', () => {
       expect(parsed.data.plan.subscription_source).toBe('stripe');
       expect(parsed.data.feature_flags.advanced_model_access).toBe(true);
       expect(parsed.data.feature_flags.generic_web_search).toBe(true);
-      // First real consumer of the capability-handshake contract: the live
-      // route must actually include it, not just the isolated service.
       expect(parsed.data.capability_handshake?.granted).toContain('canUseWebSearch');
       expect(parsed.data.capability_handshake?.granted).toContain('canUseVoice');
       expect(parsed.data.capability_handshake?.sources.tier).toBe('tier:pro');
@@ -132,16 +120,11 @@ describe('GET /api/me — shared cloud contract', () => {
         subscription_source: 'none',
       });
       expect(parsed.data.routing_preferences).toEqual({});
-      // Tier-layer honesty at the full integration level (real route, real
-      // getTierPolicy('free')): Claude-style free chat grants search, voice,
-      // and one custom remote connector while Deep Research remains paid.
       expect(parsed.data.capability_handshake?.granted).toContain('canUseWebSearch');
       expect(parsed.data.capability_handshake?.granted).not.toContain('canUseDeepResearch');
       expect(parsed.data.capability_handshake?.granted).toContain('canUseVoice');
       expect(parsed.data.capability_handshake?.granted).toContain('canUseConnectors');
       expect(parsed.data.capability_handshake?.deniedBy['canUseDeepResearch']).toEqual(['tier']);
-      // But free users can still chat — tier honesty must not overcorrect
-      // into denying universal capabilities.
       expect(parsed.data.capability_handshake?.granted).toContain('canChat');
     }
   });

@@ -50,11 +50,6 @@ function parseRuntimeModelCapabilities(input: unknown): RuntimeModelCapabilities
   };
 }
 
-/**
- * Resolve the user-facing label for model provenance without leaking a
- * catalog transport identifier. Unknown Local/BYOK identifiers remain
- * visible verbatim because the host runtime is their only authority.
- */
 export function getModelPresentationLabel(modelId: string | null | undefined): string {
   const normalizedModelId = modelId?.trim() ?? '';
   if (!normalizedModelId) return '';
@@ -62,11 +57,6 @@ export function getModelPresentationLabel(modelId: string | null | undefined): s
   return getModelMetadataById(normalizedModelId)?.name ?? normalizedModelId;
 }
 
-/**
- * Resolve model provenance for Managed Cloud receipts. Managed execution may
- * only use catalog models, so an unknown historical id is unavailable rather
- * than a dynamic Local/BYOK model that should be exposed verbatim.
- */
 export function getManagedModelPresentationLabel(modelId: string | null | undefined): string {
   const normalizedModelId = modelId?.trim() ?? '';
   if (!normalizedModelId) return 'Unavailable model';
@@ -74,7 +64,6 @@ export function getManagedModelPresentationLabel(modelId: string | null | undefi
   return getModelMetadataById(normalizedModelId)?.name ?? 'Unavailable model';
 }
 
-/** Validate an IPC/API model-discovery payload before it reaches routing UI. */
 export function parseDiscoveredChatModels(input: unknown): DiscoveredChatModelRecord[] {
   if (!Array.isArray(input)) return [];
 
@@ -114,14 +103,6 @@ function toPresentationTier(qualityTier: ModelQualityTier | undefined): ModelInf
   }
 }
 
-/**
- * Convert a host-discovered model into the shared chat selector DTO.
- *
- * Canonical model knowledge always comes from `@agiworkforce/types` (generated
- * from the model registry). Host discovery owns only reachability and trust
- * placement. An unknown dynamic Local/BYOK model fails capability display
- * closed until its runtime can report verified metadata.
- */
 export function createChatModelInfo(model: DiscoveredChatModel): ModelInfo {
   const metadata = getModelMetadataById(model.id);
   const runtime = model.runtimeCapabilities;

@@ -1,11 +1,3 @@
-/**
- * Global (system-wide) shortcuts for the shell garnish.
- *
- * Registration is best-effort: another app may already own a combo, and on
- * macOS an accelerator can also be silently claimed by the system. A failed
- * registration must never be silent — the tray menu is the always-available
- * fallback, so we say so once instead of leaving a dead hotkey.
- */
 import { Notification, globalShortcut } from 'electron';
 import { getShortcuts } from './settingsStore';
 import { isUsableAccelerator } from './garnishCore';
@@ -36,8 +28,6 @@ function register(accelerator: string, label: string, handler: () => void): bool
     return false;
   }
   try {
-    // Electron throws on an accelerator it cannot parse and returns false when
-    // the OS refuses the combo; both must leave the app running.
     if (globalShortcut.register(accelerator, handler)) return true;
   } catch (error) {
     console.warn(`[shortcuts] ${label} accelerator rejected (${accelerator}):`, error);
@@ -47,14 +37,12 @@ function register(accelerator: string, label: string, handler: () => void): bool
   return false;
 }
 
-/** Register both garnish hotkeys from persisted settings. Safe to re-run. */
 export function registerGarnishShortcuts(handlers: GarnishShortcutHandlers): void {
   const { quickAskShortcut, screenshotShortcut } = getShortcuts();
   register(quickAskShortcut, 'Quick Ask', handlers.onQuickAsk);
   register(screenshotShortcut, 'Screenshot to Chat', handlers.onScreenshot);
 }
 
-/** Release every global shortcut. Must run on `will-quit`. */
 export function unregisterGarnishShortcuts(): void {
   globalShortcut.unregisterAll();
 }

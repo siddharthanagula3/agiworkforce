@@ -1,8 +1,3 @@
-/**
- * Artifacts Components
- *
- * Exports all artifact-related components for live previews.
- */
 
 export { ArtifactPanel } from './ArtifactPanel';
 export { ArtifactRendererView } from './ArtifactRendererView';

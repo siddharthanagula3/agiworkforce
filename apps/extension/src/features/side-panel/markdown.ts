@@ -1,14 +1,5 @@
 import DOMPurify from 'dompurify';
 
-// CHROME-NEW-005 fix (2026-05-04 audit): DOMPurify allows `target` and `rel`
-// attributes individually, but doesn't enforce that `target="_blank"` must
-// carry `rel="noopener noreferrer"`. A crafted LLM response with raw HTML
-// `<a target="_blank">` would otherwise open with `window.opener` exposed,
-// letting the destination page navigate the side-panel via
-// `window.opener.location`. Install an attribute-level hook that hardens
-// every anchor that has `target` (or that points to a different origin)
-// with `rel="noopener noreferrer"`. Idempotent — adding the hook multiple
-// times is safe because DOMPurify dedupes by function reference.
 let domPurifyHookInstalled = false;
 
 export function ensureDomPurifyHook(): void {
@@ -111,7 +102,6 @@ export function renderMarkdown(text: string): string {
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
 
-  // Negative lookahead/behind avoids matching list bullets
   html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
   html = html.replace(/(?<!_)_(?!_)(.+?)(?<!_)_(?!_)/g, '<em>$1</em>');
 
@@ -123,27 +113,6 @@ export function renderMarkdown(text: string): string {
   html = html.replace(/(<li>[\s\S]*?<\/li>)(\n(?!<li>)|$)/g, '<ul>$1</ul>$2');
 
   html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  // Only allow http(s) URLs to block javascript: scheme injection.
-  // SECURITY (M-1): entity-encode link text before interpolation so that a
-  // model response like [<img onerror=…>](url) cannot inject HTML even if a
-  // downstream DOMPurify pass is skipped or removed in a future refactor.
-  //
-  // SECURITY (C-04 audit 2026-05-19): percent-encode the four characters
-  // that break out of an HTML attribute (`"`, `'`, `<`, `>`) inside the
-  // URL before interpolating into `href="..."`. The prior fix encoded the
-  // link text but left the URL raw, so a model response like
-  // `[click](https://e.com" onerror="alert(1))` would inject an attribute.
-  // Defense-in-depth for the case where a future refactor weakens or
-  // removes the downstream DOMPurify pass (sanitizeHtml above already
-  // strips onerror/onclick/etc. and forbids non-anchor tags, so this is
-  // not a live bypass of the current sanitizeHtml config).
-  // Self-review #8 audit 2026-05-19: the URL pattern was `[^)]+` which
-  // terminated at the first `)` and broke legitimate Wikipedia-style URLs
-  // like `[wiki](https://en.wikipedia.org/wiki/Foo_(bar))`. Switched to a
-  // pattern that allows balanced single-level parens — covers the
-  // overwhelming common case while still terminating on the outer `)`.
-  // Multi-level nesting is rare in URL paths; users can fall back to
-  // angle-bracket links if needed.
   html = html.replace(
     /\[([^\]]+)\]\(((?:[^()]|\([^()]*\))+)\)/g,
     (_match: string, text: string, url: string) => {
@@ -169,7 +138,6 @@ export function renderMarkdown(text: string): string {
     .map((block) => {
       const trimmed = block.trim();
       if (!trimmed) return '';
-      // Don't wrap block elements
       if (/^<(h[1-6]|ul|ol|li|pre|blockquote|hr)/.test(trimmed)) return trimmed;
       return `<p>${trimmed.replace(/\n/g, '<br>')}</p>`;
     })

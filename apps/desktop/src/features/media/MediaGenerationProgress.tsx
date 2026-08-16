@@ -8,9 +8,7 @@ export type MediaGenProvider = 'openai' | 'google' | 'stability' | 'runway';
 interface MediaGenerationProgressProps {
   type: 'image' | 'video';
   provider?: MediaGenProvider;
-  /** Canonical catalog model id used for release-safe display labels. */
   model?: string;
-  /** Optional prompt snippet displayed beneath the spinner */
   prompt?: string;
   className?: string;
 }
@@ -31,18 +29,6 @@ function getProviderLabel(type: 'image' | 'video', provider?: MediaGenProvider, 
   return modelName ?? providerLabel ?? fallback;
 }
 
-/**
- * MediaGenerationProgress — inline loading indicator for image and video generation.
- *
- * Shows:
- *   - Animated spinner with media-appropriate color (amber=image, purple=video)
- *   - Provider label when known
- *   - Actual elapsed time so users know the request remains in flight
- *   - Prompt snippet (first 60 chars) for context
- *
- * The provider does not emit percentage or named-stage telemetry, so this
- * intentionally stays indeterminate instead of fabricating progress.
- */
 export const MediaGenerationProgress: React.FC<MediaGenerationProgressProps> = ({
   type,
   provider,

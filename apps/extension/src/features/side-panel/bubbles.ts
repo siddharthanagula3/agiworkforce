@@ -1,11 +1,3 @@
-/**
- * Side-panel message + tool-call + agent-activity render builders.
- *
- * Extracted verbatim from side_panel.ts (which runs chrome.* at import scope and
- * cannot be loaded in jsdom) so the message-rendering path is unit-testable.
- * Behaviour is unchanged. Only buildBubbleWithTools + buildToolCallEl are called
- * from side_panel.ts; the rest are internal to this cluster.
- */
 import {
   type AgentActivityArtifactEntry,
   type AgentActivityEntry,
@@ -48,16 +40,9 @@ export interface BubbleInteractionOptions {
   approvalDecisions?: Readonly<Record<string, ManagedApprovalDecision>>;
   approvalError?: string;
   onResolveApproval?: (toolCallId: string, decision: ManagedApprovalDecision) => void;
-  /** Re-send the request that produced a failed assistant message. */
   onRetry?: (messageId: string) => void;
 }
 
-/**
- * Open only the exact map-provider search URLs admitted by the canonical card
- * contract. The stream parser already enforces this allowlist, but the host
- * opener repeats it so a future state mutation cannot turn a rendered control
- * into arbitrary extension-page egress.
- */
 export function openInteractiveCardUrl(value: string): void {
   if (!isAllowedMapSearchProviderUrl(value)) return;
   window.open(new URL(value).toString(), '_blank', 'noopener,noreferrer');
@@ -117,8 +102,6 @@ function buildMapSearchCard(
   if (ctx.onOpenUrl) {
     const actions = el('div', { class: 'sp-interactive-card__actions' });
     for (const action of body.actions) {
-      // The parser admits only these URLs. Keep the renderer fail-closed too so
-      // no dead or unsafe control appears if state is later mutated in memory.
       if (!isAllowedMapSearchProviderUrl(action.url, action.provider)) continue;
       const button = el(
         'button',
@@ -138,12 +121,6 @@ function buildMapSearchCard(
   return section;
 }
 
-/**
- * Chrome intentionally registers only the display-only map link renderer.
- * Clarification has no Chrome continuation endpoint and itinerary has no
- * resolver-backed producer, so both take the continuously exercised fallback
- * path and never expose a dead control.
- */
 const CHROME_INTERACTIVE_CARD_REGISTRY: InteractiveCardRegistry<HTMLElement> = {
   'map-search.v1': ({ body, ctx }) => buildMapSearchCard(body, ctx),
 };
@@ -165,13 +142,6 @@ function appendInteractiveCards(parent: HTMLElement, message: ChatMessage): void
   parent.appendChild(cards);
 }
 
-/**
- * Failure footer for an assistant message whose stream ended in an error.
- *
- * The failure text used to be concatenated into the message content as
- * "Error: <provider string>" and rendered as ordinary markdown prose, so it was
- * visually indistinguishable from an answer and offered nothing to do about it.
- */
 function buildErrorFooter(
   msg: ChatMessage,
   onRetry?: (messageId: string) => void,
@@ -197,12 +167,6 @@ function buildErrorFooter(
   return footer;
 }
 
-/**
- * Resolve only user-actionable artifact locations. Relative generated-file
- * paths belong to the authenticated AGI web origin; absolute HTTPS URLs are
- * opened exactly as returned by the server. Non-web schemes remain visible as
- * an honest unavailable state instead of becoming a dead link.
- */
 export function resolveManagedArtifactUrl(uri: string): string | null {
   const trimmed = uri.trim();
   if (!trimmed) return null;
@@ -238,7 +202,6 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
 
   appendInteractiveCards(wrapper, msg);
 
-  // Action row: timestamp + copy button (assistant only)
   const actionRow = el('div', { class: 'sp-bubble-actions' });
   const ts = el('span', { class: 'sp-timestamp' }, formatTime(msg.timestamp));
   actionRow.appendChild(ts);
@@ -266,7 +229,6 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   return wrapper;
 }
 
-/** Map tool name to its Lucide SVG string. */
 function toolIcon(name: string): string {
   const n = name.toLowerCase();
   if (n.includes('bash') || n.includes('shell') || n.includes('terminal') || n.includes('run'))
@@ -291,14 +253,8 @@ interface ToolCallBlock {
   state: 'pending' | 'running' | 'success' | 'error';
 }
 
-/**
- * Parse tool-call fences from message content.
- * Format: [TOOL:name:state] summary\nbody\n[/TOOL]
- * Returns segments: plain text strings or ToolCallBlock objects.
- */
 function parseToolCalls(content: string): Array<string | ToolCallBlock> {
   const segments: Array<string | ToolCallBlock> = [];
-  // Regex: [TOOL:name:state] summary\nbody\n[/TOOL]
   const re = /\[TOOL:([^:\]]+):?(pending|running|success|error)?\]([\s\S]*?)\[\/TOOL\]/g;
   let last = 0;
   let m: RegExpExecArray | null;
@@ -693,8 +649,6 @@ export function buildBubbleWithTools(
 
   appendInteractiveCards(wrapper, msg);
 
-  // A failed run that produced tool activity gets the same failure footer as a
-  // plain one; the error must not be reachable only on the no-tools path.
   const toolsErrorFooter = buildErrorFooter(msg, options.onRetry);
   if (toolsErrorFooter) wrapper.appendChild(toolsErrorFooter);
 

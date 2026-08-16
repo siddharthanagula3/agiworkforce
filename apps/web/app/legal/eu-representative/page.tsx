@@ -18,21 +18,6 @@ export const metadata = buildMetadata({
   path: '/legal/eu-representative',
 });
 
-/*
- * GDPR ART. 27 — CURRENT POSITION
- *
- * This page previously said the representative would be published "before the
- * public launch". That condition has already occurred: Managed Cloud has been
- * open to the public by default since 2026-06-27 (lib/managed-compute-gate.ts).
- * A page that defers an obligation to an event that has passed reads worse than
- * an admission, and /mobile/legal already stated the accurate position — that no
- * representative has been designated. Both now say the same thing.
- *
- * When a representative IS appointed, replace the callout with the name, address
- * and contact instructions, and update /mobile/legal and /privacy section 07 in
- * the same change.
- */
-
 export default function EuRepresentativePage() {
   return (
     <div data-design="agi">

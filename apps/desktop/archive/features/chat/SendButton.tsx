@@ -1,30 +1,16 @@
-/**
- * SendButton Component
- *
- * Send/stop/queue button for the chat input.
- * Changes appearance based on input state and AI processing status.
- */
 
 import React from 'react';
 import { Clock, Loader2, Send, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export interface SendButtonProps {
-  /** Whether to show the stop button instead */
   showStopButton: boolean;
-  /** Whether currently sending */
   isSending: boolean;
-  /** Whether in queue mode (AI is processing) */
   isQueueMode: boolean;
-  /** Whether input is disabled */
   disabled?: boolean;
-  /** Whether there is content to send */
   hasContent: boolean;
-  /** Whether in simple mode */
   isSimpleMode?: boolean;
-  /** Callback when send is clicked */
   onSend: () => void;
-  /** Callback when stop is clicked */
   onStop?: () => void;
 }
 
@@ -38,9 +24,6 @@ export const SendButton: React.FC<SendButtonProps> = ({
   onSend,
   onStop,
 }) => {
-  // BUG-SB-01: Always render the stop button when showStopButton is true,
-  // even if onStop is undefined (disable it rather than silently fall through
-  // to the send button, which would mislead the user during generation).
   if (showStopButton) {
     return (
       <button
@@ -65,7 +48,6 @@ export const SendButton: React.FC<SendButtonProps> = ({
     <button
       type="button"
       onClick={onSend}
-      // BUG-SB-01 (send side): also disable while isSending to prevent double-submits.
       disabled={isSending || disabled || !hasContent}
       className={cn(
         'p-2 rounded-lg transition-all duration-200',

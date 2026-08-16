@@ -23,7 +23,6 @@ interface TodoUpdatePayload {
 }
 
 export const TodoList: React.FC<ToolResultProps> = ({ result, status }) => {
-  // Seed from the tool result data when available
   const initialTodos = (() => {
     if (!result?.data) return [];
     const data = result.data as Record<string, unknown>;
@@ -36,7 +35,6 @@ export const TodoList: React.FC<ToolResultProps> = ({ result, status }) => {
 
   const [todos, setTodos] = useState<TodoItem[]>(initialTodos);
 
-  // Keep state in sync when the result prop changes (e.g. tool completes)
   useEffect(() => {
     if (!result?.data) return;
     const data = result.data as Record<string, unknown>;
@@ -46,7 +44,6 @@ export const TodoList: React.FC<ToolResultProps> = ({ result, status }) => {
     }
   }, [result?.data]);
 
-  // Listen for real-time updates from the Rust backend
   useEffect(() => {
     const unlisten = listen<TodoUpdatePayload>('todo:update', (event) => {
       if (Array.isArray(event.payload.todos)) {

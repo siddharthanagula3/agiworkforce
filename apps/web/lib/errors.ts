@@ -8,8 +8,6 @@
  * @module errors
  */
 
-// Re-export everything from the shared utils package
-// This maintains backwards compatibility while centralizing error handling
 export {
   ErrorCode,
   AppError,
@@ -19,5 +17,4 @@ export {
   getErrorMessage,
 } from '@agiworkforce/utils';
 
-// Type-only exports
 export type { ApiError, ErrorCodeValue, FriendlyError } from '@agiworkforce/utils';

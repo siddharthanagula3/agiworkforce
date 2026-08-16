@@ -3,9 +3,6 @@ import { View, Alert, Linking, Platform, ActivityIndicator, ScrollView } from 'r
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: duplicate copies of the navigation package
-// make the raw hook throw "Couldn't find a navigation object".
 import { useFocusEffect } from 'expo-router';
 import {
   ArrowLeft,
@@ -32,10 +29,6 @@ import {
 import { DeviceIntegrationStatus } from '@/src/features/integrations/components/DeviceIntegrationStatus';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
-
-// ---------------------------------------------------------------------------
-// Helpers (unchanged from original)
-// ---------------------------------------------------------------------------
 
 function statusLabel(status: PermissionStatus): string {
   switch (status) {
@@ -70,10 +63,6 @@ function StatusIcon({ status, colors }: { status: PermissionStatus; colors: Colo
   }
 }
 
-// ---------------------------------------------------------------------------
-// Section header
-// ---------------------------------------------------------------------------
-
 function SectionHeader({ title, colors }: { title: string; colors: ColorScheme }) {
   return (
     <View className="flex-row items-center justify-between mb-3">
@@ -87,15 +76,10 @@ function SectionHeader({ title, colors }: { title: string; colors: ColorScheme }
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
-
 export default function IntegrationsScreen() {
   const router = useRouter();
   const colors = useThemeColors();
 
-  // -- Legacy permission state (Calendar / Contacts) ------------------------
   const [calendarStatus, setCalendarStatus] = useState<PermissionStatus>('undetermined');
   const [contactsStatus, setContactsStatus] = useState<PermissionStatus>('undetermined');
   const [isChecking, setIsChecking] = useState(true);

@@ -1,10 +1,3 @@
-/**
- * Archived Cloud chats, rendered inline from Desktop's own Cloud session.
- *
- * `/api/chat/conversations` authenticates through `requireCurrentUserId` ->
- * `getClerkAuthUser`, which accepts the device bearer, so restore and delete
- * work here without the cookie-gated child window.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 

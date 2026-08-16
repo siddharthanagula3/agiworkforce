@@ -1,16 +1,3 @@
-/**
- * Golden tests for tool-parameter-schema normalization.
- *
- * Cross-provider contract: every adapter feeds tool input schemas through
- * `normalizeToolParameterSchema` so:
- *   - OpenAI gets a top-level `type: object` (rejecting bare `anyOf` unions)
- *   - Gemini gets validation keywords stripped
- *   - xAI / opt-in callers can supply an unsupportedKeywords set
- *
- * These tests pin the inputs => outputs that are exercised at adapter
- * request build time. A regression here means cross-provider tool-call
- * handoff breaks (differentiator #3 — Claude->GPT->Llama in one thread).
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -82,7 +69,6 @@ describe('normalizeToolParameterSchema — anyOf flattening (OpenAI/strict)', ()
     expect(props['common']).toEqual({ type: 'string' });
     expect(props['only_a']).toEqual({ type: 'number' });
     expect(props['only_b']).toEqual({ type: 'boolean' });
-    // Only `common` is required in BOTH variants — merged required is exactly that.
     expect(out['required']).toEqual(['common']);
   });
 
@@ -129,7 +115,6 @@ describe('normalizeToolParameterSchema — Gemini cleanup', () => {
     expect(s['minLength']).toBeUndefined();
     expect(s['maxLength']).toBeUndefined();
     expect(s['pattern']).toBeUndefined();
-    // The base type:string is preserved so Gemini still validates.
     expect(s['type']).toBe('string');
   });
 

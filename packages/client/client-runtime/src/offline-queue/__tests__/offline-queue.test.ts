@@ -111,7 +111,6 @@ describe('createOfflineQueue', () => {
     const onMessageSync = vi.fn().mockRejectedValue(new Error('network failed'));
     await queue.syncOfflineQueue({ onMessageSync });
     await queue.syncOfflineQueue({ onMessageSync });
-    // Third attempt: retryCount is now 2, equals maxRetries → drop
     await queue.syncOfflineQueue({ onMessageSync });
 
     expect(queue.getQueuedItemCount()).toBe(0);

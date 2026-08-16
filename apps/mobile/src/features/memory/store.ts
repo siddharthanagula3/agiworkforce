@@ -23,7 +23,6 @@ import {
 
 export type { MemoryFact };
 
-// Re-export as MemoryEntry alias for backwards compat with UI components
 export type MemoryEntry = MemoryFact;
 
 interface MemoryState {
@@ -32,7 +31,6 @@ interface MemoryState {
   loading: boolean;
   error: string | null;
   searchQuery: string;
-  // legacy compat — local-only
   syncing: boolean;
   lastSyncAt: string | null;
 
@@ -46,7 +44,6 @@ interface MemoryState {
   bulkInsert: (facts: string[]) => Promise<{ inserted: number; skipped: number }>;
   syncMemories: () => Promise<void>;
   clearError: () => void;
-  /** Clear the mode-aware presentation facade without deleting Local or Cloud source data. */
   resetVisibleState: () => void;
 }
 
@@ -86,10 +83,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
       const isCloud = operationScope.scope === 'cloud';
       let entries: MemoryFact[];
       if (isCloud) {
-        // ── Cloud path: read from the cloud memory store (synced via cloudSyncEngine).
-        // Cloud entries use the same display type: we map CloudMemoryEntry → MemoryFact.
-        // Non-deleted entries only; tombstones pending push stay in the cloud store
-        // but must not appear in the list.
         const cloudEntries = useCloudMemoryStore
           .getState()
           .entries.filter((e) => !e.isDeleted)
@@ -105,7 +98,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.created_at - a.created_at);
         entries = cloudEntries;
       } else {
-        // ── Local path: read from SQLite (unchanged).
         entries = await listMemoryFacts({ limit: 500 });
       }
       if (!isMemoryOperationScopeCurrent(operationScope)) return;
@@ -137,9 +129,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     try {
       const isCloud = operationScope.scope === 'cloud';
       if (isCloud) {
-        // ── Cloud path: write to cloud memory store + queue for push ──────────
-        // TRUST BOUNDARY: local SQLite is NOT written. Cloud memory IDs are
-        // UUIDv7 (collision-free, time-ordered) as required by the server contract.
         const id = uuidv7();
         const now = new Date().toISOString();
         const cloudEntry = {
@@ -154,9 +143,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         };
         useCloudMemoryStore.getState().upsertCloudMemory(cloudEntry);
         markMemoryForSync(id);
-        // Also optimistically surface in the local store's entry list so the UI
-        // reflects the add immediately without waiting for the next pull. We use
-        // a synthetic MemoryFact shape (fact = content, created_at = epoch ms).
         set((state) => {
           const entry: MemoryFact = {
             id,
@@ -175,7 +161,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           };
         });
       } else {
-        // ── Local path: write to SQLite (unchanged) ───────────────────────────
         const id = Crypto.randomUUID();
         const newFact: Omit<MemoryFact, 'pinned'> & { pinned?: boolean } = {
           id,
@@ -188,9 +173,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         if (!isMemoryOperationScopeCurrent(operationScope)) return;
         set((state) => {
           const entry = { ...newFact, pinned: false };
-          // #28: also surface the new memory in the filtered view when a search is
-          // active and it matches — otherwise it stays invisible until the query is
-          // cleared (the screen renders filteredEntries while searching).
           const q = state.searchQuery.trim().toLowerCase();
           const matchesSearch = q.length > 0 && entry.fact.toLowerCase().includes(q);
           return {
@@ -216,17 +198,14 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     set({ error: null });
     const isCloud = operationScope.scope === 'cloud';
 
-    // In cloud mode, validate the entry exists BEFORE applying optimistic update.
     if (isCloud) {
       const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
       if (!existing) {
-        // Entry doesn't exist in cloud store — don't apply optimistic update or attempt push
         set({ error: 'Memory entry not found in cloud store' });
         return;
       }
     }
 
-    // Optimistic update: only applies after cloud validation (or always in local mode).
     set((state) => ({
       entries: state.entries.map((e) => (e.id === id ? { ...e, fact } : e)),
       filteredEntries: state.filteredEntries.map((e) => (e.id === id ? { ...e, fact } : e)),
@@ -234,7 +213,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
 
     try {
       if (isCloud) {
-        // ── Cloud path ────────────────────────────────────────────────────────
         const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
         if (existing) {
           useCloudMemoryStore.getState().upsertCloudMemory({
@@ -245,7 +223,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           markMemoryForSync(id);
         }
       } else {
-        // ── Local path ────────────────────────────────────────────────────────
         await updateMemoryFact(id, fact.trim());
       }
     } catch (err) {
@@ -264,7 +241,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     set({ error: null });
     const prev = get().entries;
     const prevFiltered = get().filteredEntries;
-    // Optimistic local removal from the display list.
     set((state) => ({
       entries: state.entries.filter((e) => e.id !== id),
       filteredEntries: state.filteredEntries.filter((e) => e.id !== id),
@@ -272,10 +248,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     try {
       const isCloud = operationScope.scope === 'cloud';
       if (isCloud) {
-        // ── Cloud path: mark as tombstone, keep in cloud store until server acks ──
-        // CRITICAL: must NOT hard-delete locally before the server receives the
-        // tombstone, otherwise the delete is silently lost. The sync engine's
-        // pushMemory() will hard-delete after receiving the server ack.
         const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
         if (existing) {
           useCloudMemoryStore.getState().upsertCloudMemory({
@@ -288,7 +260,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
         // If the entry is not in the cloud store (e.g. a local entry that leaked
         // to the display list in a previous session), nothing to push.
       } else {
-        // ── Local path ────────────────────────────────────────────────────────
         await deleteMemoryFact(id);
       }
     } catch (err) {
@@ -321,10 +292,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     try {
       const isCloud = operationScope.scope === 'cloud';
       if (isCloud) {
-        // ── Cloud path: write to the cloud memory store + queue for push ──────
-        // The local-only SQLite path (togglePinMemoryFact) must NOT be used
-        // here — it silently no-ops on cloud entries, so the pin appears to
-        // work until the next fetch/sync reverts it to unpinned.
         const existing = useCloudMemoryStore.getState().entries.find((e) => e.id === id);
         if (existing) {
           useCloudMemoryStore.getState().upsertCloudMemory({
@@ -335,7 +302,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
           markMemoryForSync(id);
         }
       } else {
-        // ── Local path: write to SQLite (unchanged) ───────────────────────────
         await togglePinMemoryFact(id, pinned);
       }
     } catch (err) {
@@ -427,8 +393,6 @@ export const useMemoryStore = create<MemoryState>()((set, get) => ({
     }),
 }));
 
-// Words too common to signal relevance on their own (kept small — this only
-// needs to filter noise out of a short chat message, not do real NLP).
 const MEMORY_QUERY_STOPWORDS = new Set([
   'the',
   'a',
@@ -502,16 +466,6 @@ const MEMORY_QUERY_STOPWORDS = new Set([
   'prefer',
 ]);
 
-/**
- * Score significant query-word overlap with a memory. A prior version checked
- * `fact.includes(query)` — the fact containing the ENTIRE query as a literal
- * substring — which only ever matched a verbatim repeat of the fact text.
- * Real chat questions ("what language do I prefer between rust and python")
- * never contain the short stored fact ("user prefers rust over python")
- * verbatim, so cloud memory retrieval silently returned nothing for every
- * realistic query. This lexical signal feeds the shared cross-surface memory
- * relevance scorer so Mobile and Desktop no longer rank memories differently.
- */
 function memoryLexicalSimilarity(fact: string, query: string): number {
   const factKey = normalizeMemoryKey(fact);
   const queryKey = normalizeMemoryKey(query);
@@ -529,19 +483,11 @@ function memoryLexicalSimilarity(fact: string, query: string): number {
   return matchingWords / words.length;
 }
 
-// ---------------------------------------------------------------------------
-// Context retrieval — top-K facts for chat context injection
-// ---------------------------------------------------------------------------
-
 export async function retrieveMemoryContext(
   query: string,
   k = 5,
   embedding?: Float32Array,
 ): Promise<MemoryFact[]> {
-  // TRUST BOUNDARY: in cloud mode, retrieve ONLY from the (synced) cloud memory
-  // store — never read on-device SQLite, or local-only memories would leak into a
-  // cloud turn. In local mode, read on-device SQLite only (below). This mirrors
-  // the mode split in fetchMemories / addMemory.
   if (useChatAppModeStore.getState().appMode === 'cloud') {
     const queryKey = normalizeMemoryKey(query);
     const activeEntries = useCloudMemoryStore.getState().entries.filter((e) => !e.isDeleted);
@@ -577,8 +523,6 @@ export async function retrieveMemoryContext(
       if (ranked.length > 0) return ranked.slice(0, k).map(({ entry }) => toFact(entry));
     }
 
-    // Relevance gate: only inject pinned facts when no keyword match is found,
-    // mirroring the local-mode fallback below.
     return activeEntries
       .filter((e) => e.pinned)
       .slice(0, k)
@@ -601,8 +545,5 @@ export async function retrieveMemoryContext(
   const textResults = await searchMemoryByText(query, k);
   if (textResults.length > 0) return textResults;
 
-  // Relevance gate: only inject pinned facts when no keyword or vector match
-  // is found. Unpinned, non-matching memories are not relevant to the current
-  // query and must NOT be injected into the chat context.
   return listMemoryFacts({ pinned: true, limit: k });
 }

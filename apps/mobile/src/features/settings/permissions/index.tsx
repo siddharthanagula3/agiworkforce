@@ -1,19 +1,7 @@
-/**
- * Permissions Settings Screen — Index
- *
- * Displays native-backed permission rows. Each row shows an icon, label, the
- * current OS status, and a chevron to the per-permission detail.
- *
- * Read-on-focus via getPermissionsAsync (no prompt). User action → detail
- * screen handles the actual request/Settings redirect.
- */
 import { useCallback } from 'react';
 import { View } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: duplicate copies of the navigation package
-// make the raw hook throw "Couldn't find a navigation object".
 import { useFocusEffect } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -29,10 +17,6 @@ import {
 } from './registry';
 import type { MobilePermissionKind } from './types';
 
-// ---------------------------------------------------------------------------
-// Row
-// ---------------------------------------------------------------------------
-
 interface PermissionRowProps {
   kind: MobilePermissionKind;
   isLast: boolean;
@@ -46,13 +30,6 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
   const permState = usePermissionsStore((s) => s.permissions[kind]);
   const status = permState?.lastObservedStatus ?? 'undetermined';
   const granted = isPermissionGranted(status);
-  // Name the level the OS actually granted rather than collapsing every kind to
-  // On/Ask/Off: "granted" means foreground-only for the microphone and
-  // unconditional for notifications, and the row should say which. The same
-  // string drives VoiceOver, so sighted and screen-reader users read the same
-  // audit value — and 'Ask' stays distinct from 'Never', because telling
-  // VoiceOver a permission was denied when the OS has not asked yet sends the
-  // user to Settings to fix something that was never broken.
   const statusLabel = permissionStatusLabel(status, kind);
 
   return (
@@ -124,16 +101,11 @@ function PermissionRow({ kind, isLast, onPressDetail }: PermissionRowProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
-
 export default function PermissionsScreen() {
   const router = useRouter();
   const c = useThemeColors();
   const setObservedStatus = usePermissionsStore((s) => s.setObservedStatus);
 
-  // Read-only OS status poll on every focus (useFocusEffect so back-from-Settings refreshes)
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -162,7 +134,6 @@ export default function PermissionsScreen() {
 
   return (
     // Reached from Settings → Safety & Security and from Capabilities, so the
-    // shell pops the real stack and keeps `backHref` only for deep links.
     <SettingsScreenShell title="Permissions" backHref="/(app)/settings/safety-security">
       <View style={{ marginTop: 10, marginBottom: 12 }}>
         <Text

@@ -1,17 +1,3 @@
-/**
- * `/billing` — post-checkout splash, or a redirect into Settings.
- *
- * This used to render a second, older billing dashboard alongside the wired
- * one at `/settings/billing`. Two screens for one thing meant the stale copy
- * kept its own idea of the plan: it showed "Payment successful!" above
- * "Current Plan: FREE / No subscription", and offered "Upgrade to Basic" to an
- * account that had just paid for Max 15x.
- *
- * The route survives rather than being deleted because Stripe's `success_url`
- * points at it, and changing that alone would strand checkout sessions already
- * in flight with the old URL. So it keeps the one job only it can do — greeting
- * someone who just paid — and hands every other visit to the real billing UI.
- */
 
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
@@ -53,19 +39,11 @@ export default async function BillingPage({
     return redirect('/settings/billing');
   }
 
-  // Current checkout always writes client_reference_id. Metadata is retained as
-  // a fallback for older sessions that predate it, but a contradictory metadata
-  // value must not let a second account claim a session with an explicit owner.
   const sessionOwner = session.client_reference_id ?? session.metadata?.['user_id'];
   if (sessionOwner !== userId) {
     return redirect('/settings/billing');
   }
 
-  // A verified Stripe session proves that this account returned from Checkout,
-  // but the existing subscription in `/api/me` may still be the PREVIOUS paid
-  // tier until the webhook commits the upgrade. Carry the authenticated target
-  // from the session so the welcome screen waits for that exact plan instead
-  // of treating any paid tier as proof that this checkout activated.
   const expectedPlan = session.metadata?.['plan_tier'];
   if (!isSelfServePaidPlanTier(expectedPlan)) {
     return redirect('/settings/billing');

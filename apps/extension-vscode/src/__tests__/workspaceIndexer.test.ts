@@ -1,12 +1,5 @@
-/**
- * workspaceIndexer.test.ts — Tests for WorkspaceIndexer logic
- *
- * Tests the relevance scoring and context building logic.
- */
 
 import { describe, it, expect } from 'vitest';
-
-// Replicate the pure logic from WorkspaceIndexer for testing
 
 interface CacheFile {
   path: string;
@@ -150,7 +143,7 @@ describe('getRelevantContext', () => {
     }));
 
     const result = getRelevantContext(manyFiles, 'component render props');
-    expect(result.length).toBeLessThanOrEqual(MAX_CONTEXT_CHARS + 200); // Some slack for last line
+    expect(result.length).toBeLessThanOrEqual(MAX_CONTEXT_CHARS + 200);
   });
 
   it('returns top 10 results maximum', () => {
@@ -199,7 +192,7 @@ describe('inferLanguage', () => {
 });
 
 describe('staleness check pattern', () => {
-  const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+  const CACHE_TTL_MS = 60 * 60 * 1000;
 
   it('considers missing cache as stale', () => {
     const cache = undefined;
@@ -208,13 +201,13 @@ describe('staleness check pattern', () => {
   });
 
   it('considers recent cache as fresh', () => {
-    const cache = { timestamp: Date.now() - 30 * 60 * 1000 }; // 30 min ago
+    const cache = { timestamp: Date.now() - 30 * 60 * 1000 };
     const isStale = Date.now() - cache.timestamp > CACHE_TTL_MS;
     expect(isStale).toBe(false);
   });
 
   it('considers old cache as stale', () => {
-    const cache = { timestamp: Date.now() - 2 * 60 * 60 * 1000 }; // 2 hours ago
+    const cache = { timestamp: Date.now() - 2 * 60 * 60 * 1000 };
     const isStale = Date.now() - cache.timestamp > CACHE_TTL_MS;
     expect(isStale).toBe(true);
   });

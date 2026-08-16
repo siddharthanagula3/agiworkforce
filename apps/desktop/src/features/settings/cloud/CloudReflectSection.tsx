@@ -1,16 +1,3 @@
-/**
- * Reflect recap, rendered inline from Desktop's own Cloud session.
- *
- * `GET /api/reflect` authenticates through `getClerkAuthUser`, so the device
- * bearer reads it directly and the response is parsed with the shared contract
- * schema (`ManagedCloudReflectRecapSchema`) rather than trusted field by field.
- * This replaces a cookie-gated child window that could land on `/login`.
- *
- * "Memory is off" is a 409 with `error.code = memory_required`, which is a
- * state and not a failure — it renders its own explanation and points at the
- * Capabilities section where the account's memory controls live, instead of
- * showing a scary error.
- */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {

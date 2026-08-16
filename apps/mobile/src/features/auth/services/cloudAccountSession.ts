@@ -23,14 +23,6 @@ export class StaleCloudAccountOperationError extends Error {
   }
 }
 
-/**
- * Bind device-side Cloud caches to the current Clerk user.
- *
- * A missing persisted owner is treated as a change, not as permission to adopt
- * legacy unowned data. That one-time fail-closed migration prevents caches
- * written by an older build from being shown to whichever account signs in
- * first after upgrade.
- */
 export function activateCloudAccount(userId: string): CloudAccountActivation {
   const ownerId = userId.trim();
   if (!ownerId) {
@@ -47,7 +39,6 @@ export function activateCloudAccount(userId: string): CloudAccountActivation {
   return { ownerId, previousOwnerId, changed };
 }
 
-/** Invalidate the current owner and every async snapshot captured for it. */
 export function invalidateCloudAccount(): void {
   const persistedOwnerId = storage.getString(CLOUD_CACHE_OWNER_KEY)?.trim() || null;
   if (runtimeOwnerId !== null || persistedOwnerId !== null) {
@@ -86,7 +77,6 @@ export function isStaleCloudAccountOperation(
   return error instanceof StaleCloudAccountOperationError;
 }
 
-/** TEST-ONLY: reset module state between deterministic owner/epoch tests. */
 export function __resetCloudAccountSessionForTests(): void {
   runtimeOwnerId = null;
   accountEpoch = 0;

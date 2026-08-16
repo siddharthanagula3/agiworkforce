@@ -10,33 +10,6 @@ import {
   isOrgResourceLimitError,
 } from '@/lib/services/org-entitlements';
 
-/**
- * Org-scoped sharing of custom remote MCP connectors (migration 0086).
- *
- * WHAT SHARING A CONNECTOR MEANS — and what it deliberately does not.
- *
- * `user_custom_connectors.auth_header_enc` is a credential store. Sharing a row
- * shares the EFFECT of that bearer token, never the token itself:
- *
- *   - members INVOKE the connector; the server decrypts the credential inside
- *     the tool loop and never returns it on any wire;
- *   - members cannot read the credential, edit the URL, or delete the row —
- *     migration 0086 adds no policy at all to `user_custom_connectors`, and the
- *     summary shape below has no field for it;
- *   - SSRF re-validation still runs per catalog build and per execution
- *     (`assertResolvedPublicHostname` in lib/user-connector-tools.ts), because
- *     DNS can be re-pointed after the share.
- *
- * WHY A SEPARATE `org_short_id`. The chat-facing server id for a personal
- * connector is `custom-<short_id>`, and `short_id` is unique only per
- * `(user_id, short_id)`. Emitting a shared connector under the owner's personal
- * short id would collide with another member's personal connector inside one
- * conversation and cross-wire `connector_tool_permissions`, which is keyed
- * `(user_id, connector_id, tool_name)`. Shared connectors therefore get an
- * org-stable 10-hex id and their own `orgmcp-` prefix, so the two namespaces
- * can never overlap and per-member permission verdicts stay stably keyed.
- */
-
 export const ORG_SHARED_CONNECTOR_PREFIX = 'orgmcp-';
 
 export function orgSharedConnectorServerId(orgShortId: string): string {
@@ -49,12 +22,9 @@ export function orgShortIdFromServerId(serverId: string): string | null {
   return /^[0-9a-f]{10}$/.test(shortId) ? shortId : null;
 }
 
-/** Auth-material-free view of a shared connector. There is no credential field. */
 export interface SharedConnectorSummary {
   organizationId: string;
-  /** `user_custom_connectors.id` — the un-share key. */
   connectorRowId: string;
-  /** Org-stable chat-facing id: tools appear as `orgmcp-<orgShortId>`. */
   orgShortId: string;
   name: string;
   url: string;
@@ -100,11 +70,6 @@ function toSummary(row: SharedConnectorRow): SharedConnectorSummary {
   };
 }
 
-/**
- * Everything the organization shares. `organizationId` is always the
- * server-derived membership org (see org-sharing-service.ts) — never a
- * client-supplied value.
- */
 export async function listSharedConnectors(
   db: DatabaseAdapter,
   organizationId: string,
@@ -122,12 +87,6 @@ export async function listSharedConnectors(
 
 const SHORT_ID_MAX_ATTEMPTS = 5;
 
-/**
- * Allocate an `org_short_id` unused inside this organization. The DB's
- * `idx_org_shared_connectors_short_id` unique index is the hard backstop; this
- * loop only avoids a pointless round-trip failure. 40 bits makes a same-org
- * collision practically impossible.
- */
 async function allocateOrgShortId(db: DatabaseAdapter, organizationId: string): Promise<string> {
   for (let attempt = 0; attempt < SHORT_ID_MAX_ATTEMPTS; attempt += 1) {
     const candidate = randomBytes(5).toString('hex');
@@ -151,25 +110,6 @@ export interface ShareConnectorInput {
   actorUserId: string;
 }
 
-/**
- * Share one of the actor's own connectors with the organization.
- *
- *   1. OWNERSHIP: the insert selects the connector by `(id, user_id)`, so an
- *      admin cannot conscript another member's personal connector — and
- *      therefore another member's bearer token — into the org's shared set.
- *      Zero rows means "not yours" and surfaces as 404.
- *   2. ORG-WIDE CEILING: `assert_org_resource_limit` takes a
- *      transaction-scoped advisory lock keyed on the organization BEFORE
- *      counting, in the same statement as the insert. Two admins sharing the
- *      25th and 26th connector concurrently serialize on that lock and the
- *      second transaction aborts. A TypeScript count-then-insert loses that
- *      race, which is why the count is not done here.
- *
- * The cap counts the org's SHARED set only. A member's personal connectors stay
- * on that member's own plan — seats are the unit of value, so an org does not
- * get to spend its shared allowance on private setups, and a member does not
- * lose their personal allowance by joining.
- */
 export async function shareConnector(
   db: DatabaseAdapter,
   input: ShareConnectorInput,
@@ -236,11 +176,6 @@ export async function shareConnector(
   return toSummary(inserted);
 }
 
-/**
- * Stop sharing. Returns the org short id so the caller can evict the cached
- * catalog and close the open MCP handle immediately — otherwise a removed
- * member keeps calling a shared server until the process restarts.
- */
 export async function unshareConnector(
   db: DatabaseAdapter,
   organizationId: string,

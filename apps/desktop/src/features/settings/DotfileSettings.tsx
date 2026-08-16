@@ -17,8 +17,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/ui/Button';
 import { useIsMounted } from '@/hooks/useIsMounted';
 
-// ── Types ──────────────────────────────────────────────────────────────────
-
 interface McpServerEntry {
   command?: string;
   args?: string[];
@@ -43,8 +41,6 @@ interface SkillEntry {
   source: string;
 }
 
-// ── 1. Configuration Editor ────────────────────────────────────────────────
-
 function ConfigEditorSection() {
   const [config, setConfig] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
@@ -52,8 +48,6 @@ function ConfigEditorSection() {
   const [model, setModel] = useState('');
   const [provider, setProvider] = useState('');
   const [approvalMode, setApprovalMode] = useState('');
-  // Section may unmount while config load / save is in flight (user
-  // navigates to a different settings tab). Guards post-await setState.
   const isMounted = useIsMounted();
 
   useEffect(() => {
@@ -156,8 +150,6 @@ function ConfigEditorSection() {
     </div>
   );
 }
-
-// ── 2. MCP Servers ─────────────────────────────────────────────────────────
 
 function McpServersSection() {
   const [servers, setServers] = useState<Record<string, McpServerEntry>>({});
@@ -304,8 +296,6 @@ function McpServersSection() {
   );
 }
 
-// ── 3. Ecosystem ───────────────────────────────────────────────────────────
-
 function EcosystemSection() {
   const [tools, setTools] = useState<DetectedTool[]>([]);
   const [loading, setLoading] = useState(true);
@@ -404,8 +394,6 @@ function EcosystemSection() {
   );
 }
 
-// ── 4. Skills Browser ──────────────────────────────────────────────────────
-
 function SkillsBrowserSection() {
   const [skills, setSkills] = useState<SkillEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -462,8 +450,6 @@ function SkillsBrowserSection() {
     </div>
   );
 }
-
-// ── 5. Instructions Editor ─────────────────────────────────────────────────
 
 function InstructionsEditorSection() {
   const [content, setContent] = useState('');
@@ -545,8 +531,6 @@ function InstructionsEditorSection() {
   );
 }
 
-// ── 6. Memory Viewer ───────────────────────────────────────────────────────
-
 function MemoryViewerSection() {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -619,8 +603,6 @@ function MemoryViewerSection() {
     </div>
   );
 }
-
-// ── Root panel ─────────────────────────────────────────────────────────────
 
 export function DotfileSettings() {
   return (

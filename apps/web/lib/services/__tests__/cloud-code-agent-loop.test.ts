@@ -9,7 +9,6 @@ import {
 } from '../cloud-code-agent-loop';
 import { CLOUD_CODE_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
 
-/** Build a fake adapter that replays one scripted stream per turn. */
 function adapterFor(turns: StreamChunk[][]): ProviderAdapter {
   let index = 0;
   return {
@@ -138,7 +137,6 @@ describe('runCloudCodeAgentTurn', () => {
     });
     expect(runner.runCommand).toHaveBeenCalledWith('ls -la', expect.any(Number));
     expect(result.stopReason).toBe('done');
-    // The tool result must be in the transcript, or the model answered blind.
     const blocks = result.messages.flatMap((m) =>
       Array.isArray(m.content) ? m.content : [],
     ) as ToolResultBlock[];
@@ -154,7 +152,6 @@ describe('runCloudCodeAgentTurn', () => {
     });
     expect(result.stopReason).toBe('awaiting_approval');
     expect(result.pendingApproval?.command).toBe('rm -rf build');
-    // The critical assertion: it did NOT run.
     expect(runner.runCommand).not.toHaveBeenCalled();
   });
 
@@ -218,7 +215,6 @@ describe('runCloudCodeAgentTurn', () => {
   });
 
   it('stops at the step ceiling instead of looping forever', async () => {
-    // A model that always calls a tool would otherwise spend without bound.
     const turns = Array.from({ length: 10 }, (_, i) =>
       toolTurn(`t${i}`, 'list_files', { path: '.' }),
     );
@@ -281,8 +277,6 @@ describe('runCloudCodeAgentTurn', () => {
       runner: runnerStub(),
       onStepCommitted,
     });
-    // Two provider calls ⇒ two lease extensions. A loop that calls the model
-    // more often than it reserves is the unmetered defect this must not repeat.
     expect(onStepCommitted).toHaveBeenCalledTimes(2);
   });
 
@@ -318,10 +312,6 @@ describe('runCloudCodeAgentTurn', () => {
 
 describe('cloud code turn usage accounting', () => {
   it('captures the usage chunk the drain used to discard', async () => {
-    // The `default: break` in drainAssistantTurn silently swallowed every
-    // chunk type it did not name, including `usage`. That is why the turn
-    // could not be billed at what it actually cost — no real usage ever left
-    // this function.
     const drained = await drainAssistantTurn(
       (async function* () {
         yield { type: 'text-delta', delta: 'hello' } as StreamChunk;
@@ -355,9 +345,6 @@ describe('cloud code turn usage accounting', () => {
   });
 
   it('SUMS usage across every provider call in a multi-step turn', async () => {
-    // The bug this guards: a Cloud Code turn is agentic, so many provider
-    // calls per turn is the normal case. Taking usage from the last call —
-    // or from none — is how an expensive turn ends up billed like a cheap one.
     const runner: CloudCodeToolRunner = {
       readFile: vi.fn(async () => ({ output: 'contents', isError: false })),
       listFiles: vi.fn(async () => ({ output: 'a\nb', isError: false })),
@@ -399,8 +386,6 @@ describe('cloud code turn usage accounting', () => {
   });
 
   it('still reports accumulated usage when the turn ends early', async () => {
-    // A turn that errors after real provider work must not settle as if
-    // nothing happened.
     const runner = {
       readFile: vi.fn(),
       listFiles: vi.fn(),
@@ -421,16 +406,8 @@ describe('cloud code turn usage accounting', () => {
 });
 
 describe('HARD-008 — the command deadline is clamped to the turn budget', () => {
-  /**
-   * The turn budget is checked only at the TOP of a step. Before this fix the
-   * runner applied its own fixed 120 s cap, so a command admitted with seconds
-   * of budget left ran for a further two minutes and the turn overran the
-   * budget by the command's full timeout. The loop now computes the cap and
-   * passes it down; the runner has none of its own.
-   */
   it('gives a command only the turn budget that is left', async () => {
     const runner = runnerStub();
-    // 590 s into a 600 s budget when the command starts.
     const base = 5_000_000;
     let reads = 0;
     const now = (): number => (reads++ === 0 ? base : base + 590_000);

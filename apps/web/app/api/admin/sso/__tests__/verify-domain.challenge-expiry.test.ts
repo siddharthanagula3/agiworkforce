@@ -28,8 +28,6 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: (...args: unknown[]) => mockGetSubscription(...args) },
 }));
 
-// Deliberately NOT mocking `@/lib/server/sso/domain-verification`: the point of
-// this file is that the real expiry rule is reached through the real route.
 import { POST as VERIFY, PUT as REISSUE } from '../verify-domain/route';
 import {
   DOMAIN_VERIFICATION_CHALLENGE_TTL_MS,
@@ -75,7 +73,6 @@ function draftRow(token: string | null) {
   };
 }
 
-/** Stand up an owner-owned draft holding `token`, capturing any write. */
 function withDraft(token: string | null) {
   const writes: { sql: string; params: unknown[] }[] = [];
   mockQuery.mockImplementation(async (sql: string, params: unknown[]) => {
@@ -99,17 +96,6 @@ function withDraft(token: string | null) {
   return writes;
 }
 
-/**
- * CRIT-011 — the domain-verification challenge lifecycle must close.
- *
- * A challenge that never expires means any enterprise tenant can hold a live,
- * publishable claim on a domain it does not own forever (migration 0092 allows
- * unverified drafts on purpose so a squatter cannot block the real owner), so
- * any future lapse in that domain's DNS control — a dangling delegation, a
- * contractor's temporary access, a divestiture — converts a years-old draft
- * into an instant verification and an authentication takeover of every user on
- * the domain. These tests hold the window shut at the HTTP boundary.
- */
 describe('POST /api/admin/sso/verify-domain — challenge expiry', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -140,14 +126,11 @@ describe('POST /api/admin/sso/verify-domain — challenge expiry', () => {
     expect(body.verified).toBe(false);
     expect(body.reason).toBe('challenge_expired');
     expect(body.error).toMatch(/expired/i);
-    // The lapsed record must not be handed back as if publishing it would help.
     expect(body.domainVerification).toBeNull();
-    // Nothing was marked verified.
     expect(writes).toHaveLength(0);
   });
 
   it('refuses a token issued before challenges carried an expiry', async () => {
-    // Fail closed on the old unbounded shape rather than grandfathering it.
     const writes = withDraft('a'.repeat(48));
 
     const response = await VERIFY(req('POST'));
@@ -164,7 +147,6 @@ describe('POST /api/admin/sso/verify-domain — challenge expiry', () => {
 
     const writes = withDraft(token);
 
-    // Publish exactly the challenge record the connection is holding.
     const dns = await import('node:dns/promises');
     vi.spyOn(dns.Resolver.prototype, 'resolveTxt').mockResolvedValue([
       [`agiworkforce-sso-verification=${token}`],
@@ -178,9 +160,6 @@ describe('POST /api/admin/sso/verify-domain — challenge expiry', () => {
   });
 
   it('cannot be replayed against an already-verified connection', async () => {
-    // The token is cleared at verification, so a record left published in DNS
-    // is inert. Confirm the route also short-circuits before any lookup rather
-    // than re-running the check against a null challenge.
     mockQuery.mockImplementation(async (sql: string) => {
       const text = String(sql).replace(/\s+/g, ' ').trim().toLowerCase();
       if (text.startsWith('select role from organization_members')) return [{ role: 'owner' }];
@@ -208,7 +187,6 @@ describe('POST /api/admin/sso/verify-domain — challenge expiry', () => {
     };
     expect(body.verified).toBe(true);
     expect(resolveTxt).not.toHaveBeenCalled();
-    // No challenge is advertised for a domain that is already proven.
     expect(body.connection.domainVerification).toBeNull();
     expect(body.connection.domainChallengeExpiresAt).toBeNull();
   });

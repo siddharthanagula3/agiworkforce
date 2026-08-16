@@ -5,13 +5,6 @@ import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 
-/**
- * Capability-honest Cloud storage boundary.
- *
- * The managed backend currently publishes per-file byte metadata but no
- * account-level byte limit or aggregate usage contract. Keep that absence
- * visible instead of synthesizing a quota from incomplete tables.
- */
 export function StorageScopeNotice() {
   const colors = useThemeColors();
 

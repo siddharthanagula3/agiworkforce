@@ -1,9 +1,3 @@
-/**
- * SkillCategoryFilter
- *
- * Horizontal tab-strip that filters skills by category.
- * Shows count badges pulled from the store selector.
- */
 import {
   BookOpen,
   Briefcase,

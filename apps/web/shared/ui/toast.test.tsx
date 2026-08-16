@@ -1,13 +1,3 @@
-/**
- * Toast Component Tests
- *
- * Tests for Toast UI components including:
- * - ToastProvider, ToastViewport, Toast, ToastAction, ToastClose
- * - ToastTitle, ToastDescription
- * - Variants (default, destructive)
- * - User interactions (close, action buttons)
- * - Accessibility (role, aria attributes)
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -23,7 +13,6 @@ import {
   ToastAction,
 } from './toast';
 
-// Helper component for testing toasts
 interface TestToastProps {
   variant?: 'default' | 'destructive';
   open?: boolean;
@@ -348,7 +337,6 @@ describe('Toast Components', () => {
     it('should have altText for accessibility', () => {
       render(<TestToast showAction />);
 
-      // ToastAction requires altText prop for screen readers
       const actionButton = screen.getByText('Try again');
       expect(actionButton).toBeInTheDocument();
     });

@@ -9,22 +9,6 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Readable } from 'node:stream';
 
-/**
- * Cloudflare R2 object storage (S3-compatible API).
- *
- * R2 has zero egress fees, unlike Vercel Blob's per-GB bandwidth charges, which
- * matters for a chat product serving generated images/attachments repeatedly.
- * Legacy generated images/files and current avatars may still use the public
- * bucket during migration. New generated media, chat attachments, and project
- * knowledge use a distinct private bucket and are readable only through
- * authenticated owner-scoped routes; private paths never construct or return
- * a public URL.
- *
- * Once the CLOUDFLARE_R2_* env vars below are set, run
- * `node apps/web/scripts/verify-r2-connection.mjs` for an end-to-end smoke
- * test (upload, public-URL fetch, delete) before relying on this in prod.
- */
-
 function env(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;
 }
@@ -37,18 +21,12 @@ function hasR2Credentials(): boolean {
   );
 }
 
-/** True when R2 is configured (account id, keys, bucket, and public base URL present). */
 export function isObjectStorageConfigured(): boolean {
   return Boolean(
     hasR2Credentials() && env('CLOUDFLARE_R2_BUCKET_NAME') && env('CLOUDFLARE_R2_PUBLIC_BASE_URL'),
   );
 }
 
-/**
- * True only when a separate R2 bucket is configured for private objects.
- * Reusing the public bucket is rejected even if an operator supplies the same
- * name under both env vars: a hidden URL is not an access-control boundary.
- */
 export function isPrivateObjectStorageConfigured(): boolean {
   const privateBucket = env('CLOUDFLARE_R2_PRIVATE_BUCKET_NAME');
   const publicBucket = env('CLOUDFLARE_R2_BUCKET_NAME');
@@ -96,18 +74,12 @@ function getPrivateBucketName(): string {
   return bucket;
 }
 
-/** Public URL for an object key, served via the configured custom domain / r2.dev base URL. */
 export function publicUrlForKey(key: string): string {
   const base = env('CLOUDFLARE_R2_PUBLIC_BASE_URL');
   if (!base) throw new Error('CLOUDFLARE_R2_PUBLIC_BASE_URL is not configured.');
   return `${base.replace(/\/$/, '')}/${key}`;
 }
 
-/**
- * Resolve one of our public R2 URLs back to its object key. This is the
- * inverse of `publicUrlForKey`, with strict origin/path validation so callers
- * never turn a user-supplied URL into an SSRF request or an arbitrary key.
- */
 export function objectKeyFromPublicUrl(value: string): string | null {
   const configuredBase = env('CLOUDFLARE_R2_PUBLIC_BASE_URL');
   if (!configuredBase || value.includes('\\') || /%(?:2e|2f|5c)/i.test(value)) return null;
@@ -144,11 +116,6 @@ export function objectKeyFromPublicUrl(value: string): string | null {
   }
 }
 
-/**
- * Resolve a stored object locator. New private-resource paths may store the
- * validated key directly; legacy rows may still contain the configured public
- * URL.
- */
 export function objectKeyFromStorageUri(value: string): string | null {
   if (
     /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value) &&
@@ -180,25 +147,16 @@ async function putObjectInBucket(bucket: string, params: PutObjectParams): Promi
   );
 }
 
-/** Upload bytes directly to the public R2 bucket. */
 export async function putObject(params: PutObjectParams): Promise<{ url: string }> {
   await putObjectInBucket(getPublicBucketName(), params);
   return { url: publicUrlForKey(params.key) };
 }
 
-/** Upload bytes to the private R2 bucket without creating a public locator. */
 export async function putPrivateObject(params: PutObjectParams): Promise<{ key: string }> {
   await putObjectInBucket(getPrivateBucketName(), params);
   return { key: params.key };
 }
 
-/**
- * Read an object's bytes back from R2 by key. Used by the authenticated
- * same-origin file-serving route (`/api/files/[id]`) so generated-file bytes
- * can be served from the app's own origin — the PDF/image renderer gates only
- * accept `data:`, `blob:`, and same-origin sources, never the raw R2 public
- * URL. Returns null when the object does not exist.
- */
 async function getObjectFromBucket(
   bucket: string,
   key: string,
@@ -235,7 +193,6 @@ export interface StoredObjectStream {
   contentRange: string | undefined;
 }
 
-/** Stream an object (optionally one HTTP byte range) without buffering it. */
 async function getObjectStreamFromBucket(
   bucket: string,
   key: string,
@@ -269,23 +226,16 @@ export function getPrivateObjectStream(
   return getObjectStreamFromBucket(getPrivateBucketName(), key, range);
 }
 
-/** Delete an object from R2 by key (best-effort cleanup). */
 export async function deleteObject(key: string): Promise<void> {
   const client = getR2Client();
   await client.send(new DeleteObjectCommand({ Bucket: getPublicBucketName(), Key: key }));
 }
 
-/** Delete an object from the private R2 bucket. */
 export async function deletePrivateObject(key: string): Promise<void> {
   const client = getR2Client();
   await client.send(new DeleteObjectCommand({ Bucket: getPrivateBucketName(), Key: key }));
 }
 
-/**
- * Presigned PUT URL so browser code can upload directly to R2 without going
- * through a Vercel serverless function's ~4.5MB request-body limit and
- * without ever holding R2 credentials client-side.
- */
 export async function getPresignedUploadUrl(params: {
   key: string;
   contentType: string;
@@ -303,13 +253,6 @@ export async function getPresignedUploadUrl(params: {
   return { uploadUrl, publicUrl: publicUrlForKey(params.key) };
 }
 
-/**
- * Presigned PUT URL for an object that must never have a public locator.
- *
- * The browser still uploads directly to R2, so large attachment bytes do not
- * cross the Vercel request-body boundary. Reads must go through an
- * authenticated, owner-scoped application route.
- */
 export async function getPresignedPrivateUploadUrl(params: {
   key: string;
   contentType: string;

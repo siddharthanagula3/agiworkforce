@@ -1,12 +1,3 @@
-/**
- * GeneratedFileCard — surface-agnostic generated-file card.
- *
- * Round-7 autonomous suite-transformation slice (2026-05-21). The shared
- * component lets Web/Desktop/Mobile show a uniform card for compute-session
- * outputs. These tests pin: status badge selection (running / complete /
- * failed), action enablement gating, privacy / provider / source chip
- * rendering, preview thumbnail surfacing, and the unknown-status fallback.
- */
 
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -57,7 +48,6 @@ describe('GeneratedFileCard', () => {
     render(<GeneratedFileCard presentation={basePresentation()} />);
     expect(screen.getByText('design.pdf')).toBeDefined();
     expect(screen.getByText('PDF document')).toBeDefined();
-    // metadata fragments live in the same line — assert by substring presence
     const card = screen.getByTestId('generated-file-card');
     expect(card.textContent).toContain('128 KB');
     expect(card.textContent).toContain('abcdef012345');

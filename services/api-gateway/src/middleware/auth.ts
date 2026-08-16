@@ -12,25 +12,14 @@ import { logger } from '../lib/logger';
 
 const JWT_SECRET = requireEnv('JWT_SECRET');
 
-// In-memory cache for account_status to prevent fail-open when Neon is unavailable.
-// TTL is intentionally short (60s) so suspensions take effect quickly.
-// On DB error with no cached entry: fail closed (503). With a cached entry: use it.
 const ACCOUNT_STATUS_CACHE_TTL_MS = 60_000;
 
-// SECURITY (H7, redteam-services 2026-05-04): per-jti revocation cache.
-// The check itself is one indexed PK lookup so we keep the TTL short — 5
-// seconds is enough that we make at most ~1 lookup per active session per
-// 5s. The cache only stores positive non-revoked answers; revoked tokens
-// always re-check (defense in depth).
 const REVOCATION_CACHE_TTL_MS = 5_000;
 interface RevocationCacheEntry {
   cachedAt: number;
 }
 const revocationCache = new Map<string, RevocationCacheEntry>();
 
-// SECURITY (P1-GW-REVOKE): evict a jti from the positive-cache so a freshly
-// revoked token is rejected immediately instead of riding the 5s cache window.
-// /auth/logout calls this right after writing the revocation row.
 export function evictRevocationCache(jti: string): void {
   revocationCache.delete(jti);
 }
@@ -43,14 +32,6 @@ const accountStatusCache = new Map<string, AccountStatusEntry>();
 
 interface VerifiedPrincipal {
   payload: jwt.JwtPayload;
-  /**
-   * Trusted surface class from the VERIFIED issuer, never a caller header.
-   * First-party gateway tokens are minted ONLY by the device-authorization
-   * flow (routes/deviceAuth.ts, and apps/web device/token) — i.e. the CLI/IDE
-   * developer surfaces. Clerk-issued tokens are the first-party app surfaces
-   * (desktop/mobile). This is what binds the Pro-only developer-surface gate to
-   * an unforgeable credential instead of `x-agi-surface`.
-   */
   surface: CloudSurfaceClass;
 }
 
@@ -87,10 +68,6 @@ async function verifyGatewayOrClerkToken(token: string): Promise<VerifiedPrincip
     audience: 'agiworkforce',
   }) as jwt.JwtPayload;
 
-  // A verified first-party gateway token is a device-authorization credential
-  // (CLI/IDE). An explicit `surface: 'app'` claim can only DOWNGRADE the
-  // requirement (never a caller-forgeable escalation, since the whole token is
-  // HS256-signed with JWT_SECRET); absent that claim it defaults to developer.
   const claimedSurface = typeof payload['surface'] === 'string' ? payload['surface'] : null;
   return { payload, surface: claimedSurface === 'app' ? 'app' : 'developer' };
 }
@@ -109,7 +86,6 @@ function setCachedAccountStatus(userId: string, status: string): void {
   accountStatusCache.set(userId, { status, cachedAt: Date.now() });
 }
 
-// Periodic cleanup of expired cache entries to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
   for (const [userId, entry] of accountStatusCache) {
@@ -117,7 +93,6 @@ setInterval(() => {
       accountStatusCache.delete(userId);
     }
   }
-  // SECURITY (H7): also flush the revocation positive-cache.
   for (const [jti, entry] of revocationCache) {
     if (now - entry.cachedAt > REVOCATION_CACHE_TTL_MS) {
       revocationCache.delete(jti);
@@ -140,8 +115,6 @@ export async function authenticateToken(
 ): Promise<void> {
   try {
     const authHeader = req.headers['authorization'];
-    // SECURITY: Properly parse the Authorization header instead of simple string replace.
-    // Validates the 'Bearer <token>' format case-insensitively and handles edge cases.
     const parts = authHeader?.split(' ');
     const token = parts?.length === 2 && parts[0].toLowerCase() === 'bearer' ? parts[1] : undefined;
 
@@ -151,17 +124,8 @@ export async function authenticateToken(
     }
 
     const { payload, surface } = await verifyGatewayOrClerkToken(token);
-    // `token` is the raw, already-verified bearer string (verified just above
-    // via Clerk verifyToken() or jwt.verify(..., JWT_SECRET)). Attaching it
-    // lets the user-scoped database client bind Postgres RLS via
-    // NeonDatabaseAdapter.withUser(token) for the handful of call sites that
-    // have real policy coverage — see UserAuth's doc comment there. `surface`
-    // is the trusted developer-vs-app class used by the managed plan gate.
     req.user = { ...authenticatedUserSchema.parse(payload), token, surface };
 
-    // SECURITY (H7, redteam-services 2026-05-04): per-jti revocation check.
-    // Tokens issued before the H7 fix do not carry `jti` — accept them so
-    // the rollout is non-breaking but log so we can track residual risk.
     if (typeof payload.jti === 'string' && payload.jti.length > 0) {
       const jti = payload.jti;
       const cached = revocationCache.get(jti);
@@ -169,8 +133,6 @@ export async function authenticateToken(
 
       if (cacheStale) {
         try {
-          // Revocation lookup happens during token verification and must
-          // succeed-or-fail-closed.
           const { data: revokedRow, error: revokedError } = await getUserScopedClient(req.user)
             .from('revoked_jwts')
             .select('jti')
@@ -178,8 +140,6 @@ export async function authenticateToken(
             .maybeSingle();
 
           if (revokedError) {
-            // DB outage on revocation check: fail closed for defense in
-            // depth — a stolen token must not slip through during an outage.
             logger.error({ error: revokedError, jti }, 'Revocation DB check failed');
             res.status(503).json({
               error: 'Service temporarily unavailable. Please try again shortly.',
@@ -208,15 +168,11 @@ export async function authenticateToken(
       }
     }
 
-    // P0 Kill Switch: Check account status. Fail closed — never fail open.
-    // Uses a short-TTL in-memory cache so brief DB outages don't block active users.
-    // On DB error with no cached entry we return 503 (fail closed).
     const userId = req.user.userId;
     let accountStatus = getCachedAccountStatus(userId);
 
     if (accountStatus === null) {
       try {
-        // Kill-switch check during auth verification. It must fail closed.
         const { data: profile, error: profileError } = await getUserScopedClient(req.user)
           .from('profiles')
           .select('account_status')
@@ -250,8 +206,6 @@ export async function authenticateToken(
 
     next();
   } catch (error) {
-    // Handle JWT-specific errors
-    // Note: TokenExpiredError extends JsonWebTokenError, so check it first
     if (error instanceof jwt.TokenExpiredError) {
       res.status(403).json({ error: 'Token expired' });
       return;
@@ -260,7 +214,6 @@ export async function authenticateToken(
       res.status(403).json({ error: 'Invalid token' });
       return;
     }
-    // Handle Zod validation errors or other unexpected errors
     res.status(403).json({ error: 'Invalid or expired token' });
   }
 }

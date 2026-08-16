@@ -1,16 +1,3 @@
-/**
- * L1 Security — Data Isolation (secret storage boundaries)
- *
- * Mobile has no server DB in v1, so the BOLA/IDOR surface is the on-device
- * secret store. The isolation guarantees that matter:
- *   - Secrets are written device-only and never sync to iCloud backup.
- *   - Storage keys are sanitized so a crafted key cannot escape its namespace.
- *   - A locked keychain (Before-First-Unlock) returns null instead of leaking
- *     or crashing — a failed read must not surface a stale/foreign value.
- *
- * Exercises the REAL adapter (lib/secureStorage) with expo-secure-store mocked
- * at the native boundary only.
- */
 
 const DEVICE_ONLY = 'AfterFirstUnlockThisDeviceOnly';
 
@@ -46,8 +33,6 @@ describe('L1 Security - Data Isolation (Secret Storage)', () => {
   test('SECURITY: crafted keys are sanitized so they cannot escape the namespace', async () => {
     await secureStorage.setItem('../../etc/passwd', 'x');
     const [writtenKey] = SecureStoreMock.setItemAsync.mock.calls[0];
-    // Path separators (the escape vector) are stripped; the allowed set is
-    // [A-Za-z0-9._-], so dots/dashes survive but slashes do not.
     expect(writtenKey).toBe('.._.._etc_passwd');
     expect(writtenKey).not.toContain('/');
     expect(writtenKey).not.toMatch(/[^A-Za-z0-9._-]/);

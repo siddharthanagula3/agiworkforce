@@ -1,9 +1,3 @@
-/**
- * InlinePanelRenderer Component
- *
- * Router component that renders the appropriate inline panel type
- * based on the panel type.
- */
 
 import React, { memo } from 'react';
 import { InlinePanel as InlinePanelType } from '../../../stores/unifiedChatStore';
@@ -68,7 +62,6 @@ const InlinePanelRendererComponent: React.FC<InlinePanelRendererProps> = memo(
         );
 
       default:
-        // Fallback for unknown types
         return (
           <div className="p-4 rounded border border-border bg-yellow-50 dark:bg-yellow-900/20">
             <div className="text-sm text-yellow-700 dark:text-yellow-300">

@@ -1,12 +1,3 @@
-/**
- * ThermalThrottleModal — shown when the device is thermally throttling
- * (iOS thermalState >= "serious", or Android equivalent reported by the
- * native thermal status bridge).
- *
- * Informs the user that inference is paused until the device cools.
- * Single CTA dismisses the modal — the caller is responsible for actually
- * pausing inference before showing this modal.
- */
 import { Modal, View, Pressable } from 'react-native';
 import { Thermometer } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
@@ -16,7 +7,6 @@ import { spacing, radii } from '@/src/ui/theme';
 
 export interface ThermalThrottleModalProps {
   visible: boolean;
-  /** Dismisses the modal — inference should already be paused by the caller. */
   onDismiss: () => void;
 }
 

@@ -1,10 +1,3 @@
-/**
- * Single Project API
- *
- * GET /api/projects/[id] - Get a single project by ID
- * PUT /api/projects/[id] - Update project fields
- * DELETE /api/projects/[id] - Delete a project
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -55,20 +48,6 @@ async function selectProjectWithConversationCount(
   return project;
 }
 
-/**
- * Read a project the caller's ORGANIZATION shares with them (migration 0086).
- *
- * TENANCY. This runs on the privileged `getNeonDb()` connection (BYPASSRLS), so
- * the `sharedProjectIds` set — resolved server-side from `organization_members`
- * + `organization_shared_projects`, honouring an explicit `access = 'none'`
- * denial — IS the tenant boundary. The `id = any(...)` predicate is therefore
- * load-bearing, not cosmetic: without it any signed-in user could read any
- * project by uuid.
- *
- * READ ONLY. There is no shared counterpart to PUT/DELETE below; both still
- * match `where id = $1 and user_id = $2`, so a member can open a shared project
- * and can never modify or delete it.
- */
 async function selectSharedProjectWithConversationCount(
   db: ReturnType<typeof getNeonDb>,
   id: string,
@@ -133,7 +112,6 @@ async function handleGetProject(request: NextRequest, context: RouteContext) {
 async function handleUpdateProject(request: NextRequest, context: RouteContext) {
   const { userId } = await getClerkAuthUser(request);
 
-  // CSRF protection for state-changing PUT endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -152,7 +130,6 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   }
   const body = parseProjectRequest(ManagedCloudProjectUpdateRequestSchema, rawBody);
 
-  // Build SET clauses for legacy fields
   const baseSetClauses: string[] = ['updated_at = now()'];
   const baseParams: unknown[] = [];
 
@@ -166,8 +143,6 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
   if (body.instructions !== undefined) addBase('instructions', body.instructions?.trim() ?? null);
   if (body.color !== undefined) addBase('color', body.color.trim());
   if (body.isArchived !== undefined) addBase('is_archived', body.isArchived);
-  // Starred/pinned lives in the existing metadata jsonb (no migration): merge it
-  // in so other metadata keys are preserved.
   if (body.starred !== undefined) {
     baseParams.push(body.starred);
     baseSetClauses.push(
@@ -175,12 +150,10 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
     );
   }
 
-  // Round-10 fields · isolated so we can retry without them if migration not applied
   const round10SetClauses: string[] = [];
   const round10Params: unknown[] = [];
 
   function addRound10(col: string, val: unknown) {
-    // param index continues after baseParams
     const idx = baseParams.length + round10Params.length + 1;
     round10Params.push(val);
     round10SetClauses.push(`${col} = $${idx}`);
@@ -208,7 +181,6 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
       ? [...baseSetClauses, ...round10SetClauses]
       : [...baseSetClauses];
     const params = includeRound10 ? [...baseParams, ...round10Params] : [...baseParams];
-    // WHERE clause params come after SET params
     const idIdx = params.length + 1;
     const userIdx = params.length + 2;
     const organizationIdx = params.length + 3;
@@ -283,7 +255,6 @@ async function handleUpdateProject(request: NextRequest, context: RouteContext) 
 async function handleDeleteProject(request: NextRequest, context: RouteContext) {
   const { userId } = await getClerkAuthUser(request);
 
-  // CSRF protection for state-changing DELETE endpoint
   const csrfError = await requireCsrfToken(request);
   if (csrfError) return csrfError as NextResponse;
 
@@ -296,12 +267,6 @@ async function handleDeleteProject(request: NextRequest, context: RouteContext) 
 
   let affected: number;
   try {
-    // SOFT-delete (set the deleted_at tombstone) instead of a hard DELETE so the
-    // deletion propagates across devices via cross-device sync (0041). The BEFORE
-    // UPDATE trigger bumps server_version, so the next /api/projects/sync pull
-    // carries the tombstone. Hard-deleting would resurrect the row on the next pull
-    // from another device that still has it. updated_at is bumped so last-writer-wins
-    // treats the delete as the latest change.
     affected = await db.transaction(async (tx) => {
       const deleted = await tx.execute(
         `update user_projects

@@ -9,14 +9,6 @@ import {
   resolveCpstTaskOutcome,
 } from '@/lib/cpst-telemetry';
 
-/**
- * Stage-0 CPST telemetry contract
- * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2/§4.3).
- *
- * The load-bearing property of phase 1 is that the `usage` jsonb column has NO
- * schema enforcement: every key is optional and absent-until-populated, so these
- * tests pin absence as hard as they pin presence.
- */
 describe('resolveCpstTaskOutcome', () => {
   it('never reports success — billing success is not task success', () => {
     expect(resolveCpstTaskOutcome({ billingOutcome: 'completed' })).toBe('unknown');
@@ -60,7 +52,6 @@ describe('buildCpstUsageFields', () => {
       taskOutcome: 'unknown',
       verifierResult: CPST_VERIFIER_RESULT_NO_SEAM,
     });
-    // Absent-until-populated: every other key must be missing, not defaulted.
     expect('retries' in fields).toBe(false);
     expect('fallbackUsed' in fields).toBe(false);
     expect('fallbackReason' in fields).toBe(false);
@@ -164,9 +155,6 @@ describe('buildCpstUsageFields', () => {
       { billingOutcome: 'failed', cancelled: true },
     );
 
-    // `finalize_managed_usage_request` receives JSON.stringify(usage) and stores
-    // it as jsonb, so anything that does not survive this round trip is not
-    // actually persistable.
     const roundTripped = JSON.parse(JSON.stringify(fields));
 
     expect(roundTripped).toEqual({

@@ -1,31 +1,3 @@
-/**
- * cloudStreamDeltas — shared SSE-delta sink for the desktop cloud wire
- * (`POST /api/llm/v1/chat/completions`, the same OpenAI-compatible stream
- * `apps/web/lib/hooks/useChatStream.ts` consumes).
- *
- * `WebRuntime` (the embedded/browser build's cloud runtime) and `CloudRuntime`
- * (the Desktop managed-cloud runtime wired by `desktopChatRuntime.ts`) both drive
- * `sendCloudMessage` against this endpoint and must render an IDENTICAL
- * execution timeline. Before this module, `WebRuntime` implemented delta
- * parsing inline and `CloudRuntime` implemented none of it (see the module
- * doc comments on both files) — every tool_call/tool_result/search/generated-
- * file/thinking-marker event silently vanished on the CloudRuntime path.
- *
- * One sink instance is created per `sendMessage` call (it owns per-turn
- * mutable state: the streaming tool_call arg buffer, the thinking-marker
- * toggle, and the last-seen `finish_reason`) and is fed BOTH of
- * `sendCloudMessage`'s two callbacks:
- *   - `onChunk`  → plain-text SSE chunks, including the `<thinking>` /
- *     `</thinking>` sentinel markers `sendCloudMessage`'s line-parser passes
- *     through verbatim.
- *   - `onEvent`  → the raw parsed `data: {...}` JSON payload for every SSE
- *     line, so the sink can read `choices[0].delta.<key>` extension fields
- *     the plain-text path never sees.
- *
- * Wire-shape parsing goes through the shared `@agiworkforce/cloud-contracts`
- * cloud-contracts parsers (`tool-events.ts`, `generated-files.ts`) instead of
- * hand-declaring the delta shapes a second time here.
- */
 import type {
   Artifact,
   CloudMessageProjection,
@@ -52,64 +24,19 @@ interface ToolCallBufferEntry {
 }
 
 export interface CloudStreamDeltaSink {
-  /** Feed one plain-text chunk from `sendCloudMessage`'s `onChunk` callback. */
   onChunk: (text: string) => void;
-  /** Feed one raw parsed SSE payload from `sendCloudMessage`'s `onEvent` callback. */
   onEvent: (payload: Record<string, unknown>) => void;
-  /**
-   * The OpenAI-wire `finish_reason` last seen on this turn (server tool loops
-   * emit intermediate 'tool_calls' before the final 'stop'/'length'), read by
-   * the caller's own `onDone` once the stream ends.
-   */
   getFinishReason: () => string | undefined;
-  /**
-   * Classified payload from an additive `x_stream_error` delta (first seen
-   * wins, though in practice the server sends it once): the provider failed
-   * mid-stream after the response had already committed a 200, so this
-   * turn's [DONE] still arrives normally with no other visible signal —
-   * `finish_reason` alone cannot reliably carry it (see
-   * packages/ai/provider-protocol's openai-wire-compat.ts and this package's
-   * `hasStreamError` doc comments for why). `code`/`retryable` are present
-   * when the provider adapter supplied them. Read by the caller's own
-   * `onDone`, mirroring `getFinishReason`.
-   */
   getStreamError: () => { message: string; code?: string; retryable?: boolean } | undefined;
-  /**
-   * True once an `x_tool_approval_request` delta suspended this turn. The
-   * server ends the HTTP stream at suspension (no final answer yet) — the
-   * caller's `onDone` still fires, so it must read this flag to decide
-   * whether the turn is actually complete (persist + clear streaming state)
-   * or merely paused pending a user decision (keep the assistant message
-   * open for the eventual resume continuation).
-   */
   isSuspended: () => boolean;
-  /**
-   * Assistant text streamed so far (content chunks only, thinking excluded).
-   * Read at suspension to reconstruct the assistant `tool_calls` turn the
-   * resume request replays (see `ToolApprovalResumeRequestSchema`).
-   */
   getAccumulatedContent: () => string;
-  /**
-   * Every `x_tool_approval_request` seen this turn, in arrival order. A turn
-   * can suspend on more than one simultaneous call — the resume request must
-   * wait for and carry a decision for each.
-   */
   getPendingApprovalCalls: () => {
     toolCallId: string;
     name: string;
     args: Record<string, unknown>;
   }[];
-  /**
-   * The real result of a completed tool call, keyed by tool_call_id, as
-   * reported by an `x_tool_result` delta this turn. Read when a turn
-   * suspends again on a further approval request, to replay the PRIOR
-   * round's actual tool output (not a hardcoded placeholder) as the `role:
-   * 'tool'` message the resume request's thread needs.
-   */
   getToolResult: (toolCallId: string) => { content: string; isError: boolean } | undefined;
-  /** Latest portable projection of the validated canonical activity stream. */
   getAgentActivity: () => AgentActivityState | undefined;
-  /** Durable message fields reconstructed from validated stream events. */
   getMessageProjection: () => CloudStreamMessageProjection;
 }
 
@@ -125,7 +52,6 @@ function mergeById<T extends { id: string }>(
   return merged.size > 0 ? [...merged.values()] : undefined;
 }
 
-/** Merge projections emitted across initial + approval-resume stream rounds. */
 export function mergeCloudStreamMessageProjections(
   previous: CloudStreamMessageProjection | undefined,
   next: CloudStreamMessageProjection | undefined,
@@ -144,7 +70,6 @@ export function mergeCloudStreamMessageProjections(
   };
 }
 
-/** True only when a completed Cloud turn has something the transcript can show. */
 export function hasRenderableCloudMessageOutput(
   content: string,
   projection: CloudStreamMessageProjection,
@@ -182,7 +107,6 @@ function resolveOwnedGeneratedFileUri(uri: string, apiBaseUrl: string): string |
   }
 }
 
-/** Extracts `{url,title,snippet,domain}` from one contract `SearchResultSource`. */
 function toSearchResultItem(source: {
   url: string;
   title: string;
@@ -202,15 +126,6 @@ function toSearchResultItem(source: {
   return { url, title, snippet, domain };
 }
 
-/**
- * Parse a `delta.x_search_results` payload into a `WebSearchResult` for the
- * `search_results` StreamEvent. Primary parsing goes through the shared
- * `parseSearchResultsDelta` contract; the raw Anthropic
- * `web_search_tool_result_error` passthrough shape is explicitly out of scope
- * for that parser (see its doc comment), so it is detected here with a
- * minimal, separate check so a failed search still surfaces as a 'failed'
- * card instead of silently disappearing.
- */
 function mapSearchResultsPayload(payload: unknown): WebSearchResult | null {
   if (!payload || typeof payload !== 'object') return null;
   const raw = payload as Record<string, unknown>;
@@ -236,14 +151,6 @@ function mapSearchResultsPayload(payload: unknown): WebSearchResult | null {
   };
 }
 
-/**
- * Parse a `delta.x_code_result` payload (whole Anthropic
- * `code_execution_tool_result` content_block) into the `code_execution_result`
- * StreamEvent's `result` shape. Mirrors `apps/web/lib/hooks/useChatStream.ts`'s
- * `currentCodeExecutionResult` extraction exactly — same `<stdout>`/`<stderr>`/
- * `<return_code>` tag parsing out of the block's text item — so cloud-mode
- * desktop renders the identical result web does, not a re-derived guess.
- */
 function mapCodeExecutionResultPayload(payload: unknown): {
   stdout: string;
   stderr: string;
@@ -294,14 +201,7 @@ export function createCloudStreamDeltaSink(
   const projectedSearches = new Map<string, WebSearchResult>();
   const projectedFiles = new Map<string, GeneratedFileEntry>();
   let codeExecutionResult: CloudStreamMessageProjection['codeExecutionResult'];
-  // Provider token counts, carried on the OpenAI-wire `usage` object of the
-  // final chunk (`stream_options.include_usage`). A server tool loop emits more
-  // than one usage object across its rounds, so these accumulate rather than
-  // overwrite: the panel reports what the whole turn cost, not its last leg.
   let usage: CloudStreamMessageProjection['usage'];
-  // Deep Research status carries forward across deltas (some fields, e.g.
-  // `sources`/`iteration`, are only present on SOME status updates) — mirrors
-  // apps/web/lib/hooks/useChatStream.ts's currentResearch merge exactly.
   let researchStatus:
     | {
         phase: 'planning' | 'searching' | 'synthesizing' | 'complete' | 'error';
@@ -319,12 +219,6 @@ export function createCloudStreamDeltaSink(
     name: string;
     args: Record<string, unknown>;
   }[] = [];
-  // Real per-call tool output, keyed by tool_call_id, as x_tool_result deltas
-  // stream by. When a turn suspends AGAIN on a further approval request, the
-  // resume request must replay the PRIOR round's actual results as `role:
-  // 'tool'` messages -- without this, the model only ever sees a hardcoded
-  // placeholder for tools it already ran, discarding real file contents /
-  // command output / search results it needs to reason about the next call.
   const toolResults = new Map<string, { content: string; isError: boolean }>();
 
   const onChunk = (text: string): void => {
@@ -344,9 +238,6 @@ export function createCloudStreamDeltaSink(
     emit({ type: inThinkingBlock ? 'thinking' : 'content', content: text });
   };
 
-  // A server tool loop reports usage once per round, so sum rather than
-  // overwrite. Absent fields stay absent: a provider that does not bill for
-  // cache reads reports nothing, and inventing a 0 would read as a measurement.
   const accumulateUsage = (raw: unknown): void => {
     if (!raw || typeof raw !== 'object') return;
     const source = raw as Record<string, unknown>;
@@ -394,8 +285,6 @@ export function createCloudStreamDeltaSink(
         ? ((choices[0] as Record<string, unknown>)['delta'] as Record<string, unknown> | undefined)
         : undefined;
 
-    // Capture the turn's finish_reason as it streams (last seen wins). Sits
-    // on the choice, not the delta.
     const rawFinishReason =
       choices.length > 0 && choices[0] && typeof choices[0] === 'object'
         ? (choices[0] as Record<string, unknown>)['finish_reason']
@@ -404,25 +293,14 @@ export function createCloudStreamDeltaSink(
       finishReason = rawFinishReason;
     }
 
-    // Provider token counts. Sits at the TOP level of the chunk, beside
-    // `choices`, not inside a delta — and the chunk that carries it has an
-    // empty `choices` array, so it is only reachable here.
     accumulateUsage(payload['usage']);
 
-    // Canonical managed-cloud activity. Validate at the untrusted SSE boundary
-    // before either the UI or persistence layer can observe it, then maintain
-    // the same portable projection Web and Mobile consume.
     const agentEnvelope = parseAgentEventDelta(delta?.['x_agent_event']);
     if (agentEnvelope) {
       agentActivity = applyAgentActivityEvent(agentActivity, agentEnvelope);
       emit({ type: 'agent_event', envelope: agentEnvelope });
     }
 
-    // Mid-stream provider failure (additive marker — see getStreamError's
-    // doc comment). Sticky: keep the FIRST payload seen, it identifies the
-    // actual failure (unlike finish_reason, which legitimately changes as
-    // the turn progresses). Accepts a bare string defensively too, though
-    // the wire only ever sends the object.
     if (!streamError) {
       const rawStreamError = delta?.['x_stream_error'];
       if (
@@ -442,7 +320,6 @@ export function createCloudStreamDeltaSink(
       }
     }
 
-    // Streamed tool_calls (standard OpenAI-wire function-call deltas).
     const toolCalls = Array.isArray(delta?.['tool_calls']) ? delta['tool_calls'] : [];
     for (const entry of toolCalls) {
       if (!entry || typeof entry !== 'object') continue;
@@ -494,7 +371,6 @@ export function createCloudStreamDeltaSink(
       });
     }
 
-    // Artifacts.
     const artifactPayload =
       payload['artifact'] && typeof payload['artifact'] === 'object'
         ? (payload['artifact'] as Artifact)
@@ -508,29 +384,16 @@ export function createCloudStreamDeltaSink(
       emit({ type: 'artifact', artifact: artifactPayload });
     }
 
-    // Web search results.
     const search = mapSearchResultsPayload(delta?.['x_search_results']);
     if (search) {
       projectedSearches.set(search.id, search);
       emit({ type: 'search_results', search });
     }
 
-    // Server-managed code execution result (Anthropic/Google native tool —
-    // NOT the MCP/E2B x_tool_result path above, which is a separate wire
-    // shape). Previously silently dropped here: the sink never read this
-    // key at all, so a code_execution tool card set to 'running' by the
-    // x_tool_status branch above never received its completion signal and
-    // spun forever, with the actual stdout/stderr/images never rendered.
     const codeResult = mapCodeExecutionResultPayload(delta?.['x_code_result']);
     if (codeResult) {
       codeExecutionResult = codeResult;
       emit({ type: 'code_execution_result', result: codeResult });
-      // The server NEVER sends a `x_tool_status: {status: 'completed'}` for
-      // code_execution — completion is signalled exclusively by this
-      // x_code_result delta (mirrors apps/web/lib/hooks/useChatStream.ts's
-      // explicit `finishTool('code_execution', 'completed')` call). Resolve
-      // the SAME synthetic-id card the 'executing' x_tool_status branch
-      // below opened, or it is left spinning forever.
       emit({
         type: 'tool_result',
         toolCallId: 'status:code_execution',
@@ -550,9 +413,6 @@ export function createCloudStreamDeltaSink(
       });
     }
 
-    // Deep Research run status from managed cloud after the active runtime
-    // forwards `research: true`. Local/Tauri sessions do not use this sink or
-    // advertise the Research capability.
     const rawResearchStatus = delta?.['x_research_status'];
     if (rawResearchStatus && typeof rawResearchStatus === 'object') {
       const r = rawResearchStatus as Record<string, unknown>;
@@ -588,12 +448,6 @@ export function createCloudStreamDeltaSink(
       }
     }
 
-    // Tool status indicators (interim "searching…" / "fetching…" /
-    // "executing…" / mcp running-completed-failed events). These have no
-    // stable tool_call_id on the wire — synthesize one from the tool name so
-    // repeated running updates coalesce onto the same card and the
-    // completed/failed event resolves it, reusing the existing
-    // tool_call/tool_result StreamEvent shapes instead of adding a third one.
     const toolStatus = parseToolStatusDelta(delta?.['x_tool_status']);
     if (toolStatus) {
       const syntheticId = `status:${toolStatus.name}`;
@@ -622,7 +476,6 @@ export function createCloudStreamDeltaSink(
           args: toolStatus.args ?? {},
           status: 'running',
         });
-        // 'running' | 'searching' | 'fetching' | 'executing'
         emit({
           type: 'tool_call',
           toolCall: { id: syntheticId, name: toolStatus.name, args: toolStatus.args ?? {} },
@@ -630,10 +483,6 @@ export function createCloudStreamDeltaSink(
       }
     }
 
-    // Manual tool-approval request: the server suspends the turn until every
-    // pending call is decided. Surfaced as its own event (not folded into
-    // tool_call/tool_result) because it needs a distinct UI affordance
-    // (approve/reject) and a resume round-trip, not just a status update.
     const approvalRequest = parseToolApprovalRequestDelta(delta?.['x_tool_approval_request']);
     if (approvalRequest) {
       suspended = true;
@@ -657,9 +506,6 @@ export function createCloudStreamDeltaSink(
       });
     }
 
-    // Platform-executed tool results (`x_tool_result`): the web tool loop
-    // runs MCP/E2B tools server-side and reports completion keyed by the
-    // SAME tool_call_id it forwarded in the raw `tool_calls` deltas above.
     const toolResult = parseToolResultDelta(delta?.['x_tool_result']);
     if (toolResult) {
       toolResults.set(toolResult.tool_call_id, {
@@ -682,7 +528,6 @@ export function createCloudStreamDeltaSink(
       });
     }
 
-    // Managed-cloud sandbox files (emitted once before [DONE]).
     const generatedFiles: GeneratedFileEntry[] = parseGeneratedFilesDelta(
       delta?.['x_generated_files'],
     ).flatMap((f): GeneratedFileEntry[] => {

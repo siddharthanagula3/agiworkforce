@@ -1,19 +1,5 @@
 'use client';
 
-/**
- * The conversation log.
- *
- * `role="log"` with `aria-live="polite"` announces a completed turn once,
- * rather than per token — there is no streaming here on purpose, so screen
- * readers get one coherent announcement instead of a stutter. `aria-busy`
- * covers the pending window.
- *
- * Action affordances are rendered ONLY for signed-in visitors, and only when
- * the server's available-action list actually contains the id the answer
- * proposed. A marketing visitor with an answer that happens to carry a
- * `proposedActionId` sees nothing actionable.
- */
-
 import type { SupportTurn } from '../lib/contract';
 import type { SupportActionFlow } from '../hooks/useSupportSession';
 import { SupportAbstentionCard } from './SupportAbstentionCard';
@@ -72,8 +58,6 @@ export function SupportTranscript({
         const flow = actionFlows[turn.id];
         const proposedActionId = reply.kind === 'answer' ? reply.proposedActionId : null;
         const actionTitle = proposedActionId ? actionTitles[proposedActionId] : undefined;
-        // An action is offerable only if the caller is signed in AND the server
-        // advertised that exact id. The model's suggestion alone is not enough.
         const offerable = signedIn && proposedActionId !== null && actionTitle !== undefined;
 
         return (

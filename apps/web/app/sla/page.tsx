@@ -10,22 +10,6 @@ export const metadata = buildMetadata({
   path: '/sla',
 });
 
-/**
- * Nothing on this page is a commitment today.
- *
- * Managed Cloud is public alpha. There is no measured uptime history published,
- * no plan-derived support routing implemented (support requests land in one
- * email queue), and no credit process wired to billing. The page therefore
- * states targets as targets and says plainly what does not exist yet, rather
- * than reading like a contract a reviewer could rely on.
- *
- * A previous version listed "Named support contact" for the top tier. No support
- * tier routing exists in this repository and a named human is a staffing claim,
- * so it has been removed rather than softened.
- *
- * Prices are deliberately absent. Plan pricing lives on /pricing and is owned
- * elsewhere; restating it here would create a second source of truth.
- */
 const LAST_REVIEWED = '5 August 2026';
 
 const UPTIME: { component: string; target: string; window: string }[] = [

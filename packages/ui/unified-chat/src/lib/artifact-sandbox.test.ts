@@ -3,12 +3,6 @@ import { buildSandboxedHtml, __ARTIFACT_SANDBOX_INTERNALS } from './artifact-san
 
 const { CSP_META } = __ARTIFACT_SANDBOX_INTERNALS;
 
-/**
- * Returns true when the CSP <meta> sits inside <head>. Browsers ignore a CSP
- * delivered anywhere else, so the policy's position IS the security property —
- * merely asserting the tag is present would pass while the sandbox runs
- * unprotected.
- */
 function cspIsInsideHead(html: string): boolean {
   const headOpen = html.search(/<head\b[^>]*>/i);
   const headClose = html.search(/<\/head>/i);
@@ -32,9 +26,6 @@ describe('buildSandboxedHtml', () => {
   });
 
   it('puts the CSP inside <head> for a doctype with no <html> or <head>', () => {
-    // Regression: this shape reached the fallback branch, which prepended the
-    // meta ahead of the markup. Outside <head> the policy is discarded, so the
-    // sandbox executed model-generated code with no CSP at all.
     expect(cspIsInsideHead(buildSandboxedHtml('<!doctype html><body>x</body>'))).toBe(true);
   });
 

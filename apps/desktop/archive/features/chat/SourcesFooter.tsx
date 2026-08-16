@@ -5,24 +5,16 @@ import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 
 interface SourcesFooterProps {
-  /** The message content to extract citation numbers from */
   content: string;
-  /** Additional CSS classes */
   className?: string;
-  /** Callback when a source is clicked */
   onSourceClick?: (url: string) => void;
 }
 
-/**
- * A footer component that displays all sources referenced in a message.
- * Similar to how Perplexity shows sources at the end of responses.
- */
 export function SourcesFooter({ content, className, onSourceClick }: SourcesFooterProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const getCitationByIndex = useUnifiedChatStore((state) => state.getCitationByIndex);
   const openSidecar = useUnifiedChatStore((state) => state.openSidecar);
 
-  // Extract unique citation indices from the content
   const citationIndices = useMemo(() => {
     const regex = /\[(\d+)\]/g;
     const indices = new Set<number>();
@@ -37,7 +29,6 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
     return Array.from(indices).sort((a, b) => a - b);
   }, [content]);
 
-  // Get citation objects for each index
   const citations = useMemo(() => {
     return citationIndices
       .map((index) => {
@@ -56,7 +47,6 @@ export function SourcesFooter({ content, className, onSourceClick }: SourcesFoot
     }>;
   }, [citationIndices, getCitationByIndex]);
 
-  // Don't render if no citations found
   if (citations.length === 0) {
     return null;
   }

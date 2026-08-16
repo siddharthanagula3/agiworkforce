@@ -65,46 +65,35 @@ export type SignalingRole = 'desktop' | 'mobile';
  * ```
  */
 export type SignalingEvent =
-  /** WebSocket connection opened successfully */
   | { type: 'open' }
   /** Client successfully registered with the signaling server */
   | {
       type: 'registered';
-      /** Unix timestamp (milliseconds) when the pairing code expires */
       expiresAt: number;
-      /** Whether another peer is already connected to this session */
       peerConnected: boolean;
     }
   /** A peer has joined and is ready to exchange signals */
   | {
       type: 'peer_ready';
-      /** Role of the peer that joined */
       role: SignalingRole;
-      /** Optional metadata provided by the peer */
       metadata?: Record<string, unknown> | null;
     }
   /** Received a signaling message from a peer */
   | {
       type: 'signal';
-      /** Role of the peer sending the signal */
       from: SignalingRole;
-      /** Type of WebRTC signal being exchanged */
       kind: 'offer' | 'answer' | 'ice' | 'control';
-      /** Signal-specific payload (e.g., SDP offer, ICE candidate) */
       payload: unknown;
     }
   /** A peer has left the session */
   | {
       type: 'peer_left';
-      /** Role of the peer that disconnected */
       role: SignalingRole;
-      /** Optional server-supplied disconnect reason */
       reason?: 'disconnect' | 'error' | 'timeout' | 'terminated';
     }
   /** Server acknowledgement for an application-level heartbeat */
   | {
       type: 'heartbeat_ack';
-      /** Server timestamp, in Unix epoch milliseconds */
       timestamp: number;
     }
   /** The pairing session has expired (5-minute TTL by default) */
@@ -119,33 +108,27 @@ export type SignalingEvent =
    */
   | {
       type: 'sync_request';
-      /** Why the server wants a resync */
       reason: string;
-      /** Server timestamp, in Unix epoch milliseconds */
       timestamp: number;
     }
   /** An approval could not be relayed and is held until the mobile peer returns */
   | {
       type: 'approval_queued';
-      /** Pairing code the approval was queued against */
       code: string;
     }
   /** The server is dropping this socket for inactivity */
   | {
       type: 'connection_timeout';
-      /** Server-supplied timeout cause (currently always `idle`) */
       reason: string;
     }
   /** The server is shutting down and is closing every socket */
   | {
       type: 'server_shutdown';
-      /** Server-supplied shutdown cause */
       reason: string;
     }
   /** An error occurred during signaling */
   | {
       type: 'error';
-      /** Human-readable error message */
       error: string;
     }
   /** WebSocket connection closed */
@@ -219,21 +202,11 @@ export type SignalKind = 'offer' | 'answer' | 'ice' | 'control';
  * ```
  */
 export interface SignalingClientOptions {
-  /** WebSocket URL of the signaling server */
   wsUrl: string;
-  /** Pairing code for the session */
   code: string;
-  /** Role-specific HMAC token issued by the signaling server for this pairing. */
   pairToken: string;
-  /** Role of this client in the peer connection */
   role: SignalingRole;
-  /** Optional metadata to share with peers (e.g., device info, capabilities) */
   metadata?: Record<string, unknown>;
-  /** Callback invoked for all signaling events */
   onEvent: (event: SignalingEvent) => void;
-  /**
-   * Interval in milliseconds for sending heartbeat pings to keep the connection alive.
-   * Defaults to 30000ms (30 seconds) if not specified.
-   */
   heartbeatIntervalMs?: number;
 }

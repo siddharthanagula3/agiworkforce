@@ -1,12 +1,7 @@
-/**
- * Skills API — typed wrappers for skill_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
 import type { Recording } from './automation';
 import { recordingToCommandPayload } from './automation';
-
-// ---- Types ----
 
 export interface SkillMatchResult {
   skillName: string;
@@ -46,8 +41,6 @@ export interface RecordedSkillResult {
   actionCount: number;
   path: string;
 }
-
-// ---- Commands ----
 
 export async function skillMatchForMessage(content: string): Promise<SkillMatchResult[]> {
   return command<SkillMatchResult[]>('skill_match_for_message', { content });

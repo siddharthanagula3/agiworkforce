@@ -9,7 +9,6 @@ vi.mock('../lib/tauri-mock', () => ({
   isTauri: true,
 }));
 
-// AUDIT-P3-TEST-TYPE: Define properly typed window state interface for test mocks
 interface WindowState {
   pinned: boolean;
   alwaysOnTop: boolean;
@@ -18,14 +17,12 @@ interface WindowState {
   fullscreen: boolean;
 }
 
-// AUDIT-P3-TEST-TYPE: Match the EventCallback type from tauri-mock
 interface TauriEvent<T> {
   payload: T;
   id: number;
 }
 
 describe('Window State Persistence - Integration Tests', () => {
-  // AUDIT-P3-TEST-TYPE: Properly typed event callback using TauriEvent
   let stateEventCallback: ((event: TauriEvent<WindowState>) => void) | null = null;
   let persistedState: WindowState = {
     pinned: true,
@@ -47,7 +44,6 @@ describe('Window State Persistence - Integration Tests', () => {
       fullscreen: false,
     };
 
-    // AUDIT-P3-TEST-TYPE: Properly typed mock implementation for invoke
     vi.mocked(invoke).mockImplementation((command: string, args?: Record<string, unknown>) => {
       if (command === 'window_get_state') {
         return Promise.resolve({ ...persistedState });
@@ -75,7 +71,6 @@ describe('Window State Persistence - Integration Tests', () => {
       return Promise.resolve(undefined);
     });
 
-    // AUDIT-P3-TEST-TYPE: Properly typed mock implementation for listen using TauriEvent
     vi.mocked(listen).mockImplementation(
       (eventName: string, callback: (event: TauriEvent<WindowState>) => void) => {
         if (eventName === 'window:state') {
@@ -289,7 +284,6 @@ describe('Window State Persistence - Integration Tests', () => {
     it('should maintain state when toggle fails', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-      // AUDIT-P3-TEST-TYPE: Properly typed mock implementation for error handling
       vi.mocked(invoke).mockImplementation((command: string) => {
         if (command === 'window_toggle_maximize') {
           return Promise.reject(new Error('Window operation failed'));

@@ -1,15 +1,3 @@
-/**
- * chatExecutionStore cloud send — finish_reason / x_stream_error capture.
- *
- * Regression: `services/streaming.ts` parsed `finish_reason` off the wire and
- * forwarded it via `onDelta`, but chatExecutionStore's onDelta never read it
- * at all — a mid-stream provider failure (server sends a clean [DONE] with no
- * other signal; see the additive `x_stream_error` delta) rendered as an
- * ordinary completion with zero indication, worse than web/desktop (which at
- * least persisted finishReason even before their own fix). This pins that
- * both fields land on the persisted message's metadata after a real
- * sendMessage() call, mirroring cloud-sync-wiring.test.ts's mock scaffolding.
- */
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => 'test-token'),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -89,7 +77,7 @@ import {
 
 const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 
-const CONV_ID = '0190a000-0000-7000-8000-000000000002'; // a valid UUIDv7 conversation id
+const CONV_ID = '0190a000-0000-7000-8000-000000000002';
 const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
 
 beforeEach(() => {
@@ -100,7 +88,7 @@ beforeEach(() => {
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {} });
   useChatExecutionStore.setState({ error: null, paywallError: null });
-  useChatAppModeStore.getState().setAppMode('local'); // onDone's auto-sync no-ops while asserting
+  useChatAppModeStore.getState().setAppMode('local');
   useChatCloudMessageStore.getState().addCloudConversation({
     id: CONV_ID,
     title: 'Cloud Chat',
@@ -140,7 +128,6 @@ describe('cloud send: finish_reason capture', () => {
     mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks, signal) => {
       streamStarted();
       await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
-      // Model a transport that delivers already-buffered callbacks after abort.
       callbacks.onDelta({ content: 'account-a-private-response' });
       callbacks.onDone();
     });

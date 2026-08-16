@@ -42,11 +42,6 @@ describe('useDeepLink parsing', () => {
     });
   });
 
-  /**
-   * Clerk only appends `rotating_token_nonce` when the redirect URL is
-   * allowlisted on the instance. Reporting that as an explicit error is what
-   * keeps a missing dashboard entry from looking like a hang.
-   */
   it('reports a nonce-less SSO callback as a configuration error rather than dropping it', () => {
     const parsed = parseDeepLink('agiworkforce://sso-callback');
     expect(parsed?.kind).toBe('cloud-sso-error');

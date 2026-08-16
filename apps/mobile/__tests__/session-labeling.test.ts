@@ -1,17 +1,3 @@
-/**
- * Tests for src/features/chat/utils/sessionLabeling.ts — the W5 stage-2
- * mobile consumer of @agiworkforce/types's session-taxonomy and
- * ExecutionProfile contracts.
- *
- * Covers: per-mode AppSession/ExecutionProfile label correctness, invariant
- * assertions firing on a deliberately inconsistent fixture, and — the
- * sharpest check — that `mobileExecutionProfileFor`'s local/cloud
- * distinction actually AGREES with the real 4-layer enforcement in
- * `lib/egressGuard.ts` (`guardedFetch`/`isOurCloudHost`), not just an
- * independent claim about it. Uses the same mocking idiom as
- * `egress-guard.test.ts` so the guard under test is the real production
- * code, not a stub.
- */
 
 const mockSecureFetch = jest.fn();
 jest.mock('@/services/secureFetch', () => ({
@@ -99,11 +85,6 @@ describe('labelMobileSession', () => {
 });
 
 describe('labelMobileSession tracks getSessionKindDefaults (no hand-inlined drift)', () => {
-  // Same rationale as the desktop test of the same name: labelMobileSession
-  // hand-writes structural fields rather than spreading
-  // getSessionKindDefaults(kind), so nothing at the type level stops the two
-  // from drifting apart if the SSOT in taxonomy.ts changes. These checks
-  // couple the two directly.
   const cases: Array<{
     mode: ConversationExecutionMode;
     kind: Parameters<typeof getSessionKindDefaults>[0];
@@ -156,8 +137,6 @@ describe('AppSession invariants fire on a deliberately inconsistent fixture', ()
       ...valid,
       trustBoundary: { privacyMode: 'local', providerMode: 'ManagedGateway' },
     } as unknown as AppSession;
-    // Re-run through the same validator labelMobileSession uses internally —
-    // proves the invariant is real, not bypassed by construction order.
     expect(validateSessionInvariants(tampered).map((v) => v.code)).toContain(
       'trust-boundary-provider-mismatch',
     );
@@ -165,26 +144,21 @@ describe('AppSession invariants fire on a deliberately inconsistent fixture', ()
 });
 
 describe('ExecutionProfile agreement with the REAL 4-layer egress enforcement (guardedFetch)', () => {
-  // This is the check that proves the contract agrees with the trust kernel
-  // instead of merely asserting it does: it drives the real production
-  // guardedFetch/isOurCloudHost code (mocking only the network edge,
-  // secureFetch) and shows its block/allow decision matches exactly what
-  // `mobileExecutionProfileFor` says the toggle implies.
   const OUR_CLOUD_URL = 'https://agiworkforce.com/api/llm/v1/chat/completions';
 
   it('a local ExecutionProfile implies our-cloud egress is blocked — and guardedFetch actually blocks it', async () => {
     mockAppMode = 'local';
     const profile = mobileExecutionProfileFor('local');
-    expect(profile.tools.cloudExecutionAllowed).toBe(false); // the contract's claim
-    await expect(guardedFetch(OUR_CLOUD_URL)).rejects.toBeInstanceOf(EgressBlockedError); // the kernel's real behavior
+    expect(profile.tools.cloudExecutionAllowed).toBe(false);
+    await expect(guardedFetch(OUR_CLOUD_URL)).rejects.toBeInstanceOf(EgressBlockedError);
     expect(mockSecureFetch).not.toHaveBeenCalled();
   });
 
   it('a cloud ExecutionProfile implies our-cloud egress is allowed — and guardedFetch actually allows it', async () => {
     mockAppMode = 'cloud';
     const profile = mobileExecutionProfileFor('cloud');
-    expect(profile.tools.cloudExecutionAllowed).toBe(true); // the contract's claim
-    await guardedFetch(OUR_CLOUD_URL); // the kernel's real behavior — must not throw
+    expect(profile.tools.cloudExecutionAllowed).toBe(true);
+    await guardedFetch(OUR_CLOUD_URL);
     expect(mockSecureFetch).toHaveBeenCalledTimes(1);
   });
 

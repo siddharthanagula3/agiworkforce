@@ -15,36 +15,12 @@ import { resolveOrganizationEntitlementPlan } from '@/lib/services/org-entitleme
 export interface TeamAdminAccess {
   plan: BillingPlanTier;
   canManageTeam: boolean;
-  /**
-   * Licensed seat ceiling for the organization in scope, or null when no
-   * organization was named. Backed by `organizations.licensed_seats`
-   * (0085_organization_seats_lifecycle.sql).
-   */
   maxMembers: number | null;
-  /** Seats held by active members plus pending invitations, or null. */
   seatsConsumed: number | null;
-  /** maxMembers - seatsConsumed, floored at 0, or null. */
   seatsAvailable: number | null;
-  /**
-   * Where `maxMembers` came from.
-   *
-   * `unknown`       — no organization was named, so no seat state was read.
-   * `unprovisioned` — the organization has no linked Stripe subscription, so
-   *                   the number is the migration's floor. It enforces the
-   *                   ceiling but cannot grow until billing writes it.
-   * `billing`       — the number came from a linked subscription.
-   */
   seatSource: 'billing' | 'unprovisioned' | 'unknown';
 }
 
-/**
- * Resolve the caller's Team-administration capability, and — when an
- * organization is named — that organization's real licensed seat state.
- *
- * The seat numbers are REPORTING only. The ceiling itself is a database CHECK
- * (`organizations_seats_within_license`); nothing here may be used as a
- * read-then-write gate, because two admins would both read the same free seat.
- */
 export async function getTeamAdminAccess(
   db: DatabaseAdapter,
   userId: string,
@@ -90,9 +66,6 @@ export async function requireTeamAdminAccess(
   const access = await getTeamAdminAccess(db, userId, organizationId);
 
   if (!access.canManageTeam) {
-    // SUBSCRIPTION_REQUIRED is already an explicitly safe recovery code in
-    // the web error handler, but the shared legacy ErrorCode union has not
-    // yet been reconciled with that wire contract.
     throw new AppError(
       'SUBSCRIPTION_REQUIRED' as ErrorCodeValue,
       'Team administration requires an active Team or Enterprise subscription.',

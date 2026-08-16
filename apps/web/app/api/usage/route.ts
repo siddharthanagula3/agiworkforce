@@ -10,11 +10,6 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { getManagedUsageSummary } from '@/lib/services/managed-usage-summary-service';
 import { isApiKeyScopeError } from '@/lib/api-key-scope-error';
 
-/**
- * GET /api/usage
- * Returns percentage-only managed-usage status and reset times. Exact private
- * allocations and ledger operands must remain server-side.
- */
 async function handler(request: NextRequest) {
   let userId: string;
   try {

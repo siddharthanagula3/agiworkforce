@@ -1,40 +1,16 @@
-/**
- * Budget + usage tracking store for unified-chat.
- *
- * Surface-agnostic: hosts (apps/desktop, apps/web, apps/mobile) push their
- * own token / dollar / message-count snapshot via `setBudget`, and push
- * tool-call activity into the action trail via `pushAction`. The store is
- * a passive consumer — it does not call any backend, hold any auth token,
- * or know about Stripe / cloud DB / Tauri.
- *
- * Companion components: BudgetTracker (auto-counts last message tokens),
- * BudgetAlertsPanel, TokenCounter, UsageLimitBanner, CurrentActionBadge.
- */
 import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { generateId } from '../lib/utils';
 
-/**
- * Snapshot of the user's current budget window. Units are decided by the host
- * (tokens, dollars, message-count) — components render the value as-is.
- */
 export interface BudgetSnapshot {
-  /** When false, BudgetTracker no-ops and UsageLimitBanner stays hidden. */
   enabled: boolean;
   currentUsage: number;
-  /** Hard limit (matches `currentUsage` unit). 0 ⇒ unlimited. */
   limit: number;
-  /** Period reset epoch ms (when the window rolls over). */
   periodEnd: number;
-  /** Optional input/output split for the current message — visual only. */
   inputTokens?: number;
   outputTokens?: number;
 }
 
-/**
- * Alert pushed by the host when the user crosses a threshold. Components
- * render alerts in chronological order; users can dismiss individually.
- */
 export interface BudgetAlert {
   id: string;
   type: 'warning' | 'danger' | 'exceeded';
@@ -43,7 +19,6 @@ export interface BudgetAlert {
   dismissed: boolean;
 }
 
-/** Type of the most-recent agent-loop step shown in CurrentActionBadge. */
 export type ActionTrailEntryType =
   | 'thinking'
   | 'searching'
@@ -52,15 +27,10 @@ export type ActionTrailEntryType =
   | 'completed'
   | 'error';
 
-/**
- * One step in the agent's action trail. Hosts should `pushAction` whenever
- * a tool-call fires or a phase transitions (think → search → run).
- */
 export interface ActionTrailEntry {
   id: string;
   type: ActionTrailEntryType;
   message: string;
-  /** ISO 8601 string. */
   timestamp: string;
   currentStep?: number;
   totalSteps?: number;
@@ -73,23 +43,15 @@ interface BudgetState {
   budgetAlerts: BudgetAlert[];
   actionTrail: ActionTrailEntry[];
 
-  /** Replace the budget snapshot wholesale or patch fields. */
   setBudget: (snapshot: Partial<BudgetSnapshot>) => void;
-  /** Increment `currentUsage` by `tokens` (BudgetTracker uses this). */
   addTokenUsage: (tokens: number) => void;
-  /** Push a new alert. Auto-assigns id / timestamp. */
   pushAlert: (alert: Pick<BudgetAlert, 'type' | 'message'>) => void;
-  /** Mark an alert dismissed (so BudgetAlertsPanel hides it). */
   dismissAlert: (id: string) => void;
-  /** Replace the action trail (host snapshot push). */
   setActionTrail: (entries: ActionTrailEntry[]) => void;
-  /** Append one action. Auto-assigns id / timestamp. */
   pushAction: (
     entry: Pick<ActionTrailEntry, 'type' | 'message'> & Partial<ActionTrailEntry>,
   ) => void;
-  /** Clear all alerts (e.g., when a new conversation starts). */
   clearAlerts: () => void;
-  /** Clear the action trail (e.g., when the agent loop resets). */
   clearActionTrail: () => void;
 }
 
@@ -164,8 +126,6 @@ export const useBudgetStore = create<BudgetState>()(
   })),
 );
 
-// ── Selectors ────────────────────────────────────────────────────────────────
-
 export const selectBudget = (state: BudgetState): BudgetSnapshot => state.budget;
 
 export const selectBudgetPercentage = (state: BudgetState): number => {
@@ -180,9 +140,6 @@ export const selectActiveActions = (state: BudgetState): ActionTrailEntry[] =>
 export const selectVisibleAlerts = (state: BudgetState): BudgetAlert[] =>
   state.budgetAlerts.filter((a) => !a.dismissed);
 
-// ── Utility re-exports for component consumers ───────────────────────────────
-
-/** Format a token count for compact display: 1234 → "1.2K", 1_500_000 → "1.5M". */
 export function formatTokens(count: number): string {
   if (count < 1000) return `${count}`;
   if (count < 1_000_000) return `${(count / 1000).toFixed(1)}K`;

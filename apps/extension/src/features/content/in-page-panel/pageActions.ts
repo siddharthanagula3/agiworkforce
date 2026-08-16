@@ -12,21 +12,11 @@
  */
 
 export interface PageAction {
-  /** Short label shown on the chip button. */
   label: string;
-  /** Unicode character icon (kept to 1–2 chars to avoid font-loading). */
   icon: string;
-  /**
-   * Returns the fully-formed prompt to send.
-   * Receives the current page title and truncated page text so templates can
-   * reference them without re-extracting.
-   */
   buildPrompt: (pageTitle: string, pageText: string) => string;
-  /** Identifier used for analytics / test assertions. */
   id: string;
 }
-
-// ─── Generic actions (used on most pages) ─────────────────────────────────────
 
 const GENERIC_ACTIONS: PageAction[] = [
   {
@@ -59,8 +49,6 @@ const GENERIC_ACTIONS: PageAction[] = [
   },
 ];
 
-// ─── YouTube watch page actions ────────────────────────────────────────────────
-
 const YOUTUBE_ACTIONS: PageAction[] = [
   {
     id: 'yt_summarize',
@@ -84,8 +72,6 @@ const YOUTUBE_ACTIONS: PageAction[] = [
       `What are the most important questions and answers from the YouTube video titled "${title}"?`,
   },
 ];
-
-// ─── GitHub PR actions ─────────────────────────────────────────────────────────
 
 const GITHUB_PR_ACTIONS: PageAction[] = [
   {
@@ -111,12 +97,6 @@ const GITHUB_PR_ACTIONS: PageAction[] = [
   },
 ];
 
-// ─── URL pattern matchers ──────────────────────────────────────────────────────
-
-/**
- * Detects YouTube watch pages: `youtube.com/watch?v=*`.
- * Matches both www.youtube.com and youtube.com, http and https.
- */
 function isYouTubeWatch(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -130,9 +110,6 @@ function isYouTubeWatch(url: string): boolean {
   }
 }
 
-/**
- * Detects GitHub PR pages: `github.com/<owner>/<repo>/pull/<number>`.
- */
 function isGitHubPR(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -142,24 +119,12 @@ function isGitHubPR(url: string): boolean {
   }
 }
 
-// ─── Public API ────────────────────────────────────────────────────────────────
-
-/**
- * Return the appropriate set of quick-action chips for the given URL.
- *
- * Priority: YouTube watch > GitHub PR > generic (all other pages).
- */
 export function getPageActions(url: string): PageAction[] {
   if (isYouTubeWatch(url)) return YOUTUBE_ACTIONS;
   if (isGitHubPR(url)) return GITHUB_PR_ACTIONS;
   return GENERIC_ACTIONS;
 }
 
-/**
- * Truncate page text to the given character budget.
- * Collapses runs of whitespace before truncating so the budget covers more
- * semantic content (same strategy as `extractPageHtmlSafely` in content.ts).
- */
 export function truncatePageText(raw: string, maxChars = 30_000): string {
   const collapsed = raw
     .replace(/[\t\u00A0 ]+/g, ' ')
@@ -168,18 +133,4 @@ export function truncatePageText(raw: string, maxChars = 30_000): string {
   return collapsed.length <= maxChars ? collapsed : collapsed.slice(0, maxChars);
 }
 
-/**
- * Redact credit-card numbers, password-field lines, AND all API-key /
- * token patterns from page text before embedding it in an LLM prompt.
- *
- * SECURITY: this used to be a local two-regex helper (CC + password lines
- * only) and missed JWT, AWS, GitHub, Anthropic, Google, Stripe, Groq, XAI,
- * and generic bearer-token shapes. Page text sent to the LLM frequently
- * contains those (DevTools panels, README files, pasted curl commands). Now
- * routes through the shared `redactSecrets` from `@agiworkforce/utils`,
- * which has the full pattern set (~14 patterns, including the original
- * credit-card and password-line patterns) and is mirrored in the desktop
- * log redaction. Adding a new pattern? Edit `packages/platform/utils/src/logger.ts`
- * — both surfaces inherit the change.
- */
 export { redactSecrets as redactSensitiveText } from '@agiworkforce/utils/logger';

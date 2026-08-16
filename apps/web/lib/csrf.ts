@@ -1,18 +1,9 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 import { auth } from '@clerk/nextjs/server';
 
-// Lazily get CSRF_SECRET to avoid errors during build/static generation.
-//
-// SEV-WEB-07 / WEB-33 (audit 2026-05-19): both the current and the
-// previous secret are read so a rotation can happen without orphaning
-// any in-flight CSRF tokens. The previous secret is OPTIONAL and only
-// honored during the rotation window the operator picks; remove the
-// env var to close the window. Minimum 32-byte entropy is enforced on
-// each non-empty secret to prevent operationally weak rotations like
-// `CSRF_SECRET=abc`.
 const MIN_CSRF_SECRET_BYTES = 32;
 let cachedSecret: string | null = null;
-let cachedPrevSecret: string | null | undefined = undefined; // undefined = not yet read; null = read, none
+let cachedPrevSecret: string | null | undefined = undefined;
 
 function assertSufficientEntropy(name: string, value: string): void {
   if (Buffer.byteLength(value, 'utf8') < MIN_CSRF_SECRET_BYTES) {
@@ -28,18 +19,12 @@ function getCsrfSecret(): string {
   }
   const secret = process.env['CSRF_SECRET'];
   if (!secret) {
-    // CSRF_SECRET is not set. Log a server-side warning and return a per-process
-    // random sentinel so that CSRF verification always fails for non-Bearer
-    // requests (a clean 403) rather than crashing the handler with a 500.
-    // Bearer-authenticated requests are already bypassed before this is called.
-    // Operators must set CSRF_SECRET in production to secure cookie-session flows.
     console.error(
       '[csrf] CRITICAL: CSRF_SECRET environment variable is not set. ' +
         'Cookie-session CSRF protection is DISABLED. ' +
         'Set CSRF_SECRET (≥32 bytes) in your Vercel/environment config. ' +
         'Bearer-authenticated requests (web app) are unaffected.',
     );
-    // Sentinel: random 64-char hex that never matches any real token.
     cachedSecret = randomBytes(32).toString('hex');
     return cachedSecret;
   }
@@ -70,7 +55,6 @@ export function resetCsrfCache(): void {
 }
 
 const CSRF_HEADER = 'x-csrf-token';
-// Cookie name reserved for future CSRF implementation: 'csrf-token'
 
 /**
  * Read a single cookie value by name from a Cookie header string.
@@ -97,10 +81,6 @@ export function readCookie(cookieHeader: string, name: string): string | null {
   return match?.[1] ?? null;
 }
 
-/**
- * Generate a CSRF token
- * In production, tokens should be session-specific and time-limited
- */
 export function generateCsrfToken(sessionId: string): string {
   const timestamp = Date.now().toString();
   const data = `${sessionId}:${timestamp}`;
@@ -108,10 +88,6 @@ export function generateCsrfToken(sessionId: string): string {
   return `${data}:${signature}`;
 }
 
-/**
- * Verify a CSRF token
- * Tokens are valid for 1 hour by default
- */
 export function verifyCsrfToken(
   token: string | null,
   sessionId: string,
@@ -121,9 +97,6 @@ export function verifyCsrfToken(
     return false;
   }
 
-  // Parse from the right so sessionIds containing colons are handled correctly.
-  // timestamp is always a numeric string (no colons); signature is always hex (no colons).
-  // Only sessionId may contain colons, so we find the last two delimiters from the right.
   const lastColon = token.lastIndexOf(':');
   const secondLastColon = token.lastIndexOf(':', lastColon - 1);
   if (lastColon === -1 || secondLastColon === -1 || secondLastColon === lastColon) {
@@ -133,25 +106,17 @@ export function verifyCsrfToken(
   const timestamp = token.slice(secondLastColon + 1, lastColon);
   const signature = token.slice(lastColon + 1);
 
-  // Verify session ID matches
   if (tokenSessionId !== sessionId) {
     return false;
   }
 
-  // Verify token age
   const tokenTime = parseInt(timestamp, 10);
   if (isNaN(tokenTime) || Date.now() - tokenTime > maxAge) {
     return false;
   }
 
-  // Verify signature using constant-time comparison to prevent timing attacks.
   const data = `${tokenSessionId}:${timestamp}`;
 
-  // SEV-WEB-07 / WEB-33: accept tokens signed with EITHER the current or
-  // the previous secret. The previous secret is honored only when
-  // CSRF_SECRET_PREV is explicitly set · remove the env var to close the
-  // rotation window. Both branches use the same constant-time
-  // comparison; the order does not leak which secret matched.
   const currentMatch = constantTimeSignatureMatch(data, signature, getCsrfSecret());
   if (currentMatch) return true;
   const prev = getCsrfSecretPrev();
@@ -167,32 +132,12 @@ function constantTimeSignatureMatch(
   secret: string,
 ): boolean {
   const expectedSignature = createHmac('sha256', secret).update(data).digest('hex');
-  // Hash both values to a fixed-length digest before comparing.
-  // This ensures timingSafeEqual always receives equal-length buffers,
-  // eliminating the timing side channel from the try/catch that previously
-  // caught length-mismatch exceptions (distinguishable from normal comparison).
   const providedHash = createHmac('sha256', secret).update(providedSignature).digest();
   const expectedHash = createHmac('sha256', secret).update(expectedSignature).digest();
   return timingSafeEqual(providedHash, expectedHash);
 }
 
-/**
- * Extract session ID from request.
- *
- * For authenticated users, uses Clerk server auth to get the verified user ID.
- * This is more secure than parsing raw cookie bytes since the user ID is
- * verified through Clerk, not derived from untrusted cookie values.
- *
- * Falls back to cookie-based session binding for anonymous users.
- *
- * NOTE: For anonymous users this reads the `anon-session-id` cookie before
- * generating a new UUID. This ensures CSRF tokens generated on one request can
- * be verified on subsequent requests for the same anonymous session.
- * Use `getOrCreateAnonSession(request)` in route handlers that need to set the
- * cookie when one does not already exist.
- */
 export async function getSessionIdFromRequest(_request: Request): Promise<string> {
-  // Option 0 (preferred): Use Clerk auth to get verified user ID
   try {
     const { userId } = await auth();
     if (userId) {
@@ -202,9 +147,6 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     // Clerk may fail in non-route-handler contexts; fall through
   }
 
-  // Option 1: Cookie-based fallback for anonymous users.
-  // All cookie reads below go through readCookie() which anchors to the
-  // cookie-name boundary · see web-HIGH-1 fix at the helper definition.
   const cookies = _request.headers.get('cookie') || '';
 
   const sessionId = readCookie(cookies, 'session-id');
@@ -212,35 +154,17 @@ export async function getSessionIdFromRequest(_request: Request): Promise<string
     return sessionId;
   }
 
-  // SEV-WEB-M-1 fix (2026-05-05): use `__Host-` prefixed cookie only.
-  // The browser refuses to set this from JavaScript or from sibling subdomains.
-  // Legacy `anon-session-id` fallback removed 2026-05-05 per the deadline.
   const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
   if (hostPrefixed) {
     return hostPrefixed;
   }
 
-  // Option 2: Generate unique anonymous session ID
-  // NOTE: Each request without any session gets a new ID.
-  // Use getOrCreateAnonSession() in route handlers to persist this via cookie.
   return `anon-${crypto.randomUUID()}`;
 }
 
-/**
- * Get or create an anonymous session ID for the request.
- *
- * Returns `{ id }` when an existing session is found, or `{ id, newCookie }`
- * when a new anonymous session ID has been generated and should be persisted.
- * Route handlers should set `Set-Cookie: newCookie` on their response when present.
- *
- * This is the preferred function to use in route handlers that need to generate
- * CSRF tokens for anonymous users - it ensures the session ID is stable across
- * the token-generation request and subsequent validation requests.
- */
 export async function getOrCreateAnonSession(
   request: Request,
 ): Promise<{ id: string; newCookie?: string }> {
-  // Option 0 (preferred): Use Clerk auth for verified user ID
   try {
     const { userId } = await auth();
     if (userId) {
@@ -252,79 +176,23 @@ export async function getOrCreateAnonSession(
 
   const cookies = request.headers.get('cookie') || '';
 
-  // Option 1: Prefer authenticated session cookies (no new cookie needed).
-  // All cookie reads use the anchored readCookie helper · see web-HIGH-1.
   const sessionId = readCookie(cookies, 'session-id');
   if (sessionId) {
     return { id: sessionId };
   }
 
-  // Option 2: `__Host-` prefixed cookie (SEV-WEB-M-1 fix, 2026-05-05).
-  // The `__Host-` prefix forces Path=/ + Secure + no Domain; browser refuses
-  // to set it from JS or sibling subdomains. Legacy `anon-session-id` fallback
-  // removed 2026-05-05 per the deadline. Only the __Host- path is accepted.
   const hostPrefixed = readCookie(cookies, '__Host-anon-session-id');
   if (hostPrefixed) {
     return { id: hostPrefixed };
   }
 
-  // Option 3: Generate a new anonymous session ID and request it be stored in a cookie
   const anonId = `anon-${crypto.randomUUID()}`;
   return {
     id: anonId,
-    // `__Host-` requires Path=/, Secure, and no Domain attribute · all set.
     newCookie: `__Host-anon-session-id=${anonId}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=86400`,
   };
 }
 
-/**
- * RT-04 fix: Validate a Bearer token cryptographically before granting CSRF bypass.
- *
- * The old code bypassed CSRF for ANY request with `Authorization: Bearer <anything>`,
- * including invalid/garbage tokens. This created a bypass window: an attacker could
- * add `Authorization: Bearer bogus` to a cross-origin request, skip CSRF, then let
- * auth fail later · leaving any endpoint that checked CSRF before auth vulnerable.
- *
- * Fix: Only bypass CSRF when the Bearer credential is verified as belonging to a
- * real Clerk user OR a real AGI API key. If verification fails, fall through to
- * the CSRF token check as normal.
- *
- * Returns true if the token is valid (CSRF bypass is safe), false if invalid/missing.
- *
- * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ SEV-WEB-06 / WEB-34 (audit 2026-05-19) · Bearer-bypass invariant         │
- * │                                                                          │
- * │ The Bearer-bypass branch is only sound because cross-origin browsers     │
- * │ cannot forge a valid Clerk JWT, developer JWT, or AGI API key            │
- * │ policy blocks reading another origin's localStorage / injecting          │
- * │ Authorization on third-party requests; a real API key requires an       │
- * │ Argon2id match against a specific stored hash). It is NOT a generic     │
- * │ "skip CSRF if any Bearer header is present" · that pattern was the      │
- * │ RT-04 vulnerability, and WEB-APIKEY-CSRF-BLOCK-01's fix (the API-key    │
- * │ branch below) deliberately does NOT relax this: an sk_live_/sk_test_    │
- * │ token that fails ApiKeyService.verifyKey() falls through to the normal  │
- * │ CSRF token check exactly like an invalid Clerk/developer JWT does.       │
- * │                                                                          │
- * │ DO NOT add new routes that check CSRF BEFORE auth and rely on this       │
- * │ helper to skip CSRF. If such a route ever passes `Authorization: Bearer  │
- * │ <forged-but-shaped-correctly>`, the bypass attempts a verify call but    │
- * │ that call's network/DB failure mode becomes part of the CSRF surface.   │
- * │ The required order on any new route is:                                  │
- * │     1. validate the Bearer credential (or cookie session)                │
- * │     2. THEN call requireCsrfToken / validateCsrfFromRequest              │
- * │ Inverting that order is a vulnerability, not a style preference.         │
- * │                                                                          │
- * │ RESIDUAL (pre-existing, not introduced or worsened here): a request      │
- * │ carrying both a verified Bearer credential and the caller's Clerk        │
- * │ session cookie bypasses CSRF here, but lib/api-auth.ts's                 │
- * │ getClerkAuthUser() still resolves identity from the COOKIE (Path 1)      │
- * │ first, ignoring the Bearer token's principal. Bypass and identity can    │
- * │ therefore diverge. This already applied to valid Clerk-JWT bearers       │
- * │ before this change; API keys don't make it worse. Fixing it means        │
- * │ making cookie-accepting routes reject cookie auth whenever a Bearer      │
- * │ header is present, which is a separate, larger change.                  │
- * └──────────────────────────────────────────────────────────────────────────┘
- */
 async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
   if (!authHeader?.startsWith('Bearer ')) {
     return false;
@@ -334,12 +202,6 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     return false;
   }
 
-  // AGI API keys (sk_live_/sk_test_), verified via ApiKeyService — mirrors
-  // lib/api-auth.ts's getClerkAuthUser Path 2a. Checked by prefix first so a
-  // JWTs never pay for a DB round-trip and an API key never pays for a
-  // signature-verification call; the formats never overlap. verifyKey() does
-  // its own parse-time rejection (VALID_KEY_PATTERN) before any DB work, so a
-  // garbage sk_-shaped bearer costs at most one indexed lookup, never Argon2.
   if (token.startsWith('sk_live_') || token.startsWith('sk_test_')) {
     try {
       const { ApiKeyService } = await import('@/lib/services/api-key-service');
@@ -350,16 +212,11 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
     }
   }
 
-  // First-party developer tokens are HS256 credentials minted by the shared
-  // device authorization service. Signature/issuer/audience/surface validation
-  // is enough for the CSRF decision; route authentication remains responsible
-  // for the revocation and account-status checks.
   const { verifyDeveloperTokenSignature } = await import('@/lib/server/developer-token');
   if (verifyDeveloperTokenSignature(token)) {
     return true;
   }
 
-  // Verify using Clerk token verification.
   try {
     const { verifyToken } = await import('@clerk/backend');
     const secretKey = process.env['CLERK_SECRET_KEY'];
@@ -374,31 +231,20 @@ async function isBearerTokenValid(authHeader: string | null): Promise<boolean> {
   return false;
 }
 
-/**
- * Validate CSRF token from request (returns boolean for backwards compatibility)
- */
 export async function validateCsrfFromRequest(
   request: Request,
   sessionId?: string,
 ): Promise<boolean> {
-  // Only validate for state-changing methods
   const method = request.method.toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    return true; // GET requests don't need CSRF protection
+    return true;
   }
 
-  // RT-04 fix: Only bypass CSRF when the Bearer credential is cryptographically
-  // valid. Previously ANY Bearer string (including `Bearer bogus`) bypassed CSRF
-  // · this created a bypass for any endpoint checking CSRF before auth.
-  // Threat model: a cross-origin page cannot forge a valid Bearer JWT (SOP blocks
-  // reading localStorage / injecting Authorization on third-party requests) or a
-  // valid AGI API key (requires an Argon2id match against a stored hash), so a
-  // valid credential here means the request is from a legitimate client.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const validBearer = await isBearerTokenValid(authHeader);
     if (validBearer) {
-      return true; // Legitimate Bearer auth · CSRF bypass is safe
+      return true;
     }
     // Invalid Bearer + possible session cookie · fall through to CSRF token check
   }
@@ -423,20 +269,16 @@ export async function requireCsrfToken(
   request: Request,
   sessionId?: string,
 ): Promise<Response | null> {
-  // Only validate for state-changing methods
   const method = request.method.toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-    return null; // GET requests don't need CSRF protection
+    return null;
   }
 
-  // RT-04 fix: Only bypass CSRF when the Bearer credential is cryptographically
-  // valid (Clerk JWT, developer JWT, or AGI API key). See isBearerTokenValid() for the threat
-  // model analysis.
   const authHeader = request.headers.get('authorization');
   if (authHeader?.startsWith('Bearer ')) {
     const validBearer = await isBearerTokenValid(authHeader);
     if (validBearer) {
-      return null; // Legitimate Bearer auth · CSRF bypass is safe
+      return null;
     }
     // Invalid Bearer falls through to CSRF token check
   }
@@ -463,5 +305,4 @@ export async function requireCsrfToken(
   return null;
 }
 
-// Export for tests
 export { isBearerTokenValid };

@@ -31,10 +31,6 @@ const reversibleMigrations = sqlFiles(migrationsDir).filter(
 );
 
 describe('down migration contract', () => {
-  // Every rule below is worth nothing if the script does not execute. Comparing
-  // `import.meta.url` (which Node realpaths) against a raw `process.argv[1]`
-  // made the whole checker exit 0 in silence whenever the repo was reached
-  // through a symlink — no output, no findings, no failure.
   it('runs its checks when invoked through a symlinked path', () => {
     const linkDir = mkdtempSync(join(tmpdir(), 'neon-check-'));
     tempDirs.push(linkDir);
@@ -46,8 +42,6 @@ describe('down migration contract', () => {
       encoding: 'utf8',
     });
 
-    // Pass or fail is the tree's business; producing a verdict at all is this
-    // test's business.
     expect(`${result.stdout}${result.stderr}`).toMatch(/Neon migration check (passed|failed)/);
   });
 
@@ -114,8 +108,6 @@ describe('down migration contract', () => {
   });
 
   it('leaves CREATE EXTENSION and GRANT out of the contract on purpose', () => {
-    // pg_trgm is cluster-wide and shared (0101 installs it); a reversal that
-    // dropped it would take every other migration's trigram index with it.
     expect(
       declaredObjects(`
         create extension if not exists pg_trgm;
@@ -125,7 +117,6 @@ describe('down migration contract', () => {
   });
 
   it('tracks a repeated column name per table rather than collapsing them', () => {
-    // The shape of 0073, which adds organization_id to six content roots.
     const up = `
       alter table public.a add column if not exists organization_id uuid;
       alter table public.b add column if not exists organization_id uuid;

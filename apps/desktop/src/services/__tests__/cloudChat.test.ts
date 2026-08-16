@@ -198,8 +198,6 @@ describe('cloudChat service', () => {
     const replacement = ensureCloudConversation('conv_replacement', 'New chat', 'auto');
     await vi.waitFor(() => expect(createConversation).toHaveBeenCalledTimes(2));
 
-    // Settle the superseded transport while the replacement is still pending.
-    // Its identity-guarded cleanup must not delete the newer coordinator entry.
     rejectFirstCreate(new Error('old transport observed abort'));
     await Promise.resolve();
     const replacementFollower = ensureCloudConversation('conv_replacement', 'New chat', 'auto');

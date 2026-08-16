@@ -170,7 +170,6 @@ export function MCPServerBrowser() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch MCP servers from API
   useEffect(() => {
     const fetchServers = async () => {
       try {
@@ -211,7 +210,6 @@ export function MCPServerBrowser() {
 
       await McpClient.installServer(server.id);
 
-      // Refresh the server list to show the newly installed server
       const updatedServers = await McpClient.getRegistry();
       setServers(updatedServers);
 

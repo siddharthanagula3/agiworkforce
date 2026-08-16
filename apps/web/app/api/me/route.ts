@@ -38,35 +38,19 @@ const PatchMeSchema = z.object({
 });
 
 async function handleGetMe(request: NextRequest) {
-  // Rate limiting
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
 
   try {
-    // Auth: supports both Clerk session (cookie) and Bearer token paths.
     const { userId, email } = await getClerkAuthUser(request);
 
-    // Resolve the real display name + email from the Clerk profile. The session
-    // claims only carry userId (and sometimes email), so without this lookup the
-    // name falls back to the email prefix or 'User'. clerkClient works in both
-    // dev and production Clerk instances.
     let clerkName: string | undefined;
     let resolvedEmail = email ?? undefined;
     try {
       const { clerkClient } = await import('@clerk/nextjs/server');
       const client = await clerkClient();
-      // Cap the Clerk profile lookup: it is a network round-trip and the header
-      // greeting is gated on the resolved name, so a slow Clerk must never stall
-      // /api/me.
-      //
-      // PER-31: a timeout used to become a SESSION-LONG wrong name, because the
-      // comment's promised "later load" never happened (PER-1). Two things fix
-      // that now: the client re-resolves when the Clerk session cookie changes
-      // or the tab regains focus, and any name we do resolve here is written
-      // back to `profiles.display_name` below — so the next read does not
-      // depend on Clerk at all.
       let nameTimer: ReturnType<typeof setTimeout> | undefined;
       const clerkUser = await Promise.race([
         client.users.getUser(userId).finally(() => {
@@ -87,18 +71,12 @@ async function handleGetMe(request: NextRequest) {
       logger.warn({ userId, error: clerkLookupError }, 'Failed to resolve Clerk profile name');
     }
 
-    // PER-8: one resolver owns the profile identity (full name, preferred
-    // name, work description). Readers never re-derive it from Clerk metadata
-    // or a settings namespace on their own.
     const [subscription, identity] = await Promise.all([
       SubscriptionService.getSubscription(userId),
       readUserIdentity(userId),
     ]);
     const profile = identity.profile;
 
-    // PER-31: cache an upstream-resolved name so a future Clerk slowdown is
-    // harmless. Only fills a name we have never been told; never overwrites one
-    // the user chose in Settings.
     if (!identity.displayName && clerkName) {
       await backfillDisplayNameFromUpstream(userId, clerkName);
     }
@@ -111,32 +89,14 @@ async function handleGetMe(request: NextRequest) {
         ? (rawRoutingPreferences as { us_only?: boolean; geo_overlay?: string })
         : {};
 
-    // Entitlement is a function of subscription STATUS, not raw plan_tier: a
-    // canceled/unpaid row can still carry a paid plan_tier (the tier is re-derived
-    // from the Stripe price on every webhook update), so unlocking capabilities off
-    // the raw tier would show paid features (model picker, AGI Work) as available to
-    // a user the server will refuse — a dead/false control. Gate features on the
-    // effective tier; keep the `plan` object below on the raw tier + real status so
-    // billing UI can honestly show "Pro — canceled".
     const effectiveTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
 
     const feature_flags = {
       advanced_model_access: canAccessManualModelSelection(effectiveTier),
-      // Deployment capability, not a user entitlement: whether this deployment
-      // has the reachable E2B execution loop enabled (AGI_E2B_EXECUTION=1).
-      // The composer gates the "Run code" toggle on this so it is never a
-      // cosmetic dead control when the server would ignore code_execution.
       code_execution: e2bCutoverEnabled(),
-      // Safe deployment capability only; never exposes the Perplexity key.
-      // Native provider search remains available independently.
       generic_web_search: webSearchBackendConfigured(),
     };
 
-    // Optional `?surface=` lets a non-web caller (desktop, mobile — both
-    // already validate against this same MeResponseSchema) identify itself
-    // for the surface capability layer below. No existing caller sends this
-    // today, so every request keeps resolving to 'web' exactly as before —
-    // additive, not a behavior change for current clients.
     const requestedSurface = new URL(request.url).searchParams.get('surface');
     const surface: SyncedAppSurface = (SYNCED_APP_SURFACES as readonly string[]).includes(
       requestedSurface ?? '',
@@ -144,14 +104,8 @@ async function handleGetMe(request: NextRequest) {
       ? (requestedSurface as SyncedAppSurface)
       : 'web';
 
-    // First real consumer of the capability-handshake contract
-    // (`@agiworkforce/types` `capability-handshake/`, W5 discipline wave 1) —
-    // see `lib/services/capability-handshake-service.ts` for how each of the
-    // four policy layers is sourced from real, already-resolved data.
     const capability_handshake = buildMeCapabilityHandshake({
       userId,
-      // Effective (status-gated) tier so a canceled/unpaid row does not unlock
-      // paid capabilities. See effectiveTier note above.
       tier: effectiveTier,
       surface,
       cloudExecutionDeploymentEnabled: feature_flags.code_execution,
@@ -168,21 +122,14 @@ async function handleGetMe(request: NextRequest) {
         ? new Date(subscription.current_period_end).getTime() / 1000
         : null,
       cancel_at_period_end: subscription?.cancel_at_period_end ?? false,
-      // The shared contract keeps this optional for rollout compatibility. Use
-      // that fail-closed path when provider identifiers contradict each other
-      // instead of telling clients to open the wrong billing system.
       ...(subscriptionSource === 'unverified' ? {} : { subscription_source: subscriptionSource }),
     };
 
-    // Typed against the shared /api/me contract (packages/services
-    // cloud-contracts) — the contract test in __tests__/route.contract.test.ts
-    // asserts the runtime output parses against the same schema.
     const responseBody: MeResponse = {
       id: userId,
       email: resolvedEmail ?? null,
       name: resolveVisibleName(identity, clerkName, resolvedEmail),
       profile: {
-        // The name the user actually set, or the upstream one we just cached.
         display_name: identity.displayName ?? clerkName ?? null,
         preferred_name: identity.preferredName,
         work_description: identity.workDescription,
@@ -207,13 +154,6 @@ async function handleGetMe(request: NextRequest) {
   }
 }
 
-/**
- * PATCH /api/me
- * Update the current user's profile (display_name, avatar_url).
- * Only columns that exist in public.profiles are persisted here.
- * Extended profile fields (bio, phone, timezone, language) are stored
- * via PUT /api/settings/preferences under the "profile" namespace.
- */
 async function handlePatchMe(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'me');
   if (rateLimitResponse) return rateLimitResponse;
@@ -236,8 +176,6 @@ async function handlePatchMe(request: NextRequest) {
 
   const db = getNeonDb();
 
-  // Build both INSERT columns and UPDATE SET clauses together so a first-write
-  // (no existing profile row) also persists the requested field values.
   const insertCols: string[] = ['id', 'updated_at'];
   const insertVals: string[] = ['$1', 'now()'];
   const setClauses: string[] = ['updated_at = now()'];

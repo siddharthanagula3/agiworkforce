@@ -23,41 +23,28 @@ import { createStore, type StoreApi } from 'zustand/vanilla';
 import type { SharedArtifact } from '@agiworkforce/types';
 
 export interface ArtifactStoreState {
-  /** Current (latest-version) artifacts, in insertion order. */
   artifacts: SharedArtifact[];
-  /** Full version history per artifact id (index 0 = v1 … last = current). */
   versionsById: Record<string, SharedArtifact[]>;
-  /** The artifact shown in the viewer/panel. */
   selectedArtifactId: string | null;
-  /** Whether the artifact side-panel is open. */
   panelOpen: boolean;
 
-  // --- mutations ---
-  /** Add a new artifact, or version-bump an existing id when its content changed. */
   upsertArtifact: (artifact: SharedArtifact) => void;
   upsertArtifacts: (artifacts: SharedArtifact[]) => void;
   removeArtifact: (id: string) => void;
   clearConversation: (conversationId: string) => void;
   clearAll: () => void;
 
-  // --- selectors (pure reads) ---
   getArtifact: (id: string) => SharedArtifact | undefined;
   getArtifactVersions: (id: string) => SharedArtifact[];
   getConversationArtifacts: (conversationId: string) => SharedArtifact[];
 
-  // --- ui ---
   selectArtifact: (id: string | null) => void;
   setPanelOpen: (open: boolean) => void;
   togglePanel: () => void;
-  /** Select an artifact AND open the panel (the inline-card → split-view action). */
   openArtifact: (id: string) => void;
 }
 
 export interface CreateArtifactStoreOptions {
-  /**
-   * Cap on retained artifacts (e.g. mobile MMKV cap of 200). When adding a NEW artifact id
-   * beyond the cap, the oldest is dropped (with its version history). Default: unlimited.
-   */
   maxArtifacts?: number;
 }
 
@@ -68,14 +55,12 @@ interface Collection {
   versionsById: Record<string, SharedArtifact[]>;
 }
 
-/** Pure reducer: add/version-bump one artifact. Idempotent when content is unchanged. */
 function upsertOne(state: Collection, incoming: SharedArtifact, maxArtifacts?: number): Collection {
   const existing = state.artifacts.find((a) => a.id === incoming.id);
 
   if (!existing) {
     let artifacts = [...state.artifacts, incoming];
     const versionsById = { ...state.versionsById, [incoming.id]: [incoming] };
-    // Enforce the cap by dropping the oldest distinct artifact.
     if (maxArtifacts && maxArtifacts > 0 && artifacts.length > maxArtifacts) {
       const dropped = artifacts[0]!;
       artifacts = artifacts.slice(1);
@@ -84,14 +69,11 @@ function upsertOne(state: Collection, incoming: SharedArtifact, maxArtifacts?: n
     return { artifacts, versionsById };
   }
 
-  // Idempotent: identical content (ignoring timestamps) is a no-op — deterministic
-  // re-derivation must not spuriously bump versions.
   const contentUnchanged = existing.content === incoming.content;
   const metadataUnchanged =
     existing.title === incoming.title && existing.language === incoming.language;
   if (contentUnchanged && metadataUnchanged) return state;
 
-  // Metadata-only change (e.g. rename): patch in place without a version bump.
   if (contentUnchanged) {
     const patched: SharedArtifact = {
       ...existing,
@@ -109,7 +91,6 @@ function upsertOne(state: Collection, incoming: SharedArtifact, maxArtifacts?: n
     };
   }
 
-  // Content changed (an edit) → append a new version with an incremented number.
   const nextVersion: SharedArtifact = {
     ...incoming,
     version: existing.version + 1,

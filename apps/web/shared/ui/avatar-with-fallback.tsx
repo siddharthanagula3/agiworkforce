@@ -1,7 +1,3 @@
-/**
- * Avatar with Fallback Component
- * Handles avatar loading with automatic fallback when DiceBear API fails
- */
 
 import { useState, useCallback } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@agiworkforce/ui';
@@ -36,11 +32,10 @@ export function AvatarWithFallback({
     if (!imageError && currentSrc) {
       setImageError(true);
 
-      // If it's a DiceBear URL, try fallback
       if (isDiceBearUrl(currentSrc)) {
         const fallbackUrl = getFallbackForDiceBear(currentSrc);
         setCurrentSrc(fallbackUrl);
-        setImageError(false); // Reset error state to try fallback
+        setImageError(false);
       }
     }
   }, [imageError, currentSrc]);
@@ -49,7 +44,6 @@ export function AvatarWithFallback({
     setImageError(false);
   }, []);
 
-  // Get initials for fallback
   const getInitials = (name: string): string => {
     return name
       .split(' ')

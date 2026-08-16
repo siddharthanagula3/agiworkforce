@@ -1,16 +1,9 @@
-/**
- * H43 — CustomModelsSettings tests
- *
- * Covers: render without crash, list display, add-model form validation,
- * delete model, and test-connection button interaction.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CustomModelsSettings } from '../CustomModelsSettings';
 import type { CustomModelConfig } from '@agiworkforce/types';
 
-// ── Radix UI / jsdom compat polyfills ────────────────────────────────────────
 if (typeof Element.prototype.hasPointerCapture === 'undefined') {
   Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
 }
@@ -28,8 +21,6 @@ class MockResizeObserver {
 }
 global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
-// ── Store mock ────────────────────────────────────────────────────────────────
-
 const mockAddCustomModel = vi.fn();
 const mockUpdateCustomModel = vi.fn();
 const mockRemoveCustomModel = vi.fn();
@@ -46,11 +37,8 @@ vi.mock('../../../stores/settingsStore', () => ({
   ),
 }));
 
-// Mock fetch so test-connection does not hit the network
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
-
-// ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const SAMPLE_MODEL: CustomModelConfig = {
   id: 'fixture-provider/fixture-custom-model-abc123',
@@ -66,8 +54,6 @@ const SAMPLE_MODEL: CustomModelConfig = {
   status: 'connected',
   lastVerified: '2026-02-20T12:00:00Z',
 };
-
-// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe('CustomModelsSettings', () => {
   beforeEach(() => {
@@ -124,7 +110,6 @@ describe('CustomModelsSettings', () => {
       const deleteBtn = screen.getByRole('button', { name: /delete/i });
       await userEvent.click(deleteBtn);
 
-      // The delete button opens a confirmation dialog; confirm it
       const confirmBtn = await screen.findByRole('button', { name: /^Delete$/i });
       await userEvent.click(confirmBtn);
 
@@ -160,7 +145,6 @@ describe('CustomModelsSettings', () => {
         expect(screen.getByText(/add custom model/i)).toBeInTheDocument();
       });
 
-      // Click save without filling required fields
       await userEvent.click(screen.getByRole('button', { name: /add model$/i }));
 
       await waitFor(() => {
@@ -177,7 +161,6 @@ describe('CustomModelsSettings', () => {
       });
 
       await userEvent.type(screen.getByLabelText(/display name/i), 'My Model');
-      // Leave base URL empty and click save
       await userEvent.click(screen.getByRole('button', { name: /add model$/i }));
 
       await waitFor(() => {
@@ -277,7 +260,6 @@ describe('CustomModelsSettings', () => {
         expect(screen.getByText(/edit custom model/i)).toBeInTheDocument();
       });
 
-      // Click Save Changes
       await userEvent.click(screen.getByRole('button', { name: /save changes/i }));
 
       await waitFor(() => {

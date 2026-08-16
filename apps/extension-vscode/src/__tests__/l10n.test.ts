@@ -1,10 +1,3 @@
-/**
- * l10n.test.ts — The extension speaks the editor's language.
- *
- * Guards the two ways localization silently dies: a catalog that drifts out of
- * key parity with English, and a translated button whose click is compared
- * against the English literal it replaced.
- */
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
@@ -24,11 +17,6 @@ function withLanguage<T>(language: string, body: () => T): T {
   }
 }
 
-/**
- * `withLanguage` for async bodies. Restoring in a synchronous `finally` would
- * put the language back before the awaited half of the flow runs, so half the
- * strings would resolve in English.
- */
 async function withLanguageAsync<T>(language: string, body: () => Promise<T>): Promise<T> {
   const previous = mockEnv.language;
   mockEnv.language = language;
@@ -100,7 +88,6 @@ describe('t', () => {
     expect(withLanguage('en', () => t('subsystemHealth.manyUnavailable', { count: 3 }))).toBe(
       'AGI: 3 subsystems unavailable',
     );
-    // Russian moves the number to the end; concatenation could not.
     expect(withLanguage('ru', () => t('subsystemHealth.manyUnavailable', { count: 3 }))).toBe(
       'AGI: недоступных подсистем — 3',
     );
@@ -135,8 +122,6 @@ describe('applyLlmEdit in a translated editor', () => {
 
     await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
 
-    // Comparing the choice against the English 'Apply Inline' would fall
-    // through to the dismissed branch and silently drop the edit.
     expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
     expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
   });

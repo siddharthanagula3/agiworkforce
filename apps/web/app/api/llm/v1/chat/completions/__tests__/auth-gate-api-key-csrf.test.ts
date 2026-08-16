@@ -1,19 +1,3 @@
-/**
- * WEB-APIKEY-CSRF-BLOCK-01: verified API keys clear the completions auth gate
- *
- * /api/llm/v1/chat/completions is the flagship intended API-key consumer
- * (ApiKeyService.verifyKey's own doc comment: "for external API usage"),
- * and its auth-gate.ts runs requireCsrfToken() BEFORE resolving Bearer auth
- * (auth-gate.ts:37-65). Before this fix, `isBearerTokenValid` only
- * recognized Clerk JWTs, so ANY sk_live_/sk_test_ API key — even a freshly
- * issued, fully valid one — was rejected 403 CSRF_VALIDATION_FAILED before
- * getClerkAuthUser ever ran. This test proves the real fix end to end:
- *
- * issue a key via the real POST /api/settings/api-keys route → hit the real
- * runAuthGate() with it → assert it clears BOTH the CSRF gate and auth
- * resolution (ok:true), against a stateful fake DB (only the DB is faked;
- * ApiKeyService, argon2, csrf.ts, and api-auth.ts all run for real).
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -28,12 +12,8 @@ vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 
-// Override test/setup.ts's global `requireCsrfToken → always null` mock —
-// this test exists specifically to prove the REAL csrf.ts decision.
 vi.mock('@/lib/csrf', async (importOriginal) => importOriginal());
 
-// Subscription lookup is unrelated to CSRF/auth; stub a minimal active plan
-// so runAuthGate reaches `ok: true` instead of failing on a later gate.
 const mockGetSubscription = vi.fn();
 vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: {
@@ -51,10 +31,6 @@ vi.mock('@clerk/backend', () => ({
   verifyToken: (...args: unknown[]) => mockVerifyToken(...args),
 }));
 
-// ─── Stateful fake `api_keys` + `profiles` tables — same shape as
-// lib/__tests__/api-auth.test.ts's makeFakeDb(), reused here so the real
-// POST /api/settings/api-keys route and the real ApiKeyService/csrf.ts/
-// api-auth.ts stack all operate against one consistent in-memory store. ───
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn();
 
@@ -146,24 +122,17 @@ function makeFakeDb() {
   mockNeonExecute.mockImplementation(execute);
 }
 
-// Imported AFTER the mocks above so they pick up the real csrf.ts / api-auth.ts.
 import { runAuthGate } from '@/app/api/llm/v1/chat/completions/lib/auth-gate';
 import { ApiKeyService } from '@/lib/services/api-key-service';
 import { getNeonDb } from '@/lib/server/neon-db';
 import type { ApiKeyScope } from '@/lib/api-key-scopes';
 
-// Issuance itself is proven through the real HTTP route (with real CSRF) in
-// lib/__tests__/api-auth.test.ts. This file's subject is the COMPLETIONS
-// gate, so setup calls ApiKeyService directly — still real Argon2/DB code,
-// just skipping the settings route's own CSRF token requirement, which
-// would otherwise apply to this file's overridden real csrf.ts and add
-// noise unrelated to what's under test here.
 async function issueKey(
   userId: string,
   name = 'completions test key',
   scopes: ApiKeyScope[] = ['inference:write'],
 ) {
-  return ApiKeyService.createApiKey(getNeonDb(), userId, name, scopes); // { apiKey, rawKey }
+  return ApiKeyService.createApiKey(getNeonDb(), userId, name, scopes);
 }
 
 function makeCompletionsRequest(bearerToken: string): NextRequest {
@@ -196,10 +165,6 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
     makeFakeDb();
     const { rawKey } = await issueKey('completions-user');
 
-    // Hit the completions gate with it. No Clerk session this call (auth()
-    // → null) and no x-csrf-token header — before the fix this 403'd at the
-    // CSRF step; after the fix the verified key bypasses CSRF and resolves
-    // auth via Path 2a.
     mockAuth.mockResolvedValueOnce({ userId: null });
     const result = await runAuthGate(makeCompletionsRequest(rawKey));
 
@@ -207,7 +172,6 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
     if (result.ok) {
       expect(result.userId).toBe('completions-user');
     }
-    // Never touched the Clerk-JWT verification path.
     expect(mockVerifyToken).not.toHaveBeenCalled();
   });
 
@@ -219,9 +183,6 @@ describe('runAuthGate · verified API key clears CSRF + auth (WEB-APIKEY-CSRF-BL
     mockAuth.mockResolvedValueOnce({ userId: null });
     const result = await runAuthGate(makeCompletionsRequest(rawKey));
 
-    // Native clients authenticate their Bearer credential before CSRF
-    // evaluation. A revoked credential is therefore an authentication failure,
-    // not a browser-origin failure.
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(401);

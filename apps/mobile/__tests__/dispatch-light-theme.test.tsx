@@ -34,8 +34,6 @@ jest.mock('@/components/ui/card', () => {
   return { Card: ({ children }: { children: React.ReactNode }) => <View>{children}</View> };
 });
 
-// The whole point of PAR-M13 is the LIGHT palette: these surfaces resolved to
-// near-white while their text and placeholders stayed literal white/black.
 jest.mock('@/src/ui/theme', () => {
   const tokens = jest.requireActual('@/src/ui/theme/tokens');
   return {
@@ -75,7 +73,6 @@ type RenderedNode = {
   children?: unknown;
 };
 
-/** Flattens a react-test-renderer JSON tree into a prop-bearing node list. */
 function collectNodes(node: unknown, acc: RenderedNode[] = []): RenderedNode[] {
   if (!node || typeof node !== 'object') return acc;
   if (Array.isArray(node)) {
@@ -114,7 +111,6 @@ describe('Dispatch surfaces in light theme', () => {
 
     const instructions = screen.getByText(/Settings → Connections/);
     expect(instructions.props.style).toMatchObject({ color: lightColors.textSecondary });
-    // cameraOverlayTextMuted is 68%-opacity white — invisible here.
     expect(instructions.props.style).not.toMatchObject({
       color: lightColors.cameraOverlayTextMuted,
     });

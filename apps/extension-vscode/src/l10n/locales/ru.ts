@@ -1,6 +1,3 @@
-/**
- * Russian catalog. Key parity with `en` is enforced by l10n.test.ts.
- */
 const ru = {
   'applyEdit.prompt': 'AGI Workforce: применить результат {command}?',
   'applyEdit.applyInline': 'Применить на месте',

@@ -18,32 +18,6 @@ import {
   type SharedProjectSummary,
 } from '@/lib/services/org-sharing-service';
 
-/**
- * GET /api/settings/organization/shared
- *
- * The org-level view of what the organization shares and who can see it:
- * shared projects (with the per-member overrides that decide visibility),
- * shared connectors, and the member roster the admin grants against.
- *
- * TENANCY. The organization is resolved from `organization_members` for the
- * AUTHENTICATED subject — there is no organization id on the wire, so there is
- * nothing for a caller to tamper with. Every statement then binds that
- * server-derived id.
- *
- * This route runs on `getUserScopedDb()`, the non-BYPASSRLS `app_rls`
- * connection, so migration 0086's policies are a real second fence rather than
- * decoration: `organization_shared_projects` / `organization_shared_connectors`
- * are readable only through `app_org_resource_is_readable(organization_id)`,
- * which resolves membership inside the database. Deleting the `where
- * organization_id = $1` predicate from the service would still return nothing
- * for a foreign org.
- *
- * Members and viewers may READ this view — knowing what your organization
- * shares with you is the point of a shared surface. `canManageSharing` tells
- * the client whether to render the mutation controls; the mutation routes
- * re-check it server-side and the DB re-checks it again in WITH CHECK.
- */
-
 export const runtime = 'nodejs';
 
 interface OrgMemberRosterEntry {

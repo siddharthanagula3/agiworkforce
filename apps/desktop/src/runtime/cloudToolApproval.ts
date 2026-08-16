@@ -1,19 +1,3 @@
-/**
- * cloudToolApproval — the per-conversation suspended-turn registry backing
- * `ChatRuntime.resolveToolApproval` for the desktop cloud SSE runtimes
- * (`WebRuntime`, `CloudRuntime`).
- *
- * Mirrors `apps/web/lib/hooks/useChatStream.ts`'s module-level `pendingTurns`
- * registry + `useResolveToolApproval`, adapted to a per-runtime-instance Map
- * (desktop has no cross-component context to share a module-level registry
- * through, and doesn't need one — `ChatRuntime` is already the long-lived
- * owner of per-conversation stream state, see `_abortControllers`).
- *
- * The server owns the private transcript and exact pending-call checkpoint.
- * This registry persists only the durable run reference and UI projection;
- * resume submits the run id plus decisions and can be rehydrated after an app
- * restart from the persisted assistant message.
- */
 import type {
   CloudApprovalTurnProjection,
   StreamEvent,
@@ -49,20 +33,14 @@ interface PendingApprovalTurn {
   model: string;
   calls: PendingApprovalCall[];
   decisions: Map<string, 'approved' | 'rejected'>;
-  /** Assistant text streamed before suspension — seeds the reconstructed tool_calls turn. */
   assistantContent: string;
-  /** Set once the resume request has been dispatched, to prevent double-submit. */
   resolving: boolean;
-  /** Canonical activity accumulated before the approval suspension. */
   agentActivity?: AgentActivityState;
-  /** Rich transcript fields accumulated across every stream round. */
   messageProjection: CloudStreamMessageProjection;
 }
 
 export interface ResolveApprovalOutcome {
-  /** False when the turn suspended again on a further approval request (no final text yet). */
   suspended: boolean;
-  /** Full assistant text across the original turn + every resume so far. Only meaningful when `!suspended`. */
   content: string;
   model: string;
   runId: string;
@@ -97,11 +75,6 @@ function stringifyApprovalArgs(args: Record<string, unknown>): string | undefine
   }
 }
 
-/**
- * Convert the runtime's approval-card projection into the validated durable
- * Cloud metadata contract. Both Desktop Cloud runtimes use this exact mapper
- * so suspend/resume survives reload regardless of host shell.
- */
 export function toPersistedCloudApprovalProjection(
   projection: CloudApprovalTurnProjection | undefined,
 ): CloudToolApprovalProjection | undefined {
@@ -121,7 +94,6 @@ export function toPersistedCloudApprovalProjection(
   });
 }
 
-/** Rebuild shared Desktop approval cards from validated cloud metadata. */
 export function mapPersistedCloudApprovalToolCalls(metadata: unknown): ToolCall[] | undefined {
   const persisted = readPersistedCloudToolApproval(metadata);
   if (!persisted) return undefined;
@@ -152,12 +124,6 @@ function toProjection(turn: PendingApprovalTurn): CloudApprovalTurnProjection | 
   };
 }
 
-/**
- * A minimal sink-shaped view — accepted instead of the full
- * `CloudStreamDeltaSink` so callers don't have to construct one just to call
- * `recordTurnOutcome` (both runtimes already have the sink they streamed
- * with in scope at that point).
- */
 type SinkOutcome = Pick<
   CloudStreamDeltaSink,
   | 'isSuspended'
@@ -170,10 +136,6 @@ type SinkOutcome = Pick<
 export class CloudToolApprovalRegistry {
   private readonly turns = new Map<string, PendingApprovalTurn>();
 
-  /**
-   * Hydrates a fresh runtime from the durable UI projection when necessary.
-   * The server validates the run ownership and canonical pending call set.
-   */
   hasLiveTurn(conversationId: string, projection?: CloudApprovalTurnProjection): boolean {
     if (!this.turns.has(conversationId) && projection?.runId && projection.calls.length > 0) {
       this.turns.set(conversationId, {
@@ -196,11 +158,6 @@ export class CloudToolApprovalRegistry {
     return this.turns.has(conversationId);
   }
 
-  /**
-   * Call after an initial `sendMessage` stream ends. Registers a suspended
-   * turn when the sink reports one; otherwise clears any stale entry for the
-   * conversation (e.g. a later unrelated turn completed normally).
-   */
   recordTurnOutcome(
     conversationId: string,
     run: string | ManagedCloudAgentRunReference | undefined,
@@ -228,24 +185,11 @@ export class CloudToolApprovalRegistry {
     }
   }
 
-  /** Snapshot used to persist partial decisions before the resume dispatches. */
   getTurnProjection(conversationId: string): CloudApprovalTurnProjection | undefined {
     const turn = this.turns.get(conversationId);
     return turn ? toProjection(turn) : undefined;
   }
 
-  /**
-   * Record one tool's approve/reject decision. Once EVERY pending call in the
-   * suspended turn has a decision, dispatches the resume request and streams
-   * the continuation through `emit` (content/tool_call/tool_result/
-   * generated_files/done — the same StreamEvent shapes `sendMessage` emits),
-   * appending onto the same assistant message.
-   *
-   * Returns `null` when the call was ignored (unknown turn/call, already
-   * resolving, or still waiting on other pending decisions in the same turn —
-   * no network request is made yet). Returns the outcome once the resume
-   * request actually runs.
-   */
   async resolve(
     conversationId: string,
     toolCallId: string,
@@ -271,10 +215,6 @@ export class CloudToolApprovalRegistry {
 
     let resumeOperationId: string;
     try {
-      // A transport retry of this exact checkpoint must reuse its billable
-      // operation identity, including after a Desktop restart. The run id and
-      // ordered, complete decision set are durable inputs, while a fresh UUID
-      // here would turn every response-loss retry into a new server operation.
       const digest = await sha256(JSON.stringify({ runId: turn.runId, toolApprovals }));
       resumeOperationId = `resume-${digest.slice(0, 48)}`;
     } catch (error) {
@@ -314,7 +254,6 @@ export class CloudToolApprovalRegistry {
             : undefined;
           let pendingProjection: CloudApprovalTurnProjection | undefined;
           if (sink.isSuspended()) {
-            // The server advanced the same run to a new approval checkpoint.
             const nextTurn: PendingApprovalTurn = {
               runId: turn.runId,
               ...(nextRunReference ? { runReference: nextRunReference } : {}),

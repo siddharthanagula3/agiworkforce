@@ -1,9 +1,3 @@
-/**
- * Cloud Account Settings Screen
- *
- * Aligns with the web AccountSection: current-session management + user ID.
- * Cloud-only — shown when FEATURES.auth is true and user is signed in.
- */
 
 import { useCallback, useLayoutEffect, useState } from 'react';
 import { Alert, Clipboard, Image, View } from 'react-native';
@@ -44,14 +38,10 @@ export default function CloudAccountScreen() {
   const signOut = useAuthStore((s) => s.signOut);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
-  // useAuthStore().user is always null in v1 — Clerk is the real signed-in
-  // user source (see app/(app)/profile/index.tsx for the same pattern).
   const { user: clerkUser } = useUser();
 
   const userId = clerkUser?.id ?? null;
   const userEmail = clerkUser?.primaryEmailAddress?.emailAddress ?? null;
-  // Provider-stored casing is not a presentation decision — shared rule in
-  // @agiworkforce/utils/display-name.
   const rawDisplayName = clerkUser?.fullName ?? clerkUser?.username ?? null;
   const displayName = rawDisplayName ? normalizeDisplayName(rawDisplayName) : null;
   const avatarUrl = clerkUser?.imageUrl ?? null;
@@ -62,8 +52,6 @@ export default function CloudAccountScreen() {
   const [deleting, setDeleting] = useState(false);
 
   useLayoutEffect(() => {
-    // Expo Router can retain this screen instance across a direct Clerk A→B
-    // switch. Clear transient account-A UI before account B paints.
     setCopied(false);
     setLoggingOut(false);
     setExporting(false);
@@ -215,8 +203,6 @@ export default function CloudAccountScreen() {
               return;
             }
             setDeleting(true);
-            // Server derives the user from the Clerk Bearer token; no body needed.
-            // CSRF is bypassed for Bearer-authenticated requests server-side.
             api
               .delete<{ message?: string }>('/api/user/delete-account')
               .then(async (res) => {
@@ -227,9 +213,6 @@ export default function CloudAccountScreen() {
                   );
                   return;
                 }
-                // Sign out to clear cloud-scoped local state on this device.
-                // (Local Mode on-device data is intentionally preserved — it is
-                // not tied to the deleted cloud account.)
                 await signOut().catch(() => {});
                 Alert.alert(
                   'Account deletion scheduled',

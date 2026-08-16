@@ -1,12 +1,3 @@
-// packages/ui/unified-chat/src/components/StatusTrail.tsx
-// Ported from apps/desktop/src/components/UnifiedAgenticChat/StatusTrail.tsx
-//
-// Changes vs source:
-//  - ActionTrailEntry imported from budgetStore (already ships in unified-chat)
-//  - useReducedMotion moved to hooks/useReducedMotion (ported alongside)
-//  - StatusTrail now accepts actionTrail as a prop (host provides it)
-//  - StatusTrailConnected reads from budgetStore.actionTrail directly
-//  - FloatingStatusTrail is also props-driven (accepts actionTrail)
 
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Search, Code, Play, CheckCircle, XCircle, Loader2 } from 'lucide-react';
@@ -14,12 +5,7 @@ import { cn } from '../lib/utils';
 import { type ActionTrailEntry, useBudgetStore } from '../stores/budgetStore';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
-// Re-export for consumers
 export type { ActionTrailEntry };
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Icons + colours
-// ─────────────────────────────────────────────────────────────────────────────
 
 function getIconForType(type: ActionTrailEntry['type']) {
   switch (type) {
@@ -58,10 +44,6 @@ function getColorForType(type: ActionTrailEntry['type']) {
       return 'text-muted-foreground';
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// StatusTrailItem
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface StatusTrailItemProps {
   entry: ActionTrailEntry;
@@ -142,10 +124,6 @@ function StatusTrailItem({ entry, prefersReducedMotion = false }: StatusTrailIte
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StatusTrailContent — props-driven (for testing + explicit control)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export interface StatusTrailContentProps {
   actionTrail: ActionTrailEntry[];
   className?: string;
@@ -192,10 +170,6 @@ export function StatusTrailContent({
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// StatusTrail — store-connected (reads from budgetStore.actionTrail)
-// ─────────────────────────────────────────────────────────────────────────────
-
 export interface StatusTrailProps {
   className?: string;
   variant?: 'absolute' | 'inline';
@@ -214,10 +188,6 @@ export function StatusTrail({ className, variant = 'inline' }: StatusTrailProps)
     />
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FloatingStatusTrail — fixed overlay, reads from budgetStore
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface FloatingStatusTrailProps {
   className?: string;

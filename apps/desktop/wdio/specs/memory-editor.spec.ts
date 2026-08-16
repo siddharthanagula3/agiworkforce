@@ -1,7 +1,3 @@
-// Memory settings QA (checklist row #14) — drives the real Settings > Memory
-// tab via WDIO: add a fact, verify it persists after closing/reopening
-// Settings (real backend round-trip, not just in-memory React state), edit
-// it, delete it, and confirm the empty state returns.
 
 const FACT_TEXT = `QA memory fact ${Date.now()}`;
 const FACT_EDITED = `${FACT_TEXT} (edited)`;
@@ -13,8 +9,6 @@ describe('AGI Desktop Settings — Memory tab (real add/edit/delete + persistenc
   it('adds, persists across reopen, edits, and deletes a memory fact', async function () {
     this.timeout(60000);
 
-    // A fresh profile boots into onboarding (no Settings gear); enter Local
-    // mode first so this passes standalone as well as in-suite.
     await waitForDesktopShell();
     const useLocal = await $('button=Use Local Mode');
     if ((await useLocal.isExisting()) && (await useLocal.isDisplayed())) {
@@ -26,8 +20,6 @@ describe('AGI Desktop Settings — Memory tab (real add/edit/delete + persistenc
     await gear.waitForDisplayed({ timeout: 15000 });
     await gear.click();
 
-    // The nav is disabled while Settings loads; clicking a tab before then is
-    // a silent no-op.
     await waitForSettingsReady();
 
     const clickNavItem = (label: string) =>
@@ -59,14 +51,6 @@ describe('AGI Desktop Settings — Memory tab (real add/edit/delete + persistenc
     await addBtn.waitForClickable({ timeout: 5000 });
     await addBtn.click();
 
-    // The add is a real backend round-trip (store write → loadAll refresh), so
-    // wait for the newly added fact to appear in the memory list rather than a
-    // fixed pause that races the IPC. Match the fact TEXT specifically — a
-    // generic `[role="alert"]` check would falsely satisfy on an unrelated
-    // alert leaked from a prior spec (e.g. an MCP connection warning), racing
-    // ahead of the list render. If the add itself errors, the tab renders its
-    // own inline error containing the fact and this still resolves; the
-    // assertions below then fail loudly with the list contents.
     await browser.waitUntil(
       async () =>
         browser.execute(
@@ -91,12 +75,7 @@ describe('AGI Desktop Settings — Memory tab (real add/edit/delete + persistenc
     expect(factsAfterAdd).not.toBeNull();
     expect(factsAfterAdd).toContain(FACT_TEXT);
 
-    // Close and reopen Settings to verify the fact persisted via the real
-    // backend (not just component-local React state).
     await browser.keys('Escape');
-    // Wait for the whole dialog (not just the nav) to unmount — the Radix
-    // overlay lingers through its exit animation and keeps the Settings gear
-    // pointer-blocked ("not clickable") until it is gone.
     await browser.waitUntil(
       async () =>
         browser.execute(
@@ -109,9 +88,6 @@ describe('AGI Desktop Settings — Memory tab (real add/edit/delete + persistenc
 
     const gearReopen = await $('button[aria-label="Settings"]');
     await gearReopen.waitForExist({ timeout: 10000 });
-    // Click via the DOM: WebDriver's clickability check can reject the gear
-    // while a just-dismissed overlay is still fading, even though the button
-    // is fully functional.
     await browser.execute(() =>
       (
         document.querySelector('button[aria-label="Settings"]') as HTMLButtonElement | null
@@ -128,7 +104,6 @@ describe('AGI Desktop Settings — Memory tab (real add/edit/delete + persistenc
     console.log('FACTS_AFTER_REOPEN', factsAfterReopen);
     expect(factsAfterReopen).toContain(FACT_TEXT);
 
-    // Edit the fact.
     const editBtn = await $(`button[aria-label="Edit memory: ${FACT_TEXT}"]`);
     await editBtn.waitForDisplayed({ timeout: 5000 });
     await editBtn.click();
@@ -150,7 +125,6 @@ describe('AGI Desktop Settings — Memory tab (real add/edit/delete + persistenc
     console.log('FACTS_AFTER_EDIT', factsAfterEdit);
     expect(factsAfterEdit).toContain(FACT_EDITED);
 
-    // Delete the fact.
     const deleteBtn = await $('button[aria-label="Delete memory fact"]');
     await deleteBtn.waitForDisplayed({ timeout: 5000 });
     await deleteBtn.click();

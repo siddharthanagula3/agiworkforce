@@ -1,10 +1,3 @@
-/**
- * L1 Message Handling — message-router policy resolution.
- *
- * Every inbound runtime message is classified by getMessagePolicy before the
- * background router decides whether to honor it. These tests cover the real
- * resolution behavior for the message shapes the extension actually handles.
- */
 
 import { describe, expect, test } from 'vitest';
 import {

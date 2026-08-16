@@ -3,14 +3,6 @@ import { renderHook } from '@testing-library/react-native';
 import { CapabilityProvider, useCapability } from '@/src/lib/capabilities';
 import type { SyncedAppSurface, PlatformCapability } from '@agiworkforce/types';
 
-/**
- * The mobile RN capability adapter is a SEPARATE ~20-line copy of the
- * unified-chat one (mobile cannot import react-dom). This test proves it injects
- * the platform through context and stays in agreement with the shared matrix —
- * the only guard against the two adapter copies drifting apart. The default
- * context is 'mobile', so the desktop-override case proves the provider actually
- * propagates (not merely returns the default).
- */
 function wrapper(platform: SyncedAppSurface) {
   return function Wrapper({ children }: { children: React.ReactNode }) {
     return <CapabilityProvider platform={platform}>{children}</CapabilityProvider>;

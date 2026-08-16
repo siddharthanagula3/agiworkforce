@@ -1,11 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { authService } from './authentication-manager';
 
-// authService is now a Clerk adapter — login/register/password flows return
-// stub errors pointing callers to the Clerk UI components.
-// getCurrentUser() and updateProfile() delegate to fetch('/api/me').
-
-// Mock logger
 vi.mock('@shared/lib/logger', () => ({
   logger: {
     auth: vi.fn(),
@@ -15,11 +10,6 @@ vi.mock('@shared/lib/logger', () => ({
   },
 }));
 
-/**
- * Contract-valid /api/me payload (packages/contracts/cloud-contracts/src/me.ts).
- * getCurrentUser() validates responses with parseMeResponse, so partial
- * payloads throw and surface as an error result instead of a drifted user.
- */
 function mePayload(overrides: Record<string, unknown> = {}) {
   return {
     id: '1',
@@ -84,8 +74,6 @@ describe('AuthService', () => {
     });
 
     it('should return an error when the payload violates the /api/me contract', async () => {
-      // Partial payload (missing plan envelope, timestamps, flags) must fail
-      // parseMeResponse and surface as an error, not a half-populated user.
       mockFetch.mockResolvedValue({
         ok: true,
         json: () => Promise.resolve({ id: '1', email: 'test@example.com' }),
@@ -149,9 +137,7 @@ describe('AuthService', () => {
 
   describe('updateProfile', () => {
     it('should update profile successfully via fetch', async () => {
-      // PATCH call succeeds
       mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) });
-      // getCurrentUser() re-fetch
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>

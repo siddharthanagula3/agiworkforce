@@ -69,7 +69,6 @@ const htmlArtifact: Artifact = {
 
 describe('ArtifactPanel HTML preview under a blocking embedder CSP', () => {
   it('keeps rendering the markup but flags that behaviour will not run', async () => {
-    // The panel measures the capability itself; force the probe's answer.
     const capability = await import('../../lib/artifact-preview-capability');
     vi.spyOn(capability, 'getSameDocumentScriptSupport').mockResolvedValue('blocked');
 
@@ -83,7 +82,6 @@ describe('ArtifactPanel HTML preview under a blocking embedder CSP', () => {
     );
 
     expect(await screen.findByTestId('artifact-preview-scripts-blocked')).toBeTruthy();
-    // Static markup still renders — this is a warning, not a replacement.
     expect(screen.getByTestId('artifact-panel-html-preview')).toBeTruthy();
   });
 

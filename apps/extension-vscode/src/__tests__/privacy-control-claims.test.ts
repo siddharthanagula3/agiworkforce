@@ -25,7 +25,6 @@ import { describe, expect, it } from 'vitest';
 import { buildTrustReviewItems } from '../features/account-auth/accountPresentation';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 
-/** Controls the linked page does not implement; naming one is a false promise. */
 const ABSENT_CONTROL = /\btraining\b|\bretention\b/i;
 
 function renderWebview(): string {

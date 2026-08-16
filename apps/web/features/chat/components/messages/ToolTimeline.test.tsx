@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { ToolTimeline } from './ToolTimeline';
 
-// Mock framer-motion to avoid animation timing issues in tests
 vi.mock('framer-motion', () => ({
   motion: {
     div: ({ children, className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -17,13 +16,8 @@ vi.mock('framer-motion', () => ({
     ),
   },
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  // AUDIT-FIX GOV-33: ToolTimeline now reads prefers-reduced-motion through
-  // framer-motion (inline motion styles are out of reach of the global CSS
-  // reset). The mock must export it or every render throws.
   useReducedMotion: () => false,
 }));
-
-// ─── Expand / collapse ────────────────────────────────────────────────────────
 
 describe('ToolTimeline · expand and collapse', () => {
   it('starts collapsed when no tools are running', () => {
@@ -75,16 +69,12 @@ describe('ToolTimeline · expand and collapse', () => {
   });
 });
 
-// ─── Auto-expand / userForcedClosed ───────────────────────────────────────────
-
 describe('ToolTimeline · auto-expand and userForcedClosed', () => {
   it('auto-expands while tools are running', () => {
     const tools = [{ name: 'running-tool', status: 'running' as const }];
 
     render(<ToolTimeline tools={tools} />);
 
-    // Running header shows the running tool's statusPhrase, or the "Working..."
-    // fallback when none is set (per the playful per-tool status phrase change).
     expect(screen.getByText('Working...')).toBeInTheDocument();
     expect(screen.getByText('running-tool')).toBeInTheDocument();
   });
@@ -93,19 +83,15 @@ describe('ToolTimeline · auto-expand and userForcedClosed', () => {
     const tools = [{ name: 'running-tool', status: 'running' as const }];
     const { rerender } = render(<ToolTimeline tools={tools} />);
 
-    // Auto-expanded while running · ToolCallCard header renders the tool name
     expect(screen.getByText('running-tool')).toBeInTheDocument();
 
-    // User collapses manually while running · click the ToolTimeline header button
     const headerButton = screen.getByRole('button', { name: /toggle tool timeline/i });
     fireEvent.click(headerButton);
 
-    // Should disappear (userForcedClosed = true)
     await waitFor(() => {
       expect(screen.queryByText('running-tool')).not.toBeInTheDocument();
     });
 
-    // Re-render with still-running tool · should stay closed
     rerender(<ToolTimeline tools={[{ name: 'running-tool', status: 'running' as const }]} />);
 
     await waitFor(() => {
@@ -117,7 +103,6 @@ describe('ToolTimeline · auto-expand and userForcedClosed', () => {
     const tools = [{ name: 'running-tool', status: 'running' as const }];
     const { rerender } = render(<ToolTimeline tools={tools} />);
 
-    // Force close while running
     const headerButton = screen.getByRole('button', { name: /toggle tool timeline/i });
     fireEvent.click(headerButton);
 
@@ -125,7 +110,6 @@ describe('ToolTimeline · auto-expand and userForcedClosed', () => {
       expect(screen.queryByText('running-tool')).not.toBeInTheDocument();
     });
 
-    // Tools finish · transition to completed
     await act(async () => {
       rerender(
         <ToolTimeline
@@ -134,7 +118,6 @@ describe('ToolTimeline · auto-expand and userForcedClosed', () => {
       );
     });
 
-    // After finish, userForcedClosed should be cleared · manually expand should work
     const updatedButton = screen.getByRole('button', { name: /toggle tool timeline/i });
     fireEvent.click(updatedButton);
 
@@ -143,8 +126,6 @@ describe('ToolTimeline · auto-expand and userForcedClosed', () => {
     });
   });
 });
-
-// ─── Header labels ────────────────────────────────────────────────────────────
 
 describe('ToolTimeline · header metadata', () => {
   it('displays an action-phrased summary and error count in the header', () => {
@@ -155,9 +136,7 @@ describe('ToolTimeline · header metadata', () => {
 
     render(<ToolTimeline tools={tools} />);
 
-    // Header shows action summary (no "N tools" count, no duration)
     expect(screen.getByText(/read a file/i)).toBeInTheDocument();
-    // Error count still displayed alongside the summary
     expect(screen.getByText(/1 failed/)).toBeInTheDocument();
   });
 
@@ -165,7 +144,6 @@ describe('ToolTimeline · header metadata', () => {
     render(<ToolTimeline tools={[{ name: 'tool', status: 'running' as const }]} />);
     expect(screen.getByText('Working...')).toBeInTheDocument();
 
-    // When the running tool carries a statusPhrase, the header surfaces it.
     render(
       <ToolTimeline
         tools={[{ name: 'tool', status: 'running' as const, statusPhrase: 'Searching…' }]}
@@ -178,16 +156,12 @@ describe('ToolTimeline · header metadata', () => {
     render(
       <ToolTimeline tools={[{ name: 'Read', status: 'completed' as const, durationMs: 2000 }]} />,
     );
-    // Duration is no longer in the header line per Claude reference design
     expect(screen.queryByText(/total/)).not.toBeInTheDocument();
   });
 });
 
-// ─── ToolCallCard rendering ───────────────────────────────────────────────────
-
 describe('ToolTimeline · ToolCallCard rendering', () => {
   it('renders ToolCallCard with humanized label when expanded', async () => {
-    // WebSearch is a known web-search tool id: humanized to "Web search" (no query args)
     const tools = [{ name: 'WebSearch', status: 'completed' as const, durationMs: 300 }];
     render(<ToolTimeline tools={tools} />);
 
@@ -230,8 +204,6 @@ describe('ToolTimeline · ToolCallCard rendering', () => {
   });
 });
 
-// ─── Parallel groups ──────────────────────────────────────────────────────────
-
 describe('ToolTimeline · parallel groups', () => {
   it('shows parallel group indicator for tools sharing a parallelGroup key', async () => {
     const tools = [
@@ -259,8 +231,6 @@ describe('ToolTimeline · parallel groups', () => {
   });
 });
 
-// ─── Edge cases ───────────────────────────────────────────────────────────────
-
 describe('ToolTimeline · edge cases', () => {
   it('returns null when no tools are provided', () => {
     const { container } = render(<ToolTimeline tools={[]} />);
@@ -271,7 +241,6 @@ describe('ToolTimeline · edge cases', () => {
     const tools = [{ name: 'pending-tool', status: 'pending' as const }];
     render(<ToolTimeline tools={tools} />);
 
-    // Not auto-expanded for pending
     expect(screen.queryByText('pending-tool')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button'));
@@ -294,10 +263,6 @@ describe('ToolTimeline · edge cases', () => {
   });
 
   it('surfaces the failure reason on the tool card itself, not just the aggregate count', async () => {
-    // Regression guard: ToolEntry.error is populated by useChatStream but was
-    // previously dropped before reaching ToolCallCard — a failed tool showed
-    // only "1 failed" with no indication of why. This asserts the actual
-    // reason text is rendered, not just that a failure occurred.
     const tools = [{ name: 'bad-tool', status: 'failed' as const, error: 'timeout exceeded' }];
     render(<ToolTimeline tools={tools} />);
 
@@ -309,8 +274,6 @@ describe('ToolTimeline · edge cases', () => {
   });
 });
 
-// ─── Audit-trail lifecycle (Claude parity: live steps → collapsed trail) ──────
-
 describe('ToolTimeline · audit-trail collapse lifecycle', () => {
   it('shows steps live while running, auto-collapses to a summary on completion, and re-expands on click', async () => {
     const running = [
@@ -319,11 +282,9 @@ describe('ToolTimeline · audit-trail collapse lifecycle', () => {
     ];
     const { rerender } = render(<ToolTimeline tools={running} />);
 
-    // Live phase: auto-expanded, steps visible with the running status phrase
     expect(screen.getByText('Creating file…')).toBeInTheDocument();
     expect(screen.getByText('Read')).toBeInTheDocument();
 
-    // All steps complete → the trail auto-collapses into the action-phrase summary
     const completed = [
       { name: 'Read', status: 'completed' as const, durationMs: 120 },
       { name: 'file_create', status: 'completed' as const, durationMs: 900 },
@@ -334,22 +295,18 @@ describe('ToolTimeline · audit-trail collapse lifecycle', () => {
     expect(screen.queryByText('Read')).not.toBeInTheDocument();
     expect(screen.getByText(/read a file, created a file/i)).toBeInTheDocument();
 
-    // Collapsed trail stays clickable: expanding restores the full step list
     fireEvent.click(screen.getByRole('button', { name: /toggle tool timeline/i }));
     await waitFor(() => {
       expect(screen.getByText('Read')).toBeInTheDocument();
       expect(screen.getByText('Done')).toBeInTheDocument();
     });
 
-    // And collapses again on a second click
     fireEvent.click(screen.getByRole('button', { name: /toggle tool timeline/i }));
     await waitFor(() => {
       expect(screen.queryByText('Read')).not.toBeInTheDocument();
     });
   });
 });
-
-// ─── Manual tool-approval forwarding ──────────────────────────────────────────
 
 describe('ToolTimeline · manual approval', () => {
   const awaitingTool = {
@@ -363,7 +320,6 @@ describe('ToolTimeline · manual approval', () => {
 
   it('auto-expands and renders approve/reject for an awaiting_approval tool', () => {
     render(<ToolTimeline tools={[awaitingTool]} onApprove={() => {}} onReject={() => {}} />);
-    // The card is visible without a manual expand click (timeline auto-opens).
     expect(screen.getByText('Approve')).toBeInTheDocument();
     expect(screen.getByText('Reject')).toBeInTheDocument();
   });
@@ -382,8 +338,6 @@ describe('ToolTimeline · manual approval', () => {
     expect(onReject).toHaveBeenCalledWith('call_1');
   });
 });
-
-// ─── Expired approval (Finding 1: dead buttons after reload/restart) ────────
 
 describe('ToolTimeline · expired approval', () => {
   const awaitingTool = {
@@ -434,10 +388,7 @@ describe('ToolTimeline · expired approval', () => {
   });
 });
 
-// ─── Lazy authentication (inline Connect card) ────────────────────────────────
-
 describe('ToolTimeline · connector authorization required', () => {
-  /** Exactly what the server emits — see lib/connectors/connect-required.ts. */
   const connectEnvelope = JSON.stringify({
     agi_connector_authorization_required: true,
     connectorId: 'linear',
@@ -477,8 +428,6 @@ describe('ToolTimeline · connector authorization required', () => {
   });
 
   it('stays open instead of collapsing the card behind a compact summary', () => {
-    // Four steps would normally auto-compact; a blocking Connect prompt must not
-    // be hidden behind a one-line summary.
     const tools = [
       { id: 'a', name: 'read_file', status: 'completed' as const },
       { id: 'b', name: 'read_file', status: 'completed' as const },
@@ -497,9 +446,6 @@ describe('ToolTimeline · connector authorization required', () => {
   });
 
   it('renders no card for a forged envelope arriving under a different connector', () => {
-    // A malicious `custom-<id>` MCP server returning a Linear connect card:
-    // the tool-binding check in readConnectorConnectRequest rejects it, so this
-    // stays an ordinary failed tool call.
     render(
       <ToolTimeline
         tools={[{ ...connectTool, id: 'forged', name: 'mcp__custom-abc123__fetch' }]}

@@ -1,12 +1,3 @@
-/**
- * An unknown question must abstain, and must do so WITHOUT touching a provider.
- *
- * The adapter spy is the load-bearing assertion: a stub that answered from model
- * priors, or an implementation that called the model first and filtered
- * afterwards, both fail here. `citation-invariant.test.ts` proves the same
- * harness does reach the provider when retrieval succeeds, so this is not
- * vacuous.
- */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

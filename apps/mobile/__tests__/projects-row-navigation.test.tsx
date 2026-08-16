@@ -1,13 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * PAR-M17 — a project row must open the project.
- *
- * Tapping a row used to toggle the active-context flag and nothing else, so on
- * a demo the tap looked like a dead control while `/(app)/projects/[id]` — a
- * fully implemented, registered route — was reachable only from the drawer,
- * the chats list and the in-conversation project chip. "Set active" moved onto
- * the long-press sheet, alongside Open / Rename / Delete.
- */
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
@@ -27,15 +18,9 @@ const mockProject = {
 };
 
 jest.mock('expo-router', () => ({
-  // `useNavigation`/`useFocusEffect` come from expo-router, NOT
-  // @react-navigation/native: the monorepo resolves several copies of that
-  // package and importing from it crashed the app at launch. The mock has to
-  // follow the production import or every screen using them throws here.
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
   useFocusEffect: (cb: () => void | (() => void)) => {
     const React = require('react');
-    // Stands in for useFocusEffect's fire-once-on-focus behaviour. Adding `cb` to the
-    // deps would re-run it on every render, which is the opposite of what it mocks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     React.useEffect(() => cb(), []);
   },
@@ -50,8 +35,6 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-  // The bottom-anchored search pill (src/shared/components/BottomSearchBar)
-  // reads the safe-area inset so it clears the home indicator.
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 

@@ -1,22 +1,8 @@
-/**
- * FIX-008 regression test: Privacy Policy content assertions.
- *
- * These checks prevent accidental removal of legally-required disclosures.
- * The test reads the raw TSX source (not the rendered HTML) to assert that
- * the required terms appear in the document. TSX source is the authoritative
- * text — the rendered HTML contains the same strings.
- */
 
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 import { describe, it, expect } from 'vitest';
 
-/**
- * Collapse whitespace before matching. These assertions substring-match raw TSX,
- * and Prettier wraps JSX text across lines — so "…via Google\n Analytics." made
- * a correct, published disclosure look absent. Four of these checks were failing
- * for that reason alone.
- */
 function readNormalized(relativePath: string): string {
   return readFileSync(resolve(__dirname, relativePath), 'utf-8').replace(/\s+/g, ' ');
 }
@@ -31,10 +17,6 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
   });
 
   it('discloses Google Analytics', () => {
-    // Google Analytics is real: shared/components/GoogleAnalytics.tsx loads
-    // gtag.js behind the consent gate. Google Tag Manager is NOT — no container
-    // is loaded anywhere — so it is deliberately not required here. Requiring it
-    // is what kept a false vendor name in a compliance document.
     expect(privacySource).toContain('Google Analytics');
   });
 
@@ -43,7 +25,6 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
   });
 
   it('states EU residency status', () => {
-    // Must mention EU or EEA and explicitly state availability / unavailability
     expect(privacySource.toLowerCase()).toMatch(/eu.*residen|eea|european/i);
   });
 
@@ -68,14 +49,6 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
   });
 
   it('names no AI provider that is absent from the model catalog', () => {
-    // This replaces a "list at least N provider names" assertion, which was
-    // actively harmful: it rewarded padding the list and was satisfied by Groq
-    // and Mistral — two providers DELETED from the catalog (see the R26
-    // canonicalization test in packages/contracts/types). A compliance document
-    // naming a processor that processes nothing is a false disclosure, and the
-    // test demanded it.
-    //
-    // The honest invariant is the opposite one: every provider named must exist.
     const retired = ['Groq', 'Mistral'];
     for (const name of retired) {
       expect(
@@ -86,8 +59,6 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
   });
 
   it('names the managed-cloud providers that are actually reachable', () => {
-    // Direct providers, per MANAGED_CLOUD_ORIGIN_PROVIDERS, plus OpenRouter,
-    // through which aggregator-routing.ts sends MiniMax, Qwen and Zhipu.
     for (const name of ['Anthropic', 'OpenAI', 'Google', 'DeepSeek', 'Perplexity', 'OpenRouter']) {
       expect(
         privacySource,
@@ -97,8 +68,6 @@ describe('Privacy Policy required disclosures (FIX-008)', () => {
   });
 
   it('does not claim "no logging" of conversations', () => {
-    // The old stub said "We do not store, log, or use your conversations" which
-    // contradicts Cloud Mode sync. Ensure that exact phrasing is gone.
     expect(privacySource).not.toContain('We do not store, log, or use your conversations to train');
   });
 

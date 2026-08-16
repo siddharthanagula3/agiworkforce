@@ -104,10 +104,6 @@ describe('cloudAccountAuth', () => {
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
-        // Contract-valid /api/me payload (packages/contracts/cloud-contracts/src/me.ts):
-        // the route returns unix-second numbers for updated_at/current_period_end
-        // and always includes display_name, entitlement/deployment flags, credits, and
-        // routing_preferences. Extra feature flags exercise normalizeFeatureFlags.
         json: vi.fn().mockResolvedValue({
           id: 'user_123',
           email: 'user@example.com',
@@ -539,8 +535,6 @@ describe('cloudAccountAuth', () => {
   });
 
   it('backfills the account email from /api/me when the bearer claim is empty', async () => {
-    // /api/auth/device/token mints `email: ''` whenever the browser approval had
-    // no email claim, so /api/me is the only authoritative source of the address.
     const accessToken = jwtWithClaims({
       sub: 'user_123',
       email: '',

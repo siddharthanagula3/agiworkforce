@@ -1,13 +1,3 @@
-/**
- * ArtifactsGallery Component
- *
- * Gallery-style browser for all created artifacts. Provides:
- * - "Your Artifacts" tab backed by the artifact store
- * - "Inspiration" tab with hardcoded example templates
- * - Category filter row
- * - Search bar
- * - 3-column card grid with hover actions
- */
 
 import { formatDistanceToNow } from 'date-fns';
 import { Copy, Layers, Search, Trash2 } from 'lucide-react';
@@ -20,10 +10,6 @@ import { ArtifactTypeIcon } from '@/lib/artifactUtils';
 import { ArtifactCategoryFilter, type ArtifactCategory } from './ArtifactCategoryFilter';
 import { useShallow } from 'zustand/react/shallow';
 
-// =============================================================================
-// Types
-// =============================================================================
-
 type GalleryTab = 'yours' | 'inspiration';
 
 interface InspirationItem {
@@ -33,10 +19,6 @@ interface InspirationItem {
   description: string;
   tags: string[];
 }
-
-// =============================================================================
-// Inspiration data (hardcoded examples)
-// =============================================================================
 
 const INSPIRATION_ITEMS: InspirationItem[] = [
   {
@@ -106,10 +88,6 @@ const INSPIRATION_ITEMS: InspirationItem[] = [
   },
 ];
 
-// =============================================================================
-// Category → ArtifactType mapping
-// =============================================================================
-
 function categoryMatchesType(category: ArtifactCategory, type: ArtifactType): boolean {
   switch (category) {
     case 'all':
@@ -130,10 +108,6 @@ function categoryMatchesType(category: ArtifactCategory, type: ArtifactType): bo
       return true;
   }
 }
-
-// =============================================================================
-// Type badge color
-// =============================================================================
 
 function getTypeBadgeClass(type: ArtifactType): string {
   switch (type) {
@@ -156,10 +130,6 @@ function getTypeBadgeClass(type: ArtifactType): string {
       return 'bg-zinc-500/15 text-zinc-400 border-zinc-500/20';
   }
 }
-
-// =============================================================================
-// Artifact card — "Your Artifacts" tab
-// =============================================================================
 
 interface ArtifactCardProps {
   summary: ArtifactSummary;
@@ -281,10 +251,6 @@ function ArtifactCard({ summary, onOpen, onDelete, onDuplicate }: ArtifactCardPr
   );
 }
 
-// =============================================================================
-// Inspiration card
-// =============================================================================
-
 interface InspirationCardProps {
   item: InspirationItem;
 }
@@ -326,10 +292,6 @@ function InspirationCard({ item }: InspirationCardProps) {
   );
 }
 
-// =============================================================================
-// Empty state
-// =============================================================================
-
 function ArtifactsEmptyState({ query }: { query: string }) {
   if (query) {
     return (
@@ -353,10 +315,6 @@ function ArtifactsEmptyState({ query }: { query: string }) {
     </div>
   );
 }
-
-// =============================================================================
-// Main component
-// =============================================================================
 
 interface ArtifactsGalleryProps {
   className?: string;
@@ -388,7 +346,6 @@ export function ArtifactsGallery({ className }: ArtifactsGalleryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load artifacts on mount
   useEffect(() => {
     setIsLoading(true);
     listArtifacts({ statuses: ['complete', 'archived'] })
@@ -399,7 +356,6 @@ export function ArtifactsGallery({ className }: ArtifactsGalleryProps) {
       .finally(() => setIsLoading(false));
   }, [listArtifacts]);
 
-  // Filter summaries by category + search
   const filteredSummaries = useMemo(() => {
     return summaries.filter((s) => {
       const matchesCategory = categoryMatchesType(category, s.artifact_type);
@@ -409,7 +365,6 @@ export function ArtifactsGallery({ className }: ArtifactsGalleryProps) {
     });
   }, [summaries, category, searchQuery]);
 
-  // Filter inspiration items by category + search
   const filteredInspiration = useMemo(() => {
     return INSPIRATION_ITEMS.filter((item) => {
       const matchesCategory = categoryMatchesType(category, item.artifact_type);

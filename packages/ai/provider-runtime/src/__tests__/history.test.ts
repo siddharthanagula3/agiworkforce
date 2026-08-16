@@ -24,7 +24,6 @@ describe('ensureToolResultPairing — anthropic-shape', () => {
         role: 'assistant',
         content: [{ type: 'tool_use', id: 'tu1', name: 'do_thing' }],
       },
-      // orphan — no result
       { role: 'user', content: 'next prompt' },
     ];
     const out = ensureToolResultPairing(msgs);
@@ -149,7 +148,6 @@ describe('stripExcessMediaItems', () => {
     ];
     const r = stripExcessMediaItems(msgs, 1);
     expect(r.dropped).toBe(2);
-    // The 1 newest image survived → should be on message[1]
     const m0 = r.messages[0]!.content as unknown[];
     const m1 = r.messages[1]!.content as unknown[];
     expect(m0.length).toBe(0);

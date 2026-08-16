@@ -1,10 +1,3 @@
-/**
- * Gitleaks JSON report adapter (`gitleaks detect --report-format json`).
- *
- * The raw report contains the matched secret. It must never survive into a
- * finding, log line, or model prompt — only rule id, path, and line range are
- * kept, and the description passes through the redactor as a second layer.
- */
 import { z } from 'zod';
 
 import { toEvidence, type AdapterOutcome, type RawFinding } from './types.js';

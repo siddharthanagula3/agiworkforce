@@ -21,11 +21,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ---------------------------------------------------------------------------
-// Chrome API shim
-// ---------------------------------------------------------------------------
 const chromeMock = vi.hoisted(() => {
-  // The allowlist — starts empty; tests populate it via localStore
   const localStore: Record<string, unknown> = {};
 
   const debuggerMock = {
@@ -70,22 +66,13 @@ const chromeMock = vi.hoisted(() => {
   return mock;
 });
 
-// ---------------------------------------------------------------------------
-// Imports after mock installation
-// ---------------------------------------------------------------------------
 import { assertDestinationAllowlisted, getOrigin } from '../src/features/computer-use/cdpDriver';
 import { NavigationOffAllowlistError } from '../src/features/computer-use/agentLoop';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 function setAllowlist(origins: string[]): void {
   chromeMock._localStore['agi_site_allowlist'] = origins;
 }
 
-// ---------------------------------------------------------------------------
-// Tests: assertDestinationAllowlisted
-// ---------------------------------------------------------------------------
 describe('cdpDriver.assertDestinationAllowlisted — P0 security fix', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -126,7 +113,7 @@ describe('cdpDriver.assertDestinationAllowlisted — P0 security fix', () => {
   });
 
   it('rejects javascript: scheme before checking allowlist', async () => {
-    setAllowlist(['javascript:evil']); // even if somehow added — must still reject
+    setAllowlist(['javascript:evil']);
     await expect(assertDestinationAllowlisted('javascript:alert(1)')).rejects.toThrow(
       /only http\/https URLs allowed/,
     );
@@ -147,7 +134,6 @@ describe('cdpDriver.assertDestinationAllowlisted — P0 security fix', () => {
   });
 
   it('rejects when chrome.storage is unavailable (fail-closed)', async () => {
-    // Simulate storage failure
     chromeMock.storage.local.get = vi.fn().mockRejectedValue(new Error('storage unavailable'));
     await expect(assertDestinationAllowlisted('https://example.com')).rejects.toThrow(
       /not on your AGI site allowlist/,
@@ -162,9 +148,6 @@ describe('cdpDriver.assertDestinationAllowlisted — P0 security fix', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: agentLoop NavigationOffAllowlistError abort
-// ---------------------------------------------------------------------------
 describe('agentLoop — aborts on post-navigate off-allowlist tab URL', () => {
   // We test NavigationOffAllowlistError is correctly exported and identifiable
   it('NavigationOffAllowlistError is an Error subclass with the right name', () => {
@@ -183,9 +166,6 @@ describe('agentLoop — aborts on post-navigate off-allowlist tab URL', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Tests: escalation engine — structural trigger detection
-// ---------------------------------------------------------------------------
 describe('escalationEngine — detectStructuralTriggers', () => {
   it('is importable without error', async () => {
     const mod = await import('../src/features/computer-use/escalationEngine');
@@ -198,7 +178,6 @@ describe('escalationEngine — detectStructuralTriggers', () => {
   it('makeEscalationDecision returns shouldEscalate=false when no triggers', async () => {
     const { makeEscalationDecision } =
       await import('../src/features/computer-use/escalationEngine');
-    // A fill result where everything succeeded and read-back matches
     const fillResults = [
       { key: 'firstName', selector: '#first', success: true, skipped: false },
       { key: 'email', selector: '#email', success: true, skipped: false },
@@ -219,10 +198,6 @@ describe('escalationEngine — detectStructuralTriggers', () => {
         required: true,
       },
     ];
-    // Profile values that match what we'd "read back" (verifyReadback will return
-    // false in jsdom since elements don't exist, but the filler marked them success=true
-    // so the readback trigger only fires if verifyReadback returns false AND success=true).
-    // In this test we confirm the code path runs without crash.
     const decision = makeEscalationDecision(fillResults, detectedFields, {}, 'greenhouse');
     expect(typeof decision.shouldEscalate).toBe('boolean');
     expect(Array.isArray(decision.triggers)).toBe(true);

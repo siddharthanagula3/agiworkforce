@@ -66,10 +66,6 @@ function verifyInstalledPackageJson(extractedPath: string, installedPath: string
   }
 
   const { __metadata: metadata, ...installedManifest } = installed;
-  // VS Code currently adds __metadata when installing a VSIX, but its fields
-  // are an internal implementation detail and have changed across releases.
-  // Validate the container when present and prove the public install boundary
-  // separately with `--list-extensions --show-versions`.
   if (metadata !== undefined && !isRecord(metadata)) {
     throw new Error('VS Code attached malformed installation metadata to package.json');
   }

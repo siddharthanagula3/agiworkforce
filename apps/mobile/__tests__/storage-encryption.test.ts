@@ -1,21 +1,4 @@
-/**
- * Encryption-at-rest tests for the SQLite storage layer (PRD-MOBILE §12, §13).
- *
- * Verifies:
- * 1. SQLCipher key derived from Crypto.getRandomBytesAsync(32) — full 256-bit entropy.
- * 2. Key stored in SecureStore with WHEN_UNLOCKED_THIS_DEVICE_ONLY access class.
- * 3. PRAGMA key applied before any other SQL (before WAL, before migrations).
- * 4. Existing key reused from SecureStore without re-generating.
- * 5. DB opened as "agi_mobile.db".
- * 6. WAL mode enabled after keying.
- * 7. Singleton: getDb() returns same instance on repeated calls.
- *
- * Physical encryption ("file is opaque without key") is enforced by SQLCipher
- * and validated on-device via Detox (task mobile-detox).
- */
 
-// Mocks must be declared before imports — jest hoists jest.mock() calls.
-// Use jest.fn() inside the factory instead of referencing outer variables.
 jest.mock('expo-sqlite', () => {
   const execAsync = jest.fn().mockResolvedValue(undefined);
   const runAsync = jest.fn().mockResolvedValue({ lastInsertRowId: 1, changes: 1 });
@@ -64,7 +47,6 @@ function makeBytes(len = 32): Uint8Array {
   return b;
 }
 
-// Grab the mock db instance that openDatabaseAsync resolves with.
 function getMockDb() {
   return openDatabaseAsync.mock.results[0]?.value as Promise<{
     execAsync: jest.Mock;

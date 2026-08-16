@@ -6,24 +6,6 @@ import { useId } from 'react';
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import type { ConsentDecision, ConsentPurpose } from '@/lib/consent-purposes';
 
-/**
- * Per-purpose opt-in checkboxes for a data-entry point.
- *
- * DPDP s.6(1) requires consent to be given by a "clear affirmative action", so
- * every box here is rendered UNTICKED and there is no pre-selection, no
- * "select all", and no styling that makes a ticked box the path of least
- * resistance. s.5 requires the notice to accompany or precede the request, so
- * the notice link is inside the same block rather than in a footer.
- *
- * s.6(1) also forbids bundling: a purpose marked `necessaryForRequest: false`
- * must never block submission. The parent form enforces that by only requiring
- * the necessary purposes; this component simply labels which is which so the
- * person can see that the optional box is genuinely optional.
- *
- * The unticked state is not "no answer". The submitting form sends a decision
- * for every purpose shown, including the ones left unticked, so the record
- * distinguishes a refusal from never having been asked.
- */
 export function ConsentCheckboxes({
   purposes,
   value,
@@ -31,7 +13,6 @@ export function ConsentCheckboxes({
   disabled = false,
 }: {
   purposes: readonly ConsentPurpose[];
-  /** Ticked purposes, by id. Starts empty — never seed this with a purpose. */
   value: readonly string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
@@ -56,8 +37,6 @@ export function ConsentCheckboxes({
                 id={inputId}
                 type="checkbox"
                 name={`consent-${purpose.id}`}
-                // Controlled from an empty initial array: the box is unticked on
-                // first paint and stays unticked until the person clicks it.
                 checked={value.includes(purpose.id)}
                 disabled={disabled}
                 onChange={(event) => toggle(purpose.id, event.target.checked)}
@@ -109,13 +88,6 @@ export function ConsentCheckboxes({
   );
 }
 
-/**
- * Turn the ticked set into the decision array the API expects.
- *
- * Every purpose that was ON SCREEN produces a decision, ticked or not. Sending
- * only the ticked ones would record a refusal as an absence, and an absence
- * cannot be told apart from never having asked.
- */
 export function toConsentDecisions(
   purposes: readonly ConsentPurpose[],
   ticked: readonly string[],
@@ -126,11 +98,6 @@ export function toConsentDecisions(
   }));
 }
 
-/**
- * The required purposes that have not been ticked. Non-empty means the form
- * must not submit — not because we want the extra data, but because storing an
- * address for a purpose nobody agreed to is the thing DPDP forbids.
- */
 export function missingRequiredConsents(
   purposes: readonly ConsentPurpose[],
   ticked: readonly string[],

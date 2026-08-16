@@ -45,23 +45,8 @@ import {
 import { MOONSHOT_MODEL_CATALOG } from './catalog';
 import { withMoonshotCacheUsageNormalization } from './cache-usage';
 
-/**
- * Moonshot runs two separate platforms with separate accounts and separate
- * keys: `api.moonshot.ai` (international) and `api.moonshot.cn` (China). A key
- * issued for one is rejected by the other with a bare
- * `401 Invalid Authentication`, which reads as a bad key rather than a key
- * pointed at the wrong platform.
- *
- * The default was `.cn`, so an international key — the kind `founder_work.md`
- * documents, and the kind that lists the current curated model — failed out of the box with no
- * hint that the endpoint was the problem. `.cn` remains reachable through
- * `MOONSHOT_BASE_URL`; both hosts are allowlisted below and both are
- * registered in `MOONSHOT_NATIVE_BASE_URLS`, so the streaming-usage compat is
- * identical either way.
- */
 const MOONSHOT_DEFAULT_BASE_URL = 'https://api.moonshot.ai/v1';
 
-/** Hosts a `baseUrl` override is allowed to resolve to (SSRF allowlist). */
 const MOONSHOT_ALLOWED_BASE_HOSTS: readonly string[] = [
   'api.moonshot.cn',
   'api.moonshot.ai',
@@ -79,15 +64,7 @@ const MOONSHOT_AUTH_METHODS: readonly AuthMethod[] = [
 ];
 
 export interface MoonshotAdapterConfig extends ProviderAdapterConfig {
-  /** Skip dynamic /models discovery — return only the curated catalog. */
   skipDiscovery?: boolean;
-  /**
-   * Extra hostnames a `baseUrl` override may resolve to, beyond
-   * `api.moonshot.cn` / `api.moonshot.ai` / `localhost` / `127.0.0.1`. A
-   * `baseUrl` whose host isn't allowlisted falls back to the default base
-   * URL rather than being trusted unconditionally (SSRF guard implemented by
-   * `@agiworkforce/provider-runtime`).
-   */
   additionalAllowedBaseUrlHosts?: readonly string[];
 }
 

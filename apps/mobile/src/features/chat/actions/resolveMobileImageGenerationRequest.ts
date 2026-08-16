@@ -36,12 +36,6 @@ export type MobileImageGenerationRequestDecision =
       status: 'ready';
       prompt: string;
       model: string;
-      /**
-       * Only present when the chosen model's adapter actually publishes it.
-       * Absent means "no opinion" and the route keeps its own default, which is
-       * the honest outcome for a ratio the adapter cannot map — better than
-       * sending one the route would reject and failing the whole turn.
-       */
       aspectRatio?: ManagedMediaImageAspectRatio;
       ownerId: string;
     };
@@ -49,7 +43,6 @@ export type MobileImageGenerationRequestDecision =
 export interface ResolveMobileImageGenerationRequestInput {
   executionMode: 'local' | 'cloud';
   text: string;
-  /** Composer output kind. 'image' means every send this turn is an image request. */
   mediaMode: 'text' | 'image' | 'video';
   selection: string;
   subscriptionTier?: string | null;
@@ -60,16 +53,9 @@ export interface ResolveMobileImageGenerationRequestInput {
   ownerId: string | null;
   grantedCapabilities: readonly string[];
   isOnline: boolean;
-  /** Output shape chosen in the [+] sheet. Validated against the model here. */
   aspectRatio?: string;
 }
 
-/**
- * Narrow the caller's choice to a ratio the wire accepts AND the chosen model's
- * adapter publishes. Two gates, not one: the contract enum bounds the wire, and
- * the catalog bounds the adapter, so a persisted ratio that was valid for the
- * previous model is dropped rather than sent to one that would reject it.
- */
 function resolveAspectRatio(
   modelId: string,
   aspectRatio: string | undefined,
@@ -125,22 +111,11 @@ function blocked(code: MobileImageGenerationBlockCode): MobileImageGenerationReq
   return { status: 'blocked', code, alert: BLOCKED_ALERTS[code] };
 }
 
-/**
- * Canonical Mobile admission for both new-chat and existing-conversation image
- * turns. This action classifies the request and fails closed before either
- * screen mutates conversation state or invokes the Cloud media action.
- */
 export function resolveMobileImageGenerationRequest(
   input: ResolveMobileImageGenerationRequestInput,
 ): MobileImageGenerationRequestDecision {
   const text = input.text.trim();
   const slashImageRequest = /^\/image(?:\s|$)/i.test(text);
-  // Image mode is an explicit user choice, so it admits EVERY send this turn
-  // and never consults the wording classifier. Without this the composer could
-  // sit in Image mode showing the image model's name while a prompt that did
-  // not happen to contain an image word ("Create an stylist anime MC") fell
-  // through to chat completions and came back as prose — the mode chip and the
-  // model that actually answered disagreeing on screen.
   const explicitImageMode = input.mediaMode === 'image';
   const cloudDispatch =
     !explicitImageMode && input.executionMode === 'cloud' && !input.hasAttachments
@@ -169,15 +144,7 @@ export function resolveMobileImageGenerationRequest(
   }
   if (!input.isOnline) return blocked('offline');
 
-  // In Image mode the model is whatever the user picked in the Add-to-chat
-  // catalog (falling back to the image_generation slot), the same source the
-  // composer chip reads. Routing through the dispatcher here would ignore that
-  // choice and re-derive a model from the prompt's wording.
   if (explicitImageMode || slashImageRequest) {
-    // The generate route is prompt-only — it accepts no input images. An
-    // explicit request that carries attachments has to fail loudly here;
-    // dropping the attachments and generating from the prompt alone would
-    // silently answer a different question than the one that was asked.
     if (input.hasAttachments) return blocked('route_unavailable');
 
     const modelId = resolveMediaModelId('image');

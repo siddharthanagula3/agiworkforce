@@ -18,11 +18,6 @@ const stripe = STRIPE_SECRET_KEY
   ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: STRIPE_API_VERSION })
   : null;
 
-/**
- * GET /api/billing/payment-methods
- * List the current user's Stripe payment methods.
- * Returns empty list if Stripe is not configured or user has no customer.
- */
 async function handleGetPaymentMethods(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'billing-payment-methods');
   if (rateLimitResponse) return rateLimitResponse;
@@ -55,7 +50,6 @@ async function handleGetPaymentMethods(request: NextRequest) {
   }
 
   try {
-    // Retrieve the customer to get their default payment method.
     const customer = await stripe.customers.retrieve(sub.stripe_customer_id);
     if (customer.deleted) {
       return NextResponse.json({ payment_methods: [] });

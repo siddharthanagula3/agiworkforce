@@ -1,32 +1,17 @@
-/**
- * contextBuilder.ts — Rich context builder for AI requests
- *
- * Gathers workspace context (active file, open editors, git status,
- * diagnostics, workspace structure) and formats it into a single
- * string suitable for prepending to LLM system prompts.
- *
- * All methods are fail-safe — they return empty strings on error,
- * never throw.
- */
 
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-// AUDIT-FIX: vscode-reorg
 import { getActiveWorkspaceFolderSync } from '../platform/workspaceFolders';
 import { redactSecrets } from '../core/telemetry';
 
 const execFileAsync = promisify(execFile);
-
-// ─── Output limits ────────────────────────────────────────────────────────────
 
 const MAX_GIT_DIFF_CHARS = 2000;
 const MAX_FILE_TREE_CHARS = 1500;
 const MAX_TREE_ENTRIES = 30;
 const MAX_SELECTION_CHARS = 3000;
 const MAX_DIAGNOSTICS = 20;
-
-// ─── Interfaces ───────────────────────────────────────────────────────────────
 
 export interface ActiveFileContext {
   filePath: string;
@@ -59,13 +44,7 @@ export interface ContextBuildOptions {
   includeOpenFiles?: boolean;
 }
 
-// ─── Context builder ──────────────────────────────────────────────────────────
-
 export class ContextBuilder {
-  /**
-   * Returns context for the currently active editor tab.
-   * Returns undefined if no editor is open.
-   */
   getActiveFileContext(): ActiveFileContext | undefined {
     try {
       const editor = vscode.window.activeTextEditor;
@@ -92,9 +71,6 @@ export class ContextBuilder {
     }
   }
 
-  /**
-   * Returns a list of all open editor tabs with their file paths and languages.
-   */
   getOpenFilesContext(): OpenFileEntry[] {
     try {
       const entries: OpenFileEntry[] = [];
@@ -105,7 +81,6 @@ export class ContextBuilder {
           const input = tab.input;
           if (input instanceof vscode.TabInputText) {
             const uri = input.uri;
-            // Infer language from extension since tab doesn't expose languageId
             const languageId = this._inferLanguageFromUri(uri);
             entries.push({
               filePath: uri.fsPath,
@@ -123,10 +98,6 @@ export class ContextBuilder {
     }
   }
 
-  /**
-   * Runs `git status --porcelain` and `git diff --stat` in the workspace root.
-   * Returns a formatted string. Returns empty string if not a git repo or git is unavailable.
-   */
   async getGitContext(): Promise<string> {
     try {
       const workspaceRoot = getActiveWorkspaceFolderSync()?.uri.fsPath;
@@ -139,7 +110,6 @@ export class ContextBuilder {
         const result = await execFileAsync('git', ['status', '--porcelain'], execOpts);
         statusOutput = result.stdout.trim();
       } catch {
-        // Not a git repo or git not installed
         return '';
       }
 
@@ -158,7 +128,6 @@ export class ContextBuilder {
       const parts: string[] = ['Git status:'];
 
       if (statusOutput !== '') {
-        // Parse porcelain output into readable summary
         const lines = statusOutput.split('\n');
         const staged: string[] = [];
         const modified: string[] = [];
@@ -200,10 +169,6 @@ export class ContextBuilder {
         if (truncatedDiff.length > MAX_GIT_DIFF_CHARS) {
           truncatedDiff = truncatedDiff.slice(0, MAX_GIT_DIFF_CHARS) + '\n... (truncated)';
         }
-        // PR-2C (F-07): redact common secret patterns (JWT, sk-*, AKIA, ghp_,
-        // etc.) before forwarding the diff to LLM context. The user may
-        // have staged secret-containing changes that have not yet been
-        // committed; without this, those secrets land in upstream prompts.
         parts.push(`\nDiff summary:\n${redactSecrets(truncatedDiff)}`);
       }
 
@@ -213,10 +178,6 @@ export class ContextBuilder {
     }
   }
 
-  /**
-   * Returns VS Code diagnostics (errors, warnings) for the active file.
-   * Returns an empty array if no active editor or no diagnostics.
-   */
   getDiagnosticsContext(): DiagnosticEntry[] {
     try {
       const editor = vscode.window.activeTextEditor;
@@ -225,7 +186,6 @@ export class ContextBuilder {
       const allDiagnostics = vscode.languages.getDiagnostics(editor.document.uri);
       if (allDiagnostics.length === 0) return [];
 
-      // Prioritize errors and warnings — skip hints/info for context budget
       const diagnostics = allDiagnostics
         .filter((d) => d.severity <= vscode.DiagnosticSeverity.Warning)
         .slice(0, MAX_DIAGNOSTICS);
@@ -243,10 +203,6 @@ export class ContextBuilder {
     }
   }
 
-  /**
-   * Returns a tree-like representation of the workspace top-level structure.
-   * Limited to MAX_TREE_ENTRIES entries and MAX_FILE_TREE_CHARS characters.
-   */
   async getWorkspaceStructure(): Promise<string> {
     try {
       const workspaceFolder = getActiveWorkspaceFolderSync();
@@ -255,7 +211,6 @@ export class ContextBuilder {
       const rootUri = workspaceFolder.uri;
       const entries = await vscode.workspace.fs.readDirectory(rootUri);
 
-      // Sort: directories first, then files, alphabetically within each group
       const sorted = entries.sort((a, b) => {
         const aIsDir = a[1] === vscode.FileType.Directory ? 0 : 1;
         const bIsDir = b[1] === vscode.FileType.Directory ? 0 : 1;
@@ -263,7 +218,6 @@ export class ContextBuilder {
         return a[0].localeCompare(b[0]);
       });
 
-      // Filter out common noise directories
       const ignored = new Set([
         'node_modules',
         '.git',
@@ -305,12 +259,6 @@ export class ContextBuilder {
     }
   }
 
-  /**
-   * Combines all context sources into a single formatted string
-   * suitable for prepending to LLM system prompts.
-   *
-   * Options control which sections are included. Default: include everything.
-   */
   async buildFullContext(options?: ContextBuildOptions): Promise<string> {
     const includeGit = options?.includeGit ?? true;
     const includeDiagnostics = options?.includeDiagnostics ?? true;
@@ -318,7 +266,6 @@ export class ContextBuilder {
 
     const sections: string[] = [];
 
-    // 1. Active file context
     const activeFile = this.getActiveFileContext();
     if (activeFile !== undefined) {
       const fileParts: string[] = [
@@ -335,7 +282,6 @@ export class ContextBuilder {
       sections.push(fileParts.join('\n'));
     }
 
-    // 2. Open files
     if (includeOpenFiles) {
       const openFiles = this.getOpenFilesContext();
       if (openFiles.length > 0) {
@@ -346,7 +292,6 @@ export class ContextBuilder {
       }
     }
 
-    // 3. Diagnostics
     if (includeDiagnostics) {
       const diagnostics = this.getDiagnosticsContext();
       if (diagnostics.length > 0) {
@@ -358,7 +303,6 @@ export class ContextBuilder {
       }
     }
 
-    // 4. Git context
     if (includeGit) {
       const gitContext = await this.getGitContext();
       if (gitContext !== '') {
@@ -366,7 +310,6 @@ export class ContextBuilder {
       }
     }
 
-    // 5. Workspace structure
     const structure = await this.getWorkspaceStructure();
     if (structure !== '') {
       sections.push(structure);
@@ -376,8 +319,6 @@ export class ContextBuilder {
 
     return '--- Workspace Context ---\n' + sections.join('\n\n') + '\n--- End Context ---';
   }
-
-  // ─── Private helpers ──────────────────────────────────────────────────────
 
   private _inferLanguageFromUri(uri: vscode.Uri): string {
     const ext = uri.fsPath.split('.').pop()?.toLowerCase() ?? '';
@@ -448,8 +389,6 @@ export class ContextBuilder {
     }
   }
 }
-
-// ─── Singleton ────────────────────────────────────────────────────────────────
 
 let _instance: ContextBuilder | undefined;
 

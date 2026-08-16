@@ -1,12 +1,3 @@
-/**
- * Default `FSBridge` implementation backed by `node:fs/promises`.
- *
- * Resolves relative hunk paths against `cwd`. When `workspaceOnly: true`
- * (the default in apply-patch options), the caller-side guard checks the
- * resolved absolute path is rooted under `cwd` before any fs op. We don't
- * re-check inside the bridge so that callers with their own boundary
- * enforcement (sandbox, Tauri scope guard) can skip the redundant check.
- */
 
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';

@@ -1,16 +1,4 @@
 #!/usr/bin/env node
-/**
- * Regenerate the TypeScript bindings for crates/agiworkforce-protocol into
- * packages/contracts/types/src/generated/protocol (restructure Wave 5 stage b).
- *
- * The tree is COMMITTED (web/Vercel builds cannot run cargo). The check mode
- * compares a fresh isolated export with the committed working tree without
- * mutating it; write mode publishes a validated export non-destructively.
- *
- * Steps: generate into an isolated staging dir -> validate the required roots
- * -> write an index.ts barrel -> prettier -> compare or publish only after
- * every prior step succeeds.
- */
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -39,7 +27,6 @@ try {
     },
   });
 
-  /** Collect every generated .ts file (ts-rs may nest via per-type export_to dirs). */
   function collectTsFiles(dir, prefix = '') {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     const files = [];
@@ -83,7 +70,6 @@ try {
     );
   }
 
-  // Guard against duplicate type names across modules: `export *` would clash.
   const seen = new Map();
   for (const mod of modules) {
     const base = path.basename(mod);
@@ -152,10 +138,6 @@ try {
       `Verified ${modules.length} protocol type modules in ${path.relative(repoRoot, outDir)}`,
     );
   } else {
-    // Keep the committed bindings available throughout generation. Copy every
-    // validated module first, publish the barrel last, and only then remove
-    // stale files that the new barrel no longer references. A failed or
-    // interrupted export therefore never leaves consumers with an empty tree.
     fs.mkdirSync(outDir, { recursive: true });
     const publishOrder = [...expectedFiles].sort((left, right) => {
       if (left === 'index.ts') return 1;

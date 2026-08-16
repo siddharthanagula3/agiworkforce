@@ -1,35 +1,17 @@
 'use client';
 
-/**
- * AttachmentPreview - Horizontal row of file thumbnails above the textarea
- *
- * - Images: 56x56 rounded thumbnail with X remove button
- * - Documents: file icon + name + size + X remove button
- * - Animate in/out with framer-motion
- */
-
 import { memo } from 'react';
 import { X, FileText, FileSpreadsheet, FileCode, File as FileIcon, Lock } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@shared/lib/utils';
 import type { AttachmentPreview as AttachmentPreviewData } from '@features/chat/hooks/use-attachments';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface AttachmentPreviewProps {
   previews: AttachmentPreviewData[];
   onRemove: (index: number) => void;
   className?: string;
-  /**
-   * Per-file privacy label rendered as a chip on each attachment thumbnail.
-   * Surfaces the outbound destination ("Local" / "BYOK" / "Managed") so the
-   * user can see whether sending will leave the device. PLAN.md section 5:
-   * "Add file inclusion policy and per-file privacy labels".
-   */
   privacyShortLabel?: string;
 }
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -53,15 +35,11 @@ function getDocIcon(mimeType: string) {
   return FileIcon;
 }
 
-// ─── Animation variants ──────────────────────────────────────────────────────
-
 const itemVariants = {
   initial: { opacity: 0, scale: 0.8, y: 8 },
   animate: { opacity: 1, scale: 1, y: 0 },
   exit: { opacity: 0, scale: 0.8, y: 8 },
 };
-
-// ─── Remove Button ───────────────────────────────────────────────────────────
 
 function RemoveButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
@@ -84,8 +62,6 @@ function RemoveButton({ onClick, label }: { onClick: () => void; label: string }
     </button>
   );
 }
-
-// ─── Image Thumbnail ─────────────────────────────────────────────────────────
 
 function PrivacyChip({ label }: { label: string }) {
   return (
@@ -133,8 +109,6 @@ function ImageThumbnail({
     </motion.div>
   );
 }
-
-// ─── Document Chip ───────────────────────────────────────────────────────────
 
 function DocumentChip({
   preview,
@@ -192,8 +166,6 @@ function DocumentChip({
     </motion.div>
   );
 }
-
-// ─── Main Component ──────────────────────────────────────────────────────────
 
 function AttachmentPreviewComponent({
   previews,

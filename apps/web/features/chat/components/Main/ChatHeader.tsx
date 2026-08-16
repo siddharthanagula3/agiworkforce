@@ -1,15 +1,5 @@
 'use client';
 
-/**
- * ChatHeader - Clean, minimal header
- *
- * Redesigned with:
- * - Essential actions only (sidebar, title, search, menu)
- * - Secondary actions in overflow menu
- * - Clean visual hierarchy
- * - Profile popover on avatar click
- */
-
 import React from 'react';
 import Link from 'next/link';
 import { Badge, Button, Input } from '@agiworkforce/ui';
@@ -47,10 +37,6 @@ import { PLAN_LABEL, isFreePlan, normalizeUIPlanTier } from '@agiworkforce/types
 import { useShareConversation } from '../../hooks/use-share-conversation';
 import { ShareConversationDialog } from '../share/ShareConversationDialog';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function getInitials(name: string | undefined, email: string | undefined): string {
   if (name && name.trim()) {
     const parts = name.trim().split(/\s+/);
@@ -64,10 +50,6 @@ function getInitials(name: string | undefined, email: string | undefined): strin
   }
   return 'AG';
 }
-
-// ---------------------------------------------------------------------------
-// Profile Popover
-// ---------------------------------------------------------------------------
 
 function ProfilePopover() {
   const { user, logout } = useAuthStore();
@@ -177,10 +159,6 @@ function ProfilePopover() {
     </Popover>
   );
 }
-
-// ---------------------------------------------------------------------------
-// cn import (local copy to avoid circular)
-// ---------------------------------------------------------------------------
 
 function cn(...classes: (string | false | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');

@@ -10,9 +10,6 @@ import { WEB_APP_URL } from '../api/config';
 import { parseMeResponse, type MeResponse } from '@agiworkforce/cloud-contracts';
 import { effectivePlanTier, normalizeUIPlanTier, tierAtLeast } from '@agiworkforce/types';
 import { invoke } from '../lib/tauri-mock';
-// Runtime flags come from the zero-import leaf, not the barrel: this module runs during
-// auth-store init (checkSession → isLocalDevBrowser), and pulling `isTauri`
-// through the cyclic `tauri-mock` barrel reads it before initialization.
 import { isElectronHost, isTauri } from '../lib/runtimeEnvironment';
 import { authorizeDesktopDevice } from './desktopDeviceAuthorization';
 import {
@@ -20,9 +17,6 @@ import {
   type DesktopCloudSignInWindowSession,
 } from './desktopCloudSignInWindow';
 import { openDesktopCloudAccountWindow } from './desktopCloudAccountWindow';
-// NOTE: egressGuard is required LAZILY at its call site (fetchAccountSnapshot)
-// to break the load-time cycle egressGuard → appModeStore → auth →
-// cloudAccountAuth → egressGuard. A static import here re-introduces it.
 
 export class AuthError extends Error {
   constructor(
@@ -352,10 +346,6 @@ class CloudAccountAuthService {
   }
 
   private clearNativeSession(): Promise<void> {
-    // Clears share the same queue as writes. If A is already inside an
-    // irreversible keyring write, sign-out's clear runs after it; a later B
-    // write then runs after the clear. Native credential order therefore
-    // matches session-generation order even when individual invokes hang.
     return this.enqueueNativeCredentialOperation(async () => {
       await invoke('account_clear_tokens');
     });
@@ -421,10 +411,6 @@ class CloudAccountAuthService {
     try {
       const { guardedFetch } = await import('../lib/egressGuard');
       if (usesNativeCloudAccountBridge) {
-        // Device authorization, account validation, managed chat persistence,
-        // and native sync all terminate at the Next.js managed-cloud origin.
-        // Set it before requesting a code so a fresh install cannot fall back
-        // to a stale API-gateway override.
         await invoke('account_store_api_base_url', { apiBaseUrl: WEB_APP_URL });
       }
       if (!attemptIsCurrent()) {
@@ -495,8 +481,6 @@ class CloudAccountAuthService {
             return;
           }
           if (isElectronHost) {
-            // Electron denies embedded popups at the main-process boundary.
-            // Use its shell shim so device approval opens in the real browser.
             const { open } = await import('@tauri-apps/plugin-shell');
             await open(url);
             return;
@@ -565,20 +549,10 @@ class CloudAccountAuthService {
     return this.authorizeCloudAccount();
   }
 
-  /**
-   * Adopt a credential produced by native in-app sign-in.
-   *
-   * Native sign-in authenticates the user against Clerk inside the app and
-   * exchanges that session for the SAME first-party device credential the
-   * browser-approval path produces (see `desktopNativeSignIn.ts`). From here
-   * on the two paths are indistinguishable: one vault, one refresh route, one
-   * expiry schedule. There is deliberately no second credential store.
-   */
   async adoptNativeCredential(credential: {
     accessToken: string;
     refreshToken?: string;
   }): Promise<AuthResponse> {
-    // A native attempt supersedes any in-flight browser approval.
     this.deviceAuthorizationController?.abort();
     this.deviceAuthorizationController = null;
     this.updateState({ isLoading: true, error: null });
@@ -593,9 +567,6 @@ class CloudAccountAuthService {
     this.clearSessionExpiryTimer();
     clearAuthCache();
 
-    // Local authority is revoked synchronously. Remote logout and native-vault
-    // cleanup are best-effort teardown, never prerequisites for denying a new
-    // Managed Cloud operation.
     this.updateState({
       user: null,
       session: null,
@@ -608,23 +579,15 @@ class CloudAccountAuthService {
     });
 
     if (typeof window !== 'undefined') {
-      // Cloud sign-out must not erase unrelated session-scoped Desktop UI
-      // state. Only the development-browser credential seed belongs here;
-      // Tauri credentials live in the native encrypted account store.
       window.sessionStorage.removeItem(DEV_BROWSER_SESSION_STORAGE_KEY);
     }
 
-    // In-flight durable runs must be cancelled while the retiring bearer is
-    // still accepted by the server. Local authority and refresh work were
-    // already revoked above, so this hook cannot admit new Managed operations.
     try {
       await options.beforeCredentialRevocation?.();
     } catch (error) {
       console.warn('[Auth] Failed to cancel every retiring Cloud operation:', error);
     }
 
-    // A newer sign-in supersedes this teardown. Never let account A's delayed
-    // native clear or remote logout erase/revoke account B's replacement.
     if (this.sessionGeneration !== signOutGeneration || this.currentState.session !== null) return;
 
     const nativeClear = usesNativeCloudAccountBridge
@@ -652,9 +615,6 @@ class CloudAccountAuthService {
               signal: controller.signal,
             });
           } catch (error) {
-            // Local credential removal must still complete when the network is
-            // unavailable. The server-side developer token is short-lived and
-            // will expire even if this best-effort revocation cannot be sent.
             console.warn('[Auth] Could not revoke the Cloud session remotely:', error);
           } finally {
             clearTimeout(timeoutId);
@@ -846,9 +806,6 @@ class CloudAccountAuthService {
           500,
           'token_store_failed',
         );
-        // The native vault may have accepted one token before a later write
-        // failed. Clear both native and in-memory state so the UI can never
-        // appear authenticated with a session that cannot be restored safely.
         if (this.sessionSnapshotIsCurrent(generation, session.user.id, session.access_token)) {
           await this.invalidateSession(authError.message);
         }
@@ -914,8 +871,6 @@ class CloudAccountAuthService {
     try {
       const snapshot = await this.fetchAccountSnapshot(session.access_token);
       if (!this.sessionSnapshotIsCurrent(generation, user.id, session.access_token)) {
-        // A newer account/session owns currentState. This stale request is not
-        // an authorization failure and must neither publish nor invalidate it.
         return true;
       }
       if (snapshot.profile) setCachedData('profile', user.id, snapshot.profile);
@@ -924,18 +879,10 @@ class CloudAccountAuthService {
 
       this.updateState({
         ...snapshot,
-        // The device bearer carries `email: ''` whenever the browser approval
-        // had no email claim, so /api/me is the only authoritative source of
-        // the account address. Fold it back onto the user instead of dropping
-        // it into `profile` alone, or every consumer of `authState.user.email`
-        // (sidebar, account settings) shows a blank address forever.
         user:
           this.currentState.user && !this.currentState.user.email && snapshot.profile?.email
             ? { ...this.currentState.user, email: snapshot.profile.email }
             : this.currentState.user,
-        // A successful account snapshot with no subscription is the canonical
-        // Free-tier state, not a billing fetch failure. The orchestrator uses
-        // `succeeded + null subscription` to select the Free plan honestly.
         subscriptionFetchStatus: 'succeeded',
         error: null,
       });
@@ -953,10 +900,6 @@ class CloudAccountAuthService {
           ? error.message
           : 'AGI Cloud account details are temporarily unavailable. Your session is still connected.',
       });
-      // Only an explicit authorization response invalidates the credential.
-      // Network, rate-limit, server, and contract failures keep the revocable
-      // session connected so a transient /api/me outage cannot sign the user
-      // back out immediately after a successful in-app authorization.
       return !authorizationRejected;
     }
   }
@@ -1121,9 +1064,6 @@ class CloudAccountAuthService {
   }
 
   private async fetchAccountSnapshot(accessToken: string): Promise<AccountSnapshot> {
-    // Dynamic import breaks the egressGuard ↔ appModeStore load-time cycle while
-    // working under ESM (a relative `require()` does not resolve here). By the
-    // time this async method runs, the module graph is fully loaded.
     const { guardedFetch } = await import('../lib/egressGuard');
     const response = await guardedFetch(`${WEB_APP_URL}/api/me?surface=desktop`, {
       method: 'GET',
@@ -1146,9 +1086,6 @@ class CloudAccountAuthService {
       );
     }
 
-    // Validate against the shared /api/me contract (packages/services) — a
-    // mismatch throws into refreshUserData's catch (fetch status 'failed',
-    // cached snapshot kept) instead of silently mis-mapping account fields.
     const data = parseMeResponse(await response.json());
     const userId = data.id || (this.currentState.user?.id ?? userFromAccessToken(accessToken).id);
     const now = new Date().toISOString();

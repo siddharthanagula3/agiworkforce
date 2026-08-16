@@ -1,10 +1,3 @@
-/**
- * Agent Detail Screen
- *
- * Full-screen view of a single agent: progress, current action,
- * run artifacts, expandable tool call log, and controls.
- * Accessible by tapping the ChevronRight on an agent card.
- */
 import { useCallback } from 'react';
 import { View, ScrollView, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -48,10 +41,6 @@ import { sendAgentCommand, requestAgentRefresh } from '@/services/companion';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
-// ---------------------------------------------------------------------------
-// Status helpers
-// ---------------------------------------------------------------------------
-
 function AgentStatusIcon({ status }: { status: 'running' | 'completed' | 'failed' | 'waiting' }) {
   const colors = useThemeColors();
   switch (status) {
@@ -84,10 +73,6 @@ function getStatusBadgeColor(
       return 'blue';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Agent Detail Screen
-// ---------------------------------------------------------------------------
 
 export default function AgentDetailScreen() {
   const colors = useThemeColors();
@@ -130,7 +115,6 @@ export default function AgentDetailScreen() {
 
   if (!FEATURES.agents) return <FeatureUnavailable feature="Agents" />;
 
-  // Agent not found — may have been removed
   if (!agent) {
     return (
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
@@ -437,10 +421,6 @@ export default function AgentDetailScreen() {
     </SafeAreaView>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function ArtifactTypeIcon({ type }: { type: string }) {
   const colors = useThemeColors();

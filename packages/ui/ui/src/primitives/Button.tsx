@@ -1,17 +1,5 @@
 'use client';
 
-/**
- * NOTE: Button.tsx is not itself in the audited drift batch, but LoadingButton.tsx
- * (which IS in the batch) imports it directly, so it must exist here for
- * LoadingButton to typecheck standalone. Pulled in as a required dependency.
- *
- * Drift resolution: desktop's `default` variant had an extra `border border-border`
- * that web's did not. Resolved toward web (no border): neither apps/web nor
- * apps/desktop globals.css/design tokens show any intent for filled primary buttons
- * to carry a visible border, `bg-primary` already provides its own visual boundary,
- * and every other drifted file in this batch (Card, Select, Spinner) also resolves
- * toward web — so this keeps the shared primitive consistent with that convention.
- */
 import * as React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -44,16 +32,9 @@ const buttonVariants = cva(
   },
 );
 
-// React 19 ref-as-prop pattern - no forwardRef needed
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
   asChild?: boolean;
-  /**
-   * Indicates the button is in a loading state. Sets `aria-busy`, disables the
-   * button, and (for text buttons) announces "Loading, please wait" to
-   * assistive technologies. Additive and opt-in: defaults to `false`, so
-   * existing callers render exactly as before.
-   */
   isLoading?: boolean;
   ref?: React.Ref<HTMLButtonElement>;
 }
@@ -74,8 +55,6 @@ function Button({
   const classes = cn(buttonVariants({ variant, size, className }));
   const inert = disabled || isLoading;
 
-  // Radix Slot requires exactly one child element, so when composing (`asChild`)
-  // we must not inject the loading / sr-only spans — only forward a11y state.
   if (asChild) {
     return (
       <Comp
@@ -92,8 +71,6 @@ function Button({
     );
   }
 
-  // Icon-only buttons (no visible text) need an accessible name; fall back to a
-  // visually-hidden label when the caller supplied neither text nor aria-label.
   const hasTextContent = React.Children.toArray(children).some(
     (child) => typeof child === 'string' && child.trim() !== '',
   );

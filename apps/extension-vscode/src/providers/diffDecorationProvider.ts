@@ -1,13 +1,3 @@
-/**
- * diffDecorationProvider.ts — Inline diff decorations with accept/reject CodeLens
- *
- * Wave 3 enhancements:
- * - Line-level gutter decorations showing + (added) and - (removed) clearly
- * - Summary header above each diff: "Changes: +X lines, -Y lines in filename"
- * - Keyboard shortcuts for accept (Ctrl+Shift+A) and reject (Ctrl+Shift+R)
- * - Accept All / Reject All commands for multi-file patch batches
- * - Compatibility with patch:path format from Wave 2
- */
 
 import * as vscode from 'vscode';
 
@@ -18,11 +8,8 @@ export interface DiffSession {
   readonly originalText: string;
   readonly newText: string;
   readonly decorations: vscode.DecorationOptions[];
-  /** File path (relative) associated with this diff, for display purposes. */
   readonly filePath?: string;
-  /** Patch batch ID this diff belongs to, if any. */
   readonly batchId?: string;
-  /** Confidence level from patch engine. */
   readonly confidence?: 'high' | 'medium' | 'low';
 }
 
@@ -81,7 +68,6 @@ export class DiffCodeLensProvider implements vscode.CodeLensProvider {
 
       const r = new vscode.Range(session.range.start.line, 0, session.range.start.line, 0);
 
-      // Summary header showing change counts
       const summary = computeDiffSummary(session.originalText, session.newText);
       const fileName = session.filePath ?? vscode.workspace.asRelativePath(session.uri);
       const summaryParts: string[] = [];
@@ -90,7 +76,6 @@ export class DiffCodeLensProvider implements vscode.CodeLensProvider {
       if (summary.modified > 0) summaryParts.push(`~${summary.modified}`);
       const summaryText = summaryParts.join(', ');
 
-      // Confidence indicator
       const confidenceLabel =
         session.confidence === 'high'
           ? '$(pass-filled)'
@@ -102,34 +87,29 @@ export class DiffCodeLensProvider implements vscode.CodeLensProvider {
       const confidenceText = confidenceLabel !== '' ? ` ${confidenceLabel}` : '';
 
       lenses.push(
-        // Summary header
         new vscode.CodeLens(r, {
           title: `$(diff) Changes: ${summaryText} in ${fileName}${confidenceText}`,
           tooltip: `${summary.added} added, ${summary.removed} removed, ${summary.modified} modified lines`,
           command: '',
         }),
-        // Accept single diff (Ctrl+Shift+A)
         new vscode.CodeLens(r, {
           title: '$(check) Accept',
           tooltip: 'Apply this suggestion (Ctrl+Shift+A)',
           command: 'agi-workforce.acceptDiff',
           arguments: [session.id],
         }),
-        // Reject single diff (Ctrl+Shift+R)
         new vscode.CodeLens(r, {
           title: '$(close) Reject',
           tooltip: 'Dismiss this suggestion (Ctrl+Shift+R)',
           command: 'agi-workforce.rejectDiff',
           arguments: [session.id],
         }),
-        // Accept all in this file
         new vscode.CodeLens(r, {
           title: '$(check-all) Accept All in File',
           tooltip: 'Apply all suggestions in this file',
           command: 'agi-workforce.acceptAllDiffs',
           arguments: [document.uri],
         }),
-        // Reject all in this file
         new vscode.CodeLens(r, {
           title: '$(close-all) Reject All in File',
           tooltip: 'Dismiss all suggestions in this file',
@@ -138,13 +118,11 @@ export class DiffCodeLensProvider implements vscode.CodeLensProvider {
         }),
       );
 
-      // Track batch IDs for batch-level actions
       if (session.batchId !== undefined) {
         batchIds.add(session.batchId);
       }
     }
 
-    // Add batch-level Accept All / Reject All if there are multiple batch sessions
     for (const batchId of batchIds) {
       const batchSessions = [...this._sessions.values()].filter(
         (s) => s.batchId === batchId && s.uri.toString() === document.uri.toString(),
@@ -194,7 +172,6 @@ export class DiffDecorationProvider implements vscode.Disposable {
   private readonly _disposables: vscode.Disposable[] = [];
 
   constructor() {
-    // v3 palette: success=#22c55e (dark), danger=#ef4444 (dark), warning=#f59e0b (dark)
     this._addedDecoration = vscode.window.createTextEditorDecorationType({
       isWholeLine: true,
       backgroundColor: new vscode.ThemeColor('diffEditor.insertedLineBackground'),
@@ -220,7 +197,6 @@ export class DiffDecorationProvider implements vscode.Disposable {
       before: { contentText: ' ', backgroundColor: '#f59e0b', width: '2px', margin: '0 4px 0 0' },
     });
 
-    // Gutter decorations with clear + / - indicators (v3 success/danger palette)
     this._addedGutter = vscode.window.createTextEditorDecorationType({
       isWholeLine: false,
       before: {
@@ -359,10 +335,8 @@ export class DiffDecorationProvider implements vscode.Disposable {
     }
   }
 
-  /** Accept all diffs belonging to a specific batch across all files. */
   async acceptBatch(batchId: string): Promise<void> {
     const batchSessions = [...this._activeDiffs.values()].filter((s) => s.batchId === batchId);
-    // Group by URI, process each file bottom-to-top
     const byUri = new Map<string, DiffSession[]>();
     for (const s of batchSessions) {
       const key = s.uri.toString();
@@ -378,7 +352,6 @@ export class DiffDecorationProvider implements vscode.Disposable {
     }
   }
 
-  /** Reject all diffs belonging to a specific batch across all files. */
   rejectBatch(batchId: string): void {
     const batchSessions = [...this._activeDiffs.values()].filter((s) => s.batchId === batchId);
     for (const session of batchSessions) {
@@ -386,13 +359,6 @@ export class DiffDecorationProvider implements vscode.Disposable {
     }
   }
 
-  /**
-   * The diff nearest the cursor in the focused editor.
-   *
-   * This is the session a keybinding means when it passes no arguments — a
-   * keybinding cannot supply a session id, so every argument-free entry point
-   * resolves through here instead of looking up `undefined`.
-   */
   currentSession(): DiffSession | undefined {
     const editor = vscode.window.activeTextEditor;
     if (editor === undefined) return undefined;
@@ -412,22 +378,12 @@ export class DiffDecorationProvider implements vscode.Disposable {
     return closest;
   }
 
-  /**
-   * Accept the diff nearest the cursor in the focused editor (keyboard path).
-   *
-   * Returns false when no diff in the focused editor could be resolved, so the
-   * caller can say so instead of leaving the keypress looking broken.
-   */
   async acceptCurrentDiff(): Promise<boolean> {
     const closest = this.currentSession();
     if (closest === undefined) return false;
     return this.acceptDiff(closest.id);
   }
 
-  /**
-   * Reject the diff nearest the cursor in the focused editor (keyboard path).
-   * Returns false when there was nothing to reject.
-   */
   rejectCurrentDiff(): boolean {
     const closest = this.currentSession();
     if (closest === undefined) return false;
@@ -435,7 +391,6 @@ export class DiffDecorationProvider implements vscode.Disposable {
     return true;
   }
 
-  /** Accept all diffs across all open files. */
   async acceptAllGlobal(): Promise<void> {
     const allUris = new Set([...this._activeDiffs.values()].map((s) => s.uri.toString()));
     for (const uriStr of allUris) {
@@ -446,7 +401,6 @@ export class DiffDecorationProvider implements vscode.Disposable {
     }
   }
 
-  /** Reject all diffs across all open files. */
   rejectAllGlobal(): void {
     const sessionIds = [...this._activeDiffs.keys()];
     for (const id of sessionIds) {

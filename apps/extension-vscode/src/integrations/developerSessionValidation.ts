@@ -3,10 +3,6 @@ import type { ThreadSummary } from '@agiworkforce/types';
 
 type VerifiedDeveloperSessionTrustMode = Exclude<ThreadSummary['trustMode'], 'unknown'>;
 
-/**
- * Compare workspace ownership metadata without allowing process-relative host
- * values to inherit authority from the Extension Host's current directory.
- */
 export function isSameWorkspacePath(ownerCwd: string, candidateCwd?: string): boolean {
   if (candidateCwd === undefined || !path.isAbsolute(ownerCwd) || !path.isAbsolute(candidateCwd)) {
     return false;
@@ -18,10 +14,6 @@ export function isSameWorkspacePath(ownerCwd: string, candidateCwd?: string): bo
     : owner === candidate;
 }
 
-/**
- * Validate the app-server's authoritative response before any prompt, editor
- * context, or attachment is sent to `turn/start`.
- */
 export function assertRunnableStartedThread(
   thread: ThreadSummary,
   requestedCwd: string,

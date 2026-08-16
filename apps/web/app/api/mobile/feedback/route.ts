@@ -1,19 +1,3 @@
-/**
- * Mobile App Feedback API
- *
- * POST /api/mobile/feedback — accepts bug reports / feature requests / general
- * feedback from the mobile app's Settings → Support → "Report App Issue" screen
- * (apps/mobile/src/features/feedback/index.tsx).
- *
- * Was previously calling this exact path with no backend route behind it — every
- * submission 404'd and the user's feedback was silently lost (surfaced to them
- * as "Submission Failed", but never reached anyone). Writes into the existing
- * (until now unused) `public.feedback` table from db/neon/0016_misc.sql.
- *
- * user_id is intentionally optional: feedback is reachable from both Local and
- * Cloud mode, and a Local-only user with no Cloud account must still be able to
- * submit feedback — the table's user_id column is nullable for this reason.
- */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
@@ -31,8 +15,6 @@ const FeedbackSchema = z.object({
 });
 
 async function handleSubmitFeedback(request: NextRequest) {
-  // Bearer-authenticated requests (the mobile app) are bypassed inside
-  // requireCsrfToken; cookie-auth callers still need a valid token.
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
 
@@ -46,8 +28,6 @@ async function handleSubmitFeedback(request: NextRequest) {
   }
   const { type, message } = parsed.data;
 
-  // Soft auth — attribute the feedback when signed in, accept it anonymously
-  // otherwise (Local-only users have no Cloud account to require here).
   const { userId } = await auth();
 
   const db = getNeonDb();

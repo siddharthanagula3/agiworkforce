@@ -68,19 +68,6 @@ export const agiPalette = {
   },
 } as const;
 
-/**
- * ChatGPT-leaning "cool" palette. Founder decision 2026-07-27: desktop and both
- * extensions follow ChatGPT colors (apps/web's chat surface already did, via
- * `[data-chat-theme='cool']`).
- *
- * Values are the same ones `chat.css` already ships under that attribute, so
- * the two stay in lockstep and the WCAG work recorded there (AUDIT-FIX GOV-34)
- * carries over instead of being re-derived. Do not drift one without the other.
- *
- * `state.warning` in dark is the one addition: #ef8c57 sampled from the
- * "Full access" permission chip in the reference capture, which is exactly what
- * our own permission chips render.
- */
 export const agiCoolPalette = {
   light: {
     surface: {
@@ -156,12 +143,6 @@ export const agiRadii = {
   '2xl': '24px',
 } as const;
 
-/**
- * Font stacks per docs/design/design-spec-2026-05-15.md §2. Each value is a
- * complete CSS `font-family` string and can be applied directly via
- * `style.fontFamily`. Mirrored into `agiChatCssVars` as `--chat-font-*` for
- * stylesheet consumers.
- */
 export const agiTypography = {
   sans: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
   serif: "'IBM Plex Serif', Georgia, 'Times New Roman', serif",
@@ -169,11 +150,6 @@ export const agiTypography = {
   mono: "'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace",
 } as const;
 
-/**
- * Shadow ramps shared across surfaces. Values picked to read clearly on the
- * warm-off-white canvas (light mode) and the warm-charcoal canvas (dark mode)
- * without producing hard cut-outs on either.
- */
 export const agiShadows = {
   sm: '0 1px 2px rgba(0, 0, 0, 0.04)',
   md: '0 4px 16px rgba(0, 0, 0, 0.12)',
@@ -322,12 +298,6 @@ export const agiNativeColors = {
   },
 } as const;
 
-/**
- * Chrome extension surface. The compact browser UI uses AGI's warm neutral
- * palette and terra action colour: the surrounding Chrome frame is already a
- * cool neutral, so carrying the product palette into the panel makes the
- * extension recognisably AGI without adding decorative colour.
- */
 export const agiExtensionCssVars = {
   dark: {
     '--agi-ext-bg': agiPalette.dark.surface.base,
@@ -394,14 +364,7 @@ export const agiExtensionCssVars = {
 } as const satisfies Record<AgiThemeMode, CssVariableMap>;
 
 export const agiVsCodeCssVars = {
-  // Panel palette. Fixed (not theme-derived) so the panel looks the same across
-  // VS Code + Cursor + Windsurf + Antigravity.
-  //
-  // Founder decision 2026-07-27 replaced the Linear-style indigo set approved
   // 2026-06-13 (#09090b / #5e6ad2) with {@link agiCoolPalette}, so this panel,
-  // the Chrome panel and desktop now share one ChatGPT-leaning ramp instead of
-  // three different ones. The diff tokens below stay theme-derived — they must
-  // agree with the host editor's own diff colors, not with our brand.
   '--agi-vscode-bg': agiCoolPalette.dark.surface.base,
   '--agi-vscode-surface': agiCoolPalette.dark.surface.sidebar,
   '--agi-vscode-overlay': agiCoolPalette.dark.surface.overlay,

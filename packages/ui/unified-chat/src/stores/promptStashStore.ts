@@ -1,10 +1,3 @@
-/**
- * promptStashStore — surface-agnostic store for saved prompts (PromptStash).
- *
- * Persists saved prompt entries to localStorage.
- *
- * Phase A Slice 5 (ported from apps/desktop/src/stores/promptStashStore)
- */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
@@ -18,11 +11,8 @@ export interface PromptStashEntry {
 interface PromptStashState {
   entries: PromptStashEntry[];
 
-  /** Save a new prompt. Generates a stable id from timestamp. */
   save: (text: string, label?: string) => void;
-  /** Remove a single entry by id. */
   remove: (id: string) => void;
-  /** Clear all saved prompts. */
   clear: () => void;
 }
 
@@ -52,8 +42,6 @@ export const usePromptStashStore = create<PromptStashState>()(
     },
   ),
 );
-
-// ── Selectors ─────────────────────────────────────────────────────────────────
 
 export const selectPromptStashEntries = (s: PromptStashState): PromptStashEntry[] => s.entries;
 export const selectPromptStashCount = (s: PromptStashState): number => s.entries.length;

@@ -18,18 +18,6 @@ import {
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 import { hasAcceptedCurrentTerms } from '@/lib/server/terms';
 
-// RFC 8628 device-code POLL. Mirrors services/api-gateway deviceAuth.ts `/token`.
-// The CLI polls this until the user approves at /auth/device. Status codes are
-// part of the contract the CLI client (apps/cli/src/oauth.rs) keys on:
-//   403 { error: "authorization_pending" } — not approved yet (keep polling)
-//   400 { error: "expired_token" | "access_denied" } — terminal
-//   200 { access_token, token_type, expires_in } — approved
-//
-// On approval we mint the SAME first-party HS256 bearer the gateway mints
-// (same claims + JWT_SECRET), so a token issued here is accepted by the gateway
-// when the shared secret is configured. The token is IDENTITY-ONLY — it does not
-// grant managed-cloud inference/billing, which stay behind their own gates.
-
 export const runtime = 'nodejs';
 
 const TokenPollSchema = z.object({ device_code: z.string().uuid() });
@@ -92,9 +80,6 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     return NextResponse.json({ error: 'authorization_pending' }, { status: 403, ...noStore });
   }
 
-  // Approval and polling are separate requests. Re-check at issuance so a
-  // policy revision published between them cannot mint a session under stale
-  // assent.
   if (!(await hasAcceptedCurrentTerms(record.user_id))) {
     return NextResponse.json({ error: 'terms_acceptance_required' }, { status: 400, ...noStore });
   }
@@ -114,7 +99,6 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     throw createError.internal('Token signing is not configured');
   }
 
-  // Single-use: mark consumed so a leaked device_code cannot be replayed.
   const consumed = await db.transaction(async (tx) => {
     const consumedRows = await tx.query<{ status: string }>(
       `UPDATE device_authorization_codes
@@ -140,11 +124,9 @@ async function handleDeviceCodePoll(request: NextRequest): Promise<NextResponse>
     return true;
   });
   if (!consumed) {
-    // Lost the race to another poll that already consumed it.
     return NextResponse.json({ error: 'expired_token' }, { status: 400, ...noStore });
   }
 
-  // Correlation id only — never log the raw device_code (it is the poll secret).
   const deviceRef = pseudonymizeIdentifier(record.device_id, 'device-id', 12);
   logger.info({ deviceRef, userId: record.user_id }, 'Device token issued');
   return NextResponse.json(

@@ -11,11 +11,6 @@ import {
   videoProviderTaskAttachmentWorkflow,
 } from './video-generation-workflow';
 
-/**
- * Start the durable owner before the job INSERT. Its Workflow input waits
- * through the bounded database handoff, so an INSERT commit whose response is
- * lost still has an unattended reconciler.
- */
 export async function startVideoGenerationWorkflowOwner(input: {
   jobId: string;
 }): Promise<{ workflowRunId: string; cancel: () => Promise<void> }> {
@@ -29,11 +24,6 @@ export async function startVideoGenerationWorkflowOwner(input: {
   return { workflowRunId: run.runId, cancel: () => run.cancel() };
 }
 
-/**
- * Enqueue and durably attach Workflow before provider egress. A lost attachment
- * response is recovered by re-reading the exact run id; a real attachment
- * failure cancels the run so no detached reconciler can touch the job.
- */
 export async function startVideoGenerationWorkflowExecution(input: {
   db: DatabaseAdapter;
   jobId: string;
@@ -59,11 +49,6 @@ export async function startVideoGenerationWorkflowExecution(input: {
   return { workflowRunId: run.workflowRunId };
 }
 
-/**
- * Persist a known accepted provider id in Workflow's durable input before the
- * request loses its only in-memory copy. The workflow itself performs only an
- * idempotent DB attachment; it never repeats provider submission.
- */
 export async function startVideoProviderTaskAttachmentRecovery(input: {
   jobId: string;
   providerTaskId: string;

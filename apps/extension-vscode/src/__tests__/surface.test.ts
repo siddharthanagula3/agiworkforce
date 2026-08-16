@@ -1,11 +1,3 @@
-/**
- * Surface anchor tests for the VS Code extension.
- *
- * The /goal sync rule says CLI / VS Code / Chrome are developer surfaces and
- * must not be enrolled into the consumer chat sync pipeline. These tests
- * lock the constant + assert the canonical helpers from `@agiworkforce/types`
- * agree.
- */
 
 import { describe, expect, it } from 'vitest';
 import {

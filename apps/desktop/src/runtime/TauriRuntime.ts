@@ -1,20 +1,3 @@
-/**
- * TauriRuntime
- *
- * Implements the ChatRuntime interface from @agiworkforce/unified-chat, bridging
- * the shared chat package to the Tauri/Rust backend via invoke() IPC.
- *
- * This runtime is exclusively the Local/BYOK Desktop transport. Managed Cloud
- * is owned by CloudRuntime at the composition root; TauriRuntime never
- * re-derives that boundary from mutable UI mode state.
- *
- * Streaming pattern:
- *   - invoke('chat_send_message') triggers the Rust backend to start streaming
- *   - Rust emits 'chat:stream-start', 'chat:stream-chunk', 'chat:stream-end'
- *     and 'tool:event' events via Tauri's event channel
- *   - This adapter listens to those events and yields StreamChunk objects
- *     through an async generator, which the ChatRuntime consumer iterates
- */
 
 import type {
   ChatRuntime,
@@ -47,10 +30,6 @@ import {
 } from '../stores/chat/chatStore';
 import { useArtifactStore } from '../stores/artifactStore';
 import { PartialArtifactAccumulator } from './partialArtifactArgs';
-
-// ---------------------------------------------------------------------------
-// Raw Tauri event payload shapes (snake_case from Rust serde serialisation)
-// ---------------------------------------------------------------------------
 
 interface StreamChunkPayload {
   conversation_id: string | number;
@@ -109,9 +88,6 @@ interface AgentProgressPayload {
   tool_count?: number;
 }
 
-// Raw payload for the `chat:artifact` event, emitted by
-// `core/llm/tool_executor/artifact_tools.rs::execute_create_artifact_tool`
-// when the model calls the `create_artifact` tool during a live turn.
 interface ArtifactEventPayload {
   conversation_id: string | number | null;
   message_id?: string | number | null;
@@ -128,10 +104,6 @@ interface ArtifactEventPayload {
   };
 }
 
-// Raw payload for `chat:artifact-progress`, emitted by
-// `sys/commands/chat/stream_runtime.rs` while a `create_artifact` tool call's
-// arguments are still streaming. Display only — the durable artifact still
-// arrives on `chat:artifact` when the tool executes.
 interface ArtifactProgressPayload {
   conversation_id: string | number;
   message_id: string | number;
@@ -140,32 +112,23 @@ interface ArtifactProgressPayload {
   delta: string;
 }
 
-// Raw shape of the Rust `ArtifactResponse<T>` wrapper
-// (apps/desktop/src-tauri/src/sys/commands/artifacts.rs).
 interface RawArtifactResponse<T> {
   success: boolean;
   data: T | null;
   error: string | null;
 }
 
-// Raw shape of the Rust `Artifact` struct (core/artifacts/types.rs) as
-// returned by `artifact_update`. Only the fields this runtime reads.
 interface RawArtifact {
   id: string;
   content: string;
 }
 
-// Raw shape of the Rust `ArtifactVersion` struct (core/artifacts/types.rs)
-// as returned by `artifact_get_versions`.
 interface RawArtifactVersion {
   version: number;
   content: string;
   created_at?: string;
 }
 
-// Full Rust Artifact shape returned by artifact_get_conversation_snapshot.
-// `render_type` is the exact shared renderer type; `artifact_type` is the
-// coarser Rust category retained only for native rendering/filtering.
 interface RawConversationArtifact {
   id: string;
   artifact_type?: string;
@@ -279,10 +242,6 @@ function toAgentJsonValue(value: unknown): JsonValue {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Raw Rust response shapes (snake_case before mapping to ChatRuntime types)
-// ---------------------------------------------------------------------------
-
 interface RawConversation {
   id: string | number;
   title: string | null;
@@ -324,10 +283,6 @@ interface RawFileUploadResult {
   mimeType?: string;
   size?: number;
 }
-
-// ---------------------------------------------------------------------------
-// Mapping helpers
-// ---------------------------------------------------------------------------
 
 function mapConversation(raw: RawConversation): Conversation {
   return {
@@ -380,15 +335,6 @@ function mapPersistedArtifact(raw: RawConversationArtifact): Artifact {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Attachment encoding (DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01)
-//
-// `File` objects cannot cross the Tauri IPC boundary, so every attachment
-// the composer collected must be read into a base64 data URL and shaped to
-// match the Rust `ChatAttachment` struct (`apps/desktop/src-tauri/src/sys/
-// commands/chat/types.rs`) before `invoke('chat_send_message', ...)`.
-// ---------------------------------------------------------------------------
-
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -398,11 +344,6 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-/**
- * `File.name` is always a bare filename per the File API spec, but we strip
- * any stray path separators defensively — the backend's `ChatAttachment`
- * validator rejects `/`, `\`, and `..` in `name` (path-traversal guard).
- */
 function sanitizeAttachmentName(name: string): string {
   const base = name.split(/[/\\]/).pop() ?? name;
   return base.replace(/\.\./g, '_');
@@ -414,9 +355,6 @@ async function encodeAttachmentsForIpc(files: File[]): Promise<TauriAttachmentPa
       const dataUrl = await readFileAsDataUrl(file);
       return {
         id: crypto.randomUUID(),
-        // Only 'image' routes through the vision/multimodal path on the
-        // backend; every other accepted type (PDF/text/CSV/code) is a
-        // document that goes through text extraction instead.
         type: file.type.startsWith('image/') ? 'image' : 'file',
         name: sanitizeAttachmentName(file.name),
         mimeType: file.type || undefined,
@@ -426,15 +364,6 @@ async function encodeAttachmentsForIpc(files: File[]): Promise<TauriAttachmentPa
   );
 }
 
-/**
- * Capability payload the Rust tool filter (`chat/tool_config.rs`) uses to decide
- * which tools this turn may offer. It was never sent, so the filter had nothing
- * to filter on and every model was offered every tool.
- *
- * Catalog models use the generated registry. Dynamic Local models use only the
- * provider metadata carried through discovery; absent metadata stays unknown
- * and the native side closes every tool gate.
- */
 function resolveModelCapabilities(modelId: string | undefined) {
   const capabilities = modelId ? getModelMetadataById(modelId)?.capabilities : undefined;
   const runtimeModel = modelId
@@ -445,11 +374,6 @@ function resolveModelCapabilities(modelId: string | undefined) {
   return {
     tools: capabilities?.tools ?? runtimeModel?.supportsTools ?? false,
     vision: capabilities?.vision ?? runtimeModel?.supportsVision ?? false,
-    // A provider's generic function-calling flag proves only that it can emit
-    // structured tool calls. It does not prove the model is suitable for
-    // computer control, code execution, or an autonomous agent loop. Dynamic
-    // Local models therefore expose those specialist capabilities only when a
-    // canonical capability record says so; unknown stays unavailable.
     computerUse: capabilities?.computerUse ?? false,
     search: capabilities?.search ?? false,
     codeExecution: capabilities?.codeExecution ?? false,
@@ -459,36 +383,17 @@ function resolveModelCapabilities(modelId: string | undefined) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// TauriRuntime implementation
-// ---------------------------------------------------------------------------
-
 export class TauriRuntime implements ChatRuntime {
-  /** Local Web search is network egress and is exposed only as a one-turn composer choice. */
   readonly supportsExplicitLocalWebSearch = true;
 
-  /**
-   * The native chat request does not accept the shared composer's
-   * Ask/Auto/Plan/Bypass value. Keep the shared control hidden until that value
-   * reaches a native enforcement boundary; rendering it would falsely imply a
-   * per-conversation permission change.
-   */
   readonly supportsAgentControl = false;
 
-  // Track active stop requests keyed by conversationId so stopGeneration()
-  // can signal Tauri and wait for its authoritative stream-end acknowledgement.
   private readonly _stopFlags = new Map<string, boolean>();
   private readonly _stopSettlers = new Map<string, () => void>();
 
-  // Registered onStream callbacks
   private readonly _streamCallbacks = new Set<
     (event: import('@agiworkforce/unified-chat').StreamEvent) => void
   >();
-
-  // ---------------------------------------------------------------------------
-  // ChatRuntime.sendMessage — drives the internal generator and dispatches
-  // chunks to all registered onStream callbacks.
-  // ---------------------------------------------------------------------------
 
   private getCurrentUserId(): string {
     return resolveDesktopChatOwnerId();
@@ -498,9 +403,6 @@ export class TauriRuntime implements ChatRuntime {
     const conversation = useDesktopChatStore
       .getState()
       .conversations.find((candidate) => candidate.id === conversationId);
-    // BYOK is the only non-local execution mode this runtime may honor. A
-    // stale/legacy cloud_managed label must fail closed to local execution;
-    // managed turns are accepted only by CloudRuntime.
     if (conversation?.executionMode === 'byok') return 'byok';
     return 'local_only';
   }
@@ -520,9 +422,6 @@ export class TauriRuntime implements ChatRuntime {
       throw new Error('Please sign in to send messages.');
     }
 
-    // Carry the conversation's project scope ("AGI Work") into the backend
-    // row — the frontend-only projectId set via setConversationProject would
-    // otherwise be lost on the lazy first-send create.
     const projectId =
       useDesktopChatStore.getState().conversations.find((c) => c.id === frontendConversationId)
         ?.projectId ?? null;
@@ -543,10 +442,6 @@ export class TauriRuntime implements ChatRuntime {
 
     useDesktopChatStore.getState().linkConversationId(frontendConversationId, dbId);
     if (import.meta.env.DEV) {
-      // W5 stage-2 session labeling — additive, dev/test-only (see
-      // ./sessionLabeling.ts module doc). Does not change what gets persisted
-      // or returned; only asserts the new conversation's AppSession/
-      // ExecutionProfile are internally consistent.
       const { desktopExecutionProfileFor, labelDesktopSession } = await import('./sessionLabeling');
       labelDesktopSession({
         id: String(dbId),
@@ -563,10 +458,6 @@ export class TauriRuntime implements ChatRuntime {
     content: string,
     options?: SendMessageOptions,
   ): Promise<void> {
-    // DESKTOP-ATTACHMENT-SEND-WIRE-SEVERED-01: `options.attachments` carries
-    // the real `File` objects ChatInput held locally. Previously this was
-    // hardcoded to `undefined` here, so no attachment content ever reached
-    // the backend regardless of what the user attached.
     const attachments =
       options?.attachments && options.attachments.length > 0
         ? await encodeAttachmentsForIpc(options.attachments)
@@ -579,7 +470,6 @@ export class TauriRuntime implements ChatRuntime {
       provider: options?.provider,
       attachments,
       signal: options?.signal,
-      // Forward the composer controls that were previously dropped here.
       thinkingEnabled: options?.thinkingEnabled,
       webSearch: options?.webSearch,
       systemPrompt: options?.systemPrompt,
@@ -632,8 +522,6 @@ export class TauriRuntime implements ChatRuntime {
         }
       }
     }
-    // Post-turn cloud sync: debounced, managed-only gate re-checked inside.
-    // Fire-and-forget — never blocks the caller.
     triggerCloudSyncAfterTurn();
   }
 
@@ -644,7 +532,6 @@ export class TauriRuntime implements ChatRuntime {
     return () => this._streamCallbacks.delete(callback);
   }
 
-  // Aliases so the optional interface methods work
   async getMessages(conversationId: string): Promise<ChatMessage[]> {
     return this.loadMessages(conversationId);
   }
@@ -653,10 +540,6 @@ export class TauriRuntime implements ChatRuntime {
     const convs = await this.loadConversations();
     return convs.map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt }));
   }
-
-  // ---------------------------------------------------------------------------
-  // Internal async generator — yields raw StreamChunk objects
-  // ---------------------------------------------------------------------------
 
   private async *_streamMessage(params: SendMessageParams): AsyncIterable<StreamChunk> {
     const {
@@ -669,9 +552,6 @@ export class TauriRuntime implements ChatRuntime {
       thinkingEnabled,
       webSearch,
       systemPrompt,
-      // agentMode intentionally not forwarded — see the comment on
-      // `focusMode`/`enableAgentMode` below for why mapping it onto
-      // `enableAgentMode` was the LOCAL-CHAT-NOINVOKE-01 root cause.
       effort,
       localToolScope,
       enableTools,
@@ -698,17 +578,12 @@ export class TauriRuntime implements ChatRuntime {
       return;
     }
 
-    // Mark this conversation as not stopped before we start
     this._stopFlags.set(conversationId, false);
 
-    // Yield chunks by listening to Tauri events. We use a promise queue so
-    // the async generator can pause waiting for the next event without
-    // blocking the event thread.
     type Resolve = (value: StreamChunk | null) => void;
     const queue: StreamChunk[] = [];
     const waiting: Resolve[] = [];
     const streamedArtifactIds = new Set<string>();
-    // Progressive `create_artifact` previews, keyed by `${messageId}:${index}`.
     const artifactDraftAccumulators = new Map<string, PartialArtifactAccumulator>();
     let activeArtifactDraftKey: string | null = null;
     let done = false;
@@ -755,7 +630,6 @@ export class TauriRuntime implements ChatRuntime {
     };
     this._stopSettlers.set(conversationId, beginStopWait);
 
-    // Register all event listeners
     const unlisteners: Array<() => void> = [];
 
     const registerListener = async <T>(
@@ -768,7 +642,6 @@ export class TauriRuntime implements ChatRuntime {
 
     const pushAgentEvent = (event: AgentEvent) => {
       const envelope: AgentEventEnvelope = {
-        // The Rust-owned canonical agent-event schema is currently v3.
         schemaVersion: 3,
         sessionId: String(backendConversationId),
         turnId: frontendMessageId,
@@ -779,10 +652,6 @@ export class TauriRuntime implements ChatRuntime {
       push({ type: 'agent_event', data: envelope });
     };
 
-    // Native Local lifecycle updates are adapted into the same canonical,
-    // renderer-neutral activity envelope used by managed Cloud. This keeps the
-    // shared ChatInterface responsible for presentation while Tauri owns only
-    // transport translation.
     await registerListener<AgentThinkingPayload>('agent:thinking', (payload) => {
       if (!payload.thinking) return;
       thinkingStartedAtMs = Date.now();
@@ -794,10 +663,6 @@ export class TauriRuntime implements ChatRuntime {
       });
     });
 
-    // Provider reasoning is a separate, typed native event. Keep the native
-    // transport details here and expose only the surface-neutral shared
-    // `thinking` chunk to ChatInterface. Completion payloads contain the full
-    // trace, so emit only the unseen suffix after any deltas.
     await registerListener<ThinkingEventPayload>('thinking:event', (payload) => {
       if (payload.message_id && payload.message_id !== frontendMessageId) return;
 
@@ -853,7 +718,6 @@ export class TauriRuntime implements ChatRuntime {
       });
     });
 
-    // chat:stream-chunk — incremental text delta
     await registerListener<StreamChunkPayload>('chat:stream-chunk', (payload) => {
       const convId = String(payload.conversation_id);
       if (
@@ -864,7 +728,6 @@ export class TauriRuntime implements ChatRuntime {
       push({ type: 'text', content: payload.delta });
     });
 
-    // chat:stream-end — stream finished normally
     await registerListener<StreamEndPayload>('chat:stream-end', (payload) => {
       const convId = String(payload.conversation_id);
       if (
@@ -914,7 +777,6 @@ export class TauriRuntime implements ChatRuntime {
       });
     });
 
-    // chat:stream-error — stream finished with error
     await registerListener<StreamErrorPayload>('chat:stream-error', (payload) => {
       const convId = String(payload.conversation_id);
       if (
@@ -926,7 +788,6 @@ export class TauriRuntime implements ChatRuntime {
       push(null);
     });
 
-    // tool:event — tool call lifecycle events
     await registerListener<ToolEventPayload>('tool:event', (payload) => {
       if (payload.type === 'started') {
         const name = payload.name ?? '';
@@ -972,11 +833,6 @@ export class TauriRuntime implements ChatRuntime {
       }
     });
 
-    // chat:artifact-progress — `create_artifact` arguments are still streaming.
-    // Drives a DISPLAY-ONLY preview in the artifact panel: no artifact is
-    // created, appended, or versioned here. If a delta is lost (seq gap) or the
-    // partial JSON yields nothing usable, the preview is simply skipped and the
-    // artifact appears when the tool call completes, exactly as before.
     await registerListener<ArtifactProgressPayload>('chat:artifact-progress', (payload) => {
       const convId = String(payload.conversation_id);
       if (
@@ -994,8 +850,6 @@ export class TauriRuntime implements ChatRuntime {
       }
       const fields = accumulator.push(payload.delta, payload.seq);
       if (!fields) return;
-      // Wait until the model has committed to a title or a type before taking
-      // over the panel — an empty shell is noise, not progress.
       if (fields.title === undefined && fields.artifactType === undefined) return;
 
       activeArtifactDraftKey = key;
@@ -1009,9 +863,6 @@ export class TauriRuntime implements ChatRuntime {
       });
     });
 
-    // chat:artifact — emitted when a `create_artifact` tool call completes
-    // during this turn (core/llm/tool_executor/artifact_tools.rs). Mirrors
-    // the chat:stream-chunk conversation-id filter above.
     await registerListener<ArtifactEventPayload>('chat:artifact', (payload) => {
       const convId = payload.conversation_id === null ? null : String(payload.conversation_id);
       if (convId !== null && convId !== String(backendConversationId)) return;
@@ -1028,7 +879,6 @@ export class TauriRuntime implements ChatRuntime {
         return;
       }
       streamedArtifactIds.add(payload.artifact.id);
-      // The authoritative artifact replaces the progressive preview.
       if (activeArtifactDraftKey !== null) {
         activeArtifactDraftKey = null;
         useArtifactStore.getState().finalizeArtifactDraft(payload.artifact.id);
@@ -1050,15 +900,12 @@ export class TauriRuntime implements ChatRuntime {
       });
     });
 
-    // Cleanup helper
     const cleanup = () => {
       for (const unlisten of unlisteners) {
         unlisten();
       }
       unlisteners.length = 0;
       artifactDraftAccumulators.clear();
-      // A preview left over from a tool call that errored, was stopped, or
-      // never produced an artifact must not linger as a fake panel.
       if (activeArtifactDraftKey !== null) {
         const key = activeArtifactDraftKey;
         activeArtifactDraftKey = null;
@@ -1066,25 +913,16 @@ export class TauriRuntime implements ChatRuntime {
       }
     };
 
-    // Cancellation must wait for native stream-end: that event carries the
-    // durable assistant-message ID required to link artifacts before teardown.
     if (signal) {
       signal.addEventListener('abort', () => this.stopGeneration(conversationId), { once: true });
     }
 
-    // Personalization ("Response Style" settings) must apply to EVERY send in
-    // every mode (Local/BYOK/Managed), so merge the guidance block into the
-    // conversation's custom instructions here — the single point every send
-    // funnels through. personalizationToPrompt returns '' for neutral settings,
-    // so a default profile adds nothing. (This is the sole wiring of the settings
-    // panel into the model; the converter existed but had no caller.)
     const personalizationBlock = personalizationToPrompt(
       useSettingsStore.getState().personalization,
     );
     const mergedCustomInstructions =
       [personalizationBlock, systemPrompt].filter((s) => s && s.trim()).join('\n\n') || undefined;
 
-    // Kick off the Rust-side stream after listeners are ready.
     try {
       const resolvedModelCapabilities = resolveModelCapabilities(model);
       await invoke('chat_send_message', {
@@ -1100,38 +938,12 @@ export class TauriRuntime implements ChatRuntime {
           attachments: attachments ?? [],
           stream: true,
           frontendMessageId,
-          // TauriRuntime owns only Local and BYOK. Managed Cloud has a separate
-          // CloudRuntime and may never be selected through this native IPC path.
           activeMode: 'local',
           executionMode,
-          // Cloud credits (AGI Managed Cloud) are ONLY for managed mode. BYOK is a
-          // private path that goes DIRECT to the user's provider — it must never be
-          // billed/routed through AGI managed cloud. activeMode is binary
-          // ('local'|'cloud') and lumps byok+managed together, so derive the 3-way
-          // PrivacyMode here (mirrors the canonical logic in features/chat/index.tsx).
           preferCloudCredits: false,
-          // Composer controls — the Rust ChatSendMessageRequest already accepts
-          // these camelCase aliases; they were previously dropped client-side.
           thinkingMode: resolvedModelCapabilities?.thinking ? thinkingEnabled : undefined,
           reasoningEffort: effort,
           customInstructions: mergedCustomInstructions,
-          // BUG (LOCAL-CHAT-NOINVOKE-01 root cause, found 2026-07-03): `agentMode`
-          // here is the AgentControl composer chip's permission-style value —
-          // 'ask' | 'auto' | 'plan' | 'bypass' (see SendMessageOptions.agentMode
-          // doc). It is ALWAYS a non-empty string once a conversation exists
-          // (default 'ask'), so the previous `agentMode ? true : undefined` was
-          // unconditionally true. That forced `enable_agent_mode: true` on every
-          // send. For an explicit (non-"auto") model — the normal case in Local
-          // mode, since there is no ManagedCloud auto-routing fallback there —
-          // the backend trusts this flag directly
-          // (send_message_setup::resolve_request_flags) and skips
-          // detect_agent_mode's intent/accessibility checks entirely, so EVERY
-          // plain chat message was being routed through the full computer-use
-          // AgentOrchestrator (send_message_execution::spawn_streaming_agent)
-          // instead of a normal LLM completion — explaining sends that never
-          // produce a visible assistant reply. `agentMode` is a tool-confirmation
-          // permission style, not an "activate agent mode" switch, and there is
-          // currently no chat_send_message field for it — do not forward it here.
           focusMode: webSearch ? 'web' : undefined,
         },
       });
@@ -1161,7 +973,6 @@ export class TauriRuntime implements ChatRuntime {
     this._stopFlags.set(conversationId, true);
     this._stopSettlers.get(conversationId)?.();
     const backendConversationId = uuidToDbId(conversationId);
-    // Fire-and-forget: signal the Rust backend to halt the stream
     void invoke('chat_stop_generation', { conversationId: backendConversationId }).catch(() => {
       // Ignore errors — the stop flag already prevents further yields
     });
@@ -1182,9 +993,6 @@ export class TauriRuntime implements ChatRuntime {
   }
 
   async loadConversations(): Promise<Conversation[]> {
-    // This runtime is admitted only for the Local workspace. Managed Cloud
-    // conversation loading is owned by CloudRuntime and never reaches native
-    // SQLite.
     const raw = await invoke<RawConversation[]>('chat_get_conversations', {
       userId: this.getCurrentUserId(),
       appMode: 'local',
@@ -1194,11 +1002,6 @@ export class TauriRuntime implements ChatRuntime {
 
   async loadMessages(conversationId: string): Promise<ChatMessage[]> {
     const backendConversationId = uuidToDbId(conversationId);
-    // A conversation that has never been persisted (a fresh "New chat" before
-    // its first message) has no DB id mapping — and by definition no stored
-    // messages. Passing `undefined` into the i64 command arg made the invoke
-    // reject, which ChatInterface rendered as "Could not load this
-    // conversation" on every brand-new chat in a fresh profile.
     if (typeof backendConversationId !== 'number' || backendConversationId <= 0) {
       return [];
     }
@@ -1222,8 +1025,6 @@ export class TauriRuntime implements ChatRuntime {
         userId: this.getCurrentUserId(),
       });
     } catch {
-      // Message history remains usable if an older native binary does not yet
-      // expose the additive artifact snapshot command.
       return messages;
     }
     if (!response || typeof response !== 'object') return messages;
@@ -1271,7 +1072,6 @@ export class TauriRuntime implements ChatRuntime {
   }
 
   async uploadFile(file: File): Promise<FileRef> {
-    // Read the file as a base64 data URL for IPC transport
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
@@ -1299,19 +1099,10 @@ export class TauriRuntime implements ChatRuntime {
     return 'desktop';
   }
 
-  // ---------------------------------------------------------------------------
-  // Artifact persistence — backs ArtifactPanel's edit-in-place + version
-  // stepper (packages/ui/unified-chat/src/components/{ChatInterface,ArtifactPanel}.tsx).
-  // ---------------------------------------------------------------------------
-
   async updateArtifact(
     artifactId: string,
     content: string,
   ): Promise<{ id: string; content: string }> {
-    // Editing a historical version (pseudo-id `<realId>::v<n>`, see
-    // getArtifactVersions below) always writes back to the real artifact —
-    // matching the backend's own rollback() semantics ("rollback creates a
-    // new version with the old content").
     const realId = artifactId.split('::v')[0] ?? artifactId;
     const response = await invoke<RawArtifactResponse<RawArtifact>>('artifact_update', {
       id: realId,

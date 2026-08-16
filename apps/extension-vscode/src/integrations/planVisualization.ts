@@ -15,7 +15,6 @@ const MAX_STEP_CHARS = 500;
 const MAX_EXPLANATION_CHARS = 2_000;
 const STATUSES = new Set<PlanStepStatus>(['pending', 'in_progress', 'completed']);
 
-/** Parse the model-authored update_plan tool input as bounded display data. */
 export function parsePlanVisualization(input: unknown): PlanVisualization | undefined {
   if (input === null || typeof input !== 'object') return undefined;
   const candidate = input as { explanation?: unknown; plan?: unknown };
@@ -53,7 +52,6 @@ function escapeMarkdownText(value: string): string {
     .replace(/>/gu, '&gt;');
 }
 
-/** Render a native VS Code Chat checklist without allowing Markdown injection. */
 export function renderPlanMarkdown(visualization: PlanVisualization): string {
   const lines = ['\n\n### Plan'];
   if (visualization.explanation !== undefined) {

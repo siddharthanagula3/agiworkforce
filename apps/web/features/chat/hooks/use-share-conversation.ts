@@ -4,14 +4,6 @@ import { useCallback, useState } from 'react';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 
-/**
- * Hook that encapsulates conversation sharing logic.
- *
- * Reads messages from the global chat store, posts them to /api/share
- * (backed by the `shared_sessions` table). The route authenticates the
- * caller via Clerk, records owner_id, and returns a revoke token so the
- * link can be taken down later via DELETE /api/share/[token].
- */
 export type ShareExpiryDays = 1 | 7 | 30;
 
 export interface ActiveConversationShare {

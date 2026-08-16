@@ -17,21 +17,8 @@ import {
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
-// ---------------------------------------------------------------------------
-// Validation
-// ---------------------------------------------------------------------------
-
 const NAME_RE = /^[a-z0-9-]{2,32}$/;
 
-/**
- * The placeholder `ChatComposerNew.resolveSlashCommand` actually substitutes.
- *
- * This UI used to document `{input}`. The composer only ever replaced
- * `{{input}}`, so a template written from these instructions shipped the
- * literal text `{input}` to the model. The token is declared once here and
- * asserted against the composer by
- * `__tests__/settings-store-fields-are-consumed.test.ts`.
- */
 const INPUT_TOKEN = '{{input}}';
 
 interface FormErrors {
@@ -66,10 +53,6 @@ function validate(
 
   return errors;
 }
-
-// ---------------------------------------------------------------------------
-// Command Form Modal
-// ---------------------------------------------------------------------------
 
 interface CommandFormModalProps {
   open: boolean;
@@ -242,10 +225,6 @@ function CommandFormModal({ open, onClose, initial, existingNames }: CommandForm
   );
 }
 
-// ---------------------------------------------------------------------------
-// Delete Confirm Dialog
-// ---------------------------------------------------------------------------
-
 interface DeleteConfirmProps {
   open: boolean;
   commandName: string;
@@ -275,10 +254,6 @@ function DeleteConfirmDialog({ open, commandName, onConfirm, onCancel }: DeleteC
     </Dialog>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Main CustomCommandsSettings
-// ---------------------------------------------------------------------------
 
 export function CustomCommandsSettings() {
   const { customCommands, deleteCustomCommand } = useSettingsStore();

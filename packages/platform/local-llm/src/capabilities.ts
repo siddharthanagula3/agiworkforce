@@ -11,8 +11,6 @@ const VALID_TIER1_STATUSES: readonly Tier1Status[] = [
   'unavailable',
 ];
 
-// Native modules older than this change won't return `status` yet — fall back
-// to deriving it from the `available` boolean so the app keeps working.
 function resolveTier1Status(rawStatus: unknown, available: boolean): Tier1Status {
   if (typeof rawStatus === 'string' && (VALID_TIER1_STATUSES as string[]).includes(rawStatus)) {
     return rawStatus as Tier1Status;

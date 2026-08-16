@@ -17,11 +17,8 @@ vi.mock('@features/settings/services/user-preferences', () => ({
 }));
 
 vi.mock('@features/settings/hooks/use-settings-queries', () => {
-  // Stable reference, exactly as react-query hands back cached data · a fresh
-  // object literal per render would re-fire SecuritySection's reset effect.
   const settings = { two_factor_enabled: false, session_timeout: 60 };
   return {
-    // The mirror column disagrees with the authoritative 2FA route on purpose.
     useUserSettings: () => ({ data: settings, isLoading: false }),
     useUpdateSettings: () => ({ mutate: vi.fn(), isPending: false }),
     useChangePassword: () => ({ mutate: vi.fn(), isPending: false }),
@@ -32,8 +29,6 @@ vi.mock('@features/settings/components/AuditLogPanel', () => ({
   AuditLogPanel: () => <div>Security activity</div>,
 }));
 
-// Surface the security form's own value so the mirror-vs-authority wiring is
-// observable without driving the radix Select in jsdom.
 vi.mock('@features/settings/components/Settings/TwoFactor', () => ({
   TwoFactorPanel: ({ securityForm }: { securityForm: UseFormReturn<SecuritySettingsFormData> }) => (
     <div data-testid="security-form-2fa">{String(securityForm.watch('two_factor_enabled'))}</div>
@@ -54,7 +49,6 @@ describe('SecuritySection · authenticator enrollment', () => {
     expect(
       await screen.findByRole('button', { name: /set up authenticator app/i }),
     ).toBeInTheDocument();
-    // The claim that enrollment "is coming to web" was false once the routes shipped.
     expect(screen.queryByText(/coming to web/i)).toBeNull();
     expect(screen.queryByText(/remains read-only/i)).toBeNull();
   });
@@ -66,8 +60,6 @@ describe('SecuritySection · authenticator enrollment', () => {
 
     render(<SecuritySection />);
 
-    // useUserSettings reports two_factor_enabled: false; GET /api/settings/2fa
-    // reports true. Saving the form must not write the stale `false` back.
     await waitFor(() => expect(screen.getByTestId('security-form-2fa')).toHaveTextContent('true'));
   });
 });

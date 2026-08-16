@@ -1,10 +1,3 @@
-/**
- * FolderSelector Component
- *
- * Allows users to scope their chat session to a specific project folder,
- * similar to Claude Code and Windsurf. The selected folder provides context
- * for file operations and helps the AI understand the project structure.
- */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
@@ -29,13 +22,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/Tooltip';
 
 export interface FolderSelectorProps {
-  /** Whether the selector is disabled */
   disabled?: boolean;
-  /** Additional class names */
   className?: string;
-  /** Whether to show in compact mode (icon only when no folder selected) */
   compact?: boolean;
-  /** Whether in simple mode (simplified UI) */
   isSimpleMode?: boolean;
 }
 
@@ -49,14 +38,12 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
   const [isSelecting, setIsSelecting] = useState(false);
   const hasHydratedRef = useRef(false);
 
-  // Store selectors
   const currentFolder = useProjectStore(selectCurrentFolder);
   const recentFolders = useProjectStore(selectRecentFolders);
   const setCurrentFolder = useProjectStore((state) => state.setCurrentFolder);
   const removeRecentFolder = useProjectStore((state) => state.removeRecentFolder);
   const clearRecentFolders = useProjectStore((state) => state.clearRecentFolders);
 
-  // Format display name
   const displayName = useMemo(() => {
     if (!currentFolder) return null;
     return formatFolderPath(currentFolder);
@@ -66,7 +53,6 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     await invoke('project_context_set_folder', { path });
   }, []);
 
-  // Handle folder selection via native dialog
   const handleSelectFolder = useCallback(async () => {
     if (isSelecting) return;
 
@@ -96,7 +82,6 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     }
   }, [isSelecting, setCurrentFolder, syncFolderContext]);
 
-  // Handle selecting a recent folder
   const handleSelectRecentFolder = useCallback(
     async (path: string) => {
       try {
@@ -110,7 +95,6 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     [setCurrentFolder, syncFolderContext],
   );
 
-  // Handle removing a recent folder
   const handleRemoveRecentFolder = useCallback(
     (e: React.MouseEvent, path: string) => {
       e.stopPropagation();
@@ -119,7 +103,6 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     [removeRecentFolder],
   );
 
-  // Handle clearing current folder
   const handleClearFolder = useCallback(
     async (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -155,15 +138,12 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     })();
   }, [currentFolder, setCurrentFolder, syncFolderContext]);
 
-  // Filter recent folders to not include current folder
   const filteredRecentFolders = useMemo(() => {
     return recentFolders.filter((f) => f !== currentFolder);
   }, [recentFolders, currentFolder]);
 
-  // Render the trigger button content
   const renderTriggerContent = () => {
     if (currentFolder) {
-      // In compact mode, show just the icon
       if (compact) {
         return <FolderOpen size={18} className="text-primary" aria-hidden="true" />;
       }
@@ -322,7 +302,6 @@ export const FolderSelector: React.FC<FolderSelectorProps> = ({
     </DropdownMenu>
   );
 
-  // Wrap in Tooltip only in compact mode
   if (compact) {
     return (
       <Tooltip>

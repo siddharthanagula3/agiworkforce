@@ -84,7 +84,7 @@ export function secureFilenameSegment(length = 13): string {
   }
   const out: string[] = new Array(length);
   let filled = 0;
-  const limit = 256 - (256 % FILENAME_ALPHABET.length); // 252
+  const limit = 256 - (256 % FILENAME_ALPHABET.length);
   while (filled < length) {
     const batch = getRandomBytes(Math.max(length, 16));
     for (let i = 0; i < batch.length && filled < length; i++) {
@@ -96,19 +96,12 @@ export function secureFilenameSegment(length = 13): string {
   return out.join('');
 }
 
-/**
- * Cryptographically secure replacement for `Math.random()` · returns a
- * float in `[0, 1)` derived from 32 fresh bits.
- */
 export function secureRandomFloat(): number {
   const bytes = getRandomBytes(4);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return view.getUint32(0, false) / 0x1_0000_0000;
 }
 
-/**
- * Unbiased integer in `[0, maxExclusive)` via rejection sampling.
- */
 export function secureRandomInt(maxExclusive: number): number {
   if (!Number.isInteger(maxExclusive) || maxExclusive <= 0) {
     throw new RangeError('maxExclusive must be a positive integer');

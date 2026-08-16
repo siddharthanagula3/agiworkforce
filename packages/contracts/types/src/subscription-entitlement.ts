@@ -1,8 +1,3 @@
-/**
- * Subscription entitlement is a function of both the recorded plan and its
- * billing status. Stripe rows can retain a paid plan after cancellation, so
- * product capabilities must never be unlocked from the raw plan alone.
- */
 
 export const ENTITLED_SUBSCRIPTION_STATUSES = ['active', 'trialing'] as const;
 

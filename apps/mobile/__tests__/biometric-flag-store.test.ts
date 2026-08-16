@@ -1,10 +1,3 @@
-/**
- * Regression tests for LOW-MOB-1 — biometric-lock flag in SecureStore.
- *
- * AUDIT-FIX: H-10 — the in-memory flag defaults to ENABLED until hydration
- * completes, but first-run users are not app-locked. Only a persisted 'true'
- * enables the gate after hydration. SecureStore failures keep enabled=true.
- */
 
 const mockGetItemAsync = jest.fn();
 const mockSetItemAsync = jest.fn();
@@ -20,7 +13,6 @@ import { useBiometricFlag, hydrateBiometricFlag } from '../lib/biometricFlagStor
 beforeEach(() => {
   mockGetItemAsync.mockReset().mockResolvedValue(null);
   mockSetItemAsync.mockReset().mockResolvedValue(undefined);
-  // Reset the in-memory state to its (fail-closed) initial values between tests.
   useBiometricFlag.setState({ hydrated: false, enabled: true });
 });
 
@@ -98,8 +90,6 @@ describe('biometricFlagStore — setEnabled', () => {
   });
 
   it('propagates SecureStore write errors (caller decides what to do)', async () => {
-    // Starting state per fail-closed default is enabled=true. A failed
-    // setEnabled(false) must NOT advance state, so it stays enabled=true.
     mockSetItemAsync.mockRejectedValueOnce(new Error('disk full'));
     await expect(useBiometricFlag.getState().setEnabled(false)).rejects.toThrow('disk full');
     expect(useBiometricFlag.getState().enabled).toBe(true);
@@ -108,8 +98,6 @@ describe('biometricFlagStore — setEnabled', () => {
 
 describe('biometricFlagStore — tamper resistance contract', () => {
   it('does NOT read from MMKV (the pre-fix backing store)', () => {
-    // No MMKV import in the file — sentinel test catches a regression that
-    // accidentally re-introduces an MMKV path.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const fs = require('fs');
     // eslint-disable-next-line @typescript-eslint/no-require-imports

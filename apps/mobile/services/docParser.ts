@@ -1,8 +1,3 @@
-/**
- * Document parser for on-device doc Q&A (Wave 0 scaffold).
- * Extracts plain text from PDF / TXT / MD / CSV / code files.
- * Image extraction from PDFs is deferred to Wave 1 (vision architecture).
- */
 
 import { readAsStringAsync, getInfoAsync } from 'expo-file-system/legacy';
 
@@ -92,7 +87,6 @@ function detectDocType(uri: string, mimeType?: string): SupportedDocType {
   if (ext === 'txt' || mimeType === 'text/plain') return 'txt';
   if (CODE_EXTENSIONS.has(ext)) return 'code';
 
-  // MIME type fallback for text-like content
   if (mimeType?.startsWith('text/')) return 'txt';
 
   throw new DocParseError(
@@ -101,12 +95,6 @@ function detectDocType(uri: string, mimeType?: string): SupportedDocType {
   );
 }
 
-/**
- * Non-throwing capability check: true when `parseDocument` can extract text from
- * this file (pdf/txt/md/csv/code or any text/* MIME). Used for attach-time
- * validation so unsupported formats (docx, zip, …) are rejected up front with a
- * clear message instead of silently becoming an empty stub at send time.
- */
 export function isParseableDocument(uri: string, mimeType?: string): boolean {
   try {
     detectDocType(uri, mimeType);
@@ -116,20 +104,6 @@ export function isParseableDocument(uri: string, mimeType?: string): boolean {
   }
 }
 
-/**
- * The ONLY MIME allowlist the chat document pickers may advertise.
- *
- * Invariant: every entry must satisfy `isParseableDocument`, because the
- * attach-time validator (`src/features/chat/utils/attachmentValidation.ts`)
- * rejects anything it cannot parse. The two chat screens used to hardcode
- * their own arrays that additionally offered `application/msword` and the
- * OOXML wordprocessingml type — neither is recognised by `detectDocType`, so
- * picking a Word document was a guaranteed dead end: the picker advertised it
- * and the validator immediately answered "isn't a supported file type".
- * Deriving both pickers from this constant makes that class of mismatch
- * impossible, and `__tests__/document-picker-mime-parity.test.ts` asserts the
- * invariant. Do not add a type here before the parser can extract its text.
- */
 export const PICKABLE_DOCUMENT_MIME_TYPES: readonly string[] = [
   'application/pdf',
   'text/plain',
@@ -152,7 +126,6 @@ function parseCsvToText(raw: string): { text: string; rows: number; columns: num
   const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
   if (lines.length === 0) return { text: '', rows: 0, columns: 0 };
 
-  // Simple CSV split — handles quoted fields with embedded commas
   const splitCsvLine = (line: string): string[] => {
     const result: string[] = [];
     let current = '';
@@ -190,14 +163,7 @@ function parseCsvToText(raw: string): { text: string; rows: number; columns: num
   };
 }
 
-// PDF text extraction via a minimal pure-JS approach.
-// expo-file-system reads the file as base64; we then extract the raw text
-// streams from the PDF binary. This is a best-effort extractor that works for
-// standard text-layer PDFs — scanned image-only PDFs will return minimal text.
-// Full vision-based OCR is deferred to Wave 1.
 function extractTextFromPdfBuffer(base64: string): { text: string; pages: number } {
-  // Decode base64 to a Latin-1 string for pattern matching.
-  // atob is available in the Hermes runtime (React Native).
   let raw: string;
   try {
     raw = atob(base64);
@@ -209,7 +175,6 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
     throw new DocParseError('File does not appear to be a valid PDF', 'CORRUPT_FILE');
   }
 
-  // Detect encryption
   if (raw.includes('/Encrypt')) {
     throw new DocParseError(
       'PDF is encrypted — password-protected PDFs are not supported in Wave 0',
@@ -217,24 +182,20 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
     );
   }
 
-  // Count pages via /Type /Page occurrences (rough; accurate for most PDFs)
   let pages = 0;
   const pageRegex = /\/Type\s*\/Page[^s]/g;
   let match;
   while ((match = pageRegex.exec(raw)) !== null) {
-    // consume match to silence unused-var lint
     void match;
     pages++;
   }
   if (pages === 0) pages = 1;
 
-  // Extract text from BT...ET blocks (text objects in PDF content streams)
   const textParts: string[] = [];
   const btEtRegex = /BT([\s\S]*?)ET/g;
   let btMatch;
   while ((btMatch = btEtRegex.exec(raw)) !== null) {
     const block = btMatch[1] ?? '';
-    // Tj / TJ operators carry visible text
     const tjRegex = /\(([^)]*)\)\s*Tj|\[([^\]]*)\]\s*TJ/g;
     let tjMatch;
     while ((tjMatch = tjRegex.exec(block)) !== null) {
@@ -243,7 +204,6 @@ function extractTextFromPdfBuffer(base64: string): { text: string; pages: number
       if (literal) {
         textParts.push(literal.replace(/\\n/g, '\n').replace(/\\r/g, ''));
       } else if (array) {
-        // Extract string literals from TJ arrays
         const stringRegex = /\(([^)]*)\)/g;
         let sm;
         while ((sm = stringRegex.exec(array)) !== null) {

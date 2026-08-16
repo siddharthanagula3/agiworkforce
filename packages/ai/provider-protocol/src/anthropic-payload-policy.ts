@@ -1,17 +1,3 @@
-/**
- * Anthropic payload policy (cache_control, service_tier).
- *
- * Decides:
- *   - whether to attach Anthropic ephemeral `cache_control` to the system
- *     prompt and last user turn (gated on baseUrl: api.anthropic.com or
- *     Vertex Anthropic for long-TTL eligibility)
- *   - whether `service_tier` is allowed on this endpoint
- *
- * Pure function. Use at the request-build boundary inside the Anthropic adapter.
- *
- * Ported from OpenClaw `src/agents/anthropic-payload-policy.ts` (MIT, Peter Steinberger).
- * See THIRD_PARTY_LICENSES.md at repo root for full attribution.
- */
 
 import { resolveProviderRequestCapabilities } from './provider-attribution';
 import {
@@ -49,12 +35,6 @@ function resolveBaseUrlHostname(baseUrl: string): string | undefined {
   }
 }
 
-// AUDIT-FIX: alert-396 — validate the leftmost label against a region pattern
-// rather than relying on a free-form `endsWith` substring match. Even with
-// URL-parsed `hostname`, the original check would accept any host of shape
-// `<anything>-aiplatform.googleapis.com`. Vertex AI's documented endpoints use
-// a region identifier (lowercase letters, digits, and `-`) as the prefix —
-// for example `us-central1-aiplatform.googleapis.com`. Enforce that shape.
 const VERTEX_REGION_HOST_REGEX =
   /^[a-z0-9]{1,32}(?:-[a-z0-9]{1,32}){0,4}-aiplatform\.googleapis\.com$/;
 
@@ -84,8 +64,6 @@ function resolveAnthropicEphemeralCacheControl(
   if (retention === 'none') {
     return undefined;
   }
-  // Trust explicit long-retention opt-ins for Anthropic-compatible custom providers.
-  // Keep hostname gating for implicit/env-driven long retention so defaults stay conservative.
   const ttl =
     retention === 'long' && (cacheRetention === 'long' || isLongTtlEligibleEndpoint(baseUrl))
       ? '1h'
@@ -247,7 +225,6 @@ export function applyAnthropicPayloadPolicyToParams(
     return;
   }
 
-  // Preserve Anthropic cache-write scope by only tagging the trailing user turn.
   applyAnthropicCacheControlToMessages(payloadObj['messages'], policy.cacheControl);
 }
 

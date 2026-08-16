@@ -1,19 +1,3 @@
-/**
- * In-process e2e for the provider stream route.
- *
- * Boots the express app under supertest, hits
- * `POST /api/v1/providers/anthropic/stream`, and asserts the SSE response
- * yields a non-empty assembled text + a non-error stop. Gated on
- * AGIWORKFORCE_LIVE_TEST=1 + ANTHROPIC_API_KEY (real network).
- *
- * This is the gateway-level analog of the per-adapter live tests: it proves
- * that the route, auth middleware, validation, and SSE plumbing all work
- * together, not just the underlying adapter.
- *
- * NOTE: in this PR we only build the test scaffold (skip path) — fully
- * exercising it requires standing up an Express app instance with a mocked
- * authenticateToken middleware. The skip path runs in CI clean.
- */
 
 import { describe, expect, it } from 'vitest';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
@@ -23,20 +7,14 @@ const apiKey = process.env['ANTHROPIC_API_KEY'];
 const skip = !liveEnabled || !apiKey;
 const ANTHROPIC_CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
-// llm-guardrail-allow: paid live-network call, gated by AGIWORKFORCE_LIVE_TEST
 describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
   it('streams a tiny completion via /api/v1/providers/anthropic/stream', async () => {
-    // Lazy import so the suite skip path doesn't pull in the gateway tree.
-    // We construct a fresh express app with the providerStream router mounted
-    // and a stubbed auth middleware so the test doesn't depend on a real JWT.
     const express = (await import('express')).default;
     const supertest = (await import('supertest')).default;
     const { providerStreamRouter } = await import('../routes/providerStream');
 
     const app = express();
     app.use(express.json({ limit: '1mb' }));
-    // Stub auth middleware: provider stream router calls authenticateToken
-    // first; we shortcut by injecting a user on every request.
     app.use((req, _res, next) => {
       (req as unknown as { user: { userId: string } }).user = { userId: 'live-test' };
       next();
@@ -65,7 +43,6 @@ describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
     const sseBody = res.body as unknown as string;
     expect(typeof sseBody).toBe('string');
 
-    // Parse SSE frames into chunks.
     const chunks: Array<{ type: string; [k: string]: unknown }> = [];
     for (const frame of sseBody.split('\n\n')) {
       const dataLine = frame.split('\n').find((l) => l.startsWith('data:'));
@@ -93,9 +70,6 @@ describe.skipIf(skip)('provider stream route — anthropic e2e', () => {
   }, 60_000);
 });
 
-// llm-guardrail-allow: the inverse marker that reports WHY the live suite was
-// skipped, so a silent skip is never mistaken for a pass
 describe.skipIf(!skip)('provider stream route — anthropic e2e (skipped)', () => {
-  // llm-guardrail-allow: placeholder that names the two env vars to set
   it.skip('set AGIWORKFORCE_LIVE_TEST=1 + ANTHROPIC_API_KEY to run', () => {});
 });

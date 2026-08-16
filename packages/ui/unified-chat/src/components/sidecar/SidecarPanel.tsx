@@ -1,19 +1,3 @@
-/**
- * SidecarPanel — surface-agnostic sidecar (workspace panel) shell.
- *
- * Ported from apps/desktop/src/components/UnifiedAgenticChat/DynamicSidecar.tsx.
- *
- * This file contains the chrome (header, minimize/close buttons, animated
- * entry) and content routing for the sidecar. Desktop-specific panels
- * (MonacoEditor, TerminalPanel, BrowserVisualization, etc.) are NOT imported
- * here — they are injected via the `children` prop so this component stays
- * surface-agnostic.
- *
- * Usage in a host app:
- *   <SidecarPanel panelType="artifact" onClose={...}>
- *     <ArtifactRenderer artifact={...} />
- *   </SidecarPanel>
- */
 
 import {
   Activity,
@@ -46,10 +30,6 @@ import {
 } from 'lucide-react';
 import React, { useState } from 'react';
 import { cn } from '../../lib/utils';
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export type SidecarPanelType =
   | 'terminal'
@@ -86,23 +66,13 @@ export type SidecarPanelType =
 
 export interface SidecarPanelProps {
   panelType: SidecarPanelType;
-  /** Panel body. When provided, renderContent is ignored. */
   children?: React.ReactNode;
-  /** Called when the user clicks the close button. */
   onClose?: () => void;
-  /** Whether the panel starts minimized. */
   defaultMinimized?: boolean;
-  /** 'allowed' shows a green badge; 'restricted' shows an amber badge. */
   allowStatus?: 'allowed' | 'restricted';
-  /** Directory label shown in the security badge. */
   allowedDirectory?: string;
-  /** Additional class names on the root element. */
   className?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Icon map
-// ---------------------------------------------------------------------------
 
 const PANEL_ICONS: Record<Exclude<SidecarPanelType, null>, React.ReactNode> = {
   terminal: <Terminal className="h-4 w-4 text-emerald-400" />,
@@ -141,10 +111,6 @@ function panelLabel(panelType: SidecarPanelType): string {
   if (!panelType) return 'Workspace';
   return panelType.charAt(0).toUpperCase() + panelType.slice(1);
 }
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
 
 export function SidecarPanel({
   panelType,

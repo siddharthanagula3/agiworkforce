@@ -1,22 +1,3 @@
-/**
- * @file store.ts
- *
- * All SQL for support handoff. Kept in one module so the ownership predicate is
- * auditable in a single place.
- *
- * # Two rules every query here obeys
- *
- * 1. OWNERSHIP IS A PREDICATE, NOT A CHECK. Every user-facing read and write
- *    carries `owner_session_key = $n` in the WHERE clause. Nothing loads a row
- *    and then compares in JavaScript, so there is no branch to forget. A
- *    mismatch returns zero rows, which the callers render as 404 — session ids
- *    are not enumerable.
- * 2. STATE TRANSITIONS ARE CONDITIONAL UPDATES. `waiting → timed_out_emailed`
- *    and `waiting → connected` are single statements with the prior state in the
- *    predicate and `returning *`. That makes the row itself the lock: two
- *    concurrent polls cannot both send the fallback email, and two agents cannot
- *    both claim one user.
- */
 
 import 'server-only';
 
@@ -68,7 +49,6 @@ export interface AgentPresenceRow {
 }
 
 export interface FreshAgentRow extends AgentPresenceRow {
-  /** Sessions this agent currently holds in `connected`. */
   active_sessions: number;
 }
 
@@ -77,13 +57,6 @@ const SESSION_COLUMNS = `id, reference_id, owner_user_id, owner_session_key, sur
   page_path, locale, agent_user_id, wait_expires_at, connected_at, last_activity_at, closed_at,
   email_sent_at, email_provider_message_id, email_error, created_at`;
 
-/**
- * Agents whose heartbeat is still fresh, with their current load.
- *
- * The freshness predicate is the gate that stops the lie: a `status = 'online'`
- * column alone always eventually lies, because an agent who closes the tab, loses
- * wifi, or sleeps their laptop never gets to write `offline`.
- */
 export async function listFreshOnlineAgents(heartbeatTtlSeconds: number): Promise<FreshAgentRow[]> {
   const db = getNeonDb();
   return db.query<FreshAgentRow>(
@@ -142,7 +115,6 @@ export interface InsertSessionInput {
   accountContext: HandoffAccountContext;
   pagePath: string | null;
   locale: string | null;
-  /** Non-null exactly when status is `waiting` — enforced by a CHECK too. */
   waitExpiresAt: string | null;
 }
 
@@ -179,7 +151,6 @@ export async function insertHandoffSession(
   return rows[0] ?? null;
 }
 
-/** Ownership-scoped read. Zero rows means "not yours or not there" — same answer. */
 export async function getSessionForOwner(
   sessionId: string,
   ownerSessionKey: string,
@@ -196,7 +167,6 @@ export async function getSessionForOwner(
   return rows[0] ?? null;
 }
 
-/** Service-context read used by the agent console and the cron sweep. */
 export async function getSessionById(sessionId: string): Promise<HandoffSessionRow | null> {
   const db = getNeonDb();
   const rows = await db.query<HandoffSessionRow>(
@@ -206,14 +176,6 @@ export async function getSessionById(sessionId: string): Promise<HandoffSessionR
   return rows[0] ?? null;
 }
 
-/**
- * Single-flight `waiting → timed_out_emailed`.
- *
- * The `status = 'waiting'` predicate IS the lock. Whoever gets a row back owns
- * sending the fallback email; everyone else gets zero rows and sends nothing.
- * Two concurrent polls, a poll racing the cron, and a poll racing an agent claim
- * are all covered by the same statement.
- */
 export async function claimExpiredWaitingSession(
   sessionId: string,
 ): Promise<HandoffSessionRow | null> {
@@ -228,7 +190,6 @@ export async function claimExpiredWaitingSession(
   return rows[0] ?? null;
 }
 
-/** Cron sweep: claim up to `limit` expired waits, one row each, same single-flight rule. */
 export async function claimExpiredWaitingBatch(limit: number): Promise<HandoffSessionRow[]> {
   const db = getNeonDb();
   return db.query<HandoffSessionRow>(
@@ -254,9 +215,6 @@ export async function recordEmailOutcome(input: {
 }): Promise<void> {
   const db = getNeonDb();
   await db.execute(
-    // email_sent_at is keyed off the STATUS, not off the provider message id:
-    // a successful send whose provider returned no id must still be recorded as
-    // sent, or a sweep would look at the row and think nothing ever went out.
     `update public.support_handoff_sessions
         set status = $2,
             email_sent_at = case when $2 = 'undeliverable' then email_sent_at else now() end,
@@ -295,7 +253,6 @@ export async function listWaitingQueue(limit: number): Promise<HandoffSessionRow
   );
 }
 
-/** Single-flight `waiting → connected`. The loser of a claim race gets zero rows. */
 export async function claimSessionForAgent(
   sessionId: string,
   agentUserId: string,
@@ -356,7 +313,6 @@ export async function listHandoffMessages(
   );
 }
 
-/** Close `connected` sessions whose user or agent walked away. */
 export async function closeIdleConnectedSessions(idleSeconds: number): Promise<number> {
   const db = getNeonDb();
   return db.execute(
@@ -368,7 +324,6 @@ export async function closeIdleConnectedSessions(idleSeconds: number): Promise<n
   );
 }
 
-/** Retention purge. Transcripts are user content; they do not live forever. */
 export async function purgeOldHandoffSessions(retentionDays: number): Promise<number> {
   const db = getNeonDb();
   return db.execute(

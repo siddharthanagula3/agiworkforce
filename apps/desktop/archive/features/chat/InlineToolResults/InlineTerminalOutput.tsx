@@ -23,7 +23,6 @@ export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status
 
   const data = result?.data as TerminalOutputData | undefined;
 
-  // Show error state if status indicates failure, even if data is null
   if (status === 'failed' || status === 'error') {
     const errorData = data as TerminalOutputData | undefined;
     return (
@@ -46,7 +45,6 @@ export const InlineTerminalOutput: React.FC<ToolResultProps> = ({ result, status
 
   if (!data) return null;
 
-  // In compact mode, hide terminal output completely
   if (compactMode) {
     return null;
   }

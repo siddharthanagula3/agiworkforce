@@ -306,8 +306,6 @@ describe('managed Cloud agent-run client', () => {
           headers: expect.objectContaining({ 'x-csrf-token': 'csrf-1' }),
         }),
       );
-      // The continuation is durable, so nothing is lost by letting go — and a
-      // stream left open from a list view would be pinned forever.
       expect(cancelled).toBe(true);
     });
 

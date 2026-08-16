@@ -3,19 +3,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { getCsrfToken } from '@/lib/client/csrf';
 
-/**
- * Enterprise SSO configuration, nested inside the Team section.
- *
- * The server is the authority on entitlement: this panel asks
- * `GET /api/admin/sso` and renders nothing at all when that call is refused as
- * unauthenticated or unentitled. It never decides from a plan string on the
- * client, and it never advertises a control the caller cannot actually use.
- *
- * Refused is not the same as broken. Any other failure reply — or no reply at
- * all — is reported as a server problem, because hiding the panel on a 500
- * tells an enterprise admin that SSO left their plan.
- */
-
 type ConnectionStatus =
   | 'awaiting_domain_verification'
   | 'awaiting_provider_configuration'
@@ -130,9 +117,7 @@ export function SSOPanel({
   organizationId: string;
   isOwner: boolean;
 }) {
-  // `null` means "not entitled or not yet known" — the panel stays invisible.
   const [connections, setConnections] = useState<Connection[] | null>(null);
-  // The list could not be read for a reason that is NOT lack of entitlement.
   const [unavailable, setUnavailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -150,13 +135,6 @@ export function SSOPanel({
         credentials: 'same-origin',
       });
       if (!response.ok) {
-        // Only an entitlement or auth answer means "this org does not have SSO";
-        // hide the panel rather than dangle a control that cannot be used.
-        //
-        // Every other status is the server failing, and it must not be dressed
-        // up as an absent feature. Collapsing a 500/503 into a hidden panel is
-        // how an outage reads to an enterprise admin as "SSO was taken away" —
-        // they reconfigure or open a ticket against a product that is fine.
         if (response.status === 401 || response.status === 403) {
           setConnections(null);
           setUnavailable(false);
@@ -169,7 +147,6 @@ export function SSOPanel({
       setConnections(body.connections);
       setUnavailable(false);
     } catch {
-      // A network failure is equally not evidence that SSO is unavailable.
       setUnavailable(true);
     }
   }, [organizationId]);
@@ -207,8 +184,6 @@ export function SSOPanel({
   );
 
   if (connections === null) {
-    // Nothing loaded. Stay invisible only when SSO genuinely is not on this
-    // plan; say so plainly when the read failed instead.
     if (!unavailable) {
       return null;
     }
@@ -352,9 +327,6 @@ export function SSOPanel({
                   ) : null}
                 </div>
               ) : !connection.domainVerifiedAt ? (
-                // Unverified with no live challenge: it lapsed, so say that
-                // rather than leaving the admin staring at a Verify button that
-                // cannot succeed.
                 <p
                   role="status"
                   style={{ margin: '10px 0 0', color: 'var(--text-3)', fontSize: 12 }}

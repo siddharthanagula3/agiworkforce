@@ -1,43 +1,7 @@
-/**
- * Notification Store
- *
- * Wires Rust notification commands (notifications.rs + notification_center.rs)
- * to the frontend via invoke(). Covers both OS-level desktop notifications
- * and the in-app notification center.
- *
- * Rust commands wired:
- *   notifications.rs:
- *     - notification_check_permission
- *     - notification_request_permission
- *     - notification_show
- *     - notification_show_with_actions
- *     - notification_schedule
- *     - notification_schedule_reminder
- *     - notification_cancel
- *     - notification_cancel_all
- *     - notification_get_scheduled
- *     - notification_get
- *     - notification_update
- *     - notification_register_actions
- *   notification_center.rs:
- *     - notification_list
- *     - notification_mark_read
- *     - notification_mark_all_read
- *     - notification_delete
- *     - notification_delete_all_read
- *     - notification_get_settings
- *     - notification_set_settings
- *     - notification_create
- *     - notification_unread_count
- */
 import { create } from 'zustand';
 import { devtools, subscribeWithSelector } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { invoke, listen, type UnlistenFn } from '../lib/tauri-mock';
-
-// =============================================================================
-// Types (mirror Rust structs — camelCase for TS convention)
-// =============================================================================
 
 export interface NotificationAction {
   id: string;
@@ -120,15 +84,9 @@ export interface CreateNotificationInput {
   expiresAt?: string;
 }
 
-// =============================================================================
-// Store State
-// =============================================================================
-
 interface NotificationState {
-  // Permission
   permissionGranted: boolean;
 
-  // In-app notification center
   notifications: Notification[];
   total: number;
   unreadCount: number;
@@ -137,24 +95,18 @@ interface NotificationState {
   hasMore: boolean;
   settings: NotificationSettings | null;
 
-  // Per-conversation unread badge counts (conversationId → count)
   unreadCounts: Record<string, number>;
 
-  // Scheduled (OS-level)
   scheduled: ScheduledNotification[];
 
-  // Loading flags
   loading: boolean;
   error: string | null;
 
-  // Event listener cleanup
   _unlisteners: UnlistenFn[];
 
-  // === Actions: Permission ===
   checkPermission: () => Promise<boolean>;
   requestPermission: () => Promise<string>;
 
-  // === Actions: OS Notifications ===
   show: (title: string, body: string, icon?: string) => Promise<void>;
   showWithActions: (title: string, body: string, actions: NotificationAction[]) => Promise<string>;
   schedule: (
@@ -182,12 +134,10 @@ interface NotificationState {
   ) => Promise<ScheduledNotification>;
   registerActions: (actions: NotificationAction[]) => Promise<void>;
 
-  // === Actions: Per-conversation unread tracking ===
   incrementUnread: (conversationId: string) => void;
   markConversationRead: (conversationId: string) => void;
   clearAllUnread: () => void;
 
-  // === Actions: Notification Center ===
   list: (
     page?: number,
     pageSize?: number,
@@ -203,14 +153,9 @@ interface NotificationState {
   create: (input: CreateNotificationInput) => Promise<Notification>;
   fetchUnreadCount: () => Promise<number>;
 
-  // === Lifecycle ===
   init: () => Promise<void>;
   cleanup: () => void;
 }
-
-// =============================================================================
-// Store
-// =============================================================================
 
 export const useNotificationStore = create<NotificationState>()(
   devtools(
@@ -229,10 +174,6 @@ export const useNotificationStore = create<NotificationState>()(
         loading: false,
         error: null,
         _unlisteners: [],
-
-        // =================================================================
-        // Permission
-        // =================================================================
 
         checkPermission: async () => {
           try {
@@ -259,10 +200,6 @@ export const useNotificationStore = create<NotificationState>()(
             return 'denied';
           }
         },
-
-        // =================================================================
-        // OS Notifications
-        // =================================================================
 
         show: async (title, body, icon) => {
           try {
@@ -296,7 +233,6 @@ export const useNotificationStore = create<NotificationState>()(
               icon: icon ?? null,
               category: category ?? null,
             });
-            // Refresh scheduled list
             await get().getScheduled();
             return id;
           } catch (err) {
@@ -406,10 +342,6 @@ export const useNotificationStore = create<NotificationState>()(
           }
         },
 
-        // =================================================================
-        // Per-conversation unread tracking (purely client-side)
-        // =================================================================
-
         incrementUnread: (conversationId) => {
           set(
             (s) => {
@@ -433,10 +365,6 @@ export const useNotificationStore = create<NotificationState>()(
         clearAllUnread: () => {
           set({ unreadCounts: {} }, undefined, 'notification/clearAllUnread');
         },
-
-        // =================================================================
-        // Notification Center
-        // =================================================================
 
         list: async (page, pageSize, unreadOnly, notificationType) => {
           set({ loading: true, error: null }, undefined, 'notification/list/start');
@@ -616,20 +544,14 @@ export const useNotificationStore = create<NotificationState>()(
           }
         },
 
-        // =================================================================
-        // Lifecycle
-        // =================================================================
-
         init: async () => {
           const unlisteners: UnlistenFn[] = [];
 
-          // Listen for unread count changes from backend
           const unreadUn = await listen<number>('notification:unread_count', (event) => {
             set({ unreadCount: event.payload }, undefined, 'notification/event/unreadCount');
           });
           unlisteners.push(unreadUn);
 
-          // Listen for new notifications from backend
           const newUn = await listen<Notification>('notification:new', (event) => {
             set(
               (s) => {
@@ -642,7 +564,6 @@ export const useNotificationStore = create<NotificationState>()(
           });
           unlisteners.push(newUn);
 
-          // Listen for deleted notifications
           const deletedUn = await listen<string>('notification:deleted', (event) => {
             set(
               (s) => {
@@ -660,7 +581,6 @@ export const useNotificationStore = create<NotificationState>()(
 
           set({ _unlisteners: unlisteners }, undefined, 'notification/init');
 
-          // Fetch initial state
           await get().checkPermission();
           await get().fetchUnreadCount();
         },
@@ -678,10 +598,6 @@ export const useNotificationStore = create<NotificationState>()(
   ),
 );
 
-// =============================================================================
-// Selectors
-// =============================================================================
-
 export const selectPermissionGranted = (s: NotificationState) => s.permissionGranted;
 export const selectNotifications = (s: NotificationState) => s.notifications;
 export const selectUnreadCount = (s: NotificationState) => s.unreadCount;
@@ -692,21 +608,12 @@ export const selectScheduledNotifications = (s: NotificationState) => s.schedule
 export const selectNotificationLoading = (s: NotificationState) => s.loading;
 export const selectNotificationError = (s: NotificationState) => s.error;
 
-// Per-conversation unread selectors
 export const selectUnreadCounts = (s: NotificationState) => s.unreadCounts;
 
-/**
- * Returns the unread count for a specific conversation.
- * Use as: useNotificationStore(selectConversationUnreadCount(conversationId))
- */
 export const selectConversationUnreadCount =
   (conversationId: string) =>
   (s: NotificationState): number =>
     s.unreadCounts[conversationId] ?? 0;
 
-/**
- * Returns the sum of all per-conversation unread counts.
- * Useful for a global badge on the chat nav icon.
- */
 export const selectTotalConversationUnread = (s: NotificationState): number =>
   Object.values(s.unreadCounts).reduce((acc, n) => acc + n, 0);

@@ -10,18 +10,6 @@ import { webManagedCloudProjects } from '@/features/projects/services/managed-cl
 import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { toast } from 'sonner';
 
-/**
- * /projects · top-level Projects hub on web.
- *
- * Mounts the shared `ProjectGallery` for the default "Updated" sort (which
- * already sorts starred-first then by updatedAt). For other sort modes
- * (Name A-Z, Created newest, Star status) the page renders its own sorted
- * `ProjectCard` grid so it can apply a different comparator without needing
- * to modify the read-only shared gallery component.
- *
- * Fix 52: sort menu now actually sorts project list (2026-05-24).
- */
-
 type SortMode = 'updated' | 'created' | 'name' | 'starred';
 
 const SORT_LABELS: Record<SortMode, string> = {
@@ -75,8 +63,6 @@ export default function ProjectsPage() {
   );
   const displayProjects = showArchived ? archivedProjects : sortedProjects;
 
-  // Server-backed create: persist to Neon (user_projects) and return the saved
-  // row so ProjectGallery inserts the canonical server id into the view model.
   const handleCreateProject = useCallback(
     async (input: ProjectGalleryCreateInput): Promise<Project> => {
       return webManagedCloudProjects.createProject(input);
@@ -112,21 +98,18 @@ export default function ProjectsPage() {
     [updateProject],
   );
 
-  // Persist a star toggle (ProjectCard flips the store optimistically first).
   const persistStar = useCallback(
     async (projectId: string, starred: boolean) => {
       try {
         await webManagedCloudProjects.updateProject(projectId, { starred });
       } catch (error) {
-        updateProject(projectId, { starred: !starred }); // roll back the optimistic toggle
+        updateProject(projectId, { starred: !starred });
         toast.error(error instanceof Error ? error.message : 'Failed to update star');
       }
     },
     [updateProject],
   );
 
-  // The gallery removes optimistically; the custom sorted cards do not. A
-  // failed Cloud delete restores an optimistic row instead of lying in the UI.
   const handleDeleteProjectServer = useCallback(
     async (project: Project, alreadyRemovedFromView: boolean) => {
       try {
@@ -145,8 +128,6 @@ export default function ProjectsPage() {
     [addProject, removeProject],
   );
 
-  // For the default mode, delegate to ProjectGallery (keeps search + create form).
-  // For other modes, render our own sorted grid below the sort toolbar.
   const useGallery = sortMode === 'updated' && !showArchived;
 
   return (
@@ -155,7 +136,6 @@ export default function ProjectsPage() {
         data-design="agi"
         style={{
           minHeight: '100%',
-          // App-shell tokens, not the marketing palette — see chat/library/page.tsx.
           background: 'hsl(var(--background))',
           padding: '48px 32px',
           color: 'hsl(var(--foreground))',
@@ -367,7 +347,6 @@ export default function ProjectsPage() {
                 Sign in to view your cloud projects.
               </div>
             ) : useGallery ? (
-              /* Default sort: delegate to ProjectGallery (keeps search + create form) */
               <ProjectGallery
                 title={null}
                 description=""
@@ -386,7 +365,6 @@ export default function ProjectsPage() {
                 onStarProject={(id, starred) => void persistStar(id, starred)}
               />
             ) : (
-              /* Custom sort: render sorted ProjectCard grid */
               <div>
                 {displayProjects.length === 0 ? (
                   <div

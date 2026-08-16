@@ -2,10 +2,6 @@
 
 import { create } from 'zustand';
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface ResearchSource {
   url: string;
   title: string;
@@ -18,12 +14,6 @@ interface ResearchPanelState {
   panelOpen: boolean;
   sources: ResearchSource[];
   query?: string;
-  /**
-   * The conversation the current `sources` belong to. The Sources panel must be
-   * scoped per-chat: a chat that did NOT run a web search should show no sources,
-   * not the leftover sources from a previous chat. Consumers compare this against
-   * the active conversation id and treat a mismatch as "no sources".
-   */
   conversationId: string | null;
 }
 
@@ -32,16 +22,11 @@ interface ResearchPanelActions {
   closePanel: () => void;
   togglePanel: () => void;
   setSources: (conversationId: string | null, sources: ResearchSource[], query?: string) => void;
-  /** Returns the sources only if they belong to the given conversation (else empty). */
   sourcesFor: (conversationId: string | null | undefined) => {
     sources: ResearchSource[];
     query?: string;
   };
 }
-
-// ============================================================================
-// Store
-// ============================================================================
 
 export const useResearchPanelStore = create<ResearchPanelState & ResearchPanelActions>()(
   (set, get) => ({

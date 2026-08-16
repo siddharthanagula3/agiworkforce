@@ -1,6 +1,3 @@
-// packages/ui/unified-chat/src/components/ToolTimeline.tsx
-// Ported from apps/desktop/src/components/UnifiedAgenticChat/ToolTimeline.tsx
-// No Tauri, no desktop stores. Uses local ToolCallCard and TaskPhaseTimeline.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -33,14 +30,9 @@ function argsFromDisplayArgs(displayArgs: string): Record<string, unknown> | und
 export interface ToolTimelineProps {
   entries: ToolLabelEntry[];
   className?: string;
-  /**
-   * When `true` and entries carry `phase` metadata, delegates rendering to
-   * `<TaskPhaseTimeline>`. Defaults to `false`.
-   */
   enablePhaseGrouping?: boolean;
 }
 
-/** A rendered group: either a single standalone entry or a set of parallel entries. */
 interface EntryGroup {
   parallelGroup?: string;
   entries: ToolLabelEntry[];

@@ -14,7 +14,6 @@ export interface MediaPermissionDetails {
   mediaType?: 'video' | 'audio' | 'unknown';
 }
 
-/** Only the AGI hosted app and the bundled `agi://cloud` document are trusted. */
 export function isTrustedCloudRendererOrigin(rawUrl: string | undefined): boolean {
   if (!rawUrl) return false;
   try {
@@ -31,11 +30,6 @@ export function isTrustedCloudRendererOrigin(rawUrl: string | undefined): boolea
   }
 }
 
-/**
- * Request-time policy. Electron's `media` permission combines microphone,
- * camera and speakers, so the Cloud shell must inspect the requested types
- * instead of granting the entire bucket for a microphone feature.
- */
 export function shouldGrantCloudPermissionRequest(
   permission: string,
   details: MediaPermissionDetails,
@@ -50,7 +44,6 @@ export function shouldGrantCloudPermissionRequest(
   );
 }
 
-/** Check-time companion to `shouldGrantCloudPermissionRequest`. */
 export function shouldGrantCloudPermissionCheck(
   permission: string,
   requestingOrigin: string,

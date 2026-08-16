@@ -1,9 +1,3 @@
-/**
- * Agent Metrics Store Tests
- *
- * Tests for agent activity tracking, session management,
- * and metrics calculation.
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { useAgentMetricsStore } from './agent-metrics-store';
@@ -11,7 +5,6 @@ import type { AgentStatus } from '@shared/types';
 
 describe('Agent Metrics Store', () => {
   beforeEach(() => {
-    // Reset store before each test
     useAgentMetricsStore.getState().reset();
     vi.useFakeTimers();
   });
@@ -136,7 +129,6 @@ describe('Agent Metrics Store', () => {
     it('should handle ending non-existent session', () => {
       const { endSession } = useAgentMetricsStore.getState();
 
-      // Should not throw
       expect(() => {
         endSession('non-existent', 'completed');
       }).not.toThrow();
@@ -158,7 +150,6 @@ describe('Agent Metrics Store', () => {
         status: 'pending',
       });
 
-      // Advance time by 5 seconds
       vi.advanceTimersByTime(5000);
       endSession(sessionId, 'completed');
 
@@ -229,10 +220,9 @@ describe('Agent Metrics Store', () => {
 
       let state = useAgentMetricsStore.getState();
       expect(state.totalAgents).toBe(3);
-      expect(state.activeAgents).toBe(2); // working + analyzing
+      expect(state.activeAgents).toBe(2);
       expect(state.idleAgents).toBe(1);
 
-      // Update agent-1 to idle
       updateAgentStatus('agent-1', { agentName: 'agent-1', status: 'idle', progress: 0 });
 
       state = useAgentMetricsStore.getState();
@@ -303,7 +293,6 @@ describe('Agent Metrics Store', () => {
     it('should limit recent activity to 50 items', () => {
       const { addActivity } = useAgentMetricsStore.getState();
 
-      // Add 60 activities
       for (let i = 0; i < 60; i++) {
         addActivity({
           type: 'task_complete',
@@ -441,7 +430,6 @@ describe('Agent Metrics Store', () => {
       endSession(s3, 'completed');
       endSession(s4, 'failed');
 
-      // 3 completed, 1 failed = 75% success rate
       expect(getSuccessRate()).toBe(75);
     });
 
@@ -475,7 +463,6 @@ describe('Agent Metrics Store', () => {
         reset,
       } = useAgentMetricsStore.getState();
 
-      // Populate state
       startSession({
         userId: 'user-1',
         taskDescription: 'Task',
@@ -496,7 +483,6 @@ describe('Agent Metrics Store', () => {
       incrementTokens(5000);
       setBackgroundServiceRunning(true);
 
-      // Reset
       reset();
 
       const state = useAgentMetricsStore.getState();
@@ -551,7 +537,6 @@ describe('Agent Metrics Store', () => {
     it('should handle updating non-existent session', () => {
       const { updateSession } = useAgentMetricsStore.getState();
 
-      // Should not throw
       expect(() => {
         updateSession('non-existent', { messagesCount: 10 });
       }).not.toThrow();

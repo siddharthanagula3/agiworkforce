@@ -1,12 +1,3 @@
-/**
- * Unit tests for the platform url_fetch tool.
- *
- * Covers the SSRF rejection matrix (localhost, RFC1918, link-local/IMDS,
- * IPv6 loopback, DNS-resolves-to-private, redirect-to-private), timeout,
- * response size cap, content-type allowlist, HTML extraction, and the
- * explicit truncation note. All HTTP is mocked; DNS is mocked at the
- * node:dns/promises seam (same pattern as egress-policy.test.ts).
- */
 
 import { beforeEach, describe, it, expect, vi } from 'vitest';
 
@@ -29,7 +20,6 @@ import {
   URL_FETCH_TOOL,
 } from './url-fetch-tool';
 
-/** Public DNS answer for hostnames that should pass the resolution check. */
 function resolvePublic() {
   dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
 }
@@ -106,7 +96,6 @@ describe('SSRF rejection matrix', () => {
     const outcome = await executeUrlFetch({ url: 'https://example.com/page' }, { fetchImpl });
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) expect(outcome.errorCode).toBe('url_not_allowed');
-    // Only the first (public) hop was fetched; the private hop was blocked pre-fetch.
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
@@ -183,7 +172,6 @@ describe('redirect handling', () => {
 describe('timeout', () => {
   it('returns a timeout error when the request exceeds the deadline', async () => {
     resolvePublic();
-    // fetchImpl that only settles when the abort signal fires (like a hung server).
     const fetchImpl = vi.fn(
       (_url: unknown, init?: RequestInit) =>
         new Promise<Response>((_resolve, reject) => {
@@ -224,7 +212,7 @@ describe('size cap', () => {
     const chunk = new TextEncoder().encode('a'.repeat(1024));
     const body = new ReadableStream<Uint8Array>({
       pull(controller) {
-        controller.enqueue(chunk); // endless 1KB chunks
+        controller.enqueue(chunk);
       },
     });
     const fetchImpl = fetchReturning(
@@ -246,8 +234,6 @@ describe('content-type allowlist', () => {
       resolvePublic();
       const headers: Record<string, string> = {};
       if (contentType) headers['content-type'] = contentType;
-      // Bytes body: Response does not synthesize a default content-type for it,
-      // so the empty-string case genuinely exercises the missing-header path.
       const fetchImpl = fetchReturning(
         new Response(new TextEncoder().encode('binarydata'), { status: 200, headers }),
       );
@@ -362,7 +348,7 @@ describe('HTML extraction', () => {
 describe('truncation', () => {
   it('caps extracted text and appends an explicit truncation note', async () => {
     resolvePublic();
-    const longText = 'word '.repeat(2000); // 10,000 chars
+    const longText = 'word '.repeat(2000);
     const fetchImpl = fetchReturning(
       new Response(longText, { status: 200, headers: { 'content-type': 'text/plain' } }),
     );

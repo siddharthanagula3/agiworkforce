@@ -1,14 +1,5 @@
-/**
- * Regression tests for scheduler store Tauri command wiring (audit fix).
- *
- * The audit found that scheduledTaskStore used incorrect command names.
- * These tests verify that schedulerStore (the authoritative implementation)
- * invokes the correct `scheduler_*` command names when performing CRUD
- * operations on scheduled jobs.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// The store imports from ../../lib/tauri-mock (not @tauri-apps/api/core directly)
 const mockInvoke = vi.fn();
 
 vi.mock('../../lib/tauri-mock', () => ({
@@ -29,7 +20,6 @@ vi.mock('sonner', () => ({
   },
 }));
 
-// Import after mocking to get the store wired to the mocked invoke
 import {
   getScheduleSummary,
   inferTaskInterval,
@@ -39,13 +29,12 @@ import {
 describe('schedulerStore — Tauri command wiring', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset store state
     useSchedulerStore.setState({ jobs: [], tasks: [], isLoading: false, error: null });
   });
 
   it('addJob invokes scheduler_add_job (not scheduler_create_job or other variants)', async () => {
-    mockInvoke.mockResolvedValueOnce('job-123'); // addJob returns a string ID
-    mockInvoke.mockResolvedValueOnce([]); // listJobs called after add
+    mockInvoke.mockResolvedValueOnce('job-123');
+    mockInvoke.mockResolvedValueOnce([]);
 
     await useSchedulerStore.getState().addJob('Test Job', '0 9 * * *', 'briefing', '{}');
 
@@ -153,7 +142,7 @@ describe('schedulerStore — Tauri command wiring', () => {
 
   it('addJob returns the job ID from invoke response', async () => {
     mockInvoke.mockResolvedValueOnce('returned-job-id');
-    mockInvoke.mockResolvedValueOnce([]); // listJobs
+    mockInvoke.mockResolvedValueOnce([]);
 
     const jobId = await useSchedulerStore.getState().addJob('Name', 'cron', 'custom', 'data');
     expect(jobId).toBe('returned-job-id');

@@ -1,22 +1,3 @@
-/**
- * Cloud Usage Settings Screen
- *
- * Native RN equivalent of the web UsageSection. Fetches GET /api/usage (via
- * services/usage.ts) and shows plan usage as a percentage — the primary
- * metric is "X% used" + a progress bar + reset date, matching the reference
- * pattern (Claude iOS Settings → Usage: a bar, "2% used", "Resets in 4hr
- * 58min" — no raw dollar figures on the primary surface). Exact dollar
- * figures are available in a collapsed "Details" section for users who want
- * them, never as the headline number.
- *
- * Gated behind FEATURES.usageDashboard — when that flag is false the screen
- * shows a placeholder directing users to the web dashboard. Deliberately
- * separate from FEATURES.billing, which gates the external Stripe portal
- * link on the Billing screen (App Store Guideline 3.1.1 risk); this screen
- * only reads a balance, so it doesn't carry that risk.
- *
- * Cloud-only surface.
- */
 
 import { useCallback, useEffect, useState } from 'react';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
@@ -43,10 +24,6 @@ import {
   isCloudAccountEpochCurrent,
 } from '@/src/features/auth/services/cloudAccountSession';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
 function formatResetDate(iso: string | null): string | null {
   if (!iso) return null;
   const date = new Date(iso);
@@ -60,9 +37,6 @@ function formatResetDate(iso: string | null): string | null {
   });
 }
 
-/** "Wed 6:00 PM" style — used for the weekly rolling-window reset (an
- *  absolute moment: oldest-transaction-in-window + 7 days), matching the
- *  Claude-reference "Resets Wed 6:00 PM" pattern. */
 function formatResetWeekday(iso: string | null): string | null {
   if (!iso) return null;
   const date = new Date(iso);
@@ -70,7 +44,6 @@ function formatResetWeekday(iso: string | null): string | null {
   return date.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' });
 }
 
-/** "3 hr 27 min" style countdown for the rolling 5h session window. */
 function formatResetsInDuration(iso: string | null): string | null {
   if (!iso) return null;
   const target = Date.parse(iso);
@@ -83,10 +56,6 @@ function formatResetsInDuration(iso: string | null): string | null {
   if (hours <= 0) return `${minutes} min`;
   return `${hours} hr ${minutes} min`;
 }
-
-// ---------------------------------------------------------------------------
-// UsagePercentBar — the primary, percentage-only metric (Claude-style)
-// ---------------------------------------------------------------------------
 
 function UsagePercentBar({
   label,
@@ -133,10 +102,6 @@ function UsagePercentBar({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Placeholder — billing not yet active
-// ---------------------------------------------------------------------------
-
 function BillingUnavailablePlaceholder() {
   const colors = useThemeColors();
   return (
@@ -182,10 +147,6 @@ function BillingUnavailablePlaceholder() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Screen
-// ---------------------------------------------------------------------------
-
 export default function CloudUsageScreen() {
   const colors = useThemeColors();
   const router = useRouter();
@@ -228,10 +189,6 @@ export default function CloudUsageScreen() {
     setLastUpdated(null);
   }, [clerkUserId]);
 
-  // guardedFetch blocks this screen's own fetch (an EgressBlockedError) while
-  // chat is set to Local — see CloudSyncBlockedBanner's doc comment. Skip the
-  // doomed request and show the banner instead of the raw technical error
-  // message; re-fetch as soon as the user switches modes.
   useEffect(() => {
     if (FEATURES.usageDashboard && isClerkSignedIn && isCloudModeActive) void load();
   }, [clerkUserId, load, isClerkSignedIn, isCloudModeActive]);

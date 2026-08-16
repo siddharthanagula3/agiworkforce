@@ -9,16 +9,6 @@ import { useSettingsStore } from '../../stores/settingsStore';
 import { useTierStore } from '../../stores/tierStore';
 import { useChat } from '../useChat';
 
-/**
- * DES-C03 — desktop Cloud used to serialise `thinking_mode: false` on every
- * managed request. `apps/web/app/api/llm/v1/chat/completions/lib/
- * request-processor.ts` answers that with a 422
- * `invalid_thinking_configuration` for any model whose catalog entry sets
- * `reasoning.canDisableThinking: false`, so a demo turn on such a model failed
- * before generation. These tests pin the clamp at the send boundary.
- *
- * Model ids come from the registry, never hardcoded.
- */
 function catalogModelIdWhere(predicate: (id: string) => boolean): string {
   const match = listCanonicalModels().find((model) => predicate(model.id));
   if (!match) throw new Error('No catalog model matches this reasoning shape');
@@ -77,11 +67,6 @@ function seedManagedConversation(model: ModelInfo): void {
   useTierStore.setState({ tier: 'max', currentConversationProvider: null });
 }
 
-/**
- * A typed send spy: the assertions read `mock.calls[0][2]` (the
- * `SendMessageOptions` bag), which an untyped `vi.fn()` erases to an empty
- * tuple.
- */
 function makeSendSpy() {
   return vi.fn(
     async (_conversationId: string, _content: string, _options?: SendMessageOptions) => {},

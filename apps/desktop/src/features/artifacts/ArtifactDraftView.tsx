@@ -1,19 +1,3 @@
-/**
- * ArtifactDraftView
- *
- * Progressive, DISPLAY-ONLY view of a `create_artifact` tool call whose
- * arguments are still streaming (see `runtime/partialArtifactArgs.ts` and the
- * `chat:artifact-progress` event in
- * `src-tauri/src/sys/commands/chat/stream_runtime.rs`).
- *
- * It deliberately shows the source text as it arrives rather than rendering a
- * half-parsed preview: a partially written HTML/React/Mermaid document does not
- * render into anything truthful. The real renderer takes over the moment the
- * durable artifact lands on `chat:artifact` and the draft is dropped.
- *
- * Nothing here writes to the artifact store's backend paths — no create, no
- * append, no version.
- */
 
 import { useEffect, useRef } from 'react';
 import { Loader2, X } from 'lucide-react';
@@ -29,7 +13,6 @@ interface ArtifactDraftViewProps {
 export function ArtifactDraftView({ draft, onClose }: ArtifactDraftViewProps) {
   const scrollRef = useRef<HTMLPreElement | null>(null);
 
-  // Follow the stream as content arrives.
   useEffect(() => {
     const node = scrollRef.current;
     if (!node) return;

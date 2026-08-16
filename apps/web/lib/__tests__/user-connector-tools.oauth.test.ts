@@ -1,14 +1,3 @@
-/**
- * The OAuth connector source in the chat tool loop.
- *
- * Proves the two behaviours the broker exists for:
- *   - tools are offered ONLY when the signed-in user holds a grant whose token
- *     resolves right now (so the directory's "Connected" is never a claim the
- *     tool loop cannot back up);
- *   - LAZY AUTHENTICATION: a 401 does not fail the turn. It refreshes and
- *     retries the same call once, and only then becomes a structured
- *     "connect required" result the client renders as an inline Connect card.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -89,7 +78,6 @@ import {
 } from '../user-connector-tools';
 import { parseConnectorAuthorizationRequired } from '@/lib/connectors/connect-required';
 
-/** MCP transport 401, exactly the shape `StreamableHTTPError` throws. */
 function unauthorized(): Error {
   return Object.assign(new Error('Streamable HTTP error: Error POSTing to endpoint: {}'), {
     code: 401,
@@ -117,9 +105,6 @@ function catalogWith(serverName: string, toolName: string) {
 }
 
 beforeEach(async () => {
-  // Evict BEFORE clearing mocks: a handle left over from the previous test
-  // still has to be closable, and clearAllMocks would strip close()'s
-  // implementation out from under it.
   await evictConnectorOAuthCaches('user-1', 'linear');
   vi.clearAllMocks();
   __resetConnectorMcpMapCacheForTests();
@@ -175,8 +160,6 @@ describe('OAuth connector catalog gating', () => {
   });
 
   it('still applies the user per-tool BLOCK verdict to an OAuth connector', async () => {
-    // The policy layer keys on (connector_id, tool_name) and the OAuth
-    // connector id IS the serverId, so a blocked tool must never be advertised.
     mockResolveAccessToken.mockResolvedValue({
       status: 'ready',
       accessToken: 'tok',
@@ -263,9 +246,7 @@ describe('OAuth connector execution — lazy authentication', () => {
     expect(mockResolveAccessToken).toHaveBeenLastCalledWith('user-1', 'linear', {
       forceRefresh: true,
     });
-    // Same tool, same args, on the retry.
     expect(callTool).toHaveBeenNthCalledWith(2, 'create_issue', { title: 'x' });
-    // The retry must not reuse the handle that carried the rejected token.
     expect(mockConnectMcpServer).toHaveBeenCalledTimes(2);
   });
 

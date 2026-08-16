@@ -1,16 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
-/**
- * Regression: the "Show performance chip in chat" setting
- * (app/(app)/settings/performance.tsx, PERF_CHIP_SHOW_KEY, default true)
- * promises "Shows tok/s and TTFT under each assistant response," but the
- * chip never rendered for ANY message. MessageBubble's render condition
- * required message.runtimeTier to be truthy — a field chatExecutionStore
- * never sets on local completions (only tokensPerSecond is populated) — so
- * PerformanceChip was unreachable regardless of the setting or of real
- * tokensPerSecond data being available.
- */
-
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import type { ChatMessage } from '@/types/chat';
@@ -68,7 +57,6 @@ jest.mock('expo-haptics', () => ({
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
   const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
-  // Any icon name resolves to the stub — robust to new icons added to MessageBubble.
   return new Proxy({}, { get: () => Icon });
 });
 
@@ -163,8 +151,8 @@ describe('MessageBubble performance chip', () => {
   });
 
   it('renders the chip when tokensPerSecond is present, even without runtimeTier', () => {
-    mockGetString.mockReturnValue(undefined); // setting unset -> default on
-    const message = makeMessage(); // no runtimeTier set — matches real chatExecutionStore output
+    mockGetString.mockReturnValue(undefined);
+    const message = makeMessage();
 
     const { getByTestId } = render(<MessageBubble message={message} />);
 

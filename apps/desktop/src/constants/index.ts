@@ -1,6 +1,3 @@
-/**
- * Centralized exports for all constants used in the desktop application.
- */
 
 export * from './errorMessages';
 export * from './llm';

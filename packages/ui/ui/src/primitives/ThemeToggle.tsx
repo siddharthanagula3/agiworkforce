@@ -4,14 +4,6 @@ import { useTheme } from 'next-themes';
 import { Moon, Sun, Monitor } from 'lucide-react';
 import { Button } from './Button';
 
-/**
- * Cycles light → dark → system on each click. Reads/writes theme via
- * next-themes' useTheme(), so the consuming app must render next-themes'
- * ThemeProvider higher in the tree. next-themes is a peerDependency here
- * (like react/lucide-react) rather than a bundled dependency, so this
- * resolves to the host app's own next-themes instance. apps/desktop has no
- * next-themes provider today and does not render this component.
- */
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
 

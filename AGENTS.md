@@ -31,6 +31,7 @@ These rules must stay mirrored in `CLAUDE.md` and guarded by `pnpm check:agent-c
 - Do not mark work complete from build success alone. Inspect relevant files, run surface checks, inspect `git status`/diff, and record unresolved risks.
 - Treat unusual product behavior as a bug, not as background noise: unreadable UI, dead or duplicate controls, unexpected redirects, visible console/network errors, stale provider/model labels, fake availability badges, and confusing auth or upgrade gates must be fixed immediately when reproducible, or recorded as a concrete blocker with evidence.
 - Do not treat generated audit/report markdown as remediation. Audit files are triage queues: open the cited source files, confirm the issue in implementation, patch production paths when safe, and only summarize after code changes or explicit blocked risks are recorded.
+- Write lean code with no comments. Name things so the code reads without narration. Comment only when a reader would otherwise get it wrong: a non-obvious constraint, a correctness or security reason a change would silently break, or a directive the tooling reads (`eslint-*`, `@ts-expect-error`, `/// <reference>`, license headers). Never restate what the line already says, never narrate history or the diff, and never leave a comment where a clearer name or a test would do the job.
 - Use the nearest path-scoped `AGENTS.md` before editing high-risk areas.
 
 ## LLM Failure Prevention Rules

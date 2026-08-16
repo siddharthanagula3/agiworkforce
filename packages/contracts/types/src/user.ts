@@ -12,35 +12,9 @@
 
 import type { BillingPlanTier } from './billing-catalog';
 
-// ============================================================================
-// Subscription Tier
-// ============================================================================
-
-/**
- * Subscription tier levels available in the platform.
- *
- * - `free` -- Basic access with limited features and token allowance.
- * - `basic` -- Mobile-first entry tier.
- * - `pro` -- Full feature access for professionals.
- * - `max` -- Max 5x usage tier.
- * - `max_15x` -- Max 15x usage tier.
- * - `team` -- Per-seat team tier.
- * - `enterprise` -- Custom enterprise deployment with dedicated support.
- */
 export type SubscriptionTier = Exclude<BillingPlanTier, 'local-only' | 'byok'>;
 
-// ============================================================================
-// Subscription Status
-// ============================================================================
-
-/**
- * Status of a user's subscription.
- */
 export type UserSubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trialing' | 'expired';
-
-// ============================================================================
-// User
-// ============================================================================
 
 /**
  * Core user identity shared across all surfaces.
@@ -58,28 +32,18 @@ export type UserSubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'trial
  * ```
  */
 export interface User {
-  /** Unique user identifier (UUID). */
   id: string;
 
-  /** User's email address. */
   email: string;
 
-  /** Display name. */
   name?: string;
 
-  /** Avatar image URL. */
   avatarUrl?: string;
 
-  /** Current subscription tier. */
   subscriptionTier: SubscriptionTier;
 
-  /** ISO 8601 timestamp when the account was created. */
   createdAt: string;
 }
-
-// ============================================================================
-// User Profile
-// ============================================================================
 
 /**
  * Extended user profile with preferences and usage data.
@@ -107,51 +71,35 @@ export interface User {
  * ```
  */
 export interface ExtendedUserProfile {
-  /** Unique user identifier (UUID). */
   id: string;
 
-  /** User's email address. */
   email: string;
 
-  /** Display name. */
   name?: string;
 
-  /** Avatar image URL. */
   avatarUrl?: string;
 
-  /** Current subscription tier. */
   subscriptionTier: SubscriptionTier;
 
-  /** Subscription billing status. */
   subscriptionStatus?: UserSubscriptionStatus;
 
-  /** Current token balance (credits). */
   tokenBalance?: number;
 
-  /** Monthly token limit for the current plan. */
   monthlyTokenLimit?: number;
 
-  /** Tokens consumed in the current billing period. */
   tokensUsedThisMonth?: number;
 
-  /** User's preferred default model. */
   preferredModel?: string;
 
-  /** User's preferred default provider. */
   preferredProvider?: string;
 
-  /** User's preferred theme. */
   theme?: 'light' | 'dark' | 'system';
 
-  /** User's preferred language (BCP 47 code). */
   language?: string;
 
-  /** ISO 8601 timestamp when the profile was created. */
   createdAt: string;
 
-  /** ISO 8601 timestamp when the profile was last updated. */
   updatedAt?: string;
 
-  /** Arbitrary profile metadata. */
   metadata?: Record<string, unknown>;
 }

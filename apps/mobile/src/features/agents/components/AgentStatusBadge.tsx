@@ -16,11 +16,6 @@ interface AgentStatusBadgeProps {
   status: Agent['status'];
 }
 
-/**
- * Built from the live palette rather than the static dark one: the status
- * colours differ between themes (error is #f87171 in dark, #dc2626 in light),
- * and a module-scope constant can only ever hold one of them.
- */
 function statusConfig(colors: ReturnType<typeof useThemeColors>): Record<
   Agent['status'],
   {

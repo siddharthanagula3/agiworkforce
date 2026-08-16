@@ -1,4 +1,3 @@
-/** Format ms as an MM:SS recording clock (e.g. 125_000 -> "02:05"). */
 export function formatClock(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
   const minutes = Math.floor(totalSeconds / 60);
@@ -6,7 +5,6 @@ export function formatClock(ms: number): string {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
-/** Format an ISO date as a compact relative time, e.g. "2h ago"; falls back to a date past 7 days. */
 export function formatRelativeTime(isoDate: string): string {
   const now = Date.now();
   const then = new Date(isoDate).getTime();

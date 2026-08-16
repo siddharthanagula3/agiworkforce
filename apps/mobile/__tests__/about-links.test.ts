@@ -1,15 +1,3 @@
-/**
- * about-links.test.ts
- *
- * About shipped a "Open Source Licenses" row pointing at
- * https://agiworkforce.com/licenses — a URL with no route behind it, so the row
- * backgrounded the app to show a 404. Attribution now lives in-app.
- *
- * This test is the contract that keeps every About destination real: each web
- * URL the screen hardcodes must resolve to a page under apps/web/app (or a
- * redirect declared in next.config), and each in-app push target must resolve
- * to a route file.
- */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -20,7 +8,6 @@ const aboutSource = readFileSync(join(mobileRoot, 'app', '(app)', 'about.tsx'), 
 const webAppRoot = join(mobileRoot, '..', 'web', 'app');
 const nextConfig = readFileSync(join(mobileRoot, '..', 'web', 'next.config.ts'), 'utf8');
 
-/** Every route with a page, with (group) segments removed. */
 function collectWebRoutes(dir: string, segments: string[] = [], routes = new Set<string>()) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.isFile() && /^page\.(tsx|ts|jsx|js|mdx)$/.test(entry.name)) {

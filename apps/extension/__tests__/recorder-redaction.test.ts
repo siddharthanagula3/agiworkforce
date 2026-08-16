@@ -1,26 +1,6 @@
-/**
- * Recorder C-05 tests (audit 2026-05-19).
- *
- * Recorder inverts the default: selector-only unless the user explicitly
- * opts in via SET_RECORDING_VALUE_CAPTURE. Even when opted in, password
- * fields are dropped, cc-* / one-time-code autocomplete fields are
- * redacted to '[REDACTED]', and secret-shaped substrings (API keys, JWTs,
- * AWS keys, GitHub tokens) are replaced inline.
- *
- * The recorder lives in content.ts but the redaction logic
- * (`sanitizeRecordedValue`) is intentionally local-static; we replicate it
- * here for fast unit testing without booting the content script. The
- * companion integration tests in `__tests__/content.test.ts` exercise the
- * full event-listener path.
- */
 
 import { describe, expect, it } from 'vitest';
 import { JSDOM } from 'jsdom';
-
-// ─── Mirror of the production sanitizer in content.ts ─────────────────────────
-// If the production helper changes shape, surface this drift loudly by
-// importing instead of mirroring (deliberately deferred: content.ts has
-// chrome-API side effects that complicate test imports).
 
 const REC_REDACTION_PATTERNS: ReadonlyArray<{ pattern: RegExp; replacement: string }> = [
   { pattern: /sk-ant-[a-zA-Z0-9_-]{20,}/g, replacement: '[REDACTED_ANTHROPIC_KEY]' },
@@ -56,8 +36,6 @@ function sanitizeRecordedValue(
   return value;
 }
 
-// ─── Test harness ────────────────────────────────────────────────────────────
-
 function makeInput(opts: {
   type?: string;
   autocomplete?: string;
@@ -65,7 +43,6 @@ function makeInput(opts: {
 }): HTMLInputElement {
   const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
   const doc = dom.window.document;
-  // Expose JSDOM's HTMLInputElement etc. to instanceof checks
   (globalThis as { HTMLInputElement?: typeof HTMLInputElement }).HTMLInputElement =
     dom.window.HTMLInputElement;
   (globalThis as { HTMLTextAreaElement?: typeof HTMLTextAreaElement }).HTMLTextAreaElement =
@@ -78,8 +55,6 @@ function makeInput(opts: {
   if (opts.value !== undefined) input.value = opts.value;
   return input as unknown as HTMLInputElement;
 }
-
-// ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('C-05 recorder value sanitization', () => {
   describe('password fields are dropped entirely', () => {

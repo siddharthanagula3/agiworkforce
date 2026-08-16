@@ -13,8 +13,6 @@ import {
 
 type Obj = Record<string, unknown>;
 
-// OBSERVABILITY-WEB-SENTRY-01: nothing sensitive may leave the process. These
-// guard the PII scrub that runs in beforeSend on every event.
 describe('sentry-shared PII scrub', () => {
   it('redacts sensitive-named keys at any depth, keeping benign data', () => {
     const out = redactDeep({
@@ -68,15 +66,10 @@ describe('sentry-shared PII scrub', () => {
   });
 
   it('is default-disabled outside production (no DSN / not production)', () => {
-    // Under vitest NODE_ENV is 'test', so Sentry must report not-configured.
     expect(isSentryConfigured()).toBe(false);
   });
 });
 
-// Regression guard: instrumentation-client.ts must never call Sentry.init()
-// while the user's "Share crash and usage telemetry" toggle (default OFF)
-// hasn't explicitly synced to this device as opted-in — an opt-out that gets
-// silently ignored is a privacy defect, not a cosmetic bug.
 describe('telemetry consent cache (client-side Sentry gate)', () => {
   beforeEach(() => {
     window.localStorage.clear();

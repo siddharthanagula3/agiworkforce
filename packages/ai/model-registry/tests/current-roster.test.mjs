@@ -204,16 +204,6 @@ test('publishes the current Anthropic roster with canonical API IDs, limits, and
   assert.equal(compatibility.models[anthropicStandardModelKey].post_promo_prices, undefined);
 });
 
-/**
- * The dated-pricing MECHANISM is proved against synthetic fixtures in
- * `pricing-schedule.test.mjs`; this asserts what the shipped roster actually
- * publishes. Today no model carries a window: every published price is
- * date-invariant, so no request can be billed differently for the same tokens
- * depending on the calendar. The default Anthropic route in particular bills
- * the founder-selected standard rates on every date (Decision #22, reaffirmed 2026-08-05) — a
- * provider's introductory window is a provider-cost fact for verificationLog,
- * not a product price.
- */
 test('publishes date-invariant prices — no shipped model carries a pricing schedule', () => {
   const scheduled = Object.entries(registry.pricing)
     .filter(([, pricing]) => pricing.schedule !== undefined)
@@ -250,8 +240,6 @@ test('records only verified openness metadata and leaves the rest unknown', () =
     });
   }
 
-  // Open weights confirmed, exact license id NOT confirmed — it stays absent
-  // instead of being guessed.
   const unknownLicenseKeys = [
     ...registry.providerModelKeys.moonshot,
     ...registry.providerModelKeys.minimax,
@@ -275,7 +263,6 @@ test('records only verified openness metadata and leaves the rest unknown', () =
     });
   }
 
-  // Hosted Qwen variants are unverified on both axes: absent, never guessed.
   for (const modelKey of registry.providerModelKeys.qwen) {
     assert.deepEqual(openness(modelKey), {
       openWeight: undefined,
@@ -317,7 +304,6 @@ test('selects the founder-approved roster and subscription bands', () => {
   assert.equal(basicRoster.has(currentOpenAI.economy.modelKey), true);
   assert.equal(basicRoster.has(compatibility.providers.google.defaultModel), true);
   assert.equal(basicRoster.has(currentOpenAI.balanced.modelKey), false);
-  // Economy carries no Anthropic model. Reintroducing one must be deliberate.
   const anthropicModelKeys = new Set(registry.providerModelKeys.anthropic);
   assert.equal(
     [...basicRoster].some((modelKey) => anthropicModelKeys.has(modelKey)),

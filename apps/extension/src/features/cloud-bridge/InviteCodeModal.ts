@@ -2,15 +2,7 @@ import { getExtensionTokensCssAuto } from '../../tokens';
 import { waitlistService } from '../../lib/waitlistService';
 import type { InviteCodeError, InviteCodeModalProps, InviteCodeTab } from './types';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// ---------------------------------------------------------------------------
-// Error helpers
-// ---------------------------------------------------------------------------
 
 function friendlyInviteError(code?: InviteCodeError): string {
   switch (code) {
@@ -32,10 +24,6 @@ function friendlyInviteError(code?: InviteCodeError): string {
       return 'Something went wrong. Try again.';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Style builder
-// ---------------------------------------------------------------------------
 
 function buildModalStyles(): string {
   return `
@@ -250,10 +238,6 @@ function buildModalStyles(): string {
   `;
 }
 
-// ---------------------------------------------------------------------------
-// DOM builder
-// ---------------------------------------------------------------------------
-
 interface ModalElements {
   backdrop: HTMLElement;
   closeBtn: HTMLButtonElement;
@@ -261,7 +245,6 @@ interface ModalElements {
   tabWaitlistBtn: HTMLButtonElement;
   inviteContent: HTMLElement;
   waitlistContent: HTMLElement;
-  // Invite tab
   inviteInput: HTMLInputElement;
   inviteErrorText: HTMLElement;
   inviteSubmitBtn: HTMLButtonElement;
@@ -270,7 +253,6 @@ interface ModalElements {
   inviteSwitchBtn: HTMLButtonElement;
   inviteFormFields: HTMLElement;
   inviteSuccess: HTMLElement;
-  // Waitlist tab
   waitlistEmailInput: HTMLInputElement;
   waitlistNameInput: HTMLInputElement;
   waitlistErrorText: HTMLElement;
@@ -295,7 +277,6 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   const modal = document.createElement('div');
   modal.className = 'agi-modal';
 
-  // ── Header ──
   const header = document.createElement('div');
   header.className = 'agi-modal-header';
 
@@ -333,7 +314,6 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   header.appendChild(titleGroup);
   header.appendChild(closeBtn);
 
-  // ── Tabs ──
   const tabs = document.createElement('div');
   tabs.className = 'agi-tabs';
   tabs.setAttribute('role', 'tablist');
@@ -361,11 +341,9 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   tabs.appendChild(tabInviteBtn);
   tabs.appendChild(tabWaitlistBtn);
 
-  // ── Body ──
   const body = document.createElement('div');
   body.className = 'agi-modal-body';
 
-  // -- Invite tab content --
   const inviteContent = document.createElement('div');
   inviteContent.className = 'agi-tab-content active';
   inviteContent.setAttribute('role', 'tabpanel');
@@ -439,7 +417,6 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   inviteContent.appendChild(inviteSuccess);
   inviteContent.appendChild(inviteFormFields);
 
-  // -- Waitlist tab content --
   const waitlistContent = document.createElement('div');
   waitlistContent.className = 'agi-tab-content';
   waitlistContent.setAttribute('role', 'tabpanel');
@@ -560,10 +537,6 @@ function buildModalDOM(shadow: ShadowRoot): ModalElements {
   };
 }
 
-// ---------------------------------------------------------------------------
-// InviteCodeModal class
-// ---------------------------------------------------------------------------
-
 export class InviteCodeModal {
   private host: HTMLElement;
   private shadow: ShadowRoot;
@@ -580,11 +553,6 @@ export class InviteCodeModal {
 
     this.host = document.createElement('div');
     this.host.setAttribute('data-agi-cloud-modal', 'true');
-    // Do not use all:initial — it resets display to inline and prevents the
-    // shadow-DOM :host rule (display:block; position:fixed) from taking effect,
-    // which causes the overlay to collapse into normal document flow instead of
-    // covering the viewport. The shadow-DOM stylesheet handles all internal
-    // isolation via the :host rule; no inline reset is needed here.
 
     this.shadow = this.host.attachShadow({ mode: 'open' });
     this.els = buildModalDOM(this.shadow);
@@ -601,12 +569,10 @@ export class InviteCodeModal {
 
     els.closeBtn.addEventListener('click', () => this.close());
 
-    // Close on backdrop click (outside modal box)
     els.backdrop.addEventListener('click', (e: MouseEvent) => {
       if (e.target === els.backdrop) this.close();
     });
 
-    // Keep keyboard focus inside the aria-modal surface until it closes.
     this.host.addEventListener('keydown', (e: Event) => {
       const event = e as KeyboardEvent;
       if (event.key === 'Escape') {
@@ -617,7 +583,6 @@ export class InviteCodeModal {
       if (event.key === 'Tab') this.trapFocus(event);
     });
 
-    // Tab switching
     els.tabInviteBtn.addEventListener('click', () => this.switchTab('invite'));
     els.tabWaitlistBtn.addEventListener('click', () => this.switchTab('waitlist'));
     els.inviteSwitchBtn.addEventListener('click', () => this.switchTab('waitlist'));
@@ -631,7 +596,6 @@ export class InviteCodeModal {
       });
     }
 
-    // Invite input
     els.inviteInput.addEventListener('input', () => {
       const raw = els.inviteInput.value.toUpperCase();
       if (els.inviteInput.value !== raw) els.inviteInput.value = raw;
@@ -644,7 +608,6 @@ export class InviteCodeModal {
 
     els.inviteSubmitBtn.addEventListener('click', () => void this.submitInvite());
 
-    // Waitlist inputs
     els.waitlistEmailInput.addEventListener('input', () => this.updateWaitlistSubmitState());
     els.waitlistEmailInput.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter') void this.submitWaitlist();
@@ -771,9 +734,6 @@ export class InviteCodeModal {
     }
 
     if (result.inviteId) {
-      // Cloud access is gated solely by a valid Clerk token (see callCloud); the
-      // former `agi_cloud_unlocked` flag was vestigial — nothing consumed it — so
-      // the redeem path no longer writes an unlock flag. Just notify the caller.
       this.props.onRedeemed?.(result.inviteId);
     }
 
@@ -817,22 +777,18 @@ export class InviteCodeModal {
       this.returnFocus = activeElement;
     }
     this.els.backdrop.classList.remove('hidden');
-    // Reset to defaultTab on every open
     this.switchTab(this.props.defaultTab ?? 'invite');
-    // Reset invite form state
     this.els.inviteInput.value = '';
     this.clearInviteError();
     this.els.inviteFormFields.classList.remove('hidden');
     this.els.inviteSuccess.classList.remove('visible');
     this.updateInviteSubmitState();
-    // Reset waitlist form state
     this.els.waitlistEmailInput.value = '';
     this.els.waitlistNameInput.value = '';
     this.clearWaitlistError();
     this.els.waitlistFormFields.classList.remove('hidden');
     this.els.waitlistSuccess.classList.remove('visible');
     this.updateWaitlistSubmitState();
-    // Focus appropriate input
     setTimeout(() => {
       if (this.activeTab === 'invite') {
         this.els.inviteInput.focus();
@@ -871,14 +827,6 @@ export class InviteCodeModal {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Convenience factory
-// ---------------------------------------------------------------------------
-
-/**
- * Mount an InviteCodeModal into the given container and return a handle to
- * update or unmount it.
- */
 export function mountInviteCodeModal(
   container: Element,
   props: InviteCodeModalProps,

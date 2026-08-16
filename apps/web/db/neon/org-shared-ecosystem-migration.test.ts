@@ -2,15 +2,6 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-/**
- * 0086 is the sharing floor. The dangerous regressions here are silent — a
- * policy that stops fencing on `organization_id`, a predicate that quietly
- * starts admitting non-members, a "simplification" that folds sharing back into
- * 0073's governance predicate and hands every member their admins' API keys.
- * None of those produce a runtime failure in a repo with no live Postgres in
- * tests, so they are pinned at the source level here, exactly like
- * `tenancy-foundation-migration.test.ts` pins 0073.
- */
 const SHARING_TABLES = [
   'organization_shared_projects',
   'organization_project_access',
@@ -27,9 +18,6 @@ describe('org shared ecosystem migration (0086)', () => {
     for (const table of SHARING_TABLES) {
       expect(sql).toMatch(new RegExp(`create table if not exists public\\.${table}\\b`, 'i'));
     }
-    // 0058 dropped `teams`/`team_members` because a second membership system
-    // with its own role vocabulary is exactly what made last-owner protection
-    // impossible. Sharing must hang off organizations/organization_members.
     expect(sql).not.toMatch(/create table[^;]*\bpublic\.teams\b/i);
     expect(sql).not.toMatch(/create table[^;]*\bpublic\.team_members\b/i);
     expect(sql).not.toMatch(/\beditor\b/i);
@@ -37,12 +25,8 @@ describe('org shared ecosystem migration (0086)', () => {
 
   it('does not widen the 0073 governance predicate', async () => {
     const sql = await load();
-    // The one-line "fix" that would ship a catastrophe: adding 'member' to
-    // app_row_is_visible, which is applied by twelve policies including
-    // api_keys, usage_events and user_memories.
     expect(sql).not.toMatch(/create or replace function public\.app_row_is_visible/i);
     expect(sql).not.toMatch(/create or replace function public\.app_row_is_writable/i);
-    // And 0073 itself must still be owner/admin-only.
     const tenancy = await loadTenancy();
     expect(tenancy).toMatch(/current_app_org_role\(\) in \('owner', 'admin'\)/i);
     expect(tenancy).not.toMatch(/current_app_org_role\(\) in \([^)]*'member'/i);
@@ -52,9 +36,7 @@ describe('org shared ecosystem migration (0086)', () => {
     const sql = await load();
     expect(sql).toMatch(/create or replace function public\.app_org_resource_is_readable/i);
     expect(sql).toMatch(/create or replace function public\.app_org_resource_is_manageable/i);
-    // app_has_org_role (0076) is SECURITY DEFINER over organization_members.
     expect(sql).toMatch(/public\.app_has_org_role\(/i);
-    // A forged org GUC must not be able to grant a shared read.
     expect(sql).not.toMatch(/current_setting\('request\.jwt\.claim\.org_id'/i);
   });
 
@@ -97,9 +79,6 @@ describe('org shared ecosystem migration (0086)', () => {
         new RegExp(`alter table public\\.${table} force row level security`, 'i'),
       );
     }
-    // Every policy in this file must name app_rls; a policy without a role
-    // grant applies to PUBLIC and would be readable by the owner connection's
-    // role set in future refactors.
     const policyClauses = sql.match(/create policy [\s\S]*?(?=;\s*(?:--|\n|$))/gi) ?? [];
     expect(policyClauses.length).toBeGreaterThanOrEqual(8);
     for (const clause of policyClauses) {
@@ -111,16 +90,12 @@ describe('org shared ecosystem migration (0086)', () => {
     const sql = await load();
     for (const table of SHARING_TABLES) {
       const block = sql.slice(sql.indexOf(`create policy ${table}_member_read`));
-      // Deleting the organization_id argument is precisely the regression that
-      // would let org A read org B's shared set.
       expect(block.slice(0, 300)).toMatch(/\(organization_id\)/);
     }
   });
 
   it('shares projects through a grant row, never by rewriting user_projects.organization_id', async () => {
     const sql = await load();
-    // Overloading 0073's column would make "an admin may audit this" and "every
-    // member may open this" the same bit — un-sharing would also un-govern.
     expect(sql).not.toMatch(/update\s+public\.user_projects\s+set\s+organization_id/i);
     expect(sql).toMatch(/primary key \(organization_id, project_id\)/i);
     expect(sql).toMatch(/references public\.user_projects\(id\) on delete cascade/i);
@@ -131,8 +106,6 @@ describe('org shared ecosystem migration (0086)', () => {
     const start = sql.indexOf('create policy user_projects_org_shared_read');
     const policy = sql.slice(start, sql.indexOf('project_knowledge_files', start));
     expect(policy).toMatch(/for select to app_rls/i);
-    // A `for all` here would let any org member UPDATE or DELETE another
-    // member's project.
     expect(policy.slice(0, 200)).not.toMatch(/for all/i);
     expect(policy).not.toMatch(/with check/i);
   });
@@ -160,8 +133,6 @@ describe('org shared ecosystem migration (0086)', () => {
     const start = sql.indexOf('create policy project_knowledge_files_tenant_isolation');
     const policy = sql.slice(start, sql.indexOf('comment on table', start));
     expect(policy).toMatch(/organization_shared_projects/);
-    // The WITH CHECK side must stay owner-only in this slice: members read
-    // knowledge files on a shared project, they do not write them.
     const withCheck = policy.slice(policy.indexOf('with check'));
     expect(withCheck).not.toMatch(/organization_shared_projects/);
     expect(withCheck).toMatch(/p\.user_id = public\.current_app_user_id\(\)/);
@@ -174,8 +145,6 @@ describe('org shared ecosystem migration (0086)', () => {
     expect(sql).toMatch(/if p_limit is null then\s+return true/i);
     expect(sql).toMatch(/invalid_org_resource_limit/);
     expect(sql).toMatch(/unknown_org_resource/);
-    // The advisory lock must be taken BEFORE the count, or two admins sharing
-    // the last connector both see a free slot.
     const body = sql.slice(sql.indexOf('function public.assert_org_resource_limit'));
     const lockAt = body.indexOf('pg_advisory_xact_lock');
     const countAt = body.indexOf('select count(*) into v_count');
@@ -203,9 +172,7 @@ describe('org shared ecosystem migration (0086)', () => {
 
   it('never exposes the connector credential column through a sharing policy', async () => {
     const sql = await load();
-    // Sharing a connector shares the EFFECT of its bearer token, not the token.
     expect(sql).not.toMatch(/auth_header_enc/);
-    // And it must not add a member-readable policy to the credential table.
     expect(sql).not.toMatch(/create policy[^;]*on public\.user_custom_connectors/i);
   });
 });

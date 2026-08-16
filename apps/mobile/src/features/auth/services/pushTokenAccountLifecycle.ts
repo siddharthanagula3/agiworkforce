@@ -23,9 +23,6 @@ function normalizedToken(token: string | null): string | null {
 
 function captureToken(getToken: ClerkTokenResolver): Promise<string | null> {
   try {
-    // Invoke synchronously. On an A -> B render the global Clerk bridge is
-    // replaced with B immediately, so deferring this invocation by even one
-    // microtask could accidentally cache B's JWT under A's owner id.
     return getToken().then(normalizedToken, () => null);
   } catch {
     return Promise.resolve(null);
@@ -45,10 +42,6 @@ function enqueueCleanup(binding: PushTokenOwnerBinding | null): Promise<void> {
     cleanupQueue.push(binding);
   }
 
-  // A failed/offline DELETE deliberately leaves its owner at the front of the
-  // queue. The next account transition retries it before attempting any newer
-  // cleanup, so a rapid A -> B -> C sequence can never skip A and let C race a
-  // still-owned server device row.
   const drain = cleanupTail
     .catch(() => undefined)
     .then(async () => {
@@ -119,7 +112,6 @@ export async function clearPushTokenAccountSession(): Promise<void> {
   await enqueueCleanup(previousBinding);
 }
 
-/** TEST-ONLY: reset module state between deterministic lifecycle tests. */
 export function __resetPushTokenAccountLifecycleForTests(): void {
   activeBinding?.controller.abort();
   activeBinding = null;

@@ -1,21 +1,3 @@
-/**
- * @file Read-only account context for the support agent.
- *
- * OWNERSHIP RULE (the whole point of this module):
- * `resolveSupportAccountContext` takes a `userId` that its CALLER obtained from
- * `getClerkAuthUser(request)`. There is no overload, no request parameter and no
- * variant that accepts an identifier from a request body, a query string, or a
- * model. If a future caller wants to resolve "some other user", it has to add
- * that capability itself — it cannot get it here by accident.
- *
- * USAGE POLICY:
- * This module must never import `lib/server/managed-usage-policy`. That module's
- * docblock is explicit: its allowance values "must never be serialized into
- * pricing, usage, or client configuration responses. Public clients get
- * percentages and reset times only." We therefore read the already-public
- * percentage contract from `managed-usage-summary-service` instead. A unit test
- * asserts this file's import list, so the rule survives an edit.
- */
 
 import 'server-only';
 
@@ -38,7 +20,6 @@ import type {
   SupportAccountUsage,
 } from './types';
 
-/** Mirrors the ceiling enforced by POST /api/settings/api-keys. */
 export const SUPPORT_API_KEY_CEILING = 20;
 
 const CLERK_LOOKUP_TIMEOUT_MS = 1500;
@@ -59,7 +40,6 @@ function toIso(value: string | Date | null | undefined): string | null {
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-/** Same derivation /api/me uses, so the two surfaces cannot disagree. */
 function resolveSubscriptionSource(
   subscription: {
     stripe_subscription_id?: string | null;
@@ -92,8 +72,6 @@ async function resolveConnectors(userId: string): Promise<SupportAccountConnecto
     logger.warn({ userId }, 'user_connectors not migrated; support context reports no connectors');
   }
 
-  // Same filter /api/connectors GET applies: a row for an id the operator has
-  // not mapped has no runtime effect, so reporting it would be a fake state.
   const operatorMapped = getOperatorMappedConnectorIds();
   for (const row of rows) {
     if (!operatorMapped.has(row.connector_id)) continue;
@@ -115,10 +93,6 @@ async function resolveConnectors(userId: string): Promise<SupportAccountConnecto
     });
   }
 
-  // Custom MCP connectors: the row id and the namespaced `custom-<shortId>` are
-  // kept; the user-authored display NAME and the endpoint URL are dropped here.
-  // Both are user-controlled strings and neither is needed to talk about, or to
-  // revoke, the connector.
   const custom = await getUserCustomConnectorSummaries(userId);
   for (const c of custom) {
     connectors.push({
@@ -142,13 +116,6 @@ async function resolveApiKeyCount(userId: string): Promise<number> {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-/**
- * Email verification state, capped the same way /api/me caps its Clerk lookup.
- *
- * A timeout or a Clerk outage yields `'unknown'`, never `'unverified'`. The
- * difference matters: "your email is not verified" is an actionable claim and
- * the agent must not make it because a network call was slow.
- */
 async function resolveEmail(userId: string): Promise<SupportAccountEmail> {
   try {
     const { clerkClient } = await import('@clerk/nextjs/server');
@@ -191,8 +158,6 @@ async function resolveUsage(userId: string): Promise<SupportAccountUsage | null>
       hasUsageRemaining: summary.has_usage_remaining,
     };
   } catch (error) {
-    // Degrade to "I don't know your usage" rather than guessing a number. The
-    // answer layer treats a null fact as unciteable and abstains.
     logger.warn({ userId, error }, 'Support account context could not resolve managed usage');
     return null;
   }
@@ -219,8 +184,6 @@ export async function resolveSupportAccountContext(userId: string): Promise<Supp
 
   const tier = subscription?.plan_tier || 'free';
   const status = subscription?.status || 'none';
-  // Entitlement is a function of STATUS, not raw tier (lib/entitlement.ts). The
-  // raw tier is kept only so billing UI can honestly say "Pro — canceled".
   const effectiveTier = effectivePlanTier(subscription?.plan_tier, subscription?.status);
 
   return {
@@ -243,11 +206,6 @@ export async function resolveSupportAccountContext(userId: string): Promise<Supp
   };
 }
 
-/**
- * Citations for account-grounded claims. The answer layer's mandatory-citation
- * rule ("an answer with no source becomes an abstention") is satisfiable for
- * account facts without the answer layer inventing a source string.
- */
 export function buildSupportAccountCitations(
   context: SupportAccountContext,
 ): SupportAccountCitation[] {

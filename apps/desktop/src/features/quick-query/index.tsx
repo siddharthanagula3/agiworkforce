@@ -1,15 +1,3 @@
-/**
- * QuickQuery Overlay
- *
- * A system-wide quick-query floating overlay that appears when the user
- * presses the global hotkey (Cmd+Shift+Space on macOS, Ctrl+Shift+Space
- * on Windows/Linux). Inspired by Spotlight, Raycast, and similar launchers.
- *
- * - Glassmorphism dark design matching the app theme
- * - Text input with model selector
- * - Routes the query to the main chat / creates a new conversation
- * - Closes on Escape or click-outside
- */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -151,10 +139,8 @@ export function QuickQuery({
   const allowedAutoModes = getAllowedAutoModesForTier(planTier);
   const defaultModel = getBestAutoModeForTier(planTier);
 
-  // Focus input when overlay opens
   useEffect(() => {
     if (open) {
-      // Short delay so the animation frame renders first
       const timer = setTimeout(() => {
         inputRef.current?.focus();
       }, 50);
@@ -182,7 +168,6 @@ export function QuickQuery({
 
       return () => clearTimeout(timer);
     }
-    // Reset state when closing
     setQuery('');
     setModelDropdownOpen(false);
     setRecentConversations([]);
@@ -190,7 +175,6 @@ export function QuickQuery({
     return undefined;
   }, [canOpenRecentChats, getRecentConversations, open]);
 
-  // Close on Escape
   useEffect(() => {
     if (!open) return;
 
@@ -210,7 +194,6 @@ export function QuickQuery({
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [open, onClose, modelDropdownOpen]);
 
-  // Close on click outside
   useEffect(() => {
     if (!open) return;
 
@@ -221,15 +204,13 @@ export function QuickQuery({
       if (overlayRef.current && !overlayRef.current.contains(target)) {
         onClose();
       }
-      // Close dropdown if clicking outside it
       if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         setModelDropdownOpen(false);
       }
     };
 
-    // Use a small delay so the opening click doesn't immediately close it
     const timer = setTimeout(() => {
-      if (cleaned) return; // effect was cleaned up before the timer fired
+      if (cleaned) return;
       document.addEventListener('mousedown', handleClick);
     }, 100);
 
@@ -284,11 +265,9 @@ export function QuickQuery({
     [onClose, onRequestCapture, query],
   );
 
-  // Build flat list of model options for the dropdown
   const modelOptions = (() => {
     const options: Array<{ value: string; label: string; provider: Provider }> = [];
 
-    // Managed Cloud Auto profiles first.
     for (const model of getManagedAutoModelOptions()) {
       if (!allowedAutoModes.includes(model.value)) {
         continue;
@@ -310,7 +289,6 @@ export function QuickQuery({
       const defaultOption = modelOptions.find((option) => option.value === defaultModel);
       return defaultOption?.label ?? 'Auto (Economy)';
     }
-    // Fallback: show raw model id nicely
     return selectedModel.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   })();
 

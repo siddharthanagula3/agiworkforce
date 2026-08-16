@@ -65,11 +65,6 @@ function lineLabel(range: vscode.Range | undefined): string {
   return start === end ? ` line="${start}"` : ` lines="${start}-${end}"`;
 }
 
-/**
- * Converts native VS Code #file and #selection references into explicitly
- * untrusted user inputs for the local developer runtime. Unsupported reference
- * values, files outside the workspace, and sensitive paths are ignored.
- */
 export async function buildPromptReferenceInputs(
   references: readonly vscode.ChatPromptReference[] = [],
 ): Promise<UserInput[]> {
@@ -145,7 +140,6 @@ export function isWorkspaceFileReference(value: unknown): value is WorkspaceFile
   return isValidSerializedRange(candidate.range);
 }
 
-/** Builds the same safe prompt inputs for references selected in the custom sidebar. */
 export async function buildWorkspaceReferenceInputs(
   workspaceUri: vscode.Uri,
   references: readonly WorkspaceFileReference[] = [],

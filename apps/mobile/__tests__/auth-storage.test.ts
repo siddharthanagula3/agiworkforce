@@ -1,42 +1,4 @@
-/**
- * Tests for the auth token storage layer.
- *
- * Covers two units:
- *
- *  1. `lib/secureStorage.ts` — the StateStorage adapter that wraps
- *     expo-secure-store and is used by authStore's Zustand persist middleware.
- *
- *  2. `stores/authStore.ts` — persistence behaviour: session is written to
- *     secure storage on sign-in, cleared on sign-out, and rehydrated
- *     correctly on the next cold-start.
- *
- * All expo-secure-store calls are mocked so these tests run in Node / Jest
- * without native bindings.
- *
- * Key invariants tested:
- *  - setItem delegates to SecureStore.setItemAsync with the sanitized key
- *    and WHEN_UNLOCKED_THIS_DEVICE_ONLY access option.
- *  - getItem returns the promise from SecureStore.getItemAsync (async-compat
- *    with Zustand's persist middleware).
- *  - removeItem delegates to SecureStore.deleteItemAsync.
- *  - Keys containing characters outside [A-Za-z0-9._-] are sanitized to '_'.
- *  - A storage error in setItem propagates as a rejected promise (MOB-3,
- *    audit 2026-05-03) so Zustand's persist middleware can react to write
- *    failures instead of silently dropping the auth token.
- *  - A storage error in removeItem is swallowed (removal failures aren't
- *    security-critical).
- *  - authStore.signOut clears the session and triggers storage removal.
- *  - authStore.onRehydrateStorage sets isLoading=false / isInitialized=true
- *    when a cached session is present.
- *  - Large serialized sessions (>2 KB) can be stored and retrieved via the
- *    adapter without data loss (storage backend allows any size).
- */
 
-// ---------------------------------------------------------------------------
-// Shared mock references — created inside the jest.mock factory to avoid TDZ
-// issues caused by Jest hoisting the factory above const declarations.
-// The mock functions are retrieved after import via require().
-// ---------------------------------------------------------------------------
 
 const WHEN_UNLOCKED_THIS_DEVICE_ONLY = 'AfterFirstUnlockThisDeviceOnly';
 
@@ -48,7 +10,6 @@ jest.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'AfterFirstUnlockThisDeviceOnly',
 }));
 
-// Retrieve references to the mock functions created inside the factory.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const _SecureStoreMock = require('expo-secure-store') as {
   setItemAsync: jest.Mock;
@@ -59,8 +20,6 @@ const mockSetItemAsync = _SecureStoreMock.setItemAsync;
 const mockGetItemAsync = _SecureStoreMock.getItemAsync;
 const mockDeleteItemAsync = _SecureStoreMock.deleteItemAsync;
 
-// Cloud session cleanup must be mocked before authStore is imported.
-// Create mock fns inside the factory to avoid TDZ issues from Jest hoisting.
 jest.mock('../services/authSession', () => ({
   clearAuthSession: jest.fn(),
   getAuthToken: jest.fn(),
@@ -74,9 +33,6 @@ const _cloudAuthMock = require('../services/authSession') as {
 const mockClearAuthSession = _cloudAuthMock.clearAuthSession;
 const mockGetAuthToken = _cloudAuthMock.getAuthToken;
 
-// Settings teardown mocks — intercepted by the lazy require() calls inside
-// signOut's try block. Jest resolves @/ → <rootDir> so these relative paths
-// match exactly what the source requires at runtime.
 jest.mock('../stores/settings/settingsSyncStateStore', () => ({
   useSettingsSyncStateStore: {
     getState: jest.fn(),
@@ -90,8 +46,6 @@ jest.mock('../stores/settingsStore', () => ({
   },
 }));
 
-// Cloud settings store is cleared on sign-out to prevent account-B from
-// inheriting account-A's personalization.
 jest.mock('../stores/settings/cloudSettingsStore', () => ({
   useCloudSettingsStore: {
     getState: jest.fn(),
@@ -99,17 +53,12 @@ jest.mock('../stores/settings/cloudSettingsStore', () => ({
   },
 }));
 
-// Every account-scoped entitlement/capability cache is reset on sign-out so
-// account B cannot inherit account A's plan, provider, or tool grants.
 jest.mock('../src/features/billing/store', () => ({
   useTierStore: {
     getState: jest.fn(),
   },
 }));
 
-// Cloud artifacts (migration 0039 pulled artifacts) are persisted to MMKV and
-// scoped to the signed-in user — clearCloudArtifacts must run on sign-out so
-// a subsequent account cannot inherit a prior user's artifacts.
 jest.mock('../src/features/artifacts/store', () => ({
   useArtifactStore: {
     getState: jest.fn(),
@@ -117,17 +66,12 @@ jest.mock('../src/features/artifacts/store', () => ({
   clearAccountScopedArtifactState: jest.fn(),
 }));
 
-// Persisted Cloud mode is account-bound UI state. Sign-out must return the
-// app to Local before any signed-out Cloud settings surface can render.
 jest.mock('../src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: {
     setState: jest.fn(),
   },
 }));
 
-// Sign-out has one narrowly-scoped Local-mode egress exception: it captures the
-// current Clerk token and revokes this device's push token through the exact,
-// TLS-pinned endpoint before clearing Clerk credentials.
 jest.mock('../src/features/auth/services/signOutPushTokenCleanup', () => ({
   unregisterPushTokenForSignOut: jest.fn(),
 }));
@@ -136,9 +80,6 @@ jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
   invalidateCloudAccount: jest.fn(),
 }));
 
-// Keep the sign-out unit tests isolated from the full cloud-sync dependency
-// graph. Loading these real modules through signOut's lazy requires takes
-// longer than Jest's default test timeout on a cold transform cache.
 jest.mock('../services/cloudSyncEngine', () => ({
   stopCloudSyncLoop: jest.fn(),
 }));
@@ -275,7 +216,6 @@ const _pushTokenCleanupMock = require('../src/features/auth/services/signOutPush
   unregisterPushTokenForSignOut: jest.Mock;
 };
 
-// mmkv is not used by authStore but may be imported transitively.
 jest.mock('../lib/mmkv', () => ({
   whenMmkvReady: jest.fn((cb) => cb()),
   rehydrateWhenMmkvReady: jest.fn((store, _name) => {
@@ -289,20 +229,12 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
-// ---------------------------------------------------------------------------
-// Import modules under test AFTER mocks are declared.
-// ---------------------------------------------------------------------------
-
 import { secureStorage } from '../lib/secureStorage';
 import { useAuthStore } from '../src/features/auth/store';
 import { act } from '@testing-library/react-native';
 import { FEATURES } from '../lib/v1FeatureFlags';
 
 let consoleErrorSpy: jest.SpyInstance;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getState() {
   return useAuthStore.getState();
@@ -317,7 +249,6 @@ function resetAuthStore() {
   });
 }
 
-// Minimal Session shape that satisfies @authSession/authSession-js types
 function makeSession(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
   return {
     access_token: 'test-access-token',
@@ -339,10 +270,6 @@ function makeSession(overrides: Partial<Record<string, unknown>> = {}): Record<s
   };
 }
 
-// ---------------------------------------------------------------------------
-// 1. secureStorage adapter — unit tests
-// ---------------------------------------------------------------------------
-
 describe('secureStorage adapter', () => {
   beforeEach(() => {
     consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -353,15 +280,12 @@ describe('secureStorage adapter', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  // ---- getItem ----
-
   describe('getItem', () => {
     it('calls SecureStore.getItemAsync with the sanitized key', async () => {
       mockGetItemAsync.mockResolvedValue('{"foo":"bar"}');
 
       const result = secureStorage.getItem('auth-store');
 
-      // The return value is a promise (async-compat Zustand StateStorage)
       expect(mockGetItemAsync).toHaveBeenCalledWith('auth-store');
       await expect(result as Promise<string | null>).resolves.toBe('{"foo":"bar"}');
     });
@@ -379,7 +303,6 @@ describe('secureStorage adapter', () => {
 
       secureStorage.getItem('auth store/v2');
 
-      // spaces and slashes must be replaced with '_'
       expect(mockGetItemAsync).toHaveBeenCalledWith('auth_store_v2');
     });
 
@@ -392,15 +315,12 @@ describe('secureStorage adapter', () => {
     });
   });
 
-  // ---- setItem ----
-
   describe('setItem', () => {
     it('calls SecureStore.setItemAsync with the sanitized key and value', async () => {
       mockSetItemAsync.mockResolvedValue(undefined);
 
       secureStorage.setItem('auth-store', '{"session":null}');
 
-      // Allow the microtask queue to flush (fire-and-forget promise)
       await Promise.resolve();
 
       expect(mockSetItemAsync).toHaveBeenCalledWith('auth-store', '{"session":null}', {
@@ -421,10 +341,6 @@ describe('secureStorage adapter', () => {
     it('propagates the rejection when SecureStore.setItemAsync fails', async () => {
       mockSetItemAsync.mockRejectedValue(new Error('Keychain unavailable'));
 
-      // MOB-3 (audit 2026-05-03): the write must reject, not silently
-      // swallow, so Zustand's persist middleware can detect that the
-      // session was not durably written and avoid leaving stale state
-      // on disk after a token refresh.
       await expect(secureStorage.setItem('auth-store', 'value')).rejects.toThrow(
         'Keychain unavailable',
       );
@@ -436,7 +352,6 @@ describe('secureStorage adapter', () => {
         capturedValue = value;
       });
 
-      // Build a serialized session with a token > 2048 chars
       const largeToken = 'x'.repeat(2500);
       const largePayload = JSON.stringify({ session: { access_token: largeToken } });
 
@@ -447,8 +362,6 @@ describe('secureStorage adapter', () => {
       expect((capturedValue as string).length).toBeGreaterThan(2048);
     });
   });
-
-  // ---- removeItem ----
 
   describe('removeItem', () => {
     it('calls SecureStore.deleteItemAsync with the sanitized key', async () => {
@@ -480,8 +393,6 @@ describe('secureStorage adapter', () => {
     });
   });
 
-  // ---- round-trip ----
-
   describe('round-trip (set then get)', () => {
     it('retrieves exactly what was stored', async () => {
       const stored: Record<string, string> = {};
@@ -503,10 +414,6 @@ describe('secureStorage adapter', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. authStore persistence — integration with secureStorage mock
-// ---------------------------------------------------------------------------
-
 describe('authStore — secure storage persistence', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -516,12 +423,10 @@ describe('authStore — secure storage persistence', () => {
     mockGetAuthToken.mockResolvedValue('captured-clerk-jwt');
     _pushTokenCleanupMock.unregisterPushTokenForSignOut.mockResolvedValue(undefined);
 
-    // Default secure-store: succeed silently
     mockSetItemAsync.mockResolvedValue(undefined);
     mockGetItemAsync.mockResolvedValue(null);
     mockDeleteItemAsync.mockResolvedValue(undefined);
 
-    // Wire settings teardown mocks (called by lazy require inside signOut)
     _settingsSyncMock.useSettingsSyncStateStore.getState.mockReturnValue({
       resetSettingsSync: mockResetSettingsSync,
     });
@@ -541,11 +446,9 @@ describe('authStore — secure storage persistence', () => {
       }),
     ).rejects.toThrow('auth: Clerk mobile auth is not enabled in v1');
 
-    // Allow the microtask queue to flush — no secure-store write should have occurred
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(getState().session).toBeNull();
-    // Secure storage must NOT have been written with an access_token
     const accessTokenWrite = mockSetItemAsync.mock.calls.find(
       ([_key, value]: [string, string]) =>
         typeof value === 'string' && value.includes('access_token'),
@@ -554,7 +457,6 @@ describe('authStore — secure storage persistence', () => {
   });
 
   it('removes session from secure store after sign-out', async () => {
-    // Pre-load a session into the store
     const session = makeSession();
     useAuthStore.setState({ session: session as never, user: session['user'] as never });
 
@@ -564,12 +466,9 @@ describe('authStore — secure storage persistence', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    // signOut must clear state
     expect(getState().session).toBeNull();
     expect(getState().user).toBeNull();
 
-    // The Zustand persist middleware should write a null-session snapshot
-    // (or remove the key) — setItemAsync will be called with null session
     expect(mockSetItemAsync).toHaveBeenCalledWith(
       'auth-store',
       expect.stringContaining('"session":null'),
@@ -591,21 +490,14 @@ describe('authStore — secure storage persistence', () => {
   });
 
   it('signOut resets settings sync cursor and clears personalization (account-B isolation)', async () => {
-    // Regression: settings personalization (fullName, instructions, etc.) and the
-    // settings sync cursor are cloud-scoped. If not cleared on sign-out, a subsequent
-    // account inherits account A's personalization and may push a stale snapshot.
     useAuthStore.setState({ session: makeSession() as never, user: {} as never });
 
     await act(async () => {
       await getState().signOut();
     });
 
-    // Settings sync cursor must be reset to '0' so the next account starts fresh
     expect(mockResetSettingsSync).toHaveBeenCalledTimes(1);
 
-    // Cloud settings personalization must be wiped and settingsUpdatedAt set to null
-    // so the wiped state is NOT treated as a local edit (which would push defaults to cloud).
-    // Local settings are intentionally preserved — they belong to the device, not the account.
     expect(mockCloudSettingsSetState).toHaveBeenCalledWith(
       expect.objectContaining({
         personalization: {
@@ -625,10 +517,6 @@ describe('authStore — secure storage persistence', () => {
   });
 
   it('signOut clears every cached account entitlement (no stale plan/tool grants)', async () => {
-    // Regression: the Billing screen reads useTierStore().tier with no auth check.
-    // Before this fix, a previously-signed-in Pro/Max account's cached tier
-    // survived sign-out in MMKV and a signed-out (or different) user would see
-    // "You are on the Pro plan" — a fake/stale billing state.
     useAuthStore.setState({ session: makeSession() as never, user: {} as never });
 
     await act(async () => {
@@ -675,10 +563,6 @@ describe('authStore — secure storage persistence', () => {
   });
 
   it('signOut clears cloud artifacts (account-B isolation)', async () => {
-    // Regression: clearCloudArtifacts() existed on the artifact store specifically
-    // for "sign-out / leaving cloud mode" (per its own docstring) but was never
-    // wired into signOut(). cloudArtifacts (migration 0039) are persisted to MMKV,
-    // so a subsequent signed-in account could inherit a prior user's artifacts.
     useAuthStore.setState({ session: makeSession() as never, user: {} as never });
 
     await act(async () => {
@@ -689,10 +573,6 @@ describe('authStore — secure storage persistence', () => {
   });
 
   it('signOut unregisters the device push token (account-B push-notification isolation)', async () => {
-    // Regression: mobile_devices.push_token is keyed by deviceId, not session,
-    // so it previously survived sign-out indefinitely — a subsequent different
-    // account signing in on this device would still receive push notifications
-    // addressed to the prior account.
     useAuthStore.setState({ session: makeSession() as never, user: {} as never });
 
     await act(async () => {
@@ -718,19 +598,9 @@ describe('authStore — secure storage persistence', () => {
   });
 
   it('onRehydrateStorage clears session and marks store uninitialized (biometric gate)', () => {
-    // The onRehydrateStorage callback deliberately clears any previously-loaded
-    // session so the app starts in a pristine locked state. initialize() is the
-    // ONLY path that marks the store ready, and it is only called AFTER the
-    // biometric gate in _layout.tsx succeeds.
-    //
-    // Previous (incorrect) test: used useAuthStore.setState() directly and
-    // asserted the manually-set values back — testing Zustand setState, not the
-    // actual callback. This test invokes the callback as the middleware would.
 
     const session = makeSession();
 
-    // Retrieve and invoke the onRehydrateStorage callback directly so we test
-    // the real callback rather than a setState no-op.
     const storePersistConfig = (
       useAuthStore as unknown as {
         persist: {
@@ -743,14 +613,9 @@ describe('authStore — secure storage persistence', () => {
     const options = storePersistConfig?.getOptions?.();
     const outerCallback = options?.onRehydrateStorage?.();
 
-    // Hard guard: if the Zustand persist API is unavailable here the test below
-    // is a no-op and would silently pass without exercising the real callback.
-    // Fail fast so a Zustand upgrade that removes `.persist.getOptions()` surfaces
-    // immediately rather than leaving the biometric-gate invariant untested.
     expect(outerCallback).toBeDefined();
 
     if (outerCallback) {
-      // Simulate Zustand calling the inner callback with the rehydrated state
       const simulatedState = {
         session: session as never,
         user: session['user'] as never,
@@ -759,14 +624,10 @@ describe('authStore — secure storage persistence', () => {
       };
       outerCallback(simulatedState as never);
 
-      // The callback MUST have cleared session and reset loading/initialized
-      // so the biometric gate cannot be bypassed by cached storage state.
       expect(simulatedState.session).toBeNull();
       expect(simulatedState.isLoading).toBe(true);
       expect(simulatedState.isInitialized).toBe(false);
     } else {
-      // Should be unreachable — the expect(outerCallback).toBeDefined() above
-      // will have already failed the test. Left as a defensive fallback only.
       throw new Error(
         'persist API unavailable: Zustand .persist.getOptions() returned no callback',
       );
@@ -795,10 +656,6 @@ describe('authStore — secure storage persistence', () => {
     expect(getState().user).toBeNull();
   });
 });
-
-// ---------------------------------------------------------------------------
-// 3. secureStorage key sanitization — parameterized edge cases
-// ---------------------------------------------------------------------------
 
 describe('secureStorage key sanitization', () => {
   const cases: Array<{ input: string; expected: string }> = [

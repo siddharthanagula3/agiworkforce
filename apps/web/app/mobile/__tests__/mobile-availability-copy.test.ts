@@ -4,20 +4,6 @@ import { describe, expect, it } from 'vitest';
 
 import { COMING_SOON_LABEL, SURFACE_STATUS } from '../../../lib/marketing-constants';
 
-/**
- * PP-28 / CRIT-007: while `SURFACE_STATUS.mobile` says the app is unreleased,
- * no mobile-facing marketing or legal page may state or imply that it can be
- * installed today.
- *
- * These assertions are GATED on the registry, not on the words "coming soon".
- * The day mobile actually ships, `SURFACE_STATUS.mobile` moves off
- * `COMING_SOON_LABEL`, this suite stops policing download wording, and the
- * pages are free to advertise the real store listings — which is the outcome
- * we want. What it must never allow is the state the pages were in before:
- * a hero naming "iPhone & Android" with no status at all, and a terms-of-
- * service clause opening "The App is free to download and use." for an app
- * with zero `v-mobile-*` release tags.
- */
 const MOBILE_DIR = join(__dirname, '..');
 
 function readMobileFile(relativePath: string) {
@@ -39,7 +25,6 @@ describe('mobile availability copy tracks the release-state registry', () => {
 
   it('does not claim the app is installable while the registry says it is not', () => {
     if (SURFACE_STATUS.mobile !== COMING_SOON_LABEL) {
-      // Mobile has shipped; download wording is now truthful and unpoliced.
       return;
     }
 
@@ -53,9 +38,6 @@ describe('mobile availability copy tracks the release-state registry', () => {
       const source = readMobileFile(file);
 
       for (const phrase of banned) {
-        // An unconditional occurrence is a claim. The same words are allowed
-        // inside a branch that only renders once the registry reports a
-        // release, so require the guard to be present when the phrase is.
         if (source.includes(phrase)) {
           expect(
             source,

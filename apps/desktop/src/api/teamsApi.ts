@@ -1,18 +1,6 @@
-/**
- * Teams API
- *
- * TypeScript wrappers for team CRUD, members, invitations, resources,
- * activity, settings, and ownership transfer.
- *
- * invoke() params: camelCase (TS) -> snake_case (Rust) automatic conversion.
- */
 
 import { invoke } from '../lib/tauri-mock';
 import type { Team, TeamMember, TeamInvitation, TeamResource, TeamActivity } from '../types/teams';
-
-// ============================================================================
-// Interfaces for settings update (mirrors Rust update_team_settings params)
-// ============================================================================
 
 export interface UpdateTeamSettingsParams {
   teamId: string;
@@ -22,10 +10,6 @@ export interface UpdateTeamSettingsParams {
   enableActivityNotifications?: boolean | null;
   maxMembers?: number | null;
 }
-
-// ============================================================================
-// Team CRUD
-// ============================================================================
 
 export async function createTeam(
   name: string,
@@ -90,10 +74,6 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
   }
 }
 
-// ============================================================================
-// Members
-// ============================================================================
-
 export async function inviteMember(
   teamId: string,
   email: string,
@@ -156,10 +136,6 @@ export async function getTeamInvitations(teamId: string): Promise<TeamInvitation
   }
 }
 
-// ============================================================================
-// Resources
-// ============================================================================
-
 export async function shareResource(
   teamId: string,
   resourceType: string,
@@ -214,10 +190,6 @@ export async function getTeamResourcesByType(
   }
 }
 
-// ============================================================================
-// Activity
-// ============================================================================
-
 export async function getTeamActivity(
   teamId: string,
   limit: number,
@@ -241,10 +213,6 @@ export async function getUserTeamActivity(
     throw new Error(`Failed to get user team activity: ${String(error)}`);
   }
 }
-
-// ============================================================================
-// Ownership
-// ============================================================================
 
 export async function transferTeamOwnership(
   teamId: string,

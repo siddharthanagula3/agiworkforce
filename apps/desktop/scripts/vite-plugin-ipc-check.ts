@@ -1,62 +1,11 @@
-/**
- * Vite plugin: ipc-check
- *
- * Wave 2 Task 2.1, Stream 2 — drift detection at build time.
- *
- * On `buildStart`, this plugin scans every `invoke('<name>', ...)` literal
- * in `apps/desktop/src/**\/*.{ts,tsx}` and confirms the command is registered
- * as a `#[tauri::command]` somewhere under `apps/desktop/src-tauri/src/`.
- *
- * Why a Vite plugin in addition to `check-wiring.sh`?
- *   - The shell script is the CI guard (Stream 1).
- *   - This plugin gives the same signal at local `pnpm build` time, with
- *     line-accurate locations and closest-match suggestions.
- *
- * Behaviour:
- *   - Default mode: WARN. Prints a single grouped report at the end of the
- *     scan and lets the build continue.
- *   - Strict mode: opt in via `{ failOnDrift: true }`. Throws after the
- *     report so the build aborts.
- *
- * The default of WARN is a deliberate choice for this sprint:
- *   1. Per project memory (FIX-023), 20 frontend `invoke('...')` calls
- *      currently reference nonexistent backend commands. They predate this
- *      plugin and are being cleaned up incrementally.
- *   2. Failing builds today would block everyone until that backlog is
- *      resolved. CI's `check-wiring.sh` step (Stream 1) already protects
- *      *new* drift via the `set -e` exit code from the script.
- *   3. Once the existing 20 unknowns are either implemented or annotated
- *      with `// @ipc-skip`, flip `failOnDrift: true` in vite.config.ts and
- *      drop this comment.
- *
- * Escape hatch:
- *   Add `// @ipc-skip` on the same line as an `invoke('...')` call to
- *   suppress this plugin for that single call site (e.g. invoke targets
- *   that are routed through `tauri-mock.ts`'s cloud-web fallthrough and
- *   never reach Rust).
- *
- * Implementation notes:
- *   - Uses regex (not AST) for portability — keeps the plugin
- *     dependency-free. Aligns with the matching pattern used by
- *     `apps/desktop/check-wiring.sh`.
- *   - The set of `#[tauri::command]` definitions is collected once per
- *     buildStart, not per file, to keep the cost roughly O(N) in the
- *     number of frontend source files rather than O(N*M).
- */
 
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import type { Plugin } from 'vite';
 
 interface IpcCheckOptions {
-  /** Absolute path to apps/desktop/src */
   srcDir: string;
-  /** Absolute path to apps/desktop/src-tauri/src */
   srcTauriDir: string;
-  /**
-   * If true, throw after the report so the build aborts.
-   * Default: false (warn only — see plugin header for rationale).
-   */
   failOnDrift?: boolean;
 }
 
@@ -99,7 +48,6 @@ async function collectInvokeSites(srcDir: string): Promise<InvokeSite[]> {
       if (line.includes(SKIP_MARKER)) {
         continue;
       }
-      // Reset regex lastIndex per line
       INVOKE_LITERAL_RE.lastIndex = 0;
       let match: RegExpExecArray | null;
       while ((match = INVOKE_LITERAL_RE.exec(line)) !== null) {
@@ -121,9 +69,6 @@ async function collectTauriCommands(srcTauriDir: string): Promise<Set<string>> {
     const lines = text.split('\n');
     for (let i = 0; i < lines.length - 1; i++) {
       if (TAURI_COMMAND_RE.test(lines[i] ?? '')) {
-        // Walk forward over zero or more attribute / blank lines until we find
-        // the `pub fn` line (cargo allows e.g. #[allow(...)] between
-        // #[tauri::command] and the fn signature).
         for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
           const next = lines[j] ?? '';
           const m = PUB_FN_RE.exec(next);
@@ -131,8 +76,6 @@ async function collectTauriCommands(srcTauriDir: string): Promise<Set<string>> {
             known.add(m[1]);
             break;
           }
-          // Stop scanning if we hit a non-attribute, non-blank line that
-          // isn't a pub fn (defensive — shouldn't happen in practice).
           if (next.trim() !== '' && !next.trim().startsWith('#[')) {
             break;
           }
@@ -143,7 +86,6 @@ async function collectTauriCommands(srcTauriDir: string): Promise<Set<string>> {
   return known;
 }
 
-/** Levenshtein distance for closest-match suggestions. */
 function distance(a: string, b: string): number {
   if (a === b) return 0;
   if (a.length === 0) return b.length;
@@ -177,8 +119,6 @@ export function ipcCheckPlugin(options: IpcCheckOptions): Plugin {
     name: 'agiworkforce:ipc-check',
     enforce: 'pre',
     async buildStart() {
-      // Vite calls buildStart on every dev-server restart too; only run once
-      // per process to keep HMR fast.
       if (ranOnce) return;
       ranOnce = true;
 
@@ -190,7 +130,6 @@ export function ipcCheckPlugin(options: IpcCheckOptions): Plugin {
           collectTauriCommands(options.srcTauriDir),
         ]);
       } catch (err) {
-        // Don't break the build if the plugin itself crashes — just warn.
         console.warn(`[ipc-check] skipped: ${err instanceof Error ? err.message : String(err)}`);
         return;
       }
@@ -242,7 +181,6 @@ export function ipcCheckPlugin(options: IpcCheckOptions): Plugin {
       const report = lines.join('\n');
 
       if (failOnDrift) {
-        // Throwing inside buildStart fails the build with a clean message.
         throw new Error(report);
       }
       console.warn(report);

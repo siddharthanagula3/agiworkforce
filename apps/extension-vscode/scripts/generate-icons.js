@@ -1,12 +1,4 @@
 #!/usr/bin/env node
-/**
- * generate-icons.js
- *
- * Copies brand icons from the desktop app's Tauri icons directory
- * into apps/extension-vscode/media/ for use by the VS Code extension.
- *
- * Usage: node scripts/generate-icons.js
- */
 
 const fs = require('fs');
 const path = require('path');
@@ -30,7 +22,6 @@ for (const { src, dest } of copies) {
     console.log(`Copied ${src} -> media/${dest}`);
   } else {
     console.warn(`Warning: ${srcPath} not found, creating 1x1 placeholder`);
-    // Minimal valid 1x1 transparent PNG
     const placeholder = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
       'base64',

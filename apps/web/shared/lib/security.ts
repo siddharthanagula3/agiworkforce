@@ -1,14 +1,6 @@
-/**
- * Security utilities for data protection and safe operations
- * Handles XSS prevention, data sanitization, and security headers
- */
 
 import DOMPurify, { type Config as DOMPurifyConfig } from 'dompurify';
 import { MAX_CHAT_ATTACHMENT_BYTES } from '@agiworkforce/cloud-contracts';
-
-// ========================================
-// XSS Protection and Data Sanitization
-// ========================================
 
 export interface SanitizeOptions {
   allowedTags?: string[];
@@ -19,9 +11,6 @@ export interface SanitizeOptions {
 }
 
 export class SecurityManager {
-  // ========================================
-  // Encryption Key Management
-  // ========================================
 
   private encryptionKey: CryptoKey | null = null;
   private static _syncEncryptWarnShown = false;
@@ -29,20 +18,7 @@ export class SecurityManager {
   private static readonly ENCRYPTION_SALT = 'agiagent-security-salt-v1';
   private static readonly KEY_ITERATIONS = 100000;
 
-  /**
-   * Get the key source for encryption key derivation.
-   * Requires ENCRYPTION_KEY environment variable in production (server-only).
-   * Falls back to a per-origin key ONLY in development.
-   *
-   * NOTE: ENCRYPTION_KEY is intentionally NOT prefixed with NEXT_PUBLIC_ to
-   * prevent it from being bundled into client-side JavaScript. This class
-   * should only be used server-side for encryption operations. Client-side
-   * code that imports SecurityManager will use the development fallback
-   * (in dev) or throw in production · which is the correct behavior since
-   * encryption should happen server-side.
-   */
   private getKeySource(): string {
-    // Check for server-only encryption key (not exposed to client bundle)
     const envKey =
       typeof process !== 'undefined' && process.env ? process.env['ENCRYPTION_KEY'] : undefined;
 
@@ -50,7 +26,6 @@ export class SecurityManager {
       return envKey;
     }
 
-    // In production, refuse to use a deterministic fallback
     const isProduction =
       (typeof process !== 'undefined' && process.env && process.env['NODE_ENV'] === 'production') ||
       (typeof window !== 'undefined' &&
@@ -65,7 +40,6 @@ export class SecurityManager {
       );
     }
 
-    // Client-side usage warning
     if (typeof window !== 'undefined') {
       console.warn(
         '[SecurityManager] No ENCRYPTION_KEY available client-side. ' +
@@ -73,7 +47,6 @@ export class SecurityManager {
       );
     }
 
-    // Development-only fallback · still include origin for per-environment isolation
     console.warn(
       '[SecurityManager] Using development fallback encryption key. ' +
         'Set ENCRYPTION_KEY (>=32 chars) for production.',
@@ -86,17 +59,11 @@ export class SecurityManager {
     return factors.join('-');
   }
 
-  /**
-   * Derive an encryption key using PBKDF2.
-   * The key is cached after first derivation for performance.
-   */
   private async getEncryptionKey(): Promise<CryptoKey> {
-    // Return cached key if available
     if (this.encryptionKey) {
       return this.encryptionKey;
     }
 
-    // Check if Web Crypto API is available
     if (typeof window === 'undefined' || !window.crypto?.subtle) {
       throw new Error(
         'Web Crypto API not available. Encryption requires a secure context (HTTPS).',
@@ -104,7 +71,6 @@ export class SecurityManager {
     }
 
     try {
-      // Import the key material for PBKDF2
       const keyMaterial = await window.crypto.subtle.importKey(
         'raw',
         new TextEncoder().encode(this.getKeySource()),
@@ -113,7 +79,6 @@ export class SecurityManager {
         ['deriveBits', 'deriveKey'],
       );
 
-      // Derive the actual encryption key
       this.encryptionKey = await window.crypto.subtle.deriveKey(
         {
           name: 'PBKDF2',
@@ -134,22 +99,16 @@ export class SecurityManager {
     }
   }
 
-  /**
-   * Generate a synchronous encryption key from the key source.
-   * Uses a simple key derivation for synchronous operations.
-   */
   private getSyncKey(): Uint8Array {
     const keySource = this.getKeySource();
     const encoder = new TextEncoder();
     const keyBytes = encoder.encode(keySource);
 
-    // Create a 32-byte key by repeating/truncating the source
     const key = new Uint8Array(32);
     for (let i = 0; i < 32; i++) {
       key[i] = keyBytes[i % keyBytes.length]!;
     }
 
-    // Mix the key with a simple hash-like transformation
     for (let round = 0; round < 4; round++) {
       for (let i = 0; i < 32; i++) {
         key[i] = (key[i]! ^ key[(i + 7) % 32]! ^ key[(i + 13) % 32]!) & 0xff;
@@ -186,7 +145,6 @@ export class SecurityManager {
       const encoder = new TextEncoder();
       const data = encoder.encode(plaintext);
 
-      // Generate a random 16-byte nonce
       const nonce = new Uint8Array(16);
       if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
         window.crypto.getRandomValues(nonce);
@@ -196,21 +154,17 @@ export class SecurityManager {
         throw new Error('No cryptographically secure random number generator available');
       }
 
-      // Encrypt using XOR with key stream derived from key + nonce
       const encrypted = new Uint8Array(data.length);
       for (let i = 0; i < data.length; i++) {
-        // Generate key stream byte from key, nonce, and position
         const keyByte =
           key[i % 32]! ^ nonce[i % 16]! ^ ((i * 31) & 0xff) ^ key[(i + nonce[i % 16]!) % 32]!;
         encrypted[i] = data[i]! ^ keyByte;
       }
 
-      // Combine nonce + encrypted data
       const combined = new Uint8Array(nonce.length + encrypted.length);
       combined.set(nonce);
       combined.set(encrypted, nonce.length);
 
-      // Base64 encode
       return btoa(String.fromCharCode(...combined));
     } catch (error) {
       console.error('Synchronous encryption failed:', error);
@@ -243,23 +197,18 @@ export class SecurityManager {
     try {
       const key = this.getSyncKey();
 
-      // Decode from base64
       const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0));
 
-      // Extract nonce (first 16 bytes) and encrypted data
       const nonce = combined.slice(0, 16);
       const encrypted = combined.slice(16);
 
-      // Decrypt using XOR with the same key stream
       const decrypted = new Uint8Array(encrypted.length);
       for (let i = 0; i < encrypted.length; i++) {
-        // Generate the same key stream byte
         const keyByte =
           key[i % 32]! ^ nonce[i % 16]! ^ ((i * 31) & 0xff) ^ key[(i + nonce[i % 16]!) % 32]!;
         decrypted[i] = encrypted[i]! ^ keyByte;
       }
 
-      // Decode the result
       return new TextDecoder().decode(decrypted);
     } catch (error) {
       console.error('Synchronous decryption failed:', error);
@@ -282,21 +231,16 @@ export class SecurityManager {
     try {
       const key = await this.getEncryptionKey();
 
-      // Generate a random 12-byte IV (recommended for AES-GCM)
       const iv = window.crypto.getRandomValues(new Uint8Array(12));
 
-      // Encode the plaintext
       const encoded = new TextEncoder().encode(plaintext);
 
-      // Encrypt the data
       const ciphertext = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoded);
 
-      // Combine IV + ciphertext into a single array
       const combined = new Uint8Array(iv.length + ciphertext.byteLength);
       combined.set(iv);
       combined.set(new Uint8Array(ciphertext), iv.length);
 
-      // Base64 encode the result
       return btoa(String.fromCharCode(...combined));
     } catch (error) {
       console.error('Encryption failed:', error);
@@ -319,21 +263,17 @@ export class SecurityManager {
     try {
       const key = await this.getEncryptionKey();
 
-      // Decode from base64
       const combined = Uint8Array.from(atob(encryptedData), (c) => c.charCodeAt(0));
 
-      // Extract IV (first 12 bytes) and ciphertext (rest)
       const iv = combined.slice(0, 12);
       const ciphertext = combined.slice(12);
 
-      // Decrypt the data
       const decrypted = await window.crypto.subtle.decrypt(
         { name: 'AES-GCM', iv },
         key,
         ciphertext,
       );
 
-      // Decode the result
       return new TextDecoder().decode(decrypted);
     } catch (error) {
       console.error('Decryption failed:', error);
@@ -341,9 +281,6 @@ export class SecurityManager {
     }
   }
 
-  /**
-   * Check if encryption is available in the current environment.
-   */
   isEncryptionAvailable(): boolean {
     return (
       typeof window !== 'undefined' &&
@@ -352,16 +289,9 @@ export class SecurityManager {
     );
   }
 
-  /**
-   * Clear the cached encryption key (useful for security-sensitive operations).
-   */
   clearEncryptionKey(): void {
     this.encryptionKey = null;
   }
-
-  // ========================================
-  // XSS Protection and Data Sanitization
-  // ========================================
 
   private static defaultSanitizeConfig: DOMPurifyConfig = {
     ALLOWED_TAGS: [
@@ -417,7 +347,6 @@ export class SecurityManager {
     RETURN_DOM_FRAGMENT: false,
   };
 
-  // Sanitize HTML content to prevent XSS
   static sanitizeHtml(html: string, options: SanitizeOptions = {}): string {
     if (!html) return '';
 
@@ -432,7 +361,6 @@ export class SecurityManager {
     return DOMPurify.sanitize(html, config) as string;
   }
 
-  // Sanitize text for safe display (removes all HTML)
   static sanitizeText(text: string): string {
     if (!text) return '';
 
@@ -443,11 +371,9 @@ export class SecurityManager {
     });
   }
 
-  // Sanitize URL to prevent javascript: and data: schemes
   static sanitizeUrl(url: string): string {
     if (!url) return '';
 
-    // Remove dangerous schemes · loop until stable to prevent bypass via nesting
     let sanitized = url;
     let prev;
     do {
@@ -455,7 +381,6 @@ export class SecurityManager {
       sanitized = sanitized.replace(/^(javascript|data|vbscript):/i, '');
     } while (sanitized !== prev);
 
-    // Ensure it starts with allowed schemes or is relative
     if (!/^(https?:|mailto:|tel:|#|\/)/i.test(sanitized)) {
       return `https://${sanitized}`;
     }
@@ -463,7 +388,6 @@ export class SecurityManager {
     return sanitized;
   }
 
-  // Escape HTML entities in text
   static escapeHtml(text: string): string {
     if (!text) return '';
 
@@ -472,7 +396,6 @@ export class SecurityManager {
     return div.innerHTML;
   }
 
-  // Unescape HTML entities
   static unescapeHtml(html: string): string {
     if (!html) return '';
 
@@ -481,7 +404,6 @@ export class SecurityManager {
     return textarea.value;
   }
 
-  // Validate and sanitize JSON input
   static sanitizeJson<T = unknown>(jsonString: string, maxDepth: number = 10): T | null {
     try {
       const parsed = JSON.parse(jsonString);
@@ -492,7 +414,6 @@ export class SecurityManager {
     }
   }
 
-  // Deep sanitize object recursively
   private static deepSanitize(obj: unknown, maxDepth: number, currentDepth = 0): unknown {
     if (currentDepth >= maxDepth) {
       return null;
@@ -513,7 +434,6 @@ export class SecurityManager {
     if (typeof obj === 'object') {
       const sanitized: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(obj)) {
-        // Sanitize object keys as well
         const cleanKey = this.sanitizeText(key);
         if (cleanKey) {
           sanitized[cleanKey] = this.deepSanitize(value, maxDepth, currentDepth + 1);
@@ -525,16 +445,11 @@ export class SecurityManager {
     return null;
   }
 
-  // Validate file upload security
   static validateFileUpload(file: File): {
     isValid: boolean;
     errors: string[];
   } {
     const errors: string[] = [];
-    // HARD-006: was a private `10 * 1024 * 1024`, 2 MiB below the cap
-    // `/api/uploads/presign` actually enforces. A validator that rejects what
-    // the server accepts is worse than no validator: it reports a limit the
-    // product does not have.
     const maxSize = MAX_CHAT_ATTACHMENT_BYTES;
     const allowedTypes = [
       'image/jpeg',
@@ -549,17 +464,14 @@ export class SecurityManager {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ];
 
-    // Check file size
     if (file.size > maxSize) {
       errors.push('File size exceeds 10MB limit');
     }
 
-    // Check file type
     if (!allowedTypes.includes(file.type)) {
       errors.push(`File type ${file.type} is not allowed`);
     }
 
-    // Check file name for suspicious patterns
     const suspiciousPatterns = [
       /\.exe$/i,
       /\.bat$/i,
@@ -583,7 +495,6 @@ export class SecurityManager {
     };
   }
 
-  // Generate secure random string
   static generateSecureId(length: number = 32): string {
     if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
       const array = new Uint8Array(length);
@@ -599,7 +510,6 @@ export class SecurityManager {
     throw new Error('No cryptographically secure random number generator available');
   }
 
-  // Hash sensitive data (client-side hashing for non-security-critical use)
   static async hashString(input: string): Promise<string> {
     if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
       const encoder = new TextEncoder();
@@ -609,23 +519,20 @@ export class SecurityManager {
       return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
     }
 
-    // Simple fallback hash (not cryptographically secure)
     let hash = 0;
     for (let i = 0; i < input.length; i++) {
       const char = input.charCodeAt(i);
       hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
+      hash = hash & hash;
     }
     return hash.toString(16);
   }
 
-  // Validate email format
   static validateEmail(email: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email) && email.length <= 254;
   }
 
-  // Validate password strength
   static validatePassword(password: string): {
     isValid: boolean;
     score: number;
@@ -664,7 +571,6 @@ export class SecurityManager {
       score += 1;
     }
 
-    // Check for common weak patterns
     const weakPatterns = [
       /(.)\1{2,}/i, // repeated characters
       /123456|password|qwerty|admin/i, // common weak passwords
@@ -683,7 +589,6 @@ export class SecurityManager {
     };
   }
 
-  // Rate limiting implementation
   static createRateLimiter(windowMs: number, maxRequests: number) {
     const requests = new Map<string, number[]>();
 
@@ -691,17 +596,11 @@ export class SecurityManager {
       const now = Date.now();
       const windowStart = now - windowMs;
 
-      // Get existing requests for this key
       const keyRequests = requests.get(key) || [];
 
-      // Filter out requests outside the time window; always update the stored
-      // list to prevent unbounded accumulation of expired timestamps.
       const validRequests = keyRequests.filter((time) => time > windowStart);
 
-      // Check if limit exceeded
       if (validRequests.length >= maxRequests) {
-        // Persist the filtered list (removes expired timestamps) to prevent
-        // unbounded memory growth; delete the key entirely if no valid requests.
         if (validRequests.length > 0) {
           requests.set(key, validRequests);
         } else {
@@ -710,7 +609,6 @@ export class SecurityManager {
         return false;
       }
 
-      // Add current request
       validRequests.push(now);
       requests.set(key, validRequests);
 
@@ -719,28 +617,12 @@ export class SecurityManager {
   }
 }
 
-// ========================================
-// Content Security Policy (CSP) Helper
-// ========================================
-
-/**
- * CSP helper for programmatic policy construction.
- *
- * The authoritative per-request CSP is set by proxy.ts via `buildCspWithNonce()`.
- * This class is provided for contexts that need to build a CSP string outside of
- * the proxy/middleware layer (e.g., meta-tag fallback in non-Next.js environments).
- *
- * script-src uses a per-request nonce instead of 'unsafe-inline'.
- * style-src keeps 'unsafe-inline' because Tailwind, Radix UI, and inline style
- * attributes require it · migrating to nonce-based styles is tracked separately.
- */
 export class CSPManager {
   private static nonce: string | null = null;
 
   private static policies: Record<string, string[]> = {
     'default-src': ["'self'"],
     'script-src': ["'self'"],
-    // SECURITY: unsafe-inline required for Tailwind CSS 4 + Radix UI runtime styles
     'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': ["'self'", 'data:', 'https:'],
     'font-src': ["'self'", 'https:'],
@@ -753,10 +635,6 @@ export class CSPManager {
     'upgrade-insecure-requests': [],
   };
 
-  /**
-   * Set the nonce for the current request. Must be called before generateCSPString()
-   * to include the nonce in script-src.
-   */
   static setNonce(nonce: string): void {
     this.nonce = nonce;
   }
@@ -779,7 +657,6 @@ export class CSPManager {
   static generateCSPString(): string {
     return Object.entries(this.policies)
       .map(([directive, sources]) => {
-        // Inject nonce into script-src when available
         const allSources =
           directive === 'script-src' && this.nonce
             ? [...sources, `'nonce-${this.nonce}'`]
@@ -796,13 +673,11 @@ export class CSPManager {
   static setCSPMeta(): void {
     if (typeof document === 'undefined') return;
 
-    // Remove existing CSP meta tag
     const existing = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
     if (existing) {
       existing.remove();
     }
 
-    // Add new CSP meta tag
     const meta = document.createElement('meta');
     meta.httpEquiv = 'Content-Security-Policy';
     meta.content = this.generateCSPString();
@@ -810,11 +685,6 @@ export class CSPManager {
   }
 }
 
-// ========================================
-// Secure Storage Utility
-// ========================================
-
-// AUDIT-FIX: C-5 / H-18 · thrown when a caller attempts encrypted storage without an active key.
 export class SecureStorageUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -824,36 +694,24 @@ export class SecureStorageUnavailableError extends Error {
 
 export class SecureStorage {
   private static readonly ENCRYPTION_KEY_NAME = 'agi_secure_key';
-  /** In-memory cache for the non-extractable CryptoKey handle. */
   private static cachedKey: CryptoKey | null = null;
 
-  // Generate or retrieve encryption key.
-  // The CryptoKey is non-extractable and held in memory only.
-  // localStorage stores a key-ID sentinel so we know a key was generated,
-  // but never the raw key bytes.
   private static async getEncryptionKey(): Promise<CryptoKey | null> {
     if (typeof window === 'undefined' || !window.crypto?.subtle) {
       return null;
     }
 
-    // Return in-memory cached key if available
     if (this.cachedKey) {
       return this.cachedKey;
     }
 
     try {
-      // Check if we previously had a key (sentinel in localStorage).
-      // Because the key is non-extractable we cannot restore it from storage;
-      // we must generate a fresh one each session.
-      // Generate new non-extractable key
       const key = await window.crypto.subtle.generateKey(
         { name: 'AES-GCM', length: 256 },
         false, // non-extractable · raw bytes never leave WebCrypto
         ['encrypt', 'decrypt'],
       );
 
-      // Store a sentinel so other code can check if encryption is initialised.
-      // No raw key material is persisted.
       localStorage.setItem(this.ENCRYPTION_KEY_NAME, 'key-handle-active');
 
       this.cachedKey = key;
@@ -864,12 +722,10 @@ export class SecureStorage {
     }
   }
 
-  // Encrypt and store data
   static async setItem(key: string, value: unknown): Promise<boolean> {
     try {
       const encryptionKey = await this.getEncryptionKey();
       if (!encryptionKey) {
-        // AUDIT-FIX: C-5 · never silently fall back to plaintext writes.
         throw new SecureStorageUnavailableError(
           'Encryption key unavailable; refusing plaintext write',
         );
@@ -892,21 +748,18 @@ export class SecureStorage {
       localStorage.setItem(key, btoa(JSON.stringify(encryptedData)));
       return true;
     } catch (error) {
-      // AUDIT-FIX: C-5 · surface unavailability so callers route to loading/empty state.
       if (error instanceof SecureStorageUnavailableError) throw error;
       console.error('Secure storage set failed:', error);
       return false;
     }
   }
 
-  // Retrieve and decrypt data
   static async getItem<T = unknown>(key: string): Promise<T | null> {
     const storedData = localStorage.getItem(key);
     if (!storedData) return null;
 
     const encryptionKey = await this.getEncryptionKey();
     if (!encryptionKey) {
-      // AUDIT-FIX: C-5 / H-18 · never read attacker-controlled plaintext as if it were trusted JSON.
       throw new SecureStorageUnavailableError(
         'Encryption key unavailable; refusing plaintext read',
       );
@@ -931,20 +784,14 @@ export class SecureStorage {
     }
   }
 
-  // Remove item
   static removeItem(key: string): void {
     localStorage.removeItem(key);
   }
 
-  // Clear all secure data
   static clear(): void {
     localStorage.clear();
   }
 }
-
-// ========================================
-// Security Headers Validation
-// ========================================
 
 export interface SecurityHeaders {
   'Content-Security-Policy'?: string;
@@ -993,13 +840,8 @@ export class SecurityHeaderValidator {
   }
 }
 
-// ========================================
-// Export all security utilities
-// ========================================
-
 export { SecurityManager as Security, CSPManager as CSP };
 
-// Create default instance
 export const securityManager = new SecurityManager();
 
 export default SecurityManager;

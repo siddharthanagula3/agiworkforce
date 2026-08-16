@@ -1,8 +1,3 @@
-/**
- * Phase A Slice 4 — artifactStore unit tests
- *
- * Covers: push / update / remove / conversation isolation / selectors
- */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
@@ -12,10 +7,6 @@ import {
   selectArtifactById,
 } from '../artifactStore';
 import type { Artifact } from '../../lib/types';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeArtifact(id: string, title = 'Test'): Artifact {
   return {
@@ -31,16 +22,10 @@ function store() {
   return useArtifactStore.getState();
 }
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('artifactStore', () => {
   beforeEach(() => {
     useArtifactStore.getState().reset();
   });
-
-  // ---- setArtifacts -------------------------------------------------------
 
   it('setArtifacts populates a conversation', () => {
     const a1 = makeArtifact('a1');
@@ -65,8 +50,6 @@ describe('artifactStore', () => {
     expect(artifacts[0]!.id).toBe('a2');
   });
 
-  // ---- addArtifact --------------------------------------------------------
-
   it('addArtifact appends to an empty conversation', () => {
     const a1 = makeArtifact('a1');
     store().addArtifact('conv-1', a1);
@@ -87,8 +70,6 @@ describe('artifactStore', () => {
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]!.title).toBe('New Title');
   });
-
-  // ---- updateArtifact -----------------------------------------------------
 
   it('updateArtifact patches the matching artifact', () => {
     const a1 = makeArtifact('a1');
@@ -111,8 +92,6 @@ describe('artifactStore', () => {
     expect(artifacts[1]!.title).toBe('Test');
   });
 
-  // ---- removeArtifact -----------------------------------------------------
-
   it('removeArtifact deletes the matching artifact', () => {
     const a1 = makeArtifact('a1');
     const a2 = makeArtifact('a2');
@@ -134,8 +113,6 @@ describe('artifactStore', () => {
     expect(artifacts).toHaveLength(1);
   });
 
-  // ---- clearConversation --------------------------------------------------
-
   it('clearConversation removes only the specified conversation', () => {
     store().setArtifacts('conv-1', [makeArtifact('a1')]);
     store().setArtifacts('conv-2', [makeArtifact('a2')]);
@@ -148,8 +125,6 @@ describe('artifactStore', () => {
     expect(conv2).toHaveLength(1);
   });
 
-  // ---- conversation isolation ---------------------------------------------
-
   it('operations on conv-1 do not bleed into conv-2', () => {
     store().setArtifacts('conv-1', [makeArtifact('a1')]);
     store().setArtifacts('conv-2', [makeArtifact('b1'), makeArtifact('b2')]);
@@ -159,8 +134,6 @@ describe('artifactStore', () => {
     expect(selectArtifacts(useArtifactStore.getState(), 'conv-1')).toHaveLength(0);
     expect(selectArtifacts(useArtifactStore.getState(), 'conv-2')).toHaveLength(2);
   });
-
-  // ---- selectors ----------------------------------------------------------
 
   it('selectArtifacts returns [] for unknown conversationId', () => {
     const result = selectArtifacts(useArtifactStore.getState(), 'does-not-exist');
@@ -191,8 +164,6 @@ describe('artifactStore', () => {
     const found = selectArtifactById(useArtifactStore.getState(), 'conv-1', 'missing');
     expect(found).toBeUndefined();
   });
-
-  // ---- reset ---------------------------------------------------------------
 
   it('reset clears artifactsByConversation and activeArtifact', () => {
     store().setArtifacts('conv-1', [makeArtifact('a1')]);

@@ -86,7 +86,6 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
   const { resolveApproval } = useApprovalActions();
   const timeoutHandledRef = useRef(false);
 
-  // AUDIT-005-005 fix: Store interval ID in ref for proper cleanup
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const TypeIcon = TYPE_ICONS[approval.type];
@@ -98,9 +97,7 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
     timeoutHandledRef.current = false;
   }, [approval.id]);
 
-  // AUDIT-005-005 fix: Ensure interval is cleared when status changes and on unmount
   useEffect(() => {
-    // Clear any existing interval when status or dependencies change
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -117,7 +114,6 @@ export const ApprovalRequestCard: React.FC<ApprovalRequestCardProps> = ({
       const newRemaining = Math.max(0, Math.floor(remaining));
       setTimeRemaining(newRemaining);
 
-      // AUDIT-005-005 fix: Clear interval when countdown reaches 0
       if (newRemaining <= 0 && intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;

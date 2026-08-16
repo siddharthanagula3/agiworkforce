@@ -1,26 +1,6 @@
-/**
- * Slash-command registry.
- *
- * Hosts mount this in the composer to detect when the user types a leading
- * slash + command name. Built-in commands cover common chat affordances
- * (rewind, plan, clear, model-switch, etc.). Hosts can extend with their
- * own via `registerSlashCommand`.
- *
- * The registry is pure data — invoking a command is the host's
- * responsibility. The host calls `parseSlashCommand(input)` to detect a
- * command + args, then dispatches via `getCommand(name).handler` (or the
- * host's own dispatcher).
- *
- * Companion: `usePlanModeStore` + `useCheckpointStore` for the state the
- * built-ins toggle.
- */
 
 import type { PlatformCapability } from '@agiworkforce/types';
 
-/**
- * Framework-neutral icon names used by the shared slash menu catalog. Hosts
- * resolve these to their icon system at the component boundary.
- */
 export type SlashCommandIconName =
   | 'Globe'
   | 'Brain'
@@ -37,16 +17,8 @@ export type SlashCommandIconName =
   | 'ListChecks'
   | 'CircleHelp';
 
-/**
- * Canonical menu metadata for prompt-transforming commands. This used to live
- * in the web app while Desktop maintained a second, much larger hard-coded
- * catalog. Keeping the framework-neutral definitions here lets every surface
- * render the package menu while still capability-filtering commands it cannot
- * execute.
- */
 export interface SlashCommandDefinition {
   id: string;
-  /** Display label including the leading slash. */
   label: string;
   description: string;
   example?: string;
@@ -56,7 +28,6 @@ export interface SlashCommandDefinition {
   requiredCapability?: PlatformCapability;
 }
 
-/** Prompt commands supported by the managed chat composer. */
 export const BUILT_IN_SLASH_COMMANDS: SlashCommandDefinition[] = [
   {
     id: 'search',
@@ -138,56 +109,24 @@ export function filterSlashCommands(
 }
 
 export interface SlashCommand {
-  /** The slash trigger without leading slash, e.g. `'rewind'`, `'plan'`. */
   name: string;
-  /** Short one-line description shown in the autocomplete list. */
   description: string;
-  /** Optional argument hint shown in autocomplete (e.g. `'<message-id>'`). */
   argsHint?: string;
-  /** Category for grouping (e.g. `'control-flow'`, `'memory'`, `'view'`). */
   category?: string;
-  /**
-   * Handler the host invokes when the command is entered. May open a UI
-   * panel, mutate a store, fire an analytics event, etc.
-   *
-   * Receives the trailing argument string (may be empty), the active
-   * conversationId, and a `host` callback bag for things the registry
-   * doesn't know about (toast, navigate, etc.).
-   */
   handler?: (args: string, ctx: SlashCommandContext) => void | Promise<void>;
-  /** When true, the command is shown only when a conversation is active. */
   requiresConversation?: boolean;
 }
 
 export interface SlashCommandContext {
   conversationId: string | null;
-  /** Hosts may pass extra capabilities the registry doesn't know about. */
   host?: Record<string, unknown>;
 }
 
-/** Parsed result of `parseSlashCommand`. */
 export interface ParsedSlashCommand {
-  /** The command name (without leading slash), lowercased. */
   name: string;
-  /** Trailing argument string (may be empty). */
   args: string;
 }
 
-/**
- * Detect whether `input` begins with a slash command and split it into
- * `(name, args)`. Returns null when the input is not a slash command.
- *
- * Recognises:
- *   - `'/rewind'`            → `{ name: 'rewind', args: '' }`
- *   - `'/rewind 12'`         → `{ name: 'rewind', args: '12' }`
- *   - `'/plan write code'`   → `{ name: 'plan', args: 'write code' }`
- *
- * Does NOT recognise (returns null):
- *   - `'/'`                   (no name)
- *   - `' /rewind'`            (whitespace before)
- *   - `'/say /hi'` arg-only   (still recognises `'say'` with args `'/hi'`)
- *   - `'no slash'`
- */
 export function parseSlashCommand(input: string): ParsedSlashCommand | null {
   if (!input.startsWith('/')) return null;
   const body = input.slice(1).trim();
@@ -201,8 +140,6 @@ export function parseSlashCommand(input: string): ParsedSlashCommand | null {
     args: body.slice(firstSpace + 1),
   };
 }
-
-// ── Registry ─────────────────────────────────────────────────────────────────
 
 const registry = new Map<string, SlashCommand>();
 
@@ -227,7 +164,6 @@ export function listSlashCommands(filter?: {
     }
     out.push(cmd);
   }
-  // Stable sort by category, then name.
   out.sort((a, b) => {
     const ca = a.category ?? '';
     const cb = b.category ?? '';
@@ -237,17 +173,10 @@ export function listSlashCommands(filter?: {
   return out;
 }
 
-/** Reset the registry — primarily for tests. */
 export function clearSlashCommands(): void {
   registry.clear();
 }
 
-// ── Built-ins ────────────────────────────────────────────────────────────────
-
-/**
- * Register the canonical built-in slash commands. Idempotent — safe to call
- * multiple times. Hosts call this once at chat init.
- */
 export function registerBuiltinSlashCommands(): void {
   registerSlashCommand({
     name: 'rewind',

@@ -1,24 +1,11 @@
-/**
- * useSessionPersistence Hook (Desktop)
- *
- * React hook for managing session persistence in chat store.
- * Handles loading, saving, and syncing session data with localStorage.
- *
- * Adapted from apps/web/lib/hooks/useSessionPersistence.ts for the desktop
- * app's chat types (MessageUI instead of EnhancedMessage).
- */
 
 import { useCallback, useState } from 'react';
 import { safeGetJSON, safeSetJSON, safeRemoveItem } from '@/utils/localStorage';
 
-// Storage keys
 const SESSION_STORAGE_KEY = 'agi_desktop_sessions';
 const CURRENT_SESSION_KEY = 'agi_desktop_current_session_id';
 const MODEL_SELECTION_KEY = 'agi_desktop_selected_model';
 
-/**
- * Persisted session data structure for the desktop app
- */
 export interface PersistedSession {
   id: string;
   title: string;
@@ -31,9 +18,6 @@ export interface PersistedSession {
   updatedAt: string;
 }
 
-/**
- * Serializable message format for localStorage
- */
 interface StoredDesktopMessage {
   id: number;
   role: 'user' | 'assistant' | 'system';
@@ -79,7 +63,6 @@ function loadAllSessions(): PersistedSession[] {
 }
 
 function saveAllSessions(sessions: PersistedSession[]): void {
-  // Sort by updatedAt (newest first) and cap to 50 sessions to prevent unbounded growth
   const sorted = [...sessions].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
@@ -87,13 +70,10 @@ function saveAllSessions(sessions: PersistedSession[]): void {
   safeSetJSON(SESSION_STORAGE_KEY, trimmed);
 }
 
-/**
- * Hook for managing session persistence in the desktop app
- */
 export function useSessionPersistence(
   options: UseSessionPersistenceOptions = {},
 ): UseSessionPersistenceReturn {
-  void options; // options reserved for future use
+  void options;
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);

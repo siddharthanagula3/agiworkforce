@@ -1,14 +1,3 @@
-/**
- * Status polling, cancellation, and the human-agent side.
- *
- * The properties under test are the ones that would let the widget lie or leak:
- *   - a session id belonging to someone else is 404, not 403, and returns nothing;
- *   - the expired-wait transition happens on poll and is single-flight;
- *   - two agents cannot claim one user;
- *   - the claim response actually carries the context so the user does not repeat
- *     themselves;
- *   - the agent surface is admin-gated.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -149,13 +138,11 @@ describe('GET /api/support/handoff/[sessionId]', () => {
 
     expect(response.status).toBe(200);
     expect(payload.status).toBe('waiting');
-    // A waiting state without a deadline is the bug; assert it is always present.
     expect(new Date(payload.waitExpiresAt).getTime()).toBeGreaterThan(Date.now());
     expect(payload.nextStep.kind).toBe('wait');
   });
 
   it('404s another owner’s session and leaks nothing', async () => {
-    // The store returns nothing because the ownership predicate did not match.
     mocks.getSessionForOwner.mockResolvedValue(null);
 
     const response = await GET(req('http://localhost/api/support/handoff/session-1'), ctx);
@@ -164,7 +151,6 @@ describe('GET /api/support/handoff/[sessionId]', () => {
     const body = await response.text();
     expect(body).not.toContain('AGI-20260805');
     expect(body).not.toContain('customer@example.com');
-    // Ownership was applied as a query predicate, not a post-load comparison.
     expect(mocks.getSessionForOwner).toHaveBeenCalledWith('session-1', 'anon-owner');
   });
 
@@ -262,7 +248,6 @@ describe('agent surface', () => {
     expect(payload.attemptedActions[0].action).toBe('resend_verification_email');
     expect(payload.citations[0].url).toBe('https://agiworkforce.com/help');
     expect(payload.accountContext).toBeDefined();
-    // The user is told a person arrived, inside the stream they are polling.
     expect(mocks.appendHandoffMessage).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: 'session-1', author: 'system' }),
     );

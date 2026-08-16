@@ -1,15 +1,8 @@
-// packages/ui/unified-chat/src/components/TaskPhaseSection.tsx
-// Ported from apps/desktop/src/components/UnifiedAgenticChat/TaskPhaseSection.tsx
-// No Tauri, no desktop stores.
 
 import { useState } from 'react';
 import { Loader2, CheckCircle2, XCircle, ChevronRight, ChevronDown, Wrench } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { ToolLabelEntry } from '@agiworkforce/types';
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 
 export interface TaskPhase {
   name: string;
@@ -24,10 +17,6 @@ export interface TaskPhaseSectionProps {
   phase: TaskPhase;
   defaultExpanded?: boolean;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -97,10 +86,6 @@ function ToolPill({ entry }: { entry: ToolLabelEntry }) {
     </div>
   );
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// TaskPhaseSection
-// ─────────────────────────────────────────────────────────────────────────────
 
 export function TaskPhaseSection({ phase, defaultExpanded }: TaskPhaseSectionProps) {
   const initialExpanded = defaultExpanded ?? phase.status === 'running';

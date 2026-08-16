@@ -12,21 +12,6 @@ import { getNeonDb } from '@/lib/server/neon-db';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { recordAuditEvent } from '@/lib/security-audit';
 
-/**
- * Read and set the account's overage preference.
- *
- * Overage lets a request refused by a ROLLING usage cap draw on remaining
- * purchased top-up balance instead of being denied (migrations 0118/0119).
- * It is opt-in and defaults off: spending someone's purchased balance without
- * asking is worse than stopping at the limit they already expected.
- *
- * `available_cents` is the same figure the reservation path spends —
- * `least(remaining balance, purchased allocation)` — so the settings screen and
- * the server can never disagree about how much is actually spendable. It is
- * reported regardless of the toggle, because "how much would this give me"
- * is exactly what someone needs to decide whether to turn it on.
- */
-
 const OverageRequestSchema = z.object({ enabled: z.boolean() }).strict();
 
 interface OverageRow {
@@ -91,14 +76,11 @@ async function handlePutOverage(request: NextRequest) {
     [userId, parsed.data.enabled],
   );
   if (updated.length === 0) {
-    // No subscription row at all: there is no plan to exceed and no purchased
-    // balance to spend, so there is nothing this setting could govern.
     throw createError.validation(
       'Overage applies to an active plan. Start a plan before enabling it.',
     );
   }
 
-  // A setting that decides whether money gets spent belongs in the audit trail.
   await recordAuditEvent({
     userId,
     eventType: 'plan_changed',

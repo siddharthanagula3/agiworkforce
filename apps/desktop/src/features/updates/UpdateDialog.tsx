@@ -19,12 +19,6 @@ interface UpdateDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-/**
- * UpdateDialog component
- *
- * Modal dialog showing update details with version comparison,
- * release notes, download progress, and action buttons.
- */
 export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
   const {
     status,
@@ -52,7 +46,6 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
     retry();
   }, [retry]);
 
-  // Format bytes to human readable
   const formatBytes = useCallback((bytes: number): string => {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -61,7 +54,6 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }, []);
 
-  // Format release date
   const formattedDate = useMemo(() => {
     if (!updateInfo?.releaseDate) return null;
     try {
@@ -75,7 +67,6 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
     }
   }, [updateInfo?.releaseDate]);
 
-  // Determine dialog state
   const isError = status === 'error';
   const isDownloadComplete = status === 'downloaded';
   const isInstalling = status === 'installing';

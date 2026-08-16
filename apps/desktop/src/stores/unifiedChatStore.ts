@@ -1,17 +1,3 @@
-/**
- * Unified Chat Store
- *
- * DEPRECATED: This store is maintained for backwards compatibility.
- * New code should use the modular stores directly:
- *
- * - useChatStore: Conversations, messages, citations, token usage
- * - useAgentStore: Agent status, background tasks, action trail
- * - useToolStore: Tool executions, file operations, terminal commands, approvals
- * - useSidecarStore: Sidecar panel state, sidebar state
- *
- * This file re-exports all types and provides a unified hook that combines state
- * from all stores for components that haven't been migrated yet.
- */
 
 import { useCallback, useMemo } from 'react';
 import { useChatStore } from './chat/chatStore';
@@ -31,7 +17,6 @@ import {
   updateNormalizedActionLogEntry,
 } from './chat/runtimeEventBindings';
 
-// Re-export all types for backwards compatibility
 export type {
   MessageMetadata,
   Attachment,
@@ -82,13 +67,10 @@ export type {
 
 export type { SidecarSection, SidecarMode, SidecarState } from './ui';
 
-// Re-export ContextItem type
 export type { ContextItem } from '@agiworkforce/types';
 
-// Re-export helper functions
 export { dbIdToUuid, uuidToDbId } from './chat/chatStore';
 
-// Re-export initialization functions
 export {
   initializeAgentStatusListener,
   initializeBackgroundTaskEventListeners,
@@ -97,10 +79,6 @@ export {
   initializeToolEventListener,
 };
 
-/**
- * Shared clear/reset logic used by both the hook and getState() forms.
- * Extracted to avoid duplicating the same store-reset calls in two places.
- */
 function combinedClearHistory(): void {
   useChatStore.getState().clearHistory();
   useAgentStore.getState().clearActionTrail();
@@ -119,7 +97,6 @@ function combinedResetOnLogout(): void {
  * @deprecated Use individual stores instead
  */
 export interface UnifiedChatState {
-  // From chatStore
   conversations: ReturnType<typeof useChatStore.getState>['conversations'];
   activeConversationId: ReturnType<typeof useChatStore.getState>['activeConversationId'];
   messagesByConversation: ReturnType<typeof useChatStore.getState>['messagesByConversation'];
@@ -139,7 +116,6 @@ export interface UnifiedChatState {
   showMessageTimestamps: ReturnType<typeof useChatStore.getState>['showMessageTimestamps'];
   selectedMessage: ReturnType<typeof useChatStore.getState>['selectedMessage'];
 
-  // From agentStore
   agents: ReturnType<typeof useAgentStore.getState>['agents'];
   agentStatus: ReturnType<typeof useAgentStore.getState>['agentStatus'];
   backgroundTasks: ReturnType<typeof useAgentStore.getState>['backgroundTasks'];
@@ -148,7 +124,6 @@ export interface UnifiedChatState {
   isAutonomousMode: ReturnType<typeof useAgentStore.getState>['isAutonomousMode'];
   missionControlOpen: ReturnType<typeof useAgentStore.getState>['missionControlOpen'];
 
-  // From toolStore
   fileOperations: ReturnType<typeof useToolStore.getState>['fileOperations'];
   terminalCommands: ReturnType<typeof useToolStore.getState>['terminalCommands'];
   toolExecutions: ReturnType<typeof useToolStore.getState>['toolExecutions'];
@@ -162,7 +137,6 @@ export interface UnifiedChatState {
   activeToolStreams: ReturnType<typeof useToolStore.getState>['activeToolStreams'];
   filters: ReturnType<typeof useToolStore.getState>['filters'];
 
-  // From sidecarStore
   sidecarOpen: ReturnType<typeof useSidecarStore.getState>['sidecarOpen'];
   sidecarSection: ReturnType<typeof useSidecarStore.getState>['sidecarSection'];
   sidecarWidth: ReturnType<typeof useSidecarStore.getState>['sidecarWidth'];
@@ -171,7 +145,6 @@ export interface UnifiedChatState {
   sidebarCollapsed: ReturnType<typeof useSidecarStore.getState>['sidebarCollapsed'];
   sidecar: ReturnType<typeof useSidecarStore.getState>['sidecar'];
 
-  // Actions from chatStore
   ensureActiveConversation: ReturnType<typeof useChatStore.getState>['ensureActiveConversation'];
   createConversation: ReturnType<typeof useChatStore.getState>['createConversation'];
   selectConversation: ReturnType<typeof useChatStore.getState>['selectConversation'];
@@ -233,7 +206,6 @@ export interface UnifiedChatState {
   getConversationStats: ReturnType<typeof useChatStore.getState>['getConversationStats'];
   linkConversationId: ReturnType<typeof useChatStore.getState>['linkConversationId'];
 
-  // Actions from agentStore
   updateAgentStatus: ReturnType<typeof useAgentStore.getState>['updateAgentStatus'];
   setAgentStatus: ReturnType<typeof useAgentStore.getState>['setAgentStatus'];
   addAgent: ReturnType<typeof useAgentStore.getState>['addAgent'];
@@ -249,7 +221,6 @@ export interface UnifiedChatState {
   setAutonomousMode: ReturnType<typeof useAgentStore.getState>['setAutonomousMode'];
   setMissionControlOpen: ReturnType<typeof useAgentStore.getState>['setMissionControlOpen'];
 
-  // Actions from toolStore
   addFileOperation: ReturnType<typeof useToolStore.getState>['addFileOperation'];
   addTerminalCommand: ReturnType<typeof useToolStore.getState>['addTerminalCommand'];
   updateTerminalOutput: ReturnType<typeof useToolStore.getState>['updateTerminalOutput'];
@@ -282,7 +253,6 @@ export interface UnifiedChatState {
   setTerminalStatusFilter: ReturnType<typeof useToolStore.getState>['setTerminalStatusFilter'];
   setToolNameFilter: ReturnType<typeof useToolStore.getState>['setToolNameFilter'];
 
-  // Actions from sidecarStore
   setSidecarOpen: ReturnType<typeof useSidecarStore.getState>['setSidecarOpen'];
   setSidecarSection: ReturnType<typeof useSidecarStore.getState>['setSidecarSection'];
   setSidecarSectionFromEvent: ReturnType<
@@ -296,7 +266,6 @@ export interface UnifiedChatState {
   closeSidecar: ReturnType<typeof useSidecarStore.getState>['closeSidecar'];
   getSuggestedSidecarMode: ReturnType<typeof useSidecarStore.getState>['getSuggestedSidecarMode'];
 
-  // Combined actions
   clearHistory: () => void;
   exportConversation: () => Promise<string>;
   resetOnLogout: () => void;
@@ -317,26 +286,21 @@ export interface UnifiedChatState {
 function useUnifiedChatStoreImpl<T = UnifiedChatState>(
   selector?: (state: UnifiedChatState) => T,
 ): T {
-  // Get state from all stores
   const chatState = useChatStore();
   const agentState = useAgentStore();
   const toolState = useToolStore();
   const sidecarState = useSidecarStore();
 
-  // Create combined clearHistory action
   const clearHistory = useCallback(() => {
     combinedClearHistory();
   }, []);
 
-  // Create combined resetOnLogout action
   const resetOnLogout = useCallback(() => {
     combinedResetOnLogout();
   }, []);
 
-  // Combine all state into unified state object
   const unifiedState = useMemo<UnifiedChatState>(
     () => ({
-      // Chat state
       conversations: chatState.conversations,
       activeConversationId: chatState.activeConversationId,
       messagesByConversation: chatState.messagesByConversation,
@@ -356,7 +320,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       showMessageTimestamps: chatState.showMessageTimestamps,
       selectedMessage: chatState.selectedMessage,
 
-      // Agent state
       agents: agentState.agents,
       agentStatus: agentState.agentStatus,
       backgroundTasks: agentState.backgroundTasks,
@@ -365,7 +328,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       isAutonomousMode: agentState.isAutonomousMode,
       missionControlOpen: agentState.missionControlOpen,
 
-      // Tool state
       fileOperations: toolState.fileOperations,
       terminalCommands: toolState.terminalCommands,
       toolExecutions: toolState.toolExecutions,
@@ -379,7 +341,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       activeToolStreams: toolState.activeToolStreams,
       filters: toolState.filters,
 
-      // Sidecar state
       sidecarOpen: sidecarState.sidecarOpen,
       sidecarSection: sidecarState.sidecarSection,
       sidecarWidth: sidecarState.sidecarWidth,
@@ -388,7 +349,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       sidebarCollapsed: sidecarState.sidebarCollapsed,
       sidecar: sidecarState.sidecar,
 
-      // Chat actions
       ensureActiveConversation: chatState.ensureActiveConversation,
       createConversation: chatState.createConversation,
       selectConversation: chatState.selectConversation,
@@ -442,7 +402,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       getConversationStats: chatState.getConversationStats,
       linkConversationId: chatState.linkConversationId,
 
-      // Agent actions
       updateAgentStatus: agentState.updateAgentStatus,
       setAgentStatus: agentState.setAgentStatus,
       addAgent: agentState.addAgent,
@@ -458,7 +417,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       setAutonomousMode: agentState.setAutonomousMode,
       setMissionControlOpen: agentState.setMissionControlOpen,
 
-      // Tool actions
       addFileOperation: toolState.addFileOperation,
       addTerminalCommand: toolState.addTerminalCommand,
       updateTerminalOutput: toolState.updateTerminalOutput,
@@ -491,7 +449,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       setTerminalStatusFilter: toolState.setTerminalStatusFilter,
       setToolNameFilter: toolState.setToolNameFilter,
 
-      // Sidecar actions
       setSidecarOpen: sidecarState.setSidecarOpen,
       setSidecarSection: sidecarState.setSidecarSection,
       setSidecarSectionFromEvent: sidecarState.setSidecarSectionFromEvent,
@@ -503,7 +460,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
       closeSidecar: sidecarState.closeSidecar,
       getSuggestedSidecarMode: sidecarState.getSuggestedSidecarMode,
 
-      // Combined actions
       clearHistory,
       exportConversation: chatState.exportConversation,
       resetOnLogout,
@@ -515,9 +471,6 @@ function useUnifiedChatStoreImpl<T = UnifiedChatState>(
     return selector(unifiedState);
   }
 
-  // AUDIT-P3-TYPE: When no selector is provided, T defaults to UnifiedChatState.
-  // The function signature guarantees T = UnifiedChatState when selector is undefined.
-  // This is a safe cast due to the generic default and conditional logic above.
   return unifiedState as T;
 }
 
@@ -536,7 +489,6 @@ type UseUnifiedChatStore = {
 
 export const useUnifiedChatStore = useUnifiedChatStoreImpl as UseUnifiedChatStore;
 
-// Static methods for direct store access (non-hook usage)
 useUnifiedChatStore.getState = (): UnifiedChatState => {
   const chatState = useChatStore.getState();
   const agentState = useAgentStore.getState();
@@ -544,9 +496,7 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
   const sidecarState = useSidecarStore.getState();
 
   return {
-    // Chat state
     ...chatState,
-    // Agent state
     agents: agentState.agents,
     agentStatus: agentState.agentStatus,
     backgroundTasks: agentState.backgroundTasks,
@@ -568,7 +518,6 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     getActiveActionTrail: agentState.getActiveActionTrail,
     setAutonomousMode: agentState.setAutonomousMode,
     setMissionControlOpen: agentState.setMissionControlOpen,
-    // Tool state
     fileOperations: toolState.fileOperations,
     terminalCommands: toolState.terminalCommands,
     toolExecutions: toolState.toolExecutions,
@@ -612,7 +561,6 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     setFileOperationFilter: toolState.setFileOperationFilter,
     setTerminalStatusFilter: toolState.setTerminalStatusFilter,
     setToolNameFilter: toolState.setToolNameFilter,
-    // Sidecar state
     sidecarOpen: sidecarState.sidecarOpen,
     sidecarSection: sidecarState.sidecarSection,
     sidecarWidth: sidecarState.sidecarWidth,
@@ -630,7 +578,6 @@ useUnifiedChatStore.getState = (): UnifiedChatState => {
     openSidecar: sidecarState.openSidecar,
     closeSidecar: sidecarState.closeSidecar,
     getSuggestedSidecarMode: sidecarState.getSuggestedSidecarMode,
-    // Combined actions
     clearHistory: combinedClearHistory,
     resetOnLogout: combinedResetOnLogout,
   };
@@ -641,7 +588,6 @@ useUnifiedChatStore.setState = (
 ) => {
   const updates = typeof partial === 'function' ? partial(useUnifiedChatStore.getState()) : partial;
 
-  // Route updates to appropriate stores
   const chatKeys = [
     'conversations',
     'activeConversationId',
@@ -715,33 +661,22 @@ useUnifiedChatStore.setState = (
     }
   }
 
-  // AUDIT-P3-TYPE: Route partial updates to individual stores.
-  // The casts below are necessary because we're splitting a unified partial
-  // into per-store partials. The key filtering above ensures only valid keys
-  // are included in each update object.
   if (Object.keys(chatUpdates).length > 0) {
-    // Type assertion: chatUpdates contains only ChatState keys (filtered above)
     useChatStore.setState(chatUpdates as Partial<ReturnType<typeof useChatStore.getState>>);
   }
   if (Object.keys(agentUpdates).length > 0) {
-    // Type assertion: agentUpdates contains only AgentState keys (filtered above)
     useAgentStore.setState(agentUpdates as Partial<ReturnType<typeof useAgentStore.getState>>);
   }
   if (Object.keys(toolUpdates).length > 0) {
-    // Type assertion: toolUpdates contains only ToolState keys (filtered above)
     useToolStore.setState(toolUpdates as Partial<ReturnType<typeof useToolStore.getState>>);
   }
   if (Object.keys(sidecarUpdates).length > 0) {
-    // Type assertion: sidecarUpdates contains only SidecarState keys (filtered above)
     useSidecarStore.setState(
       sidecarUpdates as Partial<ReturnType<typeof useSidecarStore.getState>>,
     );
   }
 };
 
-// Subscribe to all stores
-// Each sub-store listener captures its own prevState via closure to avoid
-// a shared-variable race where concurrent store updates read stale state.
 useUnifiedChatStore.subscribe = (
   listener: (state: UnifiedChatState, prevState: UnifiedChatState) => void,
 ) => {
@@ -783,5 +718,4 @@ useUnifiedChatStore.subscribe = (
   };
 };
 
-// Export individual stores for migration
 export { useChatStore, useAgentStore, useToolStore, useSidecarStore };

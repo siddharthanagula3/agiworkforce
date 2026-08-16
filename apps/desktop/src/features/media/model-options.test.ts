@@ -29,8 +29,6 @@ describe('desktop media model options', () => {
       IMAGE_PROVIDER_OPTIONS.map((option) => [option.id, option]),
     );
 
-    // Google's image line comes from the active catalog family; with a single
-    // live model the lite slot deduplicates away.
     expect(getModelMetadataById(byAdapter['google_balanced']!.model)?.imageApi).toBe('gemini');
     if (byAdapter['google_fast']) {
       expect(getModelMetadataById(byAdapter['google_fast'].model)?.imageApi).toBe('gemini');

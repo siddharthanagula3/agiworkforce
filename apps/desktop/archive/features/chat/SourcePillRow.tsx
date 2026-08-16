@@ -1,20 +1,9 @@
-/**
- * SourcePillRow Component
- *
- * A horizontal scrollable row of source citation pills, similar to ChatGPT's
- * source pill row. Each pill shows a favicon, domain name, and opens the URL
- * in the sidecar browser on click.
- */
 
 import { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useUnifiedChatStore } from '../../stores/unifiedChatStore';
 
-/**
- * Extract the hostname from a URL string. Falls back to the raw URL on parse
- * failure so the pill is always renderable.
- */
 function extractDomain(url: string): string {
   try {
     return new URL(url).hostname;
@@ -23,10 +12,6 @@ function extractDomain(url: string): string {
   }
 }
 
-/**
- * Build a Google S2 favicon URL for a given page URL.
- * Always uses the 16×16 size which is the smallest crisp option.
- */
 function faviconUrl(url: string): string {
   const domain = extractDomain(url);
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=16`;
@@ -40,7 +25,6 @@ export interface SourceCitation {
 
 export interface SourcePillRowProps {
   citations: SourceCitation[];
-  /** Maximum number of pills shown before a "+N more" button appears. Default: 6 */
   maxVisible?: number;
   className?: string;
 }
@@ -107,7 +91,6 @@ export function SourcePillRow({ citations, maxVisible = 6, className }: SourcePi
   const hiddenCount = citations.length - maxVisible;
 
   const handlePillClick = (url: string) => {
-    // Validate URL scheme before opening — block non-http(s) URLs
     if (/^https?:\/\//i.test(url)) {
       openSidecar('browser', url);
     }

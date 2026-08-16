@@ -1,23 +1,13 @@
-/**
- * VoiceRecordingStatus Component
- *
- * Displays the current voice recording/transcribing status with visual indicators.
- */
 
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '../../lib/utils';
 
 export interface VoiceRecordingStatusProps {
-  /** Whether currently recording */
   isRecording: boolean;
-  /** Whether currently transcribing */
   isTranscribing: boolean;
-  /** Interim transcript text */
   interimTranscript: string;
-  /** Whether using Whisper Cloud (remote) */
   preferWhisperCloud?: boolean;
-  /** Voice error message */
   voiceError?: string | null;
 }
 

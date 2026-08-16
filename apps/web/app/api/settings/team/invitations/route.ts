@@ -28,18 +28,9 @@ const ListQuerySchema = z.object({
 const CreateSchema = z.object({
   organizationId: z.string().uuid('organizationId must be a UUID'),
   email: z.string().email('Invalid email address').max(320),
-  // `owner` is absent by design: ownership moves only through
-  // POST /api/settings/organization/transfer-ownership.
   role: z.enum(['admin', 'member', 'viewer']).default('member'),
 });
 
-/**
- * Every handler here re-proves the caller is an owner/admin OF THE NAMED ORG
- * inside the same request. These routes run on the privileged `getNeonDb()`
- * connection (which has BYPASSRLS), so the organization predicate below is the
- * live isolation boundary — the 0085 policies are defence in depth behind it,
- * not a substitute. A member of org A must never reach org B's invitations.
- */
 async function requireOrgAdmin(
   db: ReturnType<typeof getNeonDb>,
   organizationId: string,
@@ -62,10 +53,6 @@ async function requireOrgAdmin(
   return membership;
 }
 
-/**
- * GET /api/settings/team/invitations?organizationId=<uuid>
- * List this organization's invitations plus its live seat state.
- */
 async function handleList(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-team-invitations-list');
   if (rateLimitResponse) return rateLimitResponse;
@@ -84,8 +71,6 @@ async function handleList(request: NextRequest) {
   await requireTeamAdminAccess(db, userId, organizationId);
   await requireOrgAdmin(db, organizationId, userId);
 
-  // Lapsed invitations are flipped before the list is read so the returned
-  // status and the returned seat count agree with each other.
   await expirePendingInvitations(db, organizationId);
 
   const [invitations, seats] = await Promise.all([
@@ -99,16 +84,6 @@ async function handleList(request: NextRequest) {
   });
 }
 
-/**
- * POST /api/settings/team/invitations
- *
- * Persist a pending invitation and return its one-time link.
- *
- * There is NO transactional email provider in this repo, so nothing is
- * delivered. The response says so explicitly and hands back a link the inviter
- * copies. Claiming an email was sent would be the same false claim the
- * delete-account route calls out.
- */
 async function handleCreate(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-team-invitations-write');
   if (rateLimitResponse) return rateLimitResponse;
@@ -135,7 +110,6 @@ async function handleCreate(request: NextRequest) {
     invitedByUserId: userId,
   });
 
-  // The invitation id and address are safe to log; the raw token never is.
   logger.info(
     { userId, organizationId, invitationId: invitation.id, role },
     'Organization invitation created',
@@ -157,7 +131,6 @@ async function handleCreate(request: NextRequest) {
   return NextResponse.json(
     {
       invitation: formatInvitation(invitation),
-      // Returned exactly once. Only the sha256 hash is persisted.
       inviteToken: token,
       delivery: {
         emailSent: false,

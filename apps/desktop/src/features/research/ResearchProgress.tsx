@@ -1,10 +1,3 @@
-/**
- * ResearchProgress Component
- *
- * Multi-phase progress visualization for an active deep research session.
- * Shows the breakdown > research > synthesis pipeline with live source counts
- * and estimated time remaining.
- */
 import { memo } from 'react';
 import {
   Loader2,

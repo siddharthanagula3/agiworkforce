@@ -161,14 +161,6 @@ describe('buildStreamResponse managed-usage terminal ordering', () => {
   });
 });
 
-/**
- * CPST Stage-0 telemetry, managed cloud only
- * (docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.3, phase 1).
- *
- * `finalize_managed_usage_request` REPLACES the usage jsonb wholesale, so these
- * tests pin two things at once: the CPST keys ride the same single finalize
- * call, and the pre-existing token keys are still there afterwards.
- */
 describe('buildStreamResponse CPST usage telemetry', () => {
   async function drain(response: Response): Promise<void> {
     const reader = response.body!.getReader();
@@ -180,8 +172,6 @@ describe('buildStreamResponse CPST usage telemetry', () => {
 
   function finalizedUsage(): Record<string, unknown> {
     const call = lifecycle.finalize.mock.calls[0]?.[0] as { usage: Record<string, unknown> };
-    // The service JSON.stringifies this object into a jsonb parameter, so the
-    // assertions run against what actually reaches the column.
     return JSON.parse(JSON.stringify(call.usage));
   }
 
@@ -211,11 +201,9 @@ describe('buildStreamResponse CPST usage telemetry', () => {
     expect(lifecycle.finalize).toHaveBeenCalledOnce();
     const usage = finalizedUsage();
 
-    // Pre-existing accounting keys survive the additive change.
     expect(usage['inputTokens']).toBe(4);
     expect(usage['outputTokens']).toBe(2);
 
-    // A successful CHARGE is not a successful TASK.
     expect(usage['taskOutcome']).toBe('unknown');
     expect(usage['verifierResult']).toBe('skipped');
     expect(usage['fallbackUsed']).toBe(false);
@@ -238,7 +226,6 @@ describe('buildStreamResponse CPST usage telemetry', () => {
           method: 'POST',
         }) as never,
         upstreamSse(),
-        // No routePlanId and no rotation: both must be absent, not zero/empty.
         managedProcessed(),
         'user-001',
         'token-001',

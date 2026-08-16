@@ -22,11 +22,6 @@ async function retryIdempotentSave(save: () => Promise<void>, attempts: number):
   throw lastError;
 }
 
-/**
- * Commit both Web transcript rows before the paid video POST. Saves use stable
- * client UUIDs and the message route is idempotent, so an immediate retry can
- * recover a committed-but-response-lost write without duplicating the turn.
- */
 export async function commitVideoTranscriptBeforeStart(
   input: VideoTranscriptCommitInput,
 ): Promise<VideoTranscriptCommitResult> {
@@ -45,10 +40,6 @@ export async function commitVideoTranscriptBeforeStart(
   return { ok: true };
 }
 
-/**
- * Mechanical egress gate used by WebChatPage: the provider-start callback is
- * unreachable until both idempotent transcript writes have been acknowledged.
- */
 export async function startVideoAfterTranscriptCommit<T>(
   input: VideoTranscriptCommitInput & { start: () => Promise<T> },
 ): Promise<{ ok: true; started: T } | Exclude<VideoTranscriptCommitResult, { ok: true }>> {

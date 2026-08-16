@@ -100,7 +100,6 @@ function quietDismissalKey(userId: string, windowKey: string): string {
 export interface TimeFocusReminderProps {
   userId: string | null | undefined;
   onLeave: () => void;
-  /** Exposed for deterministic timing tests; production uses a 15-second tick. */
   activeTickMs?: number;
 }
 
@@ -132,7 +131,6 @@ export function TimeFocusReminder({
         if (!cancelled) setPreferences(normalizeTimeFocusPreferences(value, timezone));
       })
       .catch(() => {
-        // A settings outage must never interrupt chat or fabricate a reminder.
         if (!cancelled) setPreferences(null);
       });
     return () => {

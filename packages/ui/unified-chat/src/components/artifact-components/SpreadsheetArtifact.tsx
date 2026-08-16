@@ -1,20 +1,3 @@
-/**
- * SpreadsheetArtifact — read-only tabular renderer for spreadsheet/table/csv
- * artifacts (claude.ai CSV-preview parity).
- *
- * Surface-agnostic: no Tauri imports, no desktop-specific deps.
- * Content is parsed by `lib/tabular` (CSV/TSV with quoted fields, embedded
- * delimiters/newlines, BOM, ragged rows — plus the legacy JSON
- * array-of-objects shape). Features:
- *  - sticky header row with click-to-sort (asc → desc → original), numeric-aware
- *  - numeric columns right-aligned with tabular numerals
- *  - row cap with an honest "Showing first N of M rows" note (no virtual jank)
- *  - cell selection + Ctrl/Cmd-C copy (Escape clears)
- *  - honest raw-content fallback when the content is not tabular
- *
- * Downloads/exports stay in the host artifact chrome (ArtifactRenderer's
- * export menu / web ArtifactPreview download menu) — no duplicate buttons here.
- */
 
 import { ArrowDown, ArrowUp, FileSpreadsheet } from 'lucide-react';
 import React, { useCallback, useMemo, useState } from 'react';
@@ -29,7 +12,6 @@ export interface SpreadsheetArtifactProps {
   readOnly?: boolean;
 }
 
-/** Rows rendered before capping. Keeps the DOM honest and responsive. */
 export const SPREADSHEET_ROW_CAP = 500;
 
 type SortState = { column: number; direction: 'asc' | 'desc' } | null;
@@ -47,7 +29,6 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
     const { column, direction } = sort;
     const numeric = data.numericColumns[column] ?? false;
     const sign = direction === 'asc' ? 1 : -1;
-    // Stable sort; empty cells always sink to the bottom.
     return [...data.rows].sort((a, b) => {
       const av = (a[column] ?? '').trim();
       const bv = (b[column] ?? '').trim();
@@ -102,8 +83,6 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
   );
 
   if (!data) {
-    // Honest fallback: name the problem and show the raw content instead of a
-    // dead-end "invalid data" card.
     return (
       <div
         className={cn('flex flex-col bg-background border rounded-lg overflow-hidden', className)}

@@ -11,49 +11,9 @@ import {
   type SweepStepResult,
 } from '../support/dom';
 
-/**
- * Click sweep over every sidebar destination and settings tab in Local mode,
- * against the REAL Tauri binary.
- *
- * WHAT MAKES A CONTROL "WIRED" HERE
- * DesktopShellV3's panel ternary ends in a bare `else` that renders
- * `AgiWorkProjects` (DesktopShellV3.tsx:736-741). So a nav button whose id
- * never reaches a matching branch — a typo in the view map, a branch gated on
- * the wrong privacyMode, a panel that was never mounted — still paints a
- * plausible-looking Projects screen. A spec that only asserted "something
- * rendered" would pass on every dead control in the shell. Every step therefore
- * asserts the EXPECTED panel's own `data-testid` AND that `agi-work-projects`
- * is absent unless Projects was the target.
- *
- * The other two silent-failure modes this sweep watches for:
- *  - a toast in the "coming soon / not available" family, which means the click
- *    was received and deliberately declined (a dead control, not a wired one);
- *  - raw i18n keys (`sidebar.nav.code`) rendering as their own names, the
- *    regression i18n-raw-keys.spec.ts found on 2026-08-01.
- *
- * COST MODEL: every discrete WebdriverIO command costs ~5-6s against the
- * embedded Tauri driver, so each control is one `execute` to click plus as few
- * `execute` observations as it takes to settle — NOT one `waitForDisplayed` per
- * assertion. Polling cannot be pushed into the page (the obvious cheaper
- * design): this driver's `execute/sync` never awaits a returned Promise, and a
- * poll written that way hangs for 90s and then leaves the WebView blank. See
- * the clickTarget/observe docs in support/dom.ts.
- *
- * TEARDOWN CONTRACT: one app instance serves the whole run, so this spec must
- * hand the next spec a Local-mode shell with the sidebar expanded and no dialog
- * open. The final `it` and the `after` hook both enforce that.
- */
-
 const SCREEN_DIR = resolveScreenDir('sweep');
 
-// Recorded across all steps, printed as one table at the end so the failure
-// list survives even when an individual assertion aborts its own `it`.
 const results: SweepStepResult[] = [];
-/**
- * Raw keys already on screen before the sweep starts. Anything in this set is
- * a pre-existing i18n gap, not something a sweep step caused; subtracting it
- * keeps one stale key from failing every single step.
- */
 let rawKeyBaseline: string[] = [];
 
 function record(result: SweepStepResult): SweepStepResult {
@@ -64,12 +24,6 @@ function record(result: SweepStepResult): SweepStepResult {
       `${result.elapsedMs}ms`,
   );
   if (result.toasts.length) console.log(`  toasts: ${JSON.stringify(result.toasts)}`);
-  // ATTRIBUTION CAVEAT: a panel that crashes ASYNCHRONOUSLY (CodeWorkspace's
-  // FileTree needs a render loop or two to exhaust React's update depth) blows
-  // the boundary after its own step has already been observed, so the boundary
-  // is reported against the NEXT step. Measured: nav:code logs "Failed to load
-  // directory" and passes, then nav:tasks inherits the boundary. Read a
-  // boundary as "at or shortly before this step", never as proof of this one.
   if (result.errorBoundary) console.log(`  ERROR BOUNDARY: ${result.errorBoundary}`);
   if (!result.documentAlive) console.log('  BLANK WEBVIEW — the shell rendered nothing');
   const newKeys = result.rawKeys.filter((k) => !rawKeyBaseline.includes(k));
@@ -77,10 +31,7 @@ function record(result: SweepStepResult): SweepStepResult {
   return result;
 }
 
-/** Assert a step both landed on its target and was not silently declined. */
 function assertStep(result: SweepStepResult, forbidProjectsFallback = true): void {
-  // Checked first: once the WebView blanks, every later "control not found" is
-  // an artefact of the dead shell, not nine independently dead controls.
   expect(result.documentAlive).toBe(true);
   expect(result.clicked).toBe(true);
   expect(result.deadControlToasts).toEqual([]);
@@ -94,12 +45,6 @@ async function shot(name: string): Promise<void> {
   await browser.saveScreenshot(path.join(SCREEN_DIR, `${name}.png`));
 }
 
-/**
- * A Radix dialog can enter the DOM while a cold native WebView still holds its
- * invisible first animation keyframe. Waiting for a mere `[role="dialog"]`
- * match let that unfocused dialog leak into the next test while the screenshot
- * still showed the underlying Projects panel.
- */
 async function waitForInteractiveDialog(timeout = 5_000): Promise<void> {
   await browser.waitUntil(
     () =>
@@ -109,8 +54,6 @@ async function waitForInteractiveDialog(timeout = 5_000): Promise<void> {
         ).find((candidate) => (candidate as HTMLElement).getClientRects().length > 0);
         if (!(dialog instanceof HTMLElement)) return false;
 
-        // Search owns a full-screen role=dialog wrapper and animates its inner
-        // panel; Radix dialogs put the role on the surface itself.
         const surface =
           (dialog.querySelector('[data-testid="search-modal-panel"]') as HTMLElement | null) ??
           dialog;
@@ -147,9 +90,6 @@ async function waitForNoVisibleDialog(label: string, timeout = 5_000): Promise<v
   );
 }
 
-// Canonical Local-mode order from Sidebar.tsx navItemsForMode(). `customize` is
-// last and opens the settings modal rather than a panel, so it is swept in the
-// settings section below.
 const LOCAL_NAV_STEPS: Array<{
   navId: string;
   label: string;
@@ -164,33 +104,17 @@ const LOCAL_NAV_STEPS: Array<{
     navId: 'automation',
     label: 'Automation',
     expectTestId: 'desktop-automation',
-    // The wrapper exists while AutomationBuilder's lazy chunk is still on the
-    // shell fallback. Its toolbar control only exists once the real panel has
-    // resolved, so the screenshot cannot capture the spinner-only state.
     expectSelector: '[data-testid="desktop-automation"] button[title="Refresh triggers"]',
   },
   {
     navId: 'tasks',
     label: 'Tasks',
     expectTestId: 'desktop-agent-tasks',
-    // The wrapper is mounted before its React.lazy chunk resolves. Requiring
-    // the real creator input keeps a bare Suspense spinner from passing the
-    // step and becoming the screenshot evidence for this destination.
     expectSelector: '[data-testid="desktop-agent-tasks"] #agent-task-goal',
   },
   { navId: 'scheduled', label: 'Schedules', expectTestId: 'agi-work-scheduled' },
 ];
 
-/**
- * The collapsed rail is a SECOND control list (railItems() in Sidebar.tsx),
- * independently written from the expanded nav but routed through the same view
- * map. It is swept separately, and its inventory is asserted, because the two
- * lists really did drift: Local's rail was missing `scheduled` entirely, so
- * collapsing the sidebar silently removed a destination the expanded nav
- * offered. `projects` is rail-only (the expanded sidebar gives Projects its own
- * folder section instead), so the two lists are compared deliberately, not
- * asserted equal.
- */
 const LOCAL_RAIL_NAV_IDS = [
   'projects',
   'artifacts',
@@ -203,7 +127,6 @@ const LOCAL_RAIL_NAV_IDS = [
   'customize',
 ];
 
-/** Local-mode expanded nav, in Sidebar.tsx navItemsForMode() order. */
 const EXPANDED_NAV_IDS = [
   'artifacts',
   'code',
@@ -238,10 +161,6 @@ const RAIL_STEPS: Array<{
   { navId: 'projects', expectTestId: 'agi-work-projects' },
 ];
 
-// Canonical order from packages/ui/ui/src/settings-nav.ts (SETTINGS_NAV),
-// minus Account/Billing/Usage — LOCAL_HIDDEN_TABS in SettingsPanel.tsx, so
-// they do not exist in the Local shell. Kept identical to settings-tour.spec.ts
-// so the two stay comparable.
 const SETTINGS_TABS = [
   'General',
   'Personalization',
@@ -270,12 +189,8 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
       await useLocal.click();
       await waitForDesktopShell();
     }
-    // A previous spec can leave settings open, possibly dirty.
     await closeAnySettingsDialog();
 
-    // Sidebar collapse is persisted. Make this sweep independent of a prior
-    // native run (including an interrupted run) before asserting the expanded
-    // inventory below.
     const expandSidebar = await $('button[aria-label="Expand sidebar"]');
     if ((await expandSidebar.isExisting()) && (await expandSidebar.isDisplayed())) {
       await expandSidebar.click();
@@ -291,7 +206,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
 
   after(async function () {
     this.timeout(120_000);
-    // Hand the next spec a clean Local shell: no dialog, sidebar expanded.
     await closeAnySettingsDialog();
     await browser.execute(() => {
       const expand = document.querySelector(
@@ -349,11 +263,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
   }
 
   it('Tasks nav badge never claims work that does not exist', async () => {
-    // NavBadge returns null at zero on purpose: an empty pill claims pending
-    // work, and a literal "0" reads as a broken counter. A fresh e2e profile has
-    // no tasks, so the badge is expected to be ABSENT — assert the invariant
-    // (present ⇒ positive integer) rather than its presence, which would make
-    // this test depend on seeded data.
     const badge = (await browser.execute(() => {
       const el = document.querySelector('[data-testid="nav-badge-tasks"]');
       return el
@@ -378,7 +287,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
       ),
     );
     await shot('08-panel-projects');
-    // Projects IS the target here, so the fallback guard does not apply.
     assertStep(result, false);
   });
 
@@ -389,8 +297,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
         'rail:new-chat',
         { text: 'New chat', within: '[data-v3-shell]' },
         {
-          // The chat panel has no testid of its own; the composer's aria-label
-          // is the seam every other chat spec drives.
           selectorPresent: 'textarea[aria-label="Chat message input"]',
           forbidTestId: 'agi-work-projects',
         },
@@ -403,9 +309,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
   it('"New project" opens the create-project dialog', async function () {
     this.timeout(90_000);
     const result = record(
-      // The project form can mount just after the default four-look budget on
-      // a cold native WebView. Eight looks keep this a bounded interaction
-      // check without letting a late dialog leak into the next test.
       await sweepStep('rail:new-project', { ariaLabel: 'New project' }, { dialog: true }, 8),
     );
     expect(result.clicked).toBe(true);
@@ -458,9 +361,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
     await createButton.waitForClickable({ timeout: 5_000 });
     await createButton.click();
 
-    // The real create callback activates the persisted project and routes to
-    // its detail view. That gives this test the same Settings entry point a
-    // user reaches for an existing project, without seeding store state.
     await browser.waitUntil(
       () =>
         browser.execute((expectedName: string) => {
@@ -512,8 +412,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
       await sweepStep(
         'rail:collapse',
         { ariaLabel: 'Collapse sidebar' },
-        // The rail replaces the expanded nav; both carry data-nav-id, so the
-        // expectation is simply that some nav survives the collapse.
         { selectorPresent: '[data-nav-id]' },
       ),
     );
@@ -522,9 +420,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
 
     let expanded: SweepStepResult | null = null;
     try {
-      // Inventory FIRST: a destination the rail never renders cannot be caught
-      // by clicking the ones it does. This assertion is what the missing
-      // `scheduled` rail entry would have failed on.
       const railNavIds = await listNavIds();
       console.log('SWEEP rail nav ids present:', JSON.stringify(railNavIds));
       expect(railNavIds).toEqual(LOCAL_RAIL_NAV_IDS);
@@ -547,8 +442,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
         assertStep(result, !isProjects);
       }
 
-      // Customize is a real nav row in both layouts, separate from the footer
-      // Settings gear. Its route must open the same live settings surface.
       const customize = record(
         await sweepStep('rail:customize', { navId: 'customize' }, { dialog: true }, 8),
       );
@@ -557,8 +450,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
       await shot('13-rail-customize-settings');
       expect(await closeAnySettingsDialog()).toBe(true);
     } finally {
-      // A failed rail inventory/route assertion must not leave the persisted
-      // sidebar collapsed and turn every later Settings assertion into noise.
       expanded = record(
         await sweepStep(
           'rail:expand',
@@ -567,7 +458,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
         ),
       );
       if (!expanded.passed) {
-        // Best-effort recovery only: do not mask the original rail assertion.
         await browser.execute(() => {
           const sidebar = document.querySelector('aside[data-v3-sidebar]');
           if (sidebar?.getAttribute('data-collapsed') !== 'true') return;
@@ -581,7 +471,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
 
     expect(expanded).not.toBeNull();
     assertStep(expanded!, false);
-    // Expanding must restore the expanded nav, not leave the rail behind.
     expect(await listNavIds()).toEqual(EXPANDED_NAV_IDS);
   });
 
@@ -613,22 +502,14 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
   for (const [index, label] of SETTINGS_TABS.entries()) {
     it(`settings tab "${label}" renders content without an error boundary`, async function () {
       this.timeout(90_000);
-      // Nav buttons are inert (and clicks are SILENT no-ops) while the panel
-      // carries aria-busy — see support/close-settings.ts.
       await waitForSettingsReady();
 
-      // Settings nav buttons can carry a trailing badge, so match on prefix.
       const clicked = await clickButtonWithText(
         'nav[aria-label="Settings sections"]',
         label,
         'prefix',
       );
 
-      // Settings sections are React.lazy + Suspense. Sampling once right after
-      // the click caught 9 of 15 tabs mid-spinner with <70 chars of text, and
-      // "text length > 0" happily called a spinner a rendered tab. Poll until
-      // the spinner clears so a PASS means real content — and so a tab that
-      // NEVER resolves is reported as such instead of quietly passing.
       const readSnapshot = () =>
         browser.execute(
           (rawKeySource: string, domainSource: string) => {
@@ -671,10 +552,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
           rawKeys: string[];
         }>;
 
-      // "Nothing but a spinner" is the Suspense fallback — the tab has not
-      // rendered. A spinner ALONGSIDE substantial text is an in-panel loading
-      // state (Connectors polls each connector's status and keeps one
-      // indefinitely), which is not a rendering failure.
       const suspended = (s: { stillSpinning: boolean; textLength: number }) =>
         s.stillSpinning && s.textLength < 300;
 
@@ -709,8 +586,6 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
 
       expect(clicked).toBe(true);
       expect(snap.hasErrorBoundary).toBe(false);
-      // A bare spinner is not content: a tab still suspended after ~3.2s has
-      // not been shown to render anything.
       expect(suspended(snap)).toBe(false);
       expect(snap.textLength).toBeGreaterThan(0);
       expect(snap.rawKeys.filter((k) => !rawKeyBaseline.includes(k))).toEqual([]);
@@ -731,14 +606,10 @@ describe('nav click sweep · every Local-mode sidebar destination is really wire
       ),
     }))) as { dialogOpen: boolean; navIds: string[] };
     expect(state.dialogOpen).toBe(false);
-    // `code` only exists in Local mode — its presence proves the teardown left
-    // the shell where the next spec expects it.
     expect(state.navIds).toContain('code');
   });
 });
 
-// Duplicated as plain strings because browser.execute serializes its function
-// and cannot close over module-scope RegExp objects.
 const RAW_KEY_SHAPE_SOURCE = '^[a-z][a-zA-Z]*(\\.[a-z][a-zA-Z0-9_]*)+$';
 const DOMAIN_LIKE_SOURCE = '\\.(com|org|net|io|dev|app|ai|md|json|ts|tsx|js|rs|html|css|toml)$';
 

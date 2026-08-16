@@ -29,7 +29,6 @@ interface MCPCredentialManagerProps {
   servers: McpServerInfo[];
 }
 
-// OAuth providers configuration
 const OAUTH_PROVIDERS = {
   github: {
     name: 'GitHub',
@@ -51,7 +50,6 @@ const OAUTH_PROVIDERS = {
   },
 } as const;
 
-// Manual credential configs for providers without OAuth
 const MANUAL_CREDENTIAL_CONFIGS: Record<
   string,
   Array<{ key: string; label: string; placeholder: string }>
@@ -90,13 +88,11 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     },
   });
 
-  // Manual credential state
   const [credentials, setCredentials] = useState<Record<string, Record<string, string>>>({});
   const [showCredentials, setShowCredentials] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [success, setSuccess] = useState<Record<string, boolean>>({});
 
-  // Check OAuth status for a provider
   const checkOAuthStatus = useCallback(async (provider: OAuthProvider) => {
     try {
       const result = await McpClient.oauthStatus(provider);
@@ -113,7 +109,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
       }));
     } catch (error) {
       console.error(`Failed to check OAuth status for ${provider}:`, error);
-      // Don't set error here - just means not connected
       setOauthState((prev) => ({
         ...prev,
         status: {
@@ -124,7 +119,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     }
   }, []);
 
-  // Check all OAuth statuses on mount
   useEffect(() => {
     const providers = Object.keys(OAUTH_PROVIDERS) as OAuthProvider[];
     providers.forEach((provider) => {
@@ -132,7 +126,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     });
   }, [checkOAuthStatus]);
 
-  // Start OAuth flow
   const startOAuth = async (provider: OAuthProvider) => {
     setOauthState((prev) => ({
       ...prev,
@@ -143,13 +136,8 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     try {
       const result = await McpClient.oauthStart(provider);
 
-      // Store OAuth state for CSRF verification on callback.
-      // Note: This is a random nonce for CSRF protection, NOT a credential.
-      // It's ephemeral and only used to verify the OAuth callback originated
-      // from this same flow. Storing in sessionStorage is the standard approach.
       sessionStorage.setItem(`_csrf_${provider}`, btoa(result.state));
 
-      // Open browser for OAuth
       await openUrl(result.authUrl);
 
       // Keep loading state until callback completes
@@ -167,7 +155,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     }
   };
 
-  // Disconnect OAuth
   const disconnectOAuth = async (provider: OAuthProvider) => {
     setOauthState((prev) => ({
       ...prev,
@@ -199,10 +186,8 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     }
   };
 
-  // Handle OAuth callback from deep link
   const handleOAuthCallback = useCallback(
     async (provider: OAuthProvider, code: string, state: string) => {
-      // Verify state matches
       const storedBase64 = sessionStorage.getItem(`_csrf_${provider}`);
       const storedState = storedBase64 ? atob(storedBase64) : null;
       if (storedState !== state) {
@@ -219,13 +204,11 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
         return;
       }
 
-      // Clear stored state
       sessionStorage.removeItem(`_csrf_${provider}`);
       const verifiedState = storedState;
 
       try {
         await McpClient.oauthCallback(provider, code, verifiedState);
-        // Refresh status
         await checkOAuthStatus(provider);
         setOauthState((prev) => ({
           ...prev,
@@ -247,7 +230,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     [checkOAuthStatus],
   );
 
-  // Listen for OAuth completion via deep link events
   useEffect(() => {
     const handleDeepLink = (event: Event) => {
       const customEvent = event as CustomEvent<{ url?: string }>;
@@ -258,7 +240,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
         const parsed = new URL(url);
         const pathParts = parsed.pathname.split('/').filter(Boolean);
 
-        // Check for oauth/mcp/{provider} path pattern
         if (pathParts[0] === 'oauth' && pathParts[1] === 'mcp' && pathParts[2]) {
           const provider = pathParts[2] as OAuthProvider;
           const code = parsed.searchParams.get('code');
@@ -280,7 +261,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     };
   }, [handleOAuthCallback]);
 
-  // Manual credential handlers
   const handleCredentialChange = (serverName: string, key: string, value: string) => {
     setCredentials((prev) => ({
       ...prev,
@@ -319,7 +299,6 @@ export default function MCPCredentialManager({ servers }: MCPCredentialManagerPr
     }
   };
 
-  // Filter servers based on what credentials they need
   const oauthServers = servers.filter((server) => server.name in OAUTH_PROVIDERS);
   const manualServers = servers.filter((server) => MANUAL_CREDENTIAL_CONFIGS[server.name]);
 

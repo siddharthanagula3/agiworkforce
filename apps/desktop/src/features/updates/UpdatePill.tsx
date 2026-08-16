@@ -6,11 +6,6 @@ interface UpdatePillProps {
   onUpdateNow?: () => void;
 }
 
-/**
- * Sidebar pill that shows the supported update action when a release is available.
- * Matches the Claude.app sidebar update indicator pattern.
- * Renders nothing when no update is available or downloaded.
- */
 export function UpdatePill({ collapsed = false, onUpdateNow }: UpdatePillProps) {
   const { status, updateInfo, downloadAndInstall, isManualInstallerUpdate } = useUpdater();
 

@@ -1,9 +1,3 @@
-/**
- * GOV-25: segment-scoped 404 for chat.
- *
- * Without it, `notFound()` from anywhere under /chat rendered the global
- * marketing 404, dropping the user out of the app shell entirely.
- */
 export default function ChatNotFound() {
   return (
     <div

@@ -1,13 +1,7 @@
-/**
- * Device Poll API Tests
- *
- * Tests for device polling flow input validation
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
-// Mock dependencies
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(() => null),
 }));
@@ -25,7 +19,6 @@ vi.mock('@/lib/cors', () => ({
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 
-// Mock environment variables
 vi.mock('@shared/utils/env', () => ({
   requireEnv: vi.fn((key: string) => {
     if (key === 'NEON_DATABASE_URL') return 'https://localhost';
@@ -39,7 +32,6 @@ vi.mock('@shared/utils/env', () => ({
   }),
 }));
 
-// Neon DB mock - the route uses getNeonDb() with db.query() and db.execute()
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn().mockResolvedValue(1);
 
@@ -53,17 +45,14 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-// Import after mocks
 import { POST, OPTIONS } from '@/app/api/device/poll/route';
 
 describe('Device Poll API', () => {
-  // Use valid values per schema: device_fingerprint must be hex only
   const validRequest = {
     device_id: 'device-123',
     device_fingerprint: 'abc123def456',
   };
 
-  // Base device record for a pending, non-expired device
   const basePendingRow = {
     device_id: 'device-123',
     device_fingerprint: 'abc123def456',
@@ -73,7 +62,6 @@ describe('Device Poll API', () => {
     updated_at: new Date().toISOString(),
   };
 
-  // Base device record for an approved device
   const baseApprovedRow = {
     device_id: 'device-123',
     device_fingerprint: 'abc123def456',
@@ -85,7 +73,6 @@ describe('Device Poll API', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: no device found (empty result set)
     mockNeonQuery.mockResolvedValue([]);
     mockNeonExecute.mockResolvedValue(1);
   });
@@ -114,10 +101,6 @@ describe('Device Poll API', () => {
       });
 
       it('should return 404 for valid request with no matching device (no info disclosure)', async () => {
-        // Route hardened to return 404 + generic error for unknown devices rather than
-        // 200 + {status:"pending"}, to avoid exposing device-id existence to
-        // unauthenticated callers. See apps/web/app/api/device/poll/route.ts:65-69.
-        // mockNeonQuery defaults to returning [] (no rows), so no override needed.
         const request = new NextRequest('http://localhost/api/device/poll', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -135,9 +118,6 @@ describe('Device Poll API', () => {
 
     describe('Token decryption and edge cases', () => {
       it('should return 500 when the stored token is corrupted and cannot be decrypted', async () => {
-        // The device record shows "approved" and the atomic consume query returns a row
-        // with a corrupted (non-base64-GCM) access_token. decryptToken() will throw,
-        // and the route must surface that as an internal error (500).
         mockNeonQuery
           // First call: fetch device row
           .mockResolvedValueOnce([baseApprovedRow])
@@ -148,7 +128,6 @@ describe('Device Poll API', () => {
               user_id: 'user-456',
               user_email: 'test@example.com',
               user_name: 'Test User',
-              // Deliberately corrupted - too short to be a valid GCM blob
               access_token: 'bm90LXZhbGlk',
               refresh_token: 'bm90LXZhbGlk',
             },
@@ -161,14 +140,10 @@ describe('Device Poll API', () => {
         });
 
         const response = await POST(request);
-        // decryptToken throws -> createError.internal -> withErrorHandler -> 500
         expect(response.status).toBe(500);
       });
 
       it('should return pending when the RPC returns no rows (already-consumed token)', async () => {
-        // The device record is in "approved" state but the atomic consume query
-        // returns empty (another poll request already consumed the tokens).
-        // The route should treat this as "pending" rather than exposing an error.
         mockNeonQuery
           // First call: fetch device row - approved
           .mockResolvedValueOnce([baseApprovedRow])
@@ -192,7 +167,6 @@ describe('Device Poll API', () => {
         mockNeonQuery.mockResolvedValueOnce([
           {
             ...basePendingRow,
-            // Stored fingerprint is 'abc123def456' but request sends '000000000000'
             device_fingerprint: 'abc123def456',
           },
         ]);
@@ -208,12 +182,9 @@ describe('Device Poll API', () => {
       });
 
       it('should return expired status when the device authorization record is past its expiry', async () => {
-        // The device record exists but expires_at is in the past.
-        // The route detects expiry before fingerprint/status checks and returns "expired".
         mockNeonQuery.mockResolvedValueOnce([
           {
             ...basePendingRow,
-            // Expired one minute ago
             expires_at: new Date(Date.now() - 60000).toISOString(),
           },
         ]);
@@ -225,8 +196,6 @@ describe('Device Poll API', () => {
         });
 
         const response = await POST(request);
-        // Route hardened to return 404 + generic error for expired/consumed records
-        // rather than 200 + {status:"expired"}. See route.ts:73-85.
         expect(response.status).toBe(404);
 
         const data = await response.json();
@@ -247,9 +216,6 @@ describe('Device Poll API', () => {
     });
   });
 
-  // =========================================================================
-  // Status branches: denied, revoked (H15)
-  // =========================================================================
   describe('Status branches: denied, revoked (H15)', () => {
     it('returns {status:"denied"} when device record status is "denied"', async () => {
       mockNeonQuery.mockResolvedValueOnce([
@@ -294,9 +260,6 @@ describe('Device Poll API', () => {
     });
   });
 
-  // =========================================================================
-  // approved-but-missing-tokens (M28)
-  // =========================================================================
   describe('approved-but-missing-tokens (M28)', () => {
     it('returns {status:"pending"} when consumed row is approved but access_token is null', async () => {
       mockNeonQuery

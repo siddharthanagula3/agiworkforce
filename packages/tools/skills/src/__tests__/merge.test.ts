@@ -1,10 +1,3 @@
-/**
- * Skill merge precedence tests.
- *
- * Order (highest wins): extra > workspace > project > personal > managed-local > bundled.
- * Same key from a higher source replaces the lower; same source keeps the
- * later occurrence (last-wins via the Map.set overwrite path).
- */
 
 import { describe, expect, it } from 'vitest';
 
@@ -54,7 +47,7 @@ describe('mergeSkills — precedence resolution', () => {
       [makeSkill('b', 'project')],
       [makeSkill('c', 'extra')],
     ]);
-    expect(out.map((s) => s.name)).toEqual(['a', 'b', 'c']); // sorted alphabetically
+    expect(out.map((s) => s.name)).toEqual(['a', 'b', 'c']);
   });
 
   it('result is sorted alphabetically by name (stable for prompt output)', () => {
@@ -66,7 +59,6 @@ describe('mergeSkills — precedence resolution', () => {
   });
 
   it('same-precedence collision: latest (last-set) wins', () => {
-    // Both at `project` source — Map.set overwrites the earlier entry.
     const earlier = makeSkill('twin', 'project', '-earlier');
     const later = makeSkill('twin', 'project', '-later');
     const out = mergeSkills([[earlier], [later]]);
@@ -75,8 +67,6 @@ describe('mergeSkills — precedence resolution', () => {
   });
 
   it('skillKey override changes which entries collide', () => {
-    // Two skills with different `name`s but the same `metadata.skillKey`:
-    // they should be deduped under that shared key.
     const a: Skill = {
       ...makeSkill('public-a', 'project'),
       metadata: { skillKey: 'shared-key' },
@@ -87,7 +77,7 @@ describe('mergeSkills — precedence resolution', () => {
     };
     const out = mergeSkills([[a], [b]]);
     expect(out).toHaveLength(1);
-    expect(out[0]?.source).toBe('workspace'); // higher precedence wins
+    expect(out[0]?.source).toBe('workspace');
   });
 
   it('an empty input returns an empty output', () => {

@@ -1,23 +1,3 @@
-/**
- * 0087_enterprise_audit_event_writes.sql — SQL shape.
- *
- * SCOPE AND HONEST LIMITS: this is a static assertion over the migration text.
- * Every DB test in apps/web mocks the adapter, so nothing here proves the
- * runtime role/RLS behaviour. Whether the SECURITY DEFINER writer can actually
- * insert under FORCE ROW LEVEL SECURITY, and whether app_rls is really blocked
- * from inserting directly, MUST be rehearsed manually on a throwaway Neon
- * branch using the checklist at the bottom of the migration. A green run of
- * this file is not that proof.
- *
- * What it does prove is that the migration keeps the properties the audit
- * trail depends on, so a future edit cannot quietly drop one:
- *   - it does not modify 0076 (which is already applied)
- *   - the writer is SECURITY DEFINER with a hardened search_path
- *   - EXECUTE is revoked from public and granted only to app_rls
- *   - app_rls loses direct INSERT/UPDATE/DELETE (append-only, non-forgeable)
- *   - it contains no blanket schema-wide GRANT (the 0043 re-grant footgun)
- *   - the outcome/severity vocabularies match the table's CHECK constraints
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,8 +6,6 @@ import { describe, expect, it } from 'vitest';
 const MIGRATION_PATH = path.resolve(import.meta.dirname, '0087_enterprise_audit_event_writes.sql');
 const migration = fs.readFileSync(MIGRATION_PATH, 'utf8');
 
-// Strip `--` comments so assertions about executable SQL cannot be satisfied by
-// prose or by the commented-out manual verification checklist.
 const executable = migration
   .split('\n')
   .map((line) => line.replace(/--.*$/u, ''))
@@ -63,10 +41,7 @@ describe('0087 enterprise audit write migration — writer function', () => {
   });
 
   it('validates the vocabularies instead of coercing a bad value', () => {
-    // enterprise_audit_events.outcome CHECK (0076)
     expect(executable).toMatch(/p_outcome not in \('success', 'failure', 'denied'\)/i);
-    // enterprise_audit_events.severity CHECK (0076) — deliberately NARROWER than
-    // security_audit_logs' 7-value superset from 0032.
     expect(executable).toMatch(/p_severity not in \('info', 'warning', 'critical'\)/i);
     expect(executable).toMatch(/raise exception/i);
   });
@@ -108,7 +83,6 @@ describe('0087 enterprise audit write migration — privileges stay fail-closed'
   });
 
   it('does not touch the already-applied 0076 objects', () => {
-    // No re-definition of the table, its read policy, or its RLS toggles.
     expect(executable).not.toMatch(/create table[\s\S]{0,60}enterprise_audit_events/i);
     expect(executable).not.toMatch(/drop table[\s\S]{0,60}enterprise_audit_events/i);
     expect(executable).not.toMatch(/enterprise_audit_events_admin_read/i);
@@ -127,14 +101,12 @@ describe('0087 enterprise audit write migration — numbering and rehearsal', ()
       .sort((a, b) => a - b);
 
     expect(numbered).toContain(87);
-    // Exactly one migration may claim each number.
     expect(numbered.filter((n) => n === 87)).toHaveLength(1);
   });
 
   it('carries the manual Neon-branch rehearsal checklist, since vitest cannot prove RLS', () => {
     expect(migration).toMatch(/VERIFICATION/i);
     expect(migration).toMatch(/throwaway Neon BRANCH/i);
-    // The three directions that actually matter.
     expect(migration).toMatch(/set role app_rls;/i);
     expect(migration).toMatch(/permission denied/i);
   });

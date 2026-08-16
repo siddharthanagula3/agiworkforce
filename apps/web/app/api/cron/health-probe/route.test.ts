@@ -1,9 +1,3 @@
-/**
- * The probe is the only thing that turns a failing health check into a message
- * a human receives. Two properties matter more than the happy path: it must not
- * page for a Stripe-only degradation as if the platform were down, and it must
- * NOT report success when the alert never left the building.
- */
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -57,9 +51,6 @@ beforeEach(() => {
 });
 
 describe('health probe schedule', () => {
-  // A probe nothing invokes is the exact defect this route was written to close,
-  // so the registration is asserted rather than assumed. The root vercel.json is
-  // the only cron registry — the Vercel project's Root Directory is the repo root.
   const crons = (
     JSON.parse(readFileSync(resolve(process.cwd(), '../../vercel.json'), 'utf8')) as {
       crons?: Array<{ path: string; schedule: string }>;
@@ -69,10 +60,6 @@ describe('health probe schedule', () => {
   it('registers the probe on a daily schedule the Hobby plan accepts', () => {
     const entry = crons?.find((cron) => cron.path === '/api/cron/health-probe');
     expect(entry).toBeDefined();
-    // Daily, and every field before the day-of-month must be a fixed value:
-    // Hobby REJECTS the whole deploy for any sub-daily cron
-    // (PROD-VERCEL-DEPLOY-TOPOLOGY-01), which would take the site down to
-    // improve its monitoring. Tighten only after the Pro upgrade.
     expect(entry?.schedule).toMatch(/^\d+ \d+ \* \* \*$/u);
   });
 });
@@ -149,8 +136,6 @@ describe('GET /api/cron/health-probe', () => {
 
     const response = await GET(req());
 
-    // 500 is the point: a silent 200 here would be an alerting path that
-    // reports success while the incident goes unread.
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({
       alerted: true,
@@ -160,10 +145,6 @@ describe('GET /api/cron/health-probe', () => {
   });
 
   it('pages when a dependency hangs instead of stalling until the platform kills it', async () => {
-    // The likeliest outage this probe exists for: Neon or Stripe stops
-    // answering rather than refusing. Without the race the invocation is
-    // terminated mid-await and NO mail is sent — a silent failure of the one
-    // path that reaches a human.
     vi.useFakeTimers();
     try {
       mocks.runHealthChecks.mockImplementation(() => new Promise(() => {}));
@@ -187,8 +168,6 @@ describe('GET /api/cron/health-probe', () => {
   });
 
   it('surfaces the missing-variable count when the environment check fails', async () => {
-    // health-check.ts withholds the NAMES as an information-disclosure risk, so
-    // the count is the only detail an environment outage can carry.
     mocks.runHealthChecks.mockResolvedValue({
       status: 'unhealthy',
       timestamp: '2026-08-09T06:15:00.000Z',

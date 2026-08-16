@@ -1,17 +1,3 @@
-/**
- * @file Client registrations, keyed by authorization-server issuer (0115).
- *
- * A client registration is a property of (this deployment, that authorization
- * server) — not of a user. Two users connecting to the same MCP server share
- * one registration. Keying by issuer rather than by connector is what makes
- * that sharing correct: several catalog connectors can sit behind one vendor's
- * authorization server, and registering separately for each would be both
- * wasteful and, for servers that rate-limit dynamic registration, fragile.
- *
- * Nothing here decides HOW a client_id was obtained; `mcp-oauth-provider.ts`
- * owns that order (pre-registered → CIMD → dynamic registration). This module
- * only persists the outcome so the next connect reuses it.
- */
 
 import 'server-only';
 
@@ -29,12 +15,6 @@ function isUndefinedTable(error: unknown): boolean {
   );
 }
 
-/**
- * Raised when 0115 has not been applied in this deployment. Callers translate
- * it into "discovery-based connectors are unavailable here" rather than a
- * generic failure, because the difference is actionable: it means run the
- * migration, not debug the vendor.
- */
 export class McpOAuthClientStoreUnavailableError extends Error {
   constructor() {
     super('MCP OAuth client storage is not available in this environment');
@@ -47,7 +27,6 @@ export type McpClientRegistrationMethod = 'cimd' | 'dynamic';
 export interface McpOAuthClientRecord {
   issuer: string;
   clientId: string;
-  /** Null for CIMD (the identity is a URL) and for public dynamic clients. */
   clientSecret: string | null;
   registrationMethod: McpClientRegistrationMethod;
   clientMetadataUrl: string | null;
@@ -77,10 +56,6 @@ export async function getMcpOAuthClient(issuer: string): Promise<McpOAuthClientR
 
     const expiresAt = row.client_secret_expires_at ? new Date(row.client_secret_expires_at) : null;
 
-    // An expired client secret cannot authenticate at the token endpoint, so a
-    // registration holding one is worse than none: reusing it produces an
-    // `invalid_client` the user cannot act on, whereas reporting it absent
-    // makes the caller register again.
     if (expiresAt !== null && expiresAt.getTime() <= Date.now()) return null;
 
     return {
@@ -127,12 +102,6 @@ export async function saveMcpOAuthClient(record: McpOAuthClientRecord): Promise<
   }
 }
 
-/**
- * Forget a registration. Called when an authorization server rejects the
- * client we hold — a dynamically registered client can be garbage-collected by
- * the vendor, and continuing to present a client_id it no longer recognises
- * fails every subsequent connect until the row is cleared.
- */
 export async function deleteMcpOAuthClient(issuer: string): Promise<void> {
   const db = getNeonDb();
   try {

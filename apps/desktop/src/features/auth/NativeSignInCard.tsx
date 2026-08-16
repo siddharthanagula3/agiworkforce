@@ -1,25 +1,3 @@
-/**
- * Native in-app sign-in for AGI Desktop.
- *
- * Replaces the device-authorization child window. That window carried no Clerk
- * browser cookie, so its approval button could never resolve ("Checking…"
- * forever), it rendered unstyled, and a backend 500 reached the user as "AGI
- * Cloud rejected the device sign-in request" — blaming the account for a server
- * fault. Desktop ships a browser engine; it can authenticate the user itself.
- *
- * What is native and what is not:
- * - Email + password and email one-time code run entirely in this form.
- * - Multi-factor (TOTP, SMS, backup code) runs entirely in this form.
- * - Password reset and account creation are refused HERE and handed to the web
- *   app with a visible button. They are separate ceremonies and half-building
- *   them is exactly the failure this work removes.
- * - Social/SSO opens the system browser, because Google, Microsoft, and Apple
- *   all refuse OAuth inside embedded webviews. It shows a pending state with a
- *   cancel, and returns through the `agiworkforce://sso-callback` deep link.
- *
- * Every failure renders its real cause. A 5xx is stated as a service fault and
- * never as a rejection.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, ExternalLink, Loader2, Lock, LogIn, Mail, ShieldCheck } from 'lucide-react';
@@ -66,7 +44,6 @@ interface SsoPending {
   signIn: ClerkSignIn;
 }
 
-/** A second factor Clerk can actually collect in this form. */
 const SUPPORTED_SECOND_FACTORS = new Set(['totp', 'phone_code', 'backup_code']);
 
 function secondFactorLabel(factor: ClerkSecondFactor): string {
@@ -84,15 +61,6 @@ function secondFactorLabel(factor: ClerkSecondFactor): string {
   }
 }
 
-/**
- * Turn any thrown value into the sentence the user should read.
- *
- * `ClerkAuthError` and `NativeSignInExchangeError` already carry honest,
- * specific text (including the server-fault wording for 5xx), so they are
- * passed through verbatim. Only a genuinely unknown throw gets a generic
- * message, and even that one says it is unexpected rather than blaming the
- * account.
- */
 function describeFailure(error: unknown): string {
   if (error instanceof ClerkAuthError || error instanceof NativeSignInExchangeError) {
     return error.message;
@@ -127,9 +95,6 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
   const ssoPendingRef = useRef<SsoPending | null>(null);
   ssoPendingRef.current = ssoPending;
 
-  // The auth store holds WHY a previous session ended ("…has expired",
-  // "…no longer authorized"). Showing only this attempt's error would turn a
-  // revoked session into an indistinguishable fresh sign-in prompt.
   const displayedError = error ?? storeAuthError;
 
   useEffect(() => {
@@ -144,12 +109,10 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     clearStoreError();
   }, [clearStoreError]);
 
-  /** Common tail: Clerk session → durable AGI Cloud credential → app state. */
   const adoptClerkSession = useCallback(
     async (sessionId: string) => {
       const clerkSessionToken = await createSessionToken(sessionId);
       const credential = await exchangeClerkSessionForCloudCredential(clerkSessionToken);
-      // The Clerk client credential has done its job; do not keep it around.
       resetClerkClient();
       const result = await completeNativeSignIn({
         accessToken: credential.accessToken,
@@ -164,7 +127,6 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     [completeNativeSignIn, onSuccess],
   );
 
-  /** Route a Clerk sign-in resource to the step that can advance it. */
   const applySignInState = useCallback(
     async (next: ClerkSignIn) => {
       setSignIn(next);
@@ -180,7 +142,6 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
         );
         const chosen = usable.find((factor) => factor.strategy === 'totp') ?? usable[0] ?? null;
         if (!chosen) {
-          // Do not strand the user in a code box no factor can satisfy.
           setError(
             'This account requires a second factor AGI Desktop cannot collect yet. Finish signing in through your browser.',
           );
@@ -198,7 +159,6 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
       }
 
       if (next.status === 'needs_new_password') {
-        // Refused on purpose, with a real way forward.
         setStep('password_reset_required');
         return;
       }
@@ -241,7 +201,6 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     setBusy('password');
     try {
       const created = await createPasswordSignIn(email.trim(), password);
-      // Clear the password from component state the moment Clerk has it.
       setPassword('');
       await applySignInState(created);
     } catch (attemptError) {
@@ -317,11 +276,6 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
     }
   }, [applySignInState, beginAttempt, busy, code, secondFactor, signIn]);
 
-  /* ---------------------------------------------------------------- */
-  /* Social / SSO — the one hop out of the app, with a visible pending */
-  /* state and a cancel.                                              */
-  /* ---------------------------------------------------------------- */
-
   const startSocial = useCallback(
     async (strategy: string, label: string) => {
       if (busy || ssoPending) return;
@@ -395,10 +349,6 @@ export function NativeSignInCard({ onSuccess }: NativeSignInCardProps) {
       window.removeEventListener('cloud-sso-error', onCallbackError);
     };
   }, [completeNativeSignIn, onSuccess]);
-
-  /* ---------------------------------------------------------------- */
-  /* Fallback: the original browser-approval device flow.             */
-  /* ---------------------------------------------------------------- */
 
   const signInThroughBrowser = useCallback(async () => {
     if (busy) return;

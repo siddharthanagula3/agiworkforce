@@ -11,18 +11,9 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { pseudonymizeIdentifier } from '@/lib/server/pseudonymize';
 
-// RFC 8628 device-code START. Mirrors services/api-gateway deviceAuth.ts `/code`
-// but in apps/web's Neon (raw SQL) conventions, so the CLI can complete login
-// against the web origin without the (unreachable) api-gateway host.
-//
-// Unauthenticated by design: the CLI has no session yet. The minted code is
-// inert until a signed-in user approves it at /auth/device, which is the trust
-// anchor. No invite/subscription gate here — login is open; cloud-MODEL access
-// is gated separately at inference time, not at login.
-
 export const runtime = 'nodejs';
 
-const DEVICE_CODE_EXPIRES_SECONDS = 900; // 15 min
+const DEVICE_CODE_EXPIRES_SECONDS = 900;
 const POLL_INTERVAL_SECONDS = 5;
 const DEVICE_SURFACES = {
   cli: { name: 'AGI CLI', type: 'cli' },
@@ -54,10 +45,9 @@ const DEVICE_AUTHORIZATION_SCOPES = [
 ] as const;
 
 // XXXX-XXXX user code; excludes ambiguous 0/O/1/I/L for readability.
-const USER_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // 31 chars
+const USER_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const USER_CODE_PATTERN = /^[A-Z0-9]{4}-[A-Z0-9]{4}$/;
 
-/** Rejection-sampled to avoid modulo bias (largest multiple of 31 in a byte = 248). */
 function generateUserCode(): string {
   const len = USER_CODE_ALPHABET.length;
   const limit = 256 - (256 % len);
@@ -107,7 +97,6 @@ async function handleDeviceCodeStart(request: NextRequest): Promise<NextResponse
     user_code: userCode,
     surface,
   });
-  // Correlation id only — never log the raw device_code (it is the poll secret).
   const deviceRef = pseudonymizeIdentifier(deviceCode, 'device-code', 12);
   logger.info({ deviceRef, surface }, 'Device code issued');
 
@@ -128,8 +117,6 @@ async function handleDeviceCodeLookup(request: NextRequest): Promise<NextRespons
   const rateLimitResponse = await withRateLimit(request, 'device-link');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Device codes are short and user-entered. Requiring the signed-in browser
-  // session prevents this lookup from becoming an enumeration surface.
   await getClerkAuthUser(request);
 
   const userCode = new URL(request.url).searchParams.get('user_code')?.trim().toUpperCase() ?? '';
@@ -173,8 +160,6 @@ async function handleDeviceCodeLookup(request: NextRequest): Promise<NextRespons
     );
   }
 
-  // Resolve through the server-owned surface catalog instead of reflecting the
-  // query-string hint or arbitrary database copy into a security consent UI.
   const registeredDevice = Object.values(DEVICE_SURFACES).find(
     (device) => device.type === record.device_type,
   );

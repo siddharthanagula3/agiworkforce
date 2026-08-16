@@ -122,9 +122,6 @@ export function parseCronExpression(expression: string): ParsedCronExpression {
     ),
   };
 
-  // With both DOM and DOW restricted, standard cron uses OR semantics, so a
-  // valid weekday can still make `31 2 1` executable. With wildcard DOW, the
-  // requested day must physically exist in at least one selected month.
   if (!parsed.dayOfMonth.wildcard && parsed.dayOfWeek.wildcard) {
     const canOccur = parsed.month.sorted.some((month) =>
       parsed.dayOfMonth.sorted.some((day) => day <= maxDaysInMonth(month)),
@@ -247,10 +244,6 @@ function nextCronOccurrence(expression: string, timezone: string, after: Date): 
     }
 
     if (cron.minute.values.has(parts.minute)) {
-      // A DST fall-back repeats a wall-clock hour. One schedule occurrence is
-      // one wall-clock minute, so a candidate must be later in local wall time,
-      // not merely later in UTC. This also skips a repeated time that was
-      // already passed before the clock moved backward.
       if (compareLocalMinute(parts, originParts) > 0) return candidate;
     }
     candidate = new Date(
@@ -296,25 +289,10 @@ export function getNextExecutionAt(timing: ScheduleTiming, after: Date, now: Dat
   return nextCronOccurrence(expression, timing.timezone, searchAfter);
 }
 
-/**
- * Due schedules are only swept when the platform's `/api/cron/run-schedules`
- * entry in `vercel.json` fires. A task can therefore never run more often than
- * that sweep, whatever cadence the user asks for. Accepting a finer cadence
- * would be a promise the platform cannot keep.
- *
- * Pinned to `vercel.json` by `schedule-cadence.test.ts` — if the deployed cron
- * gets faster, that test fails until this constant follows it.
- */
 export const SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-/** Occurrences to sample when measuring the tightest gap a cron can produce. */
 const CADENCE_SAMPLE_OCCURRENCES = 8;
 
-/**
- * Smallest gap between consecutive firings, or null when fewer than two
- * occurrences exist inside the sampled horizon (a schedule that rare is always
- * deliverable).
- */
 function localWallClockMs(parts: LocalDateParts): number {
   return Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute);
 }
@@ -337,15 +315,8 @@ function tightestCronGapMs(expression: string, timezone: string, from: Date): nu
     try {
       next = nextCronOccurrence(expression, timezone, previous);
     } catch {
-      // No further occurrence inside the supported horizon; what we have is the
-      // whole story.
       break;
     }
-    // Measure recurring cron cadence in its configured wall clock. A normal
-    // once-daily schedule is 23 or 25 elapsed hours across DST, but it still
-    // has exactly one occurrence per local calendar day and is deliverable by
-    // the daily sweep. Twice-daily/hourly crons retain their shorter wall-clock
-    // gap and remain rejected.
     const nextLocal = localParts(formatter, next);
     const gap = localWallClockMs(nextLocal) - localWallClockMs(previousLocal);
     if (tightest === null || gap < tightest) tightest = gap;
@@ -355,22 +326,6 @@ function tightestCronGapMs(expression: string, timezone: string, from: Date): nu
   return tightest;
 }
 
-/**
- * Reject a cadence the sweep cannot deliver, so the product never shows an
- * availability it does not have.
- *
- * Deliberately NOT called from `getNextExecutionAt`: that function also runs on
- * the read/finalize path, where a throw escapes `processClaimedScheduleRun` and
- * aborts the entire batch for every other user. This belongs at the write
- * boundary only, so rows created under the old contract keep running.
- */
-/**
- * The sweep cadence in words, derived from `SWEEP_INTERVAL_MS` so the refusal
- * message cannot outlive the constant. The deployed cron is currently daily
- * because the production Vercel Hobby plan rejects sub-daily cron expressions.
- * When that deployment constraint changes, the root cron and this constant must
- * move together.
- */
 export function describeSweepCadence(): { cadence: string; minimum: string } {
   const hours = SWEEP_INTERVAL_MS / (60 * 60 * 1000);
   if (hours >= 24) {

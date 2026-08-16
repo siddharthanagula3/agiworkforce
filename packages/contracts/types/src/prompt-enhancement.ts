@@ -28,15 +28,6 @@
  * ```
  */
 
-/**
- * Complexity level of a prompt or task.
- *
- * Used to estimate required model capabilities and routing decisions.
- *
- * - `Simple`: Basic queries, simple code generation
- * - `Moderate`: Multi-step tasks, medium complexity code
- * - `Complex`: Advanced reasoning, large-scale generation
- */
 export type Complexity = 'Simple' | 'Moderate' | 'Complex';
 
 /**
@@ -51,19 +42,12 @@ export type Complexity = 'Simple' | 'Moderate' | 'Complex';
  * ```
  */
 export enum UseCase {
-  /** Workflow automation and scripting tasks */
   Automation = 'Automation',
-  /** Code generation, debugging, and refactoring */
   Coding = 'Coding',
-  /** Document creation and editing (Word, Excel, PDF) */
   DocumentCreation = 'DocumentCreation',
-  /** Web search and information retrieval */
   Search = 'Search',
-  /** Image generation */
   ImageGen = 'ImageGen',
-  /** Video generation (Veo3, etc.) */
   VideoGen = 'VideoGen',
-  /** General question answering and chat */
   GeneralQA = 'GeneralQA',
 }
 
@@ -80,19 +64,12 @@ export enum UseCase {
  * ```
  */
 export enum APIProvider {
-  /** Anthropic Claude models */
   Claude = 'Claude',
-  /** OpenAI GPT models */
   GPT = 'GPT',
-  /** Google Gemini models */
   Gemini = 'Gemini',
-  /** Perplexity for search-augmented tasks */
   Perplexity = 'Perplexity',
-  /** Local Ollama models */
   Ollama = 'Ollama',
-  /** Google Veo for video generation */
   Veo3 = 'Veo3',
-  /** OpenAI GPT Image for image generation */
   GPTImage = 'GPTImage',
 }
 
@@ -124,40 +101,26 @@ export enum APIProvider {
  * ```
  */
 export interface EnhancedPrompt {
-  /** The original user prompt */
   original: string;
 
-  /** Enhanced version with additional context and clarity */
   enhanced: string;
 
-  /** Detected use case category */
   useCase: UseCase;
 
-  /** Confidence score (0-1) for the use case detection */
   confidence: number;
 
-  /** Recommended API provider for this prompt */
   suggestedProvider: APIProvider;
 
-  /** Optional contextual information extracted or inferred */
   context?: {
-    /** Programming language if coding task */
     language?: string;
-    /** Framework or library if applicable */
     framework?: string;
-    /** Domain or subject area */
     domain?: string;
-    /** Estimated complexity level */
     complexity?: Complexity;
   };
 
-  /** Additional metadata about the enhancement */
   metadata?: {
-    /** Number of tokens added during enhancement */
     tokensAdded?: number;
-    /** Explanation of why the prompt was enhanced this way */
     enhancementReason?: string;
-    /** Alternative providers that could also work */
     alternativeProviders?: APIProvider[];
   };
 }
@@ -185,25 +148,18 @@ export interface EnhancedPrompt {
  * ```
  */
 export interface APIRoute {
-  /** Selected API provider */
   provider: APIProvider;
 
-  /** Explanation for why this provider was chosen */
   rationale: string;
 
-  /** Estimated cost in USD for the request */
   estimatedCost?: number;
 
-  /** Estimated latency in milliseconds */
   estimatedLatency?: number;
 
-  /** Fallback providers if the primary fails */
   fallbacks: APIProvider[];
 
-  /** Specific model to use (if provider supports multiple models) */
   model?: string;
 
-  /** Provider-specific configuration */
   config?: Record<string, unknown>;
 }
 
@@ -223,16 +179,12 @@ export interface APIRoute {
  * ```
  */
 export interface PromptEnhancementResult {
-  /** The enhanced prompt with context */
   prompt: EnhancedPrompt;
 
-  /** Recommended API routing */
   route: APIRoute;
 
-  /** ISO 8601 timestamp of when enhancement was performed */
   timestamp: string;
 
-  /** Time taken for enhancement in milliseconds */
   processingTime: number;
 }
 
@@ -256,23 +208,16 @@ export interface PromptEnhancementResult {
  * ```
  */
 export interface UseCaseDetection {
-  /** Primary detected use case */
   useCase: UseCase;
 
-  /** Confidence score (0-1) for the primary use case */
   confidence: number;
 
-  /** Keywords that influenced the detection */
   keywords: string[];
 
-  /** Whether the prompt is ambiguous (multiple possible use cases) */
   ambiguous: boolean;
 
-  /** Alternative use cases with their confidence scores */
   alternatives?: Array<{
-    /** Alternative use case */
     useCase: UseCase;
-    /** Confidence score for this alternative */
     confidence: number;
   }>;
 }
@@ -299,34 +244,24 @@ export interface UseCaseDetection {
  * ```
  */
 export interface ProviderCapabilities {
-  /** The API provider */
   provider: APIProvider;
 
-  /** Use cases this provider is good at */
   supportedUseCases: UseCase[];
 
-  /** Maximum context window size in tokens */
   maxTokens: number;
 
-  /** Whether the provider supports streaming responses */
   supportsStreaming: boolean;
 
-  /** Whether the provider supports function/tool calling */
   supportsFunctionCalling: boolean;
 
-  /** Whether the provider supports image inputs */
   supportsVision: boolean;
 
-  /** Cost per 1000 input tokens in USD */
   costPerKInput: number;
 
-  /** Cost per 1000 output tokens in USD */
   costPerKOutput: number;
 
-  /** Average latency in milliseconds */
   avgLatency: number;
 
-  /** Quality score (0-1) based on benchmarks */
   qualityScore: number;
 }
 
@@ -352,19 +287,14 @@ export interface ProviderCapabilities {
  * ```
  */
 export interface PromptEnhancementConfig {
-  /** Whether prompt enhancement is enabled globally */
   enabled: boolean;
 
-  /** Minimum confidence score (0-1) to apply enhancement */
   confidenceThreshold: number;
 
-  /** Prefer local/Ollama models over cloud providers when possible */
   preferLocal: boolean;
 
-  /** Maximum cost per request in USD (requests exceeding this are rejected) */
   maxCostPerRequest?: number;
 
-  /** Maximum acceptable latency in milliseconds */
   maxLatency?: number;
 
   /**

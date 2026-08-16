@@ -73,10 +73,6 @@ export function ScheduleForm({
   onSubmit,
   onCancel,
 }: ScheduleFormProps) {
-  // New schedules expose only deliverable units. An existing legacy interval
-  // keeps its currently selected unit visible so a name/description edit never
-  // renders an invalid empty select; choosing a different sub-daily cadence is
-  // still blocked by validation.
   const visibleIntervalUnits = INTERVAL_UNITS.filter(
     (unit) => unit.ms >= SWEEP_INTERVAL_MS || unit.value === draft.intervalUnit,
   );

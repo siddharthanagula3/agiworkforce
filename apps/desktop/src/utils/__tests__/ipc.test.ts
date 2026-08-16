@@ -1,19 +1,9 @@
-/**
- * The renderer-side IPC allowlist is only worth having if it stays equal to the
- * Rust `generate_handler!` registry and if the modules that talk to Rust go
- * through it. Both properties failed silently before: 200 registered commands
- * were rejected as UNKNOWN_COMMAND, six prefixes and three names matched
- * nothing, and the 178 modules that invoke through `lib/tauri-mock` reached the
- * official Tauri API without any check at all.
- */
 
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
-// The repository's own lexical parser for the registry block: it strips
-// comments, so a commented-out registration cannot inflate the expected set.
 // @ts-expect-error -- guardrail script, JavaScript with no type declarations
 import { extractRegisteredCommands } from '../../../scripts/check-wiring.mjs';
 
@@ -43,11 +33,6 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/**
- * Every command name literal passed to the `invoke` this module exports, found
- * by scanning the production sources that import it. Matches both `invoke('x')`
- * and the generic form `invoke<T>('x')`.
- */
 function commandsInvokedThroughUtilsIpc(): Set<string> {
   const commands = new Set<string>();
 
@@ -89,11 +74,6 @@ describe('COMMAND_TIMEOUTS keys off real commands', () => {
     expect(unregistered).toEqual([]);
   });
 
-  // A registered name is not enough: the table is read only by this module's own
-  // `invoke`, and almost nothing imports it. An entry for a command that reaches
-  // Rust through `lib/tauri-mock` instead is inert however correct its spelling,
-  // which is what the auth/chat/terminal/file_read entries were — they are
-  // deleted, not renamed. Derived from source so it cannot go stale.
   it('overrides only commands that can reach this module', () => {
     const reachable = commandsInvokedThroughUtilsIpc();
     expect(reachable.size).toBeGreaterThan(0);
@@ -124,9 +104,6 @@ describe('lib/tauri-mock enforces the allowlist on the native path', () => {
     vi.resetModules();
     (window as unknown as Record<string, unknown>)['__TAURI_INTERNALS__'] = { invoke: vi.fn() };
     try {
-      // src/test/setup.ts replaces this module with `{ invoke: vi.fn() }`, and
-      // vi.resetModules() re-runs that factory, so re-import it here rather
-      // than holding a reference from the previous module graph.
       const core = await import('@tauri-apps/api/core');
       const tauriInvoke = vi.mocked(core.invoke);
       tauriInvoke.mockReset();

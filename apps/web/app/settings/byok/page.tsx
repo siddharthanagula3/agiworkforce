@@ -1,13 +1,3 @@
-/**
- * /settings/byok · API keys (BYOK) settings section.
- *
- * Shows which deployment-managed provider keys are configured (presence only,
- * never value). Hosted Web does not accept or store per-account provider keys;
- * user-managed BYOK stays on Desktop, CLI, and VS Code.
- *
- * Server component: passes static provider list to client EnvKeyStatusList
- * which fetches /api/byok/env-key-status at render time.
- */
 
 import Link from 'next/link';
 import { BYOK_PROVIDERS } from '@/lib/byok-providers';

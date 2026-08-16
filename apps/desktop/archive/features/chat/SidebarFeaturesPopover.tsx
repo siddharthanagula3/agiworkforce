@@ -1,10 +1,3 @@
-/**
- * SidebarFeaturesPopover
- *
- * Collapses sidebar nav items into a categorized 2-column popover grid.
- * The 4 most-used items (Research, Terminal, Canvas, MCP Tools) are promoted
- * to direct links in the sidebar — they are intentionally absent here.
- */
 import {
   Calendar,
   Clock,
@@ -46,11 +39,8 @@ interface NavItem {
   icon: LucideIcon;
   iconBg: string;
   iconColor: string;
-  /** If set, calls setActiveView with this value */
   view?: ActiveView;
-  /** If set, calls the matching callback instead of setActiveView */
   action?: string;
-  /** Only shown when this condition is truthy (default: true) */
   visible?: boolean;
 }
 
@@ -72,13 +62,8 @@ interface SidebarFeaturesPopoverProps {
   onToggleArtifacts?: () => void;
   onOpenMcpWorkspace?: () => void;
   onOpenMcpBundles?: () => void;
-  /** Controlled open state — when provided, the popover is externally controlled */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  /**
-   * When true, renders the trigger as a full-width sidebar row (icon + "More" label)
-   * instead of the default icon-only button.
-   */
   triggerAsRow?: boolean;
 }
 

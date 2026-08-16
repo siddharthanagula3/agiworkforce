@@ -25,12 +25,6 @@ function environmentLabel(): string {
   return process.env['VERCEL_ENV'] ?? process.env['NODE_ENV'] ?? 'unknown';
 }
 
-/**
- * Alert the monitored support channel when a video billing settlement is
- * immediately terminal. Pending settlements remain owned by the normal credit
- * reconciler; succeeded settlements need no human. No user identifiers or
- * amounts leave the database in this operational alert.
- */
 export async function deliverPendingVideoIncidentAlert(
   db: DatabaseAdapter,
   job: VideoGenerationJob,
@@ -41,8 +35,6 @@ export async function deliverPendingVideoIncidentAlert(
   const claimToken = randomUUID();
   const claimed = await claimVideoIncidentAlert({ db, jobId: job.id, claimToken });
   if (!claimed) {
-    // A concurrent owner may have completed delivery between the caller's
-    // snapshot and this claim. Only a durable delivered marker is success.
     const current = await getVideoGenerationJobForSystem(db, job.id);
     return current?.incidentAlertStatus === 'delivered';
   }
@@ -87,9 +79,6 @@ export async function deliverPendingVideoIncidentAlert(
       ...(error ? { error } : {}),
     });
   } catch (recordError) {
-    // If the commit succeeded but its response was lost, the row is the source
-    // of truth. A provider idempotency key protects the subsequent retry when
-    // the write definitely did not commit.
     const current = await getVideoGenerationJobForSystem(db, job.id).catch(() => null);
     if (sent.delivered && current?.incidentAlertStatus === 'delivered') return true;
     logger.error(
@@ -219,11 +208,7 @@ export async function deliverDueVideoIncidentAlerts(
   db: DatabaseAdapter,
   limit = 20,
 ): Promise<VideoIncidentAlertSweepSummary> {
-  // Resend may consume two 10-second attempts per alert. Keep one total send
   // per invocation so this safety net fits the shortest deployed function
-  // budget, and prioritize pre-job settlements because no primary Workflow
-  // owns them. Attempt-count ordering in the repository prevents one failing
-  // oldest incident from starving newer obligations.
   const boundedLimit = Math.max(1, Math.min(Math.trunc(limit), 1));
   const settlementIds = await listPendingVideoSettlementIncidentIds(db, boundedLimit);
   const ids =

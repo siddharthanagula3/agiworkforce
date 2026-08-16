@@ -1,10 +1,5 @@
-/**
- * Settings API — typed wrappers for settings_*, settings_v2_*, and config_hierarchy commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types (matching Rust structs with serde(rename_all = "camelCase")) ----
 
 export interface DefaultModels {
   ollama: string;
@@ -122,8 +117,6 @@ export interface AppSettings {
   [key: string]: unknown;
 }
 
-// ---- Settings V1 Commands ----
-
 export async function settingsLoad(): Promise<Settings> {
   return command<Settings>('settings_load');
 }
@@ -135,8 +128,6 @@ export async function settingsSave(settings: Settings): Promise<void> {
 export async function settingsLoadFromDisk(): Promise<Settings> {
   return command<Settings>('settings_load_from_disk');
 }
-
-// ---- Settings V2 Commands ----
 
 export async function settingsV2Get(key: string): Promise<unknown> {
   return command<unknown>('settings_v2_get', { key });
@@ -173,8 +164,6 @@ export async function settingsV2ClearCache(): Promise<SettingsResponse> {
 export async function settingsV2ListAll(): Promise<GetSettingsResponse> {
   return command<GetSettingsResponse>('settings_v2_list_all');
 }
-
-// ---- Config Hierarchy Commands ----
 
 export async function getResolvedConfig(projectRoot?: string): Promise<ProjectConfig> {
   return command<ProjectConfig>('get_resolved_config', { projectRoot });

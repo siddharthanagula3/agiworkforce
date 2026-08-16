@@ -5,16 +5,6 @@ import { WebChatRoot } from '@/features/chat/components/WebChatRoot';
 import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
 import { requireCurrentTermsAcceptance } from '@/lib/server/require-current-terms';
 
-/**
- * The root domain is auth-aware, the same shape chatgpt.com uses: a signed-in
- * visitor gets the product, everyone else gets the landing page.
- *
- * This is deliberately a branch rather than a redirect. AGI ships one domain,
- * so `/` is also the primary indexed marketing page (sitemap priority 1.0).
- * Crawlers are always signed out and therefore always receive the marketing
- * render with the metadata below, which is why moving the landing to a subpath
- * — the other way to put chat on the root — was not taken.
- */
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {

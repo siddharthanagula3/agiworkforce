@@ -44,11 +44,6 @@ interface CapabilityRowMeta {
   tone: CapabilityTone;
   label: string;
   description: string;
-  /**
-   * Status pill text. Omitted for rows that only navigate: a pill reads as
-   * live state, so a row with no state to report renders a bare chevron
-   * rather than a constant that can go stale against the screen it opens.
-   */
   value?: string;
   href?: string;
   toggle?: ToggleCapability;
@@ -59,19 +54,12 @@ interface CapabilitySection {
   rows: CapabilityRowMeta[];
 }
 
-/**
- * Pill-sized labels for the stored approval mode. The full sentences belong to
- * the Action approvals screen; the authority for the value itself is
- * `useSettingsStore.autoApproveMode`, which is what the chat approval card
- * actually reads at run time.
- */
 const APPROVAL_MODE_LABELS: Record<AutoApproveMode, string> = {
   ask: 'Ask',
   smart: 'Low-risk',
   full: 'All actions',
 };
 
-/** Pill labels for `chatViewStore.toolAccess`; the screen owns the full copy. */
 const TOOL_ACCESS_LABELS: Record<ToolAccess, string> = {
   auto: 'Auto',
   'on-demand': 'On demand',
@@ -83,7 +71,6 @@ function makeSections(input: {
   appMode: MobileChatAppMode;
   autoApproveMode: AutoApproveMode;
   toolAccess: ToolAccess;
-  /** Derived from the newest stored memory; null when nothing is stored yet. */
   memoryFreshness: string | null;
 }): CapabilitySection[] {
   const { cloudUnlocked, appMode, autoApproveMode, toolAccess, memoryFreshness } = input;
@@ -112,8 +99,6 @@ function makeSections(input: {
           icon: Brain,
           tone: 'local',
           label: 'Memory',
-          // Freshness is appended only when a stored memory can date it. An
-          // empty store renders no freshness claim rather than a made-up one.
           description: memoryFreshness
             ? `${memoryDescription} ${memoryFreshness}.`
             : memoryDescription,
@@ -152,10 +137,6 @@ function makeSections(input: {
           key: 'code',
           icon: FileCode,
           tone: 'cloud',
-          // One switch, both capabilities — it gates `code_execution` AND
-          // `office_creation` on the wire. Named for what it actually does:
-          // "AGI Code" read as a separate product and gave no hint that turning
-          // it off is why "create a CSV file" fails.
           label: 'Code execution and file creation',
           description: FEATURES.codeExecution
             ? 'Run code in a secure sandbox and create docs, spreadsheets, presentations and PDFs.'
@@ -245,14 +226,9 @@ export default function CapabilitiesScreen() {
   const cloudUnlocked = useWaitlistStore((s) => s.cloudUnlocked);
   const chatFeatures = useChatStore((s) => s.features);
   const setFeature = useChatStore((s) => s.setFeature);
-  // Every badge on this screen has to come from the state it claims to
-  // describe: this screen's whole job is telling the user what the assistant
-  // may do, so a constant rendered inside a status pill is a false statement.
   const appMode = useChatAppModeStore((s) => s.appMode);
   const autoApproveMode = useSettingsStore((s) => s.autoApproveMode);
   const toolAccess = useChatStore((s) => s.toolAccess);
-  // Freshness for the Memory row comes from the real store this screen links
-  // to, read through the same mode-aware facade the Memory screen uses.
   const memoryEntries = useMemoryStore((s) => s.entries);
   const fetchMemories = useMemoryStore((s) => s.fetchMemories);
   useEffect(() => {

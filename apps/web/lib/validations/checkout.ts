@@ -10,18 +10,12 @@ export const PlanTierSchema = z.enum(SELF_SERVE_PAID_PLAN_TIERS);
 
 export const BillingIntervalSchema = z.enum(['monthly', 'yearly']);
 
-/** Plans sold monthly only; a yearly request for these is a client bug, not a price. */
 const MONTHLY_ONLY_PLANS = new Set(['basic', 'max', 'max_15x']);
 
 export const CheckoutRequestSchema = z
   .object({
     plan: PlanTierSchema,
     billingInterval: BillingIntervalSchema,
-    /**
-     * Licensed seat count. REQUIRED for per-seat plans (Team) and REJECTED for
-     * per-account plans, so a seat count can never be silently dropped on a
-     * plan that charges by the seat, nor silently multiply a personal plan.
-     */
     seats: z.number().int().min(MIN_PURCHASABLE_SEATS).max(MAX_PURCHASABLE_SEATS).optional(),
   })
   .strict()
@@ -55,12 +49,6 @@ export const UpgradeApplyRequestSchema = CheckoutRequestSchema.safeExtend({
   previewToken: z.string().min(1).max(4096),
 });
 
-/**
- * The Stripe line-item quantity for a validated request.
- *
- * Per-account plans are always quantity 1: the schema has already refused a
- * seat count on them, so this cannot be used to multiply a personal plan.
- */
 export function resolveCheckoutQuantity(request: {
   plan: string;
   seats?: number | undefined;

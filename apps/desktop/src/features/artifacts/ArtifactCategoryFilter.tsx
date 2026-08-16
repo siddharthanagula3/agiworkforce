@@ -1,16 +1,6 @@
-/**
- * ArtifactCategoryFilter Component
- *
- * Horizontal row of filter pills for browsing artifacts by category.
- * Each pill maps to a subset of ArtifactType values (or "all").
- */
 
 import { Code, Database, FileText, GitBranch, Globe, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-// =============================================================================
-// Types
-// =============================================================================
 
 export type ArtifactCategory = 'all' | 'code' | 'documents' | 'diagrams' | 'web' | 'data' | 'other';
 
@@ -23,10 +13,6 @@ interface ArtifactCategoryFilterProps {
   selected: ArtifactCategory;
   onChange: (category: ArtifactCategory) => void;
 }
-
-// =============================================================================
-// Config
-// =============================================================================
 
 const CATEGORY_CONFIGS: Record<ArtifactCategory, CategoryConfig> = {
   all: {
@@ -68,10 +54,6 @@ const CATEGORY_ORDER: ArtifactCategory[] = [
   'data',
   'other',
 ];
-
-// =============================================================================
-// Component
-// =============================================================================
 
 export function ArtifactCategoryFilter({ selected, onChange }: ArtifactCategoryFilterProps) {
   return (

@@ -1,7 +1,3 @@
-/**
- * GlobalSearchDialog - Search across all chat sessions and messages
- * Provides advanced filtering, result navigation, and search history
- */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -64,13 +60,11 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
   const [isSearching, setIsSearching] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Filters
   const [roleFilter, setRoleFilter] = useState<'all' | 'user' | 'assistant' | 'system'>('all');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [includeArchived, setIncludeArchived] = useState(false);
 
-  // Search history and suggestions
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
   const [popularSearches, setPopularSearches] = useState<PopularSearch[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -96,7 +90,6 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     }
   }, [user?.id]);
 
-  // Load recent and popular searches when dialog opens
   useEffect(() => {
     if (open && user?.id) {
       loadSearchHistory();
@@ -148,7 +141,6 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     }
   }, [user?.id, query, roleFilter, startDate, endDate, includeArchived]);
 
-  // Debounced search with 300ms delay
   useEffect(() => {
     if (!query.trim() || query.length < 2) {
       setResults([]);
@@ -156,12 +148,10 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
       return;
     }
 
-    // Clear previous timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
     }
 
-    // Set new timeout for search (300ms debounce)
     searchTimeoutRef.current = setTimeout(() => {
       handleSearch();
     }, 300);
@@ -173,17 +163,14 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     };
   }, [query, roleFilter, startDate, endDate, includeArchived, handleSearch]);
 
-  // Cleanup when dialog closes or component unmounts
   useEffect(() => {
     if (!open) {
-      // Clear timeout when dialog closes
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = null;
       }
     }
 
-    // Cleanup on unmount
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
@@ -192,25 +179,18 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
   }, [open]);
 
   const handleResultClick = (result: SearchResult) => {
-    // Close dialog first
     onOpenChange(false);
 
-    // Project matches carry the project id in `sessionId` and navigate to the
-    // project page, not a chat session.
     if (result.type === 'project') {
       router.push(`/chat/projects/${result.sessionId}`);
       return;
     }
 
-    // File matches open the Library (no per-file deep link exists yet).
     if (result.type === 'file') {
       router.push('/chat/library');
       return;
     }
 
-    // Navigate to the chat session with optional message scroll target
-    // The messageId is passed as a query parameter that the chat page can use
-    // to scroll to and highlight the specific message after loading
     if (result.messageId) {
       router.push(`/chat/${result.sessionId}?highlightMessage=${result.messageId}`);
     } else {
@@ -237,7 +217,6 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
     if (!match) return text;
 
     try {
-      // Escape special regex characters to prevent errors
       const escapedMatch = match.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const parts = text.split(new RegExp(`(${escapedMatch})`, 'gi'));
       return (
@@ -257,7 +236,6 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
         </>
       );
     } catch (error) {
-      // If regex fails for any reason, return plain text
       console.warn('[GlobalSearch] Highlight failed:', error);
       return text;
     }
@@ -492,7 +470,6 @@ export function GlobalSearchDialog({ open, onOpenChange }: GlobalSearchDialogPro
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : results.length === 0 && !query.trim() && showSuggestions ? (
-              /* Show recent and popular searches when no query */
               <div className="space-y-6">
                 {/* Recent Searches */}
                 {recentSearches.length > 0 && (

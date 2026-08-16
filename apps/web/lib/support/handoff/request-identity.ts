@@ -1,20 +1,3 @@
-/**
- * @file request-identity.ts
- *
- * Resolves WHO is escalating, server-side, for a surface that must work both
- * signed in (web app) and signed out (marketing site).
- *
- * The `ownerSessionKey` returned here is the only thing that ever appears in an
- * ownership predicate. It comes from Clerk when there is a session, and from the
- * `__Host-anon-session-id` cookie otherwise. It is NEVER read from a request
- * body or a query parameter, so a caller cannot name someone else's session.
- *
- * DEV NOTE: `getOrCreateAnonSession` mints a `__Host-` cookie, which browsers
- * only accept over HTTPS. On local plain-HTTP dev the anonymous path therefore
- * mints a fresh owner key per request and a signed-out session cannot be polled.
- * It works in preview and production. This looks like a bug on localhost and is
- * not one.
- */
 
 import 'server-only';
 
@@ -23,13 +6,9 @@ import { getOrCreateAnonSession } from '@/lib/csrf';
 import { logger } from '@/lib/logger';
 
 export interface HandoffRequestIdentity {
-  /** Verified Clerk user id, or null when signed out. */
   userId: string | null;
-  /** Ownership key for every scoped query. */
   ownerSessionKey: string;
-  /** Verified primary email, when the identity provider had one. */
   verifiedEmail: string | null;
-  /** Set this on the response when present, so the anon session persists. */
   newCookie?: string;
 }
 
@@ -45,7 +24,6 @@ async function resolveVerifiedEmail(userId: string): Promise<string | null> {
     ]);
     return user?.primaryEmailAddress?.emailAddress ?? null;
   } catch (error) {
-    // Not fatal: the caller falls back to requiring an explicit contact address.
     logger.warn({ error }, 'Support handoff could not resolve a verified email');
     return null;
   }
@@ -60,7 +38,6 @@ export async function resolveHandoffIdentity(
     const session = await auth();
     userId = session.userId ?? null;
   } catch {
-    // Clerk can throw outside a route-handler context; signed-out is the safe read.
     userId = null;
   }
 

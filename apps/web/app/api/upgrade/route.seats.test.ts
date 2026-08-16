@@ -155,8 +155,6 @@ describe('POST /api/upgrade — Team seat quantity', () => {
   });
 
   it('refuses an active store-owned plan before any Stripe lookup or mutation', async () => {
-    // Authentication reads profiles before the route reads subscriptions; the
-    // fixture must follow the SQL owner or it is consumed by the auth lookup.
     dbMocks.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from subscriptions')) {
         return [
@@ -189,9 +187,6 @@ describe('POST /api/upgrade — Team seat quantity', () => {
   });
 
   it('puts the seat count in the Stripe idempotency key', async () => {
-    // Same subscription, same prices, same proration second, different seat
-    // count: without quantity in the key Stripe replays the first result and the
-    // org gets seats it did not pay for.
     await POST(
       request({
         plan: 'team',
@@ -211,8 +206,6 @@ describe('POST /api/upgrade — Team seat quantity', () => {
   });
 
   it('refuses a preview token issued for a different seat count', async () => {
-    // Forgery guard: previewing 6 seats and applying 200 would charge the
-    // 6-seat proration for a 200-seat subscription.
     const response = await POST(
       request({
         plan: 'team',
@@ -286,8 +279,6 @@ describe('POST /api/upgrade — Team seat quantity', () => {
       }),
     );
 
-    // Reporting success here would tell the buyer they own 20 seats while Stripe
-    // bills 5.
     expect(response.status).toBe(500);
   });
 

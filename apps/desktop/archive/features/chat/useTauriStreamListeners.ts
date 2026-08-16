@@ -1,9 +1,3 @@
-/**
- * useTauriStreamListeners
- *
- * Custom hook that sets up all Tauri event listeners for the chat stream.
- * Extracted from the main useEffect in UnifiedAgenticChat.
- */
 import { useEffect } from 'react';
 import { listen, isCloudWeb, isTauri, invoke as tauriInvoke } from '../../lib/tauri-mock';
 import { invoke as ipcInvoke } from '../../utils/ipc';
@@ -94,11 +88,9 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
     const setupGeneration = ++listenerSetupGenerationRef.current;
     isMountedRef.current = true;
-    // Clear any stale unlisten functions from previous render
     unlistenFnsRef.current = [];
 
     const setupListeners = async () => {
-      // Helper to register unlisten functions as promises resolve
       const registerListener = async (listenerPromise: Promise<() => void>) => {
         try {
           const unlisten = await listenerPromise;
@@ -107,7 +99,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           if (isActiveSetup) {
             unlistenFnsRef.current.push(unlisten);
           } else {
-            // Component unmounted while setting up, clean up immediately
             unlisten();
           }
         } catch (error) {
@@ -443,10 +434,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         });
       };
 
-      /**
-       * Shared stream teardown helper extracted from stream-end and stream-error handlers.
-       * Clears queued updates, abort controller, loading state, tool timeouts, and agent status.
-       */
       const finalizeStream = (
         conversationId: StreamConversationKey,
         finalizedMessageId: string | null,
@@ -484,22 +471,15 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           if (!isMountedRef.current) return;
           markStreamActivity();
 
-          // Create new AbortController for this streaming session
-          // This allows handleStopGeneration to cancel the current stream
           abortControllerRef.current = new AbortController();
 
-          // CHT-005 fix: Register this stream session with conversation-to-message mapping
-          // This prevents race conditions when multiple streams are active
           const messageId = String(payload.message_id);
           activeStreamSessionsRef.current.set(payload.conversation_id, messageId);
 
-          // Stream has started, but we keep isLoading true until stream-end
-          // This allows the UI to show streaming state
           useUnifiedChatStore.getState().setIsLoading(true);
         }),
       );
 
-      // Live status updates: "Connecting...", "Writing response...", "Calling Read(file)..."
       registerListener(
         listen<{
           conversation_id: StreamConversationKey;
@@ -576,7 +556,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           const messageId = String(payload.message_id);
           const currentStreamingId = state.currentStreamingMessageId;
 
-          // CHT-005 fix: Use session tracking for reliable message identification
           const sessionMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
           const targetId = resolveStreamTargetMessageId(
             payload.conversation_id,
@@ -594,9 +573,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           const { finalizedMessageId } = resolution;
           const { hasValidTarget } = resolution;
 
-          // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
-          // This prevents stale stream-end events from one conversation clearing
-          // active loading state for a different in-flight chat
           if (finalizedMessageId) {
             state.updateMessage(
               finalizedMessageId,
@@ -612,16 +588,13 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             );
           }
 
-          // CHT-005 fix: Clean up stream session tracking
           activeStreamSessionsRef.current.delete(payload.conversation_id);
 
-          // AUDIT-STREAM-059 fix: Clear the stream watchdog since we got a valid stream-end
           if (streamWatchdogTimeoutRef.current) {
             clearTimeout(streamWatchdogTimeoutRef.current);
             streamWatchdogTimeoutRef.current = null;
           }
 
-          // Update billing store with new credit info
           if (payload.credits) {
             useBillingStore.getState().updateCredits(payload.credits);
           }
@@ -646,7 +619,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             finalizeStream(payload.conversation_id, finalizedMessageId, 'completed');
           }
 
-          // Auto-TTS: speak the assistant response when the user's last input was voice
           const chatPrefs = useChatPreferencesStore.getState();
           if (
             chatPrefs.lastInputWasVoice &&
@@ -667,7 +639,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
                 .trim();
               if (clean) {
                 tauriInvoke('voice_tts_speak', { text: clean }).catch(() => {
-                  // Fallback to browser SpeechSynthesis when native TTS is unavailable
                   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(clean);
                     utterance.rate = 1.05;
@@ -680,7 +651,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Listen for stream errors
       registerListener(
         listen<{
           conversation_id: StreamConversationKey;
@@ -692,7 +662,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           const messageId = String(payload.message_id);
           const currentStreamingId = state.currentStreamingMessageId;
 
-          // CHT-005 fix: Use session tracking for reliable message identification
           const sessionMessageId = activeStreamSessionsRef.current.get(payload.conversation_id);
           const targetId = resolveStreamTargetMessageId(
             payload.conversation_id,
@@ -702,7 +671,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             !!currentStreamingId &&
             (currentStreamingId === sessionMessageId || currentStreamingId === messageId);
 
-          // AUDIT-STREAM-033 fix: Only clear global state if we have a valid target
           const resolution = resolveTerminalStreamTarget({
             resolvedTargetId: targetId,
             currentStreamingMessageId: currentStreamingId,
@@ -728,10 +696,8 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             );
           }
 
-          // CHT-005 fix: Clean up stream session tracking on error
           activeStreamSessionsRef.current.delete(payload.conversation_id);
 
-          // AUDIT-STREAM-059 fix: Clear the stream watchdog since we got a valid stream-error
           if (streamWatchdogTimeoutRef.current) {
             clearTimeout(streamWatchdogTimeoutRef.current);
             streamWatchdogTimeoutRef.current = null;
@@ -759,12 +725,10 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Pending message event listeners
       registerListener(
         listen<{ id: string; content: string; timestamp: string; conversation_id?: number }>(
           'chat:pending-message-added',
           ({ payload }) => {
-            // BUG-IX-05 fix: route to useChatStore (canonical owner of pending messages)
             useChatStore.getState().addPendingMessage(payload);
           },
         ),
@@ -774,7 +738,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         listen<{ message: { id: string; content: string }; remaining: number }>(
           'chat:pending-message-consumed',
           ({ payload }) => {
-            // BUG-IX-05 fix: route to useChatStore (canonical owner of pending messages)
             useChatStore.getState().removePendingMessage(payload.message.id);
           },
         ),
@@ -782,7 +745,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
 
       registerListener(
         listen<{ count: number }>('chat:pending-messages-cleared', () => {
-          // BUG-IX-05 fix: route to useChatStore (canonical owner of pending messages)
           useChatStore.getState().clearPendingMessages();
         }),
       );
@@ -799,18 +761,13 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Listen for pending messages ready to be processed after stream ends
       registerListener(
         listen<{
           conversation_id: number;
           pending_messages: Array<{ id: string; content: string; timestamp: string }>;
           count: number;
         }>('chat:pending-messages-ready', async ({ payload }) => {
-          // Auto-process pending messages by sending them as follow-up
-          // This creates a seamless experience where queued messages are automatically sent
-          // Process messages sequentially with delays to avoid race conditions
           for (let i = 0; i < payload.pending_messages.length; i++) {
-            // Check if component is still mounted before processing each message
             if (!isMountedRef.current) {
               break;
             }
@@ -818,14 +775,11 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             const pending = payload.pending_messages[i];
             if (!pending) continue;
 
-            // Actually send the pending message as a follow-up
-            // Add delay between messages to avoid race conditions
             if (i > 0) {
               await new Promise((resolve) => setTimeout(resolve, 500));
             }
 
             try {
-              // Dispatch a custom event that ChatInputArea listens to for auto-send
               window.dispatchEvent(
                 new CustomEvent('chat:auto-send-pending', {
                   detail: {
@@ -838,21 +792,18 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
               );
             } catch (err) {
               console.error('[UnifiedAgenticChat] Failed to send pending message:', err);
-              // CHT-002 fix: Show user-visible error for pending message send failure
               toast.error('Failed to send queued message. Please try again.');
             }
           }
         }),
       );
 
-      // Listen for agent thinking state
       registerListener(
         listen<{ agent_id?: string; thinking: boolean; phase?: string; message?: string }>(
           'agent:thinking',
           ({ payload }) => {
             const chatState = useUnifiedChatStore.getState();
 
-            // Update action trail with thinking status
             if (payload.thinking) {
               chatState.addActionTrailEntry({
                 type: 'thinking',
@@ -879,7 +830,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
                   return payload.agent_id === undefined || metadataAgentId === payload.agent_id;
                 }
 
-                // Fallback for stale pre-patch entries that did not tag the source.
                 return payload.agent_id === undefined;
               }) ?? null;
 
@@ -890,7 +840,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         ),
       );
 
-      // Listen for agent finished state
       registerListener(
         listen<{
           agent_id?: string;
@@ -899,7 +848,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           error?: string;
           duration_ms?: number;
         }>('agent:finished', ({ payload }) => {
-          // Update action trail with completion status
           useUnifiedChatStore.getState().addActionTrailEntry({
             type: payload.success ? 'completed' : 'error',
             message: payload.success
@@ -909,8 +857,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             metadata: { duration_ms: payload.duration_ms },
           });
 
-          // Clear any running agent status
-          // Note: agent:finished event may not fire in all cases, so we also clear on tool result
           const currentAgent = useUnifiedChatStore.getState().agentStatus;
           if (currentAgent && currentAgent.status === 'running') {
             useUnifiedChatStore.getState().setAgentStatus({
@@ -924,8 +870,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Listen for extended thinking events (thinking:event from ThinkingState)
-      // event_type: "start" | "delta" | "complete"
       registerListener(
         listen<{
           event_type: 'start' | 'delta' | 'complete';
@@ -964,14 +908,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // AUDIT-APPROVAL-047 fix: Removed duplicate tool:confirmation_required handler.
-      // The tool confirmation flow is now handled exclusively by the runtime activity listeners,
-      // adds approvals to pendingApprovals store. Inline approval components then handle
-      // user responses via useApprovalActions, which correctly routes to either
-      // respond_tool_confirmation (for MCP/tool confirmations) or agent_resolve_approval
-      // (for agent-level approvals).
-
-      // Tool execution event listeners - display tool calls in the UI
       registerListener(
         listen<{
           conversation_id: number;
@@ -992,8 +928,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             payload.message_id,
           );
 
-          // Desktop/Tauri uses the canonical `tool:event` listener for message metadata.
-          // Cloud/web keeps this fallback because `tool:event` is not emitted there.
           if (!isTauri && targetMessageId) {
             const firstTool = payload.tool_calls[0];
             if (firstTool) {
@@ -1036,8 +970,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
               });
             }
 
-            // Guard against dropped/missed `chat:tool-executing` events.
-            // We start a timeout here as a fallback so every running tool resolves.
             scheduleToolExecutionTimeout(
               tc.id,
               normalizedToolName,
@@ -1049,10 +981,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // chat:tool-executing — legacy event, also emitted alongside `tool:event`.
-      // Timeline creation and action trail updates are handled by the canonical
-      // `tool:event` listener in toolStore.ts to avoid duplicate entries.
-      // We only retain the timeout scheduling and stream activity tracking here.
       registerListener(
         listen<{
           conversation_id: number;
@@ -1063,7 +991,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }>('chat:tool-executing', ({ payload }) => {
           markStreamActivity();
           const normalizedToolName = normalizeToolNameForUi(payload.tool_name);
-          // Timeline entry is created by tool:event Started handler in toolStore.
           // Only ensure it exists as a safety net if the tool:event was missed.
           const targetMessageId = resolveStreamTargetMessageId(
             payload.conversation_id,
@@ -1091,7 +1018,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Listen for agent progress events (iteration tracking for OpenClaw-style runs)
       registerListener(
         listen<{
           conversation_id: number;
@@ -1144,8 +1070,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             payload.message_id,
           );
 
-          // Tauri owns message metadata via `tool:event`.
-          // Cloud/web keeps this fallback so the tool card still reaches a terminal state.
           const targetMessageId = resolveStreamTargetMessageId(
             payload.conversation_id,
             payload.message_id,
@@ -1178,8 +1102,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             }
           }
 
-          // Action trail update for completion is handled by tool:event Completed
-          // in toolStore.ts — skip duplicate.  Only clear stale "running" entries
           // as a safety net if tool:event didn't already handle it.
           clearRunningToolTrailEntries(
             useUnifiedChatStore.getState(),
@@ -1188,7 +1110,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           );
 
           if (!isTauri) {
-            // Cloud/web fallback: Tauri owns this via the canonical `tool:event` path.
             const currentAgent = useUnifiedChatStore.getState().agentStatus;
             if (currentAgent && currentAgent.status === 'running') {
               useUnifiedChatStore.getState().setAgentStatus({
@@ -1202,9 +1123,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Keep a narrow agi:tool_stream cancellation listener here only for
-      // local timeout/watchdog cleanup. Runtime activity listeners own the
-      // canonical trail/artifact/tool-stream state updates.
       registerListener(
         listen<{
           event: {
@@ -1218,11 +1136,8 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           if (!isMountedRef.current) return;
           const { event: streamEvent } = event.payload;
 
-          // Mark activity on every AGI tool stream event so the watchdog
-          // doesn't fire during long-running tools (e.g. image generation 30-90s)
           markStreamActivity();
 
-          // Only handle cancelled events for cancellation cleanup
           if (streamEvent.type !== 'cancelled') return;
 
           const cancelledEvent = streamEvent as {
@@ -1232,14 +1147,12 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
             duration_ms: number;
           };
 
-          // Clear any tool execution timeout that might be pending
           clearToolExecutionTimeout(cancelledEvent.tool_id);
 
           // Canonical cancellation state is handled by runtime activity listeners.
         }),
       );
 
-      // Deep Research event listeners
       registerListener(
         listen<{
           task_id: string;
@@ -1250,7 +1163,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
           const executionStore = useExecutionStore.getState();
           const task = executionStore.researchTasks[payload.task_id];
           if (task) {
-            // Update the step status
             const updatedSteps = task.steps.map((step, index) => {
               if (index === payload.step_index || step.id === payload.step_id) {
                 return { ...step, status: 'running' as const, timestamp: Date.now() };
@@ -1363,7 +1275,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Tool progress events — show subtle progress indicators when media tools are processing
       registerListener(
         listen<{
           conversation_id: number;
@@ -1373,7 +1284,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }>('chat:tool-progress', ({ payload }) => {
           if (payload.status !== 'processing_result') return;
 
-          // Find the streaming message for this conversation and surface the progress hint
           const state = useUnifiedChatStore.getState();
           const targetMessageId = resolveStreamTargetMessageId(payload.conversation_id);
           if (!targetMessageId) return;
@@ -1392,7 +1302,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         }),
       );
 
-      // Agent mode tool-blocked events — make policy blocks visible beyond a transient toast.
       registerListener(
         listen<{ tool_name: string; mode: string; hint?: string }>(
           'tool:blocked_by_mode',
@@ -1431,7 +1340,6 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
         ),
       );
 
-      // Agent budget and iteration limit events
       registerListener(
         listen<{
           maxIterations: number;
@@ -1463,63 +1371,48 @@ export function useTauriStreamListeners(config: UseTauriStreamListenersConfig) {
       );
     };
 
-    // Start setting up listeners
     setupListeners().catch((error) => {
       console.error('[UnifiedAgenticChat] Failed to setup listeners:', error);
     });
 
-    // Capture ref values inside the effect for safe cleanup
     const activeStreamSessions = activeStreamSessionsRef.current;
     const toolExecutionTimeouts = toolExecutionTimeoutsRef.current;
 
     return () => {
-      // Mark as unmounted first to prevent new registrations
       isMountedRef.current = false;
 
-      // Clean up RAF — copy ref value to variable to avoid stale closure issues
       // eslint-disable-next-line react-hooks/exhaustive-deps
       const currentRafId = rafIdRef.current;
       if (currentRafId) {
         cancelAnimationFrame(currentRafId);
       }
 
-      // Abort any active streaming to prevent background work after unmount
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
       }
 
-      // Clear stale stream session tracking
       activeStreamSessions.clear();
-      // Bug #305 fix: Clear the live ref directly instead of a snapshot copy.
-      // A snapshot copy clears its own Map but leaves the ref's Map untouched,
-      // causing stale timeouts to persist if the hook re-mounts.
       toolExecutionTimeouts.forEach((timeoutEntry) => {
         clearTimeout(timeoutEntry.softTimeoutId);
         clearTimeout(timeoutEntry.hardTimeoutId);
       });
       toolExecutionTimeouts.clear();
 
-      // Clean up all registered listeners - handle both sync and async unlisten functions
-      // Some Tauri listeners may return promises that need to be caught to avoid unhandled rejections
       const listeners = [...unlistenFnsRef.current];
       unlistenFnsRef.current = [];
 
       listeners.forEach((unlisten) => {
         try {
           const result = unlisten();
-          // Handle async unlisten functions that return promises
           if (result && typeof result === 'object' && 'catch' in result) {
             (result as Promise<void>).catch((error) => {
-              // Suppress "listeners[eventId].handleId" errors - these occur when
-              // the event system is cleaning up during component unmount
               if (!String(error).includes('listeners[eventId]')) {
                 console.warn('[UnifiedAgenticChat] Async listener cleanup warning:', error);
               }
             });
           }
         } catch (error) {
-          // Suppress the specific Tauri internal error during cleanup
           if (!String(error).includes('listeners[eventId]')) {
             console.error('[UnifiedAgenticChat] Error during listener cleanup:', error);
           }

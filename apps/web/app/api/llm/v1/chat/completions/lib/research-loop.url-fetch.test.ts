@@ -1,9 +1,3 @@
-/**
- * Deep-research × url_fetch integration: gathering rounds execute
- * model-emitted url_fetch calls (real executeUrlFetch dispatch with mocked
- * HTTP/DNS), feed the page text back to the model, and dedupe fetched pages
- * INTO the same cumulative x_search_results list as provider search results.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const dnsMocks = vi.hoisted(() => ({ lookup: vi.fn() }));
@@ -38,8 +32,6 @@ import type { ProcessedRequest } from './request-processor';
 
 const streamRequestMock = vi.mocked(buildToolLoopStream);
 const OPENAI_CHAT_MODEL = requireProviderDefaultModel('openai');
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function sseStream(events: unknown[]): ReadableStream {
   const encoder = new TextEncoder();
@@ -122,11 +114,6 @@ beforeEach(() => {
   dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
 });
 
-/**
- * The loop's tool-free planning turn (CAP-045 slice 2) runs before gathering
- * whenever the iteration budget allows it, so every stream chain below queues
- * it first.
- */
 function planStream() {
   return sseStream([contentEvent('["fetch the page", "check the docs"]'), finishEvent()]);
 }
@@ -160,29 +147,22 @@ describe('research loop url_fetch integration', () => {
         runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }),
       );
 
-      // Fetch timeline events with the domain phrase.
       expect(raw).toContain('"name":"url_fetch"');
       expect(raw).toContain('"status_phrase":"Fetching example.com"');
       expect(raw).toContain('"x_tool_result"');
 
-      // The fetched page joined the cumulative source list (position 1 — the
-      // aggregator had no earlier provider-search sources in this run).
       expect(raw).toContain('"x_search_results"');
       expect(raw).toContain('"url":"https://example.com/"');
       expect(raw).toContain('"title":"Example Domain"');
       expect(raw).toContain('"position":1');
 
-      // The synthesis report streamed and the run completed.
       expect(raw).toContain('Report: example.com is a reserved domain. [1]');
       expect(raw).toContain('"phase":"complete"');
       expect(raw).toContain('data: [DONE]');
 
-      // Exactly one real (mocked) HTTP fetch, for the model's URL.
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]).toBe('https://example.com/');
 
-      // The continuation turn (call 3, after the planning turn) carried the assistant tool_call turn
-      // AND the tool result with the extracted page text.
       expect(streamRequestMock).toHaveBeenCalledTimes(4);
       const continuation = streamRequestMock.mock.calls[2]?.[2] as {
         messages: Array<{ role: string; content: string; tool_call_id?: string }>;
@@ -192,7 +172,6 @@ describe('research loop url_fetch integration', () => {
       expect(toolMsg?.content).toContain('illustrative examples');
       expect(toolMsg?.content).not.toContain('<html>');
 
-      // The synthesis directive's numbered source list includes the fetched page.
       const synthesis = streamRequestMock.mock.calls[3]?.[2] as {
         messages: Array<{ role: string; content: string }>;
       };
@@ -227,12 +206,8 @@ describe('research loop url_fetch integration', () => {
       expect(raw).toContain('Fetch failed (url_not_allowed)');
       expect(raw).toContain('is not available in research mode');
       expect(fetchMock).not.toHaveBeenCalled();
-      // No source was fabricated for the failed fetch (no cumulative source
-      // event at all: the aggregator stayed empty).
       expect(raw).not.toContain('"x_search_results"');
 
-      // Both tool calls got results in the continuation thread (no dangling
-      // tool_calls, which providers reject).
       const continuation = streamRequestMock.mock.calls[2]?.[2] as {
         messages: Array<{ role: string; content: string; tool_call_id?: string }>;
       };
@@ -279,8 +254,6 @@ describe('research loop url_fetch integration', () => {
         runResearchLoop(makeProcessed(), { userId: 'user-1', token: 't' }),
       );
 
-      // Only the per-round cap (3) actually fetched; the 4th got the honest
-      // budget error and still received a tool result.
       expect(fetchMock).toHaveBeenCalledTimes(3);
       expect(raw).toContain('Fetch budget for this research run is exhausted');
 

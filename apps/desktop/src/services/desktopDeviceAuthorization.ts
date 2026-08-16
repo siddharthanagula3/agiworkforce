@@ -41,12 +41,6 @@ function waitForPoll(milliseconds: number, signal?: AbortSignal): Promise<void> 
   });
 }
 
-/**
- * Runs the device authorization loop used by Desktop Cloud.
- *
- * The authorization surface owns primary authentication. The main Desktop
- * webview receives only the short-lived, revocable bearer after approval.
- */
 export async function authorizeDesktopDevice({
   origin,
   post,

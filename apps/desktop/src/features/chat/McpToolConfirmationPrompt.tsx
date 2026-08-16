@@ -108,8 +108,6 @@ export function McpToolConfirmationPrompt() {
     <Dialog
       open
       onOpenChange={(open) => {
-        // Closing the modal is the safe decision: a privileged native request
-        // must never continue merely because the overlay was dismissed.
         if (!open && !isResolving) void resolve('reject');
       }}
     >

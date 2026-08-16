@@ -339,8 +339,6 @@ function TaskRow({ task }: { task: AgentTask }) {
   );
 }
 
-// ── Background Task Row (from backgroundTaskStore) ─────────────────────────
-
 const BG_STATUS_CONFIG: Record<
   BgTask['status'],
   { icon: React.ElementType; color: string; bgColor: string; label: string }
@@ -474,8 +472,6 @@ function BgTaskRow({ task }: { task: BgTask }) {
   );
 }
 
-// ── Main Monitor ───────────────────────────────────────────────────────────
-
 export function AgentTaskMonitor() {
   const tasks = useAgentTaskStore((s) => s.tasks);
   const loading = useAgentTaskStore((s) => s.loading);
@@ -483,13 +479,11 @@ export function AgentTaskMonitor() {
   const getTaskStatus = useAgentTaskStore((s) => s.getTaskStatus);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Background task store
   const bgTasks = useBackgroundTaskStore((s) => s.tasks);
   const bgLoading = useBackgroundTaskStore((s) => s.isLoading);
   const listBgTasks = useBackgroundTaskStore((s) => s.listTasks);
   const fetchBgStats = useBackgroundTaskStore((s) => s.fetchStats);
 
-  // Initialize both stores and subscribe to timeout warnings
   useEffect(() => {
     void fetchTasks();
     void listBgTasks();
@@ -500,7 +494,6 @@ export function AgentTaskMonitor() {
     };
   }, [fetchTasks, listBgTasks, fetchBgStats]);
 
-  // Auto-refresh running tasks every 5 seconds
   useEffect(() => {
     const hasRunning = tasks.some(
       (task) =>
@@ -525,7 +518,6 @@ export function AgentTaskMonitor() {
         for (const t of runningTasks) {
           void getTaskStatus(t.id);
         }
-        // Read fresh from store to avoid stale closure over hasBgRunning
         const currentBgTasks = useBackgroundTaskStore.getState().tasks;
         const currentBgRunning = currentBgTasks.some(
           (t) => t.status === 'Running' || t.status === 'Queued',
@@ -564,7 +556,6 @@ export function AgentTaskMonitor() {
     );
   }
 
-  // Sort agent tasks: running first, then pending, then by createdAt desc
   const sortedAgentTasks = [...tasks].sort((a, b) => {
     const order: Record<string, number> = {
       running: 0,
@@ -579,7 +570,6 @@ export function AgentTaskMonitor() {
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 
-  // Sort background tasks: running first, then queued, paused, etc.
   const sortedBgTasks = [...bgTasks].sort((a, b) => {
     const order: Record<string, number> = {
       Running: 0,

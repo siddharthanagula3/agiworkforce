@@ -1,25 +1,3 @@
-/**
- * @file The structured "connect required" tool result (lazy authentication).
- *
- * When a connector tool call cannot proceed because the user has not authorized
- * the connector — or their authorization died mid-conversation — the turn must
- * NOT fail. The tool loop emits this payload as the tool result so the client
- * can render an inline Connect card, the user authorizes in place, and the
- * model calls the same tool again.
- *
- * WHY THE PAYLOAD LIVES IN `content`. `ConnectorExecResult` reaches the tool
- * loop as `{ handled, content, isError }` and only `content` and `isError`
- * survive into the tool message (`runMcpTool` in the chat-completions tool
- * loop). A JSON envelope with a discriminant key is therefore how a structured
- * result crosses that boundary without changing the loop's contract: a client
- * `JSON.parse`s the tool result and checks for
- * `agi_connector_authorization_required`, while a model that never parses it
- * still reads a plain-English `message` telling it to ask the user to connect
- * and retry.
- *
- * `isError` stays true so the model treats the result as a failed call rather
- * than as connector data.
- */
 
 import 'server-only';
 
@@ -42,15 +20,8 @@ export interface ConnectorAuthorizationRequiredPayload {
   connectorName: string;
   toolName: string;
   reason: ConnectorAuthorizationReason;
-  /**
-   * Same-origin path that starts the hosted OAuth flow, or null when this
-   * deployment has no OAuth app for the connector — in which case the card must
-   * say so instead of offering a button that cannot work.
-   */
   connectUrl: string | null;
-  /** Scopes the flow will request, so the card can show what is being asked for. */
   scopes: string[];
-  /** Human-readable, for the model and for a client that does not parse this. */
   message: string;
 }
 
@@ -74,11 +45,6 @@ function messageFor(
   }
 }
 
-/**
- * Build the payload. `additionalScopes` carries the scope a step-up challenge
- * demanded (RFC 9470), so the Connect card asks for what the server actually
- * asked for rather than for the registry default alone.
- */
 export function buildConnectorAuthorizationRequiredPayload(params: {
   connectorId: string;
   connectorLabel?: string;
@@ -104,14 +70,12 @@ export function buildConnectorAuthorizationRequiredPayload(params: {
   };
 }
 
-/** The `content` string for a `ConnectorExecResult`. */
 export function serializeConnectorAuthorizationRequired(
   payload: ConnectorAuthorizationRequiredPayload,
 ): string {
   return JSON.stringify(payload);
 }
 
-/** Client/test helper: recognise the envelope in a tool result. */
 export function parseConnectorAuthorizationRequired(
   content: string,
 ): ConnectorAuthorizationRequiredPayload | null {

@@ -2,10 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { FlatList, Modal, Platform, ScrollView, Share, View } from 'react-native';
 import { Image } from 'expo-image';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-// From `expo-router`, not `@react-navigation/native` — see the note in
-// app/(app)/(tabs)/chat.tsx: the monorepo resolves several copies of the
-// navigation package, so the raw hook can land on a different context
-// instance than the one expo-router's navigator provides.
 import { useNavigation } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -50,10 +46,6 @@ interface ArtifactsGalleryScreenProps {
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
 
-// ---------------------------------------------------------------------------
-// Kind → badge config
-// ---------------------------------------------------------------------------
-
 type BadgeTone = 'teal' | 'terra-cotta' | 'green' | 'red' | 'yellow' | 'purple' | 'blue' | 'gray';
 
 const KIND_BADGE: Record<MobileArtifactKind, BadgeTone> = {
@@ -77,10 +69,6 @@ function badgeLabel(artifact: MobileArtifact): string {
   return artifact.kind.charAt(0).toUpperCase() + artifact.kind.slice(1);
 }
 
-// ---------------------------------------------------------------------------
-// Main screen
-// ---------------------------------------------------------------------------
-
 export function ArtifactsGalleryScreen({
   initialLoading = false,
   initialArtifactId,
@@ -94,14 +82,10 @@ export function ArtifactsGalleryScreen({
   const [isLoading] = useState(initialLoading);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
 
-  // Live artifact list from the persistent store — user-created artifacts, newest first.
   const storedArtifacts = useArtifactStore((s) => s.artifacts);
   const cloudArtifacts = useArtifactStore((s) => s.cloudArtifacts);
   const cloudArtifactsOwnerId = useArtifactStore((s) => s.cloudArtifactsOwnerId);
 
-  // The selected object outlives the store row that produced it. Close an
-  // account-owned preview before paint when Clerk tears down/switches owners;
-  // Local previews remain device-owned and survive Cloud account changes.
   useLayoutEffect(() => {
     if (!selectedArtifact) return;
     if (isAccountScopedUiStateOwned(selectedArtifactScopeRef.current)) return;
@@ -109,8 +93,6 @@ export function ArtifactsGalleryScreen({
     setSelectedArtifact(null);
   }, [clerkUserId, cloudArtifactsOwnerId, selectedArtifact]);
 
-  // Reconcile the pulled Cloud overlay by canonical id/tombstone, then
-  // re-derive colors so every card follows the active theme.
   const galleryArtifacts = useMemo(
     () =>
       mergeMobileArtifactsForGallery(storedArtifacts, cloudArtifacts, c, cloudArtifactsOwnerId).map(
@@ -239,10 +221,6 @@ export function ArtifactsGalleryScreen({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Empty state
-// ---------------------------------------------------------------------------
-
 function ArtifactsEmptyState() {
   const c = useThemeColors();
   return (
@@ -263,10 +241,6 @@ function ArtifactsEmptyState() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// ArtifactCard — enhanced with code preview, type badge, timestamp
-// ---------------------------------------------------------------------------
-
 interface ArtifactCardProps {
   artifact: MobileArtifact;
   width: number;
@@ -284,9 +258,6 @@ function ArtifactImagePreview({
   height: number;
 }) {
   const c = useThemeColors();
-  // The detail preview and Library already resolve the same durable image
-  // through this owner-scoped source hook. The grid previously ignored the
-  // URL entirely and always painted a generic icon, despite having valid data.
   const { source, status } = useGeneratedImageSource(artifact.content, false);
 
   if (status === 'ready' && source) {
@@ -400,10 +371,6 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Skeleton
-// ---------------------------------------------------------------------------
-
 function ArtifactsSkeletonGrid({ cardWidth, columns }: { cardWidth: number; columns: number }) {
   const c = useThemeColors();
   const placeholders = useMemo(
@@ -437,10 +404,6 @@ function ArtifactsSkeletonGrid({ cardWidth, columns }: { cardWidth: number; colu
     </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// ArtifactPreviewModal (unchanged)
-// ---------------------------------------------------------------------------
 
 function ArtifactPreviewModal({
   artifact,
@@ -587,8 +550,6 @@ function ArtifactPreviewModal({
               </Text>
             </ScrollView>
           ) : (
-            /* Prose artifacts carry markdown. Dumping them into one proportional
-             * Text printed heading/list/emphasis markers literally. */
             <View testID="artifact-preview-content">
               {renderMarkdownContent(artifact.content, c)}
             </View>

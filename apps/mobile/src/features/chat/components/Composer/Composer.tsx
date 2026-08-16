@@ -13,8 +13,6 @@ import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 
 interface ComposerProps {
-  /** May return (a promise of) a boolean — `false` means the send was
-   *  rejected pre-flight and the composer keeps its draft. */
   onSend: (
     text: string,
     attachments?: Attachment[],
@@ -29,27 +27,13 @@ interface ComposerProps {
   onOpenAddToChat?: () => void;
   isOnline?: boolean;
   queueSize?: number;
-  /**
-   * Forwarded straight to the composer: add attachments, or focus the field
-   * (e.g. handing the keyboard back when inline voice exits).
-   */
   attachRef?: React.RefObject<ChatInputHandle | null>;
-  /** Whether to show task chips above the input (shown on empty chat) */
   showChips?: boolean;
-  /** When false, thread has messages and placeholder reads "Reply to AGI" */
   isThreadActive?: boolean;
-  /**
-   * Pre-fill text for the composer on first render (e.g. from a conversation
-   * starter prompt or URL param). Only applied at mount.
-   */
   initialText?: string;
-  /** Per-conversation draft key, forwarded to the composer for draft restore. */
   draftKey?: string;
-  /** Explicit Local/Cloud owner for the persisted conversation draft. */
   draftProvenance?: DraftProvenance;
-  /** Resolved outbound route for the composer's "what will be sent" disclosure. */
   sendPreview?: SendPreviewInput;
-  /** Per-file privacy chip on attachment thumbnails, from the same disclosure. */
   attachmentPrivacyShortLabel?: string;
 }
 
@@ -94,7 +78,6 @@ export function Composer({
 
   const handleSend = useCallback(
     (text: string, attachments?: Attachment[]) => {
-      // Forward the acceptance signal so ChatInput's draft-safe clearing works.
       return Promise.resolve(onSend(text, attachments, activeChip ?? undefined)).then(
         (accepted) => {
           if (accepted !== false) setActiveChip(null);

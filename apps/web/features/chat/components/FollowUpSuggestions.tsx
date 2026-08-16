@@ -1,48 +1,18 @@
 'use client';
 
-/**
- * FollowUpSuggestions
- *
- * A horizontal row of clickable pills shown below the last assistant message.
- * Each pill represents a follow-up question derived from the conversation context.
- * Clicking a pill sends the text as a new user message.
- *
- * Rendered only when:
- *  - The last message is from the assistant
- *  - The assistant is NOT currently generating/streaming
- *  - There is meaningful content to derive suggestions from
- *
- * v2 improvements:
- *  - Type-aware suggestions (deeper, alternative, apply, discover)
- *  - Per-type Lucide icons on each pill
- *  - 15 topic categories (up from 9)
- *  - Capability discovery pills that surface platform features
- *  - Fade-out when user starts typing (isUserTyping prop)
- */
-
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRight, ChevronDown, GitFork, Play, Sparkles, X } from 'lucide-react';
 import { cn } from '@shared/lib/utils';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export type FollowUpType = 'deeper' | 'alternative' | 'apply' | 'discover';
 
 export interface FollowUpSuggestionsProps {
-  /** The content of the last assistant message */
   lastAssistantContent: string;
-  /** Called when the user clicks a follow-up pill */
   onSelect: (prompt: string) => void;
-  /** Whether the assistant is currently generating a response */
   isGenerating?: boolean;
-  /** When true, suggestions fade out (user is typing in the composer) */
   isUserTyping?: boolean;
-  /** Total message count in the conversation (enables turn-aware suggestions) */
   messageCount?: number;
-  /** Optional className for the container */
   className?: string;
 }
 
@@ -52,10 +22,6 @@ export interface FollowUp {
   type: FollowUpType;
 }
 
-// ---------------------------------------------------------------------------
-// Icon map
-// ---------------------------------------------------------------------------
-
 const TYPE_ICONS: Record<FollowUpType, typeof ChevronDown> = {
   deeper: ChevronDown,
   alternative: GitFork,
@@ -63,23 +29,12 @@ const TYPE_ICONS: Record<FollowUpType, typeof ChevronDown> = {
   discover: Sparkles,
 };
 
-// ---------------------------------------------------------------------------
-// Follow-up generation logic
-//
-// Uses lightweight heuristics to produce 2-3 contextual follow-ups.
-// No LLM call required -- keeps the UI instant.
-// ---------------------------------------------------------------------------
-
 interface TopicEntry {
   pattern: RegExp;
   followUps: Array<{ text: string; type: FollowUpType }>;
 }
 
-/** Topic patterns: regex -> array of typed follow-up templates */
 const TOPIC_FOLLOW_UPS: TopicEntry[] = [
-  // Maps / places. Keep this ahead of technical categories because provider
-  // URLs such as Google Maps include `api` and `query`, which are transport
-  // details rather than evidence that the answer is about APIs or databases.
   {
     pattern:
       /(?:google\.com\/maps|openstreetmap\.org|\bmap(?:s)?\b|\bdirections?\b|\blocations?\b|\bnearby\b|\baddresses?\b)/i,
@@ -89,7 +44,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'What should I know before visiting?', type: 'deeper' },
     ],
   },
-  // Code-related
   {
     pattern: /\b(function|class|component|module|interface|type|struct)\b/i,
     followUps: [
@@ -98,7 +52,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'Can you optimize this for performance?', type: 'alternative' },
     ],
   },
-  // Bug / error
   {
     pattern: /\b(error|bug|issue|fix|debug|crash|exception|fail)\b/i,
     followUps: [
@@ -107,7 +60,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'How can I prevent this in the future?', type: 'alternative' },
     ],
   },
-  // Lists / steps
   {
     pattern: /(?:^|\n)\s*(?:\d+[.):]|[-*])\s/m,
     followUps: [
@@ -116,7 +68,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'Can you give a concrete example?', type: 'apply' },
     ],
   },
-  // Strategy / plan
   {
     pattern: /\b(strategy|plan|roadmap|approach|framework|methodology)\b/i,
     followUps: [
@@ -125,7 +76,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'What resources would be needed?', type: 'discover' },
     ],
   },
-  // Comparison
   {
     pattern: /\b(vs\.?|versus|compared|comparison|difference|pros\s+and\s+cons|trade-?off)\b/i,
     followUps: [
@@ -134,7 +84,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'What are the long-term implications?', type: 'deeper' },
     ],
   },
-  // Explanation / concept
   {
     pattern: /\b(means?|concept|definition|refers?\s+to|in\s+other\s+words|simply\s+put)\b/i,
     followUps: [
@@ -143,7 +92,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'What are common misconceptions about this?', type: 'alternative' },
     ],
   },
-  // Health / fitness
   {
     pattern: /\b(exercise|workout|diet|nutrition|calorie|health|wellness|sleep)\b/i,
     followUps: [
@@ -152,7 +100,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'How long until I see results?', type: 'discover' },
     ],
   },
-  // Finance
   {
     pattern: /\b(invest|budget|savings?|tax|portfolio|income|expense|financial)\b/i,
     followUps: [
@@ -161,7 +108,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'Are there any tax implications?', type: 'discover' },
     ],
   },
-  // Writing
   {
     pattern: /\b(draft|article|blog|email|letter|essay|copy|content)\b/i,
     followUps: [
@@ -170,8 +116,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'Can you add a call-to-action?', type: 'apply' },
     ],
   },
-  // ---------- NEW CATEGORIES (v2) ----------
-  // Database / SQL
   {
     pattern: /\b(database|sql|query|table|schema|migration|index|join|postgres|mysql|sqlite)\b/i,
     followUps: [
@@ -180,7 +124,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'Are there any data integrity risks?', type: 'discover' },
     ],
   },
-  // DevOps / deployment
   {
     pattern:
       /\b(deploy|docker|kubernetes|ci[\s/]?cd|pipeline|terraform|ansible|nginx|container|infrastructure)\b/i,
@@ -190,7 +133,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'How would this scale under high load?', type: 'deeper' },
     ],
   },
-  // Security
   {
     pattern:
       /\b(security|vulnerability|auth|authentication|authorization|encrypt|xss|csrf|injection|oauth|jwt)\b/i,
@@ -200,7 +142,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'How would an attacker try to bypass this?', type: 'alternative' },
     ],
   },
-  // Testing
   {
     pattern:
       /\b(?:spec|assertion|mock|stub|coverage|vitest|jest|cypress|e2e|(?:unit|integration|end-to-end|negative|regression|acceptance)\s+tests?|test(?:ing)?\s+(?:case|suite|coverage|runner|framework|fixture|mock|strategy))\b/i,
@@ -210,7 +151,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'How can I improve test coverage?', type: 'apply' },
     ],
   },
-  // API / REST
   {
     pattern:
       /\b(api|endpoint|rest|graphql|webhook|http|request|response|payload|route|middleware)\b/i,
@@ -220,7 +160,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
       { text: 'Can you generate the API documentation?', type: 'apply' },
     ],
   },
-  // Data science / ML
   {
     pattern:
       /\b(model|training|dataset|accuracy|precision|neural|linear\s+regression|logistic\s+regression|classification|embedding|tensor|gradient)\b/i,
@@ -232,7 +171,6 @@ const TOPIC_FOLLOW_UPS: TopicEntry[] = [
   },
 ];
 
-/** Generic fallbacks when no topic pattern matches */
 const GENERIC_FOLLOW_UPS: Array<{ text: string; type: FollowUpType }> = [
   { text: 'Tell me more about this', type: 'deeper' },
   { text: 'Can you give an example?', type: 'apply' },
@@ -242,14 +180,9 @@ const GENERIC_FOLLOW_UPS: Array<{ text: string; type: FollowUpType }> = [
   { text: 'Can you summarize the key points?', type: 'alternative' },
 ];
 
-/**
- * Derive 2-3 contextual follow-up questions from assistant content.
- * Returns typed suggestions with per-type icons for the UI.
- */
 export function deriveFollowUps(content: string, messageCount: number): FollowUp[] {
   if (!content || content.trim().length < 20) return [];
 
-  // Cap content length to prevent ReDoS on very long LLM responses
   const sample = content.length > 4000 ? content.slice(0, 4000) : content;
 
   const matched: Array<{ text: string; type: FollowUpType }> = [];
@@ -262,7 +195,6 @@ export function deriveFollowUps(content: string, messageCount: number): FollowUp
     }
   };
 
-  // Collect follow-ups from matching topic patterns
   for (const { pattern, followUps } of TOPIC_FOLLOW_UPS) {
     if (pattern.test(sample)) {
       for (const fu of followUps) {
@@ -273,31 +205,25 @@ export function deriveFollowUps(content: string, messageCount: number): FollowUp
     if (matched.length >= 5) break;
   }
 
-  // --- Capability discovery: surface platform features based on content ---
-
-  // When the response contains code blocks, offer to run it
   if (/```[\s\S]{10,}```/.test(sample)) {
     addUnique({ text: 'Run this code', type: 'apply' });
   }
 
-  // When the response makes factual claims, offer web verification
   if (
     /\b(according to|studies show|research indicates|data suggests|as of \d{4})\b/i.test(sample)
   ) {
     addUnique({ text: 'Search the web to verify', type: 'discover' });
   }
 
-  // After 5+ turns (10+ messages including user+assistant), offer summarization
   if (messageCount >= 10) {
     addUnique({ text: 'Summarize this conversation', type: 'apply' });
   }
 
-  // If we have fewer than 2, supplement with generics
   if (matched.length < 2) {
     const contentIsLong = content.length > 500;
     const genericPool = contentIsLong
-      ? GENERIC_FOLLOW_UPS.filter((_, i) => i < 3) // summary-style for long responses
-      : GENERIC_FOLLOW_UPS.filter((_, i) => i >= 1 && i <= 4); // example/action-style
+      ? GENERIC_FOLLOW_UPS.filter((_, i) => i < 3)
+      : GENERIC_FOLLOW_UPS.filter((_, i) => i >= 1 && i <= 4);
 
     for (const g of genericPool) {
       addUnique(g);
@@ -305,7 +231,6 @@ export function deriveFollowUps(content: string, messageCount: number): FollowUp
     }
   }
 
-  // Take up to 3
   const selected = matched.slice(0, 3);
 
   return selected.map((item, i) => ({
@@ -314,10 +239,6 @@ export function deriveFollowUps(content: string, messageCount: number): FollowUp
     type: item.type,
   }));
 }
-
-// ---------------------------------------------------------------------------
-// Animation variants
-// ---------------------------------------------------------------------------
 
 const containerVariants = {
   hidden: { opacity: 0, y: 6 },
@@ -343,10 +264,6 @@ const pillVariants = {
   },
 } as const;
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function FollowUpSuggestions({
   lastAssistantContent,
   onSelect,
@@ -361,7 +278,6 @@ export function FollowUpSuggestions({
   );
   const [dismissed, setDismissed] = useState(false);
 
-  // Don't render while generating or if there are no suggestions
   if (isGenerating || followUps.length === 0 || dismissed) {
     return null;
   }

@@ -1,36 +1,11 @@
-/**
- * createStore — small AGI-owned store for stable snapshots and subscriptions.
- *
- * Design invariants (see tasks/research/deep/misc1-skills-tasks-state-memdir.md §8.1):
- *  - Object.is short-circuit: setState is a no-op when next === prev, preventing
- *    render storms on per-keystroke mutations.
- *  - onChange fires BEFORE listeners so React re-renders see already-settled side effects.
- *  - subscribe returns an unsubscribe fn compatible with useSyncExternalStore (React 19).
- *  - Circular re-entrancy guard: onChangeAppState passes a depth counter through the
- *    fan-out chain; createStore itself doesn't need to track depth.
- *
- * Pattern reference: local reference research on stable snapshot stores.
- */
 
-/** Minimal listener type: no arguments, called after every state mutation. */
 export type Listener = () => void;
 
-/** Called synchronously before listeners whenever state actually changes. */
 export type OnChange<T> = (args: { newState: T; oldState: T }) => void;
 
-/** Public interface returned by createStore. */
 export interface Store<T> {
-  /** Returns the current snapshot. Stable reference between mutations. */
   getState: () => T;
-  /**
-   * Apply an updater function. If the result Object.is-equals the current
-   * state the call is a no-op (no onChange, no listener notifications).
-   */
   setState: (updater: (prev: T) => T) => void;
-  /**
-   * Register a listener. Returns a cleanup fn (compatible with
-   * useSyncExternalStore's second argument).
-   */
   subscribe: (listener: Listener) => () => void;
 }
 
@@ -49,9 +24,9 @@ export function createStore<T>(initialState: T, onChange?: OnChange<T>): Store<T
     setState: (updater: (prev: T) => T) => {
       const prev = state;
       const next = updater(prev);
-      if (Object.is(next, prev)) return; // Object.is short-circuit — no render storm
+      if (Object.is(next, prev)) return;
       state = next;
-      onChange?.({ newState: next, oldState: prev }); // side effects before React
+      onChange?.({ newState: next, oldState: prev });
       for (const listener of listeners) listener();
     },
     subscribe: (listener: Listener) => {

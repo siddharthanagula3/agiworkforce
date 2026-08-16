@@ -17,11 +17,6 @@ async function getInvokeMock(): Promise<InvokeMock> {
   return invoke as InvokeMock;
 }
 
-/**
- * The exact shape of the diagnostic the Rust launcher produces when discovery
- * finds nothing installed. If this text never reaches the screen, a user on a
- * stock machine has no way to learn what to install or which env var to set.
- */
 const DISCOVERY_DIAGNOSTIC =
   'No Chromium-based browser installation found. Looked for ' +
   '[/Applications/Google Chrome.app/Contents/MacOS/Google Chrome] on disk and for ' +
@@ -67,8 +62,6 @@ describe('BrowserViewer browser-control runtime', () => {
 
     render(<BrowserViewer />);
 
-    // Both the toolbar control and the empty-state panel offer the start
-    // action; the panel one is what a user with no session actually sees.
     const startButtons = screen.getAllByRole('button', { name: /Start browser/ });
     expect(startButtons.length).toBeGreaterThan(0);
     await user.click(startButtons[startButtons.length - 1]!);
@@ -80,8 +73,6 @@ describe('BrowserViewer browser-control runtime', () => {
       );
     });
 
-    // A launched runtime with no tab leaves the address bar dead, so the first
-    // tab is part of starting it.
     await waitFor(() => {
       expect(invokeMock).toHaveBeenCalledWith('browser_open_tab', { url: 'about:blank' });
     });
@@ -135,8 +126,6 @@ describe('BrowserViewer browser-control runtime', () => {
       expect(invokeMock).toHaveBeenCalledWith('browser_close', { browserId: 'session-1' });
     });
 
-    // Closed runtime, so the viewer must offer to start one again rather than
-    // stranding the user with a dead panel.
     await waitFor(() => {
       expect(screen.getAllByRole('button', { name: /Start browser/ }).length).toBeGreaterThan(0);
     });

@@ -1,26 +1,3 @@
-/**
- * @file Web-side MCP catalog and tool dispatcher.
- *
- * Server-only module — imported exclusively from route handlers and server
- * actions running in the Next.js Node.js runtime. Never import from 'use client'
- * modules.
- *
- * Responsibilities:
- *   1. Load a runtime-validated, remote-only MCP server list from
- *      WEB_MCP_SERVERS_JSON.
- *   2. Build and cache a flat tool catalog across all enabled servers.
- *   3. Dispatch individual tool calls to the right server.
- *
- * Design notes:
- *   - Uses `@agiworkforce/mcp` (the shared MCP SDK wrapper) so we get
- *     transport-discriminated connect, tool-name validation, and schema
- *     depth-caps without reimplementing them here.
- *   - Catalog is cached for 60 s in the route-handler process memory.
- *     The first warm-up call is lazy (on the first request that needs tools).
- *   - Managed Web never starts stdio MCP processes. Operator endpoints must be
- *     HTTPS and pass DNS-aware egress validation before discovery and execution.
- *   - No user-supplied URLs flow through this path.
- */
 
 import 'server-only';
 
@@ -38,8 +15,6 @@ import {
 import { assertResolvedPublicHostname } from '@/lib/egress-policy';
 import { logger } from '@/lib/logger';
 import { withSpan } from '@/lib/observability/span';
-
-// ─── Config schema (same shape as the gateway's mcpConfig.ts) ─────────────────
 
 const httpSchema = z.object({
   type: z.literal('http'),
@@ -63,8 +38,6 @@ const webMcpFileSchema = z.object({
 });
 
 type WebMcpEntry = z.infer<typeof webMcpEntrySchema>;
-
-// ─── Config loading ────────────────────────────────────────────────────────────
 
 let _configCache: WebMcpEntry[] | null = null;
 
@@ -98,8 +71,6 @@ function entryToConfig(entry: WebMcpEntry): McpServerConfig {
   };
 }
 
-// ─── Catalog cache ────────────────────────────────────────────────────────────
-
 interface CatalogState {
   catalog: McpToolCatalog | null;
   expiresAt: number;
@@ -116,10 +87,6 @@ const _state: CatalogState = {
 
 const CATALOG_TTL_MS = 60_000;
 
-/**
- * Return the cached tool catalog (or build it on first call).
- * Parallel callers coalesce into a single build promise.
- */
 export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
   const now = Date.now();
   if (_state.catalog && now < _state.expiresAt) return _state.catalog;
@@ -127,7 +94,6 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
 
   const servers = loadWebMcpConfig();
   if (servers.length === 0) {
-    // No servers configured: return an empty catalog immediately.
     const empty: McpToolCatalog = {
       version: 1,
       generatedAt: now,
@@ -168,7 +134,6 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
     try {
       const { catalog, handles } = await buildMcpToolCatalog(configs);
 
-      // Replace old handles cleanly.
       const old = Array.from(_state.handles.values());
       _state.handles = new Map();
       for (const h of handles) {
@@ -187,14 +152,6 @@ export async function getWebMcpCatalog(): Promise<McpToolCatalog> {
   return _state.building;
 }
 
-/**
- * Call a single MCP tool by (serverId, toolName, args).
- * Lazily connects if the handle isn't cached yet.
- *
- * Wrapped in a `tool` span (SCALE-VER-006) sharing the request's `trace_id`, so
- * a slow or failing tool call is attributable to the chat turn that issued it.
- * `args` is never recorded — tool arguments are user content.
- */
 export async function executeWebMcpTool(
   serverId: string,
   toolName: string,
@@ -233,32 +190,16 @@ export async function executeWebMcpTool(
   );
 }
 
-/**
- * Return tool definitions in the OpenAI function-calling shape so they can be
- * injected into an LLM request's `tools` array.
- */
 export interface WebMcpToolDef {
-  /** Qualified name used in LLM requests: `mcp__<serverId>__<toolName>`. */
   qualifiedName: string;
   serverId: string;
   toolName: string;
   description: string;
-  /** Ownership used by the canonical activity stream for truthful UI labels. */
   origin?: 'operator' | 'connector';
-  /**
-   * Human display name of the connector/server (e.g. a user's custom connector
-   * name "Notion"), used for the activity-feed summary when the serverId is an
-   * opaque `custom-<hex>` id that carries no name. Omit for operator/first-party
-   * servers whose serverId already humanizes correctly (github, filesystem, …).
-   */
   serverLabel?: string;
-  /** JSON Schema for the tool's input. */
   inputSchema: Record<string, unknown>;
 }
 
-/**
- * Convert the tool catalog into the flat list of tool defs the tool loop injects.
- */
 export function catalogToToolDefs(catalog: McpToolCatalog): WebMcpToolDef[] {
   return catalog.tools.map((t) => ({
     qualifiedName: `mcp__${t.serverName}__${t.toolName}`,
@@ -270,10 +211,6 @@ export function catalogToToolDefs(catalog: McpToolCatalog): WebMcpToolDef[] {
   }));
 }
 
-/**
- * Parse a qualified tool name back to (serverId, toolName).
- * Returns null if the name is not in `mcp__<serverId>__<toolName>` form.
- */
 export function parseQualifiedToolName(
   qualifiedName: string,
 ): { serverId: string; toolName: string } | null {
@@ -282,10 +219,6 @@ export function parseQualifiedToolName(
   return { serverId: match[1], toolName: match[2] };
 }
 
-/**
- * Format MCP tool defs into the OpenAI-compatible shape expected by
- * `ProcessedRequest.llmRequest.tools`.
- */
 export function toOpenAiToolDef(def: WebMcpToolDef): Record<string, unknown> {
   return {
     type: 'function',

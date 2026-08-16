@@ -1,8 +1,3 @@
-// AUDIT-FIX: STT-WIRE
-/**
- * Wave 2 voice feature tests.
- * Covers: voiceInput service (on-device STT), voiceOutput service contracts.
- */
 
 import { Platform } from 'react-native';
 

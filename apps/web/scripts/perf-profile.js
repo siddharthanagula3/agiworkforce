@@ -1,16 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * Performance Profiling Script
- *
- * Runs Lighthouse performance audit on the web app and generates a report.
- * Usage: node scripts/perf-profile.js [url] [output-dir]
- *
- * Default:
- * - URL: http://localhost:3000
- * - Output: ./perf-results
- */
-
 const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -19,7 +8,6 @@ const DEFAULT_URL = process.env.PERF_TEST_URL || 'http://localhost:3000';
 const DEFAULT_OUTPUT_DIR = path.join(process.cwd(), 'perf-results');
 const OUTPUT_PATH = path.join(DEFAULT_OUTPUT_DIR, `lighthouse-${Date.now()}.json`);
 
-// Create output directory if it doesn't exist
 if (!fs.existsSync(DEFAULT_OUTPUT_DIR)) {
   fs.mkdirSync(DEFAULT_OUTPUT_DIR, { recursive: true });
 }
@@ -51,7 +39,6 @@ if (result.status !== 0) {
   process.exit(1);
 }
 
-// Parse results and generate summary
 try {
   const reportJson = fs.readFileSync(OUTPUT_PATH, 'utf8');
   const report = JSON.parse(reportJson);
@@ -59,7 +46,6 @@ try {
   const scores = report.categories;
   const metrics = report.audits;
 
-  // Format scores
   const formattedScores = Object.entries(scores)
     .map(([name, data]) => {
       const percentage = Math.round(data.score * 100);
@@ -68,7 +54,6 @@ try {
     })
     .join('\n');
 
-  // Key metrics
   const keyMetrics = {
     'Largest Contentful Paint': metrics['largest-contentful-paint']?.numericValue,
     'First Input Delay': metrics['first-input-delay']?.numericValue,
@@ -90,7 +75,6 @@ try {
 
   console.log(`\nFull report saved to: ${OUTPUT_PATH}`);
 
-  // Also generate a summary JSON
   const summaryPath = path.join(DEFAULT_OUTPUT_DIR, 'summary.json');
   const summary = {
     timestamp: new Date().toISOString(),

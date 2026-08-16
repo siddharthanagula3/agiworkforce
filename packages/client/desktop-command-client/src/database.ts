@@ -1,10 +1,5 @@
-/**
- * Database API — typed wrappers for db_* Tauri commands (SQL, MySQL, MongoDB, Redis).
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface ConnectionConfig {
   host: string;
@@ -52,8 +47,6 @@ export interface DeleteQuery {
   where: string;
 }
 
-// ---- Connection Pool ----
-
 export async function dbCreatePool(
   connectionId: string,
   config: ConnectionConfig,
@@ -73,8 +66,6 @@ export async function dbListPools(): Promise<string[]> {
 export async function dbGetPoolStats(connectionId: string): Promise<unknown> {
   return command<unknown>('db_get_pool_stats', { connectionId });
 }
-
-// ---- Query Execution ----
 
 export async function dbExecuteQuery(connectionId: string, sql: string): Promise<unknown> {
   return command<unknown>('db_execute_query', { connectionId, sql });
@@ -96,8 +87,6 @@ export async function dbValidateQuery(sql: string): Promise<QueryValidation> {
   return command<QueryValidation>('db_validate_query', { sql });
 }
 
-// ---- Query Builder ----
-
 export async function dbBuildSelect(query: SelectQuery): Promise<string> {
   return command<string>('db_build_select', { query });
 }
@@ -114,8 +103,6 @@ export async function dbBuildDelete(query: DeleteQuery): Promise<string> {
   return command<string>('db_build_delete', { query });
 }
 
-// ---- Credential Storage ----
-
 export async function dbStorePassword(connectionId: string, password: string): Promise<void> {
   return command<void>('db_store_password', { connectionId, password });
 }
@@ -131,8 +118,6 @@ export async function dbGetStoredPassword(connectionId: string): Promise<string 
 export async function dbDeleteStoredPassword(connectionId: string): Promise<void> {
   return command<void>('db_delete_stored_password', { connectionId });
 }
-
-// ---- MySQL ----
 
 export async function dbMysqlTestConnection(connectionId: string): Promise<boolean> {
   return command<boolean>('db_mysql_test_connection', { connectionId });
@@ -172,8 +157,6 @@ export async function dbMysqlBulkInsert(
 ): Promise<number> {
   return command<number>('db_mysql_bulk_insert', { connectionId, tableName, columns, rows });
 }
-
-// ---- MongoDB ----
 
 export async function dbMongoConnect(
   connectionId: string,
@@ -239,8 +222,6 @@ export async function dbMongoDeleteMany(
 export async function dbMongoDisconnect(connectionId: string): Promise<void> {
   return command<void>('db_mongo_disconnect', { connectionId });
 }
-
-// ---- Redis ----
 
 export async function dbRedisConnect(
   connectionId: string,

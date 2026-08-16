@@ -57,17 +57,6 @@ describe('isExecutableImageModel', () => {
 });
 
 describe('resolveEffectiveModelPricing', () => {
-  /**
-   * SYNTHETIC fixture — a constructed model object with an arbitrary dated
-   * window, not any shipped model's price. The mechanism is proved here so it
-   * stays covered no matter which (if any) catalog model currently schedules a
-   * price; what the catalog actually publishes is asserted separately below.
-   *
-   * Both bounds are inclusive UTC calendar days and both are optional; the
-   * first covering window wins and the model's top-level fields are the
-   * fallback. Dates are always passed explicitly so nothing here depends on
-   * when the suite runs.
-   */
   const scheduled = {
     inputCost: 3,
     outputCost: 15,
@@ -98,8 +87,6 @@ describe('resolveEffectiveModelPricing', () => {
   });
 
   it('treats effectiveUntil as inclusive and effectiveFrom as the next day', () => {
-    // UTC calendar days: the changeover happens at UTC midnight, so the last
-    // instant of 2030-03-31 UTC is still the first window.
     expect(
       resolveEffectiveModelPricing(scheduled, new Date('2030-03-31T23:59:59.999Z')).inputCost,
     ).toBe(2);
@@ -109,8 +96,6 @@ describe('resolveEffectiveModelPricing', () => {
   });
 
   it('falls back to the model fields for keys a window does not override', () => {
-    // The second window declares only its start, so every rate comes from the
-    // top-level (enduring) fields.
     expect(resolveEffectiveModelPricing(scheduled, new Date('2031-01-01T00:00:00Z'))).toEqual({
       inputCost: 3,
       outputCost: 15,
@@ -355,8 +340,6 @@ describe('model catalog helpers', () => {
   });
 
   it('maps allowed models into picker-friendly tiers', () => {
-    // Catalog-driven: a representative model from each tier list maps to the
-    // matching picker tier — never hardcoded to a specific model id.
     expect(getPickerModelTier(modelsCatalog.tierAllowedModels.economy[0])).toBe('economy');
     expect(getPickerModelTier(modelsCatalog.tierAllowedModels.pro_additions[0])).toBe('balanced');
     expect(getPickerModelTier(modelsCatalog.tierAllowedModels.flagship_additions[0])).toBe(
@@ -471,8 +454,6 @@ describe('model catalog helpers', () => {
   it('derives the single selectable Auto from routing policy', () => {
     const profiles = getAutoRoutingProfiles();
 
-    // Collapsed to ONE self-routing "Auto"; the resolver picks the profile per
-    // task/tier at request time (economy/balanced/premium are non-selectable).
     expect(profiles.map((profile) => profile.id)).toEqual(['auto']);
     expect(profiles.map((profile) => profile.profile)).toEqual(['balanced']);
     expect(profiles.every((profile) => profile.label.trim().length > 0)).toBe(true);
@@ -488,7 +469,6 @@ describe('model catalog helpers', () => {
     const costRates = getModelCostRates([openaiModel, anthropicModel]);
 
     expect(aliasId).toBe(anthropicModel);
-    // Canonicalization removed: unknown IDs pass through as-is (no legacy redirect).
     const unknownModelId = 'fixture-removed-model';
     expect(normalizeModelId(unknownModelId)).toBe(unknownModelId);
     expect(contextLimits[openaiModel]).toBeGreaterThan(0);
@@ -587,7 +567,6 @@ describe('model catalog helpers', () => {
     expect(isAutoModeModelId(null)).toBe(false);
     expect(detectProviderFromModelId(anthropicDefault)).toBe('anthropic');
     expect(resolveAutoModeModel('auto-economy', 'free')).toBe(workhorse);
-    // Basic/hobby clamp every Auto alias to the economy routing profile.
     expect(resolveAutoModeModel('auto-balanced', 'hobby')).toBe(workhorse);
     expect(resolveAutoModeModel('auto-balanced', 'pro')).toBe(explicitModel);
     expect(resolveAutoModeModel('auto-premium', 'max')).toBe(
@@ -623,8 +602,6 @@ describe('model catalog helpers', () => {
   });
 
   it('unknown aliases are not in catalog (canonicalization removed for fresh start)', () => {
-    // Unknown aliases return null from getModelMetadataById and are preserved by
-    // normalizeModelId so callers can fail closed without an invented redirect.
     const unknownModelId = 'fixture-removed-model';
     const currentModelId = modelsCatalog.providers['openai']?.taskRouting?.fast_completion;
     expect(getModelMetadataById(currentModelId)?.id).toBe(currentModelId);
@@ -674,8 +651,6 @@ describe('model catalog helpers', () => {
     });
     expect(getModelMetadataById(getRoutingSlotModel('coding_premium'))).not.toBeNull();
     expect(canAccessManualModelSelection('free')).toBe(false);
-    // Pro now exposes the manual picker behind the Advanced-mode toggle per
-    // Basic/hobby carry pro's policy (2026-07-16 ladder): manual picker on.
     expect(canAccessManualModelSelection('hobby')).toBe(true);
     expect(canAccessManualModelSelection('basic')).toBe(true);
     expect(canAccessManualModelSelection('pro')).toBe(true);
@@ -689,7 +664,6 @@ describe('model catalog helpers', () => {
       allowMediaGeneration: false,
     });
     expect(getTierPolicy('pro')).toMatchObject({
-      // Round 13 — Advanced-mode toggle surfaces the manual picker for Pro.
       surfacedUx: 'auto_plus_manual',
       manualModelSelection: true,
       allowComputerUse: true,
@@ -703,9 +677,6 @@ describe('model catalog helpers', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Pro-tier task-aware routing (resolveAutoModeModel 3-arg signature)
-// ---------------------------------------------------------------------------
 describe('resolveAutoModeModel — task-aware routing', () => {
   it('keeps economy, balanced, and premium profiles distinct at Max tier', () => {
     const slots = modelRegistry.policies.auto.slots;
@@ -738,9 +709,6 @@ describe('resolveAutoModeModel — task-aware routing', () => {
 
   describe('explicit model selection is respected (not re-routed by task)', () => {
     it('concrete model + coding taskType returns the SAME model, not the coding slot', () => {
-      // Regression: the task-aware path ignored the input model and returned the
-      // task slot model, silently swapping an explicit pick and re-routing to a
-      // provider the user never chose.
       const explicitModel = getRoutingSlotModel('general_balanced_pro');
       expect(resolveAutoModeModel(explicitModel, 'pro', 'coding')).toBe(explicitModel);
     });
@@ -890,8 +858,6 @@ describe('resolveAutoModeModel — task-aware routing', () => {
     });
 
     it('Pro tier ignores usOnly flag (toggle gated by usOnlyRoutingAvailable)', () => {
-      // Pro tier policy does not set usOnlyRoutingAvailable, so the flag is
-      // ignored and reasoning still uses the normal Pro route.
       const result = resolveAutoModeModel('auto-balanced', 'pro', 'reasoning', { usOnly: true });
       expect(result).toBe(resolveAutoModeModel('auto-balanced', 'pro', 'reasoning'));
     });
@@ -974,9 +940,6 @@ describe('getDefaultModelFor — tier-aware default model resolution', () => {
   });
 
   it('returns the catalog model for the resolved slot — never a hardcoded literal', () => {
-    // The whole point of this helper is to read models.json via SLOT_REGISTRY.
-    // Spot-check that the returned IDs are present in the catalog by round-
-    // tripping through getRoutingSlotModel and matching exactly.
     const proChat = getDefaultModelFor('pro', 'chat');
     expect(proChat).toBe(getRoutingSlotModel('general_balanced_pro'));
     expect(proChat.length).toBeGreaterThan(0);
@@ -1018,8 +981,6 @@ describe('provider-owned model canonicalization', () => {
 
 describe('model env-gating (requiresEnvironment)', () => {
   it('SAFETY: no current model declares requiresEnvironment (Phase A is a pure no-op)', () => {
-    // The env-gating schema must change behavior for ZERO current models. The first
-    // env-gated model is introduced later (with E2B), not in this additive phase.
     const gated = listCanonicalModels().filter((m) => m.requiresEnvironment !== undefined);
     expect(gated).toEqual([]);
   });
@@ -1036,7 +997,6 @@ describe('model env-gating (requiresEnvironment)', () => {
   describe('evaluateModelEnvironment', () => {
     it('is selectable when the model requires no environment', () => {
       expect(evaluateModelEnvironment(undefined, undefined)).toEqual({ selectable: true });
-      // Availability is irrelevant for an unconstrained model.
       expect(evaluateModelEnvironment(undefined, { configured: false })).toEqual({
         selectable: true,
       });
@@ -1057,7 +1017,6 @@ describe('model env-gating (requiresEnvironment)', () => {
       expect(
         evaluateModelEnvironment('e2b', { configured: true, available: true }).selectable,
       ).toBe(true);
-      // Configured but unreachable → still locked.
       expect(
         evaluateModelEnvironment('e2b', { configured: true, available: false }).selectable,
       ).toBe(false);
@@ -1071,14 +1030,6 @@ describe('model env-gating (requiresEnvironment)', () => {
   });
 
   describe('web-search capability regression guard', () => {
-    // Regression test for a parity bug (2026-07-02): the chat-completions
-    // request-processor only injects the provider-native web_search tool when
-    // `capabilities.search` is true (a false value short-circuits the `??`
-    // fallback, so the tool is silently never offered). All three Anthropic
-    // models had `search: false` in the catalog even though
-    // apps/web/lib/llm-providers/anthropic.ts has full wire-format support for
-    // Anthropic's server-managed web_search tool — making that code path
-    // permanently dead for every model on that provider. Assert the fix stays in place.
     it('every current-generation Anthropic model advertises search support', () => {
       const anthropicModels = listCanonicalModels().filter(
         (model) => model.provider === 'anthropic' && model.availability !== 'unavailable',

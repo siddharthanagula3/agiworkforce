@@ -49,7 +49,6 @@ interface State {
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
 
-// HKS-001 fix: Clear timeout for a specific toast
 const clearToastTimeout = (toastId: string) => {
   const existingTimeout = toastTimeouts.get(toastId);
   if (existingTimeout !== undefined) {
@@ -58,7 +57,6 @@ const clearToastTimeout = (toastId: string) => {
   }
 };
 
-// HKS-001 fix: Clear all timeouts (for cleanup/reset)
 export const clearAllToastTimeouts = () => {
   toastTimeouts.forEach((timeout) => clearTimeout(timeout));
   toastTimeouts.clear();
@@ -119,7 +117,6 @@ export const reducer = (state: State, action: Action): State => {
     }
     case 'REMOVE_TOAST':
       if (action.toastId === undefined) {
-        // HKS-001 fix: Clear all timeouts when removing all toasts
         toastTimeouts.forEach((timeout) => clearTimeout(timeout));
         toastTimeouts.clear();
         return {
@@ -127,7 +124,6 @@ export const reducer = (state: State, action: Action): State => {
           toasts: [],
         };
       }
-      // HKS-001 fix: Clear timeout for this specific toast
       clearToastTimeout(action.toastId);
       return {
         ...state,

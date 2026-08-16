@@ -1,11 +1,5 @@
 'use client';
 
-/**
- * SkipLinks Component
- * WCAG 2.1 AA Compliance: Provides keyboard users with skip navigation links
- * to bypass repetitive content and navigate directly to main content areas.
- */
-
 interface SkipLink {
   href: string;
   label: string;

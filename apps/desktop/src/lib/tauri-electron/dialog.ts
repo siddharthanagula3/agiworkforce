@@ -1,11 +1,3 @@
-/**
- * Electron replacement for `@tauri-apps/plugin-dialog`, backed by native
- * dialogs in the main process.
- *
- * The web stub answers `false` to every `ask`/`confirm` — acceptable in a
- * browser tab where these paths are unreachable, but a shipped desktop app
- * must never silently answer "no" to a real confirmation prompt.
- */
 import { getElectronHostBridge } from './bridgeContract';
 
 function getDefaultPath(input?: string | { defaultPath?: string | null } | null): string | null {

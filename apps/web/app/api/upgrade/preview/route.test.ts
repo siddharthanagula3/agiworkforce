@@ -85,8 +85,6 @@ function makeStripeSubscription() {
 }
 
 function mockSubscriptionRow(row: Record<string, unknown>) {
-  // Authentication reads profiles before the route reads subscriptions, so a
-  // one-shot DB result would be consumed before it reaches the owner guard.
   dbMocks.query.mockImplementation(async (sql: string) => {
     if (sql.includes('from subscriptions')) return [row];
     if (sql.includes('from profiles')) {
@@ -158,11 +156,6 @@ describe('POST /api/upgrade/preview', () => {
     expect(subscriptionDetails).toMatchObject({
       proration_behavior: 'always_invoice',
     });
-    // Must be stated, not omitted. This assertion previously required the
-    // property to be ABSENT, on the assumption that omitting it preserves the
-    // renewal anchor. `invoices.createPreview` actually defaults it to `now`,
-    // which Stripe then refuses to combine with `proration_date` — so every
-    // upgrade preview returned 500 in production while this test passed.
     expect(subscriptionDetails).toMatchObject({ billing_cycle_anchor: 'unchanged' });
     expect(
       stripeMocks.createInvoicePreview.mock.calls[0]?.[0]?.subscription_details?.proration_date,
@@ -331,8 +324,6 @@ describe('POST /api/upgrade/preview', () => {
     it('quotes the recurring amount as unit price x seats', async () => {
       const response = await POST(teamRequest(12));
 
-      // 12 seats at 2000 minor units each. Publishing the unit amount would
-      // understate the org's going-forward bill twelve-fold.
       expect(await response.json()).toMatchObject({
         recurringAmountCents: 24_000,
         seats: 12,

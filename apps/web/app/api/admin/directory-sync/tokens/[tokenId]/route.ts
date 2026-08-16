@@ -19,17 +19,6 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 type RouteContext = { params: Promise<{ tokenId: string }> };
 
-/**
- * DELETE /api/admin/directory-sync/tokens/{tokenId}
- *
- * Revokes a SCIM bearer token. Soft-delete via `revoked_at`, so the record of
- * which credential an IdP was using survives the revocation, and the very next
- * SCIM request presenting it fails authentication (the verification query
- * filters on `revoked_at is null`).
- *
- * Scoped by organization in the UPDATE predicate: one tenant can never revoke
- * another's credential, and an unknown or foreign id is a 404 either way.
- */
 export async function DELETE(request: NextRequest, routeContext: RouteContext) {
   const rateLimited = await withRateLimit(request, 'scim-token-manage');
   if (rateLimited) return rateLimited;
@@ -53,7 +42,6 @@ export async function DELETE(request: NextRequest, routeContext: RouteContext) {
     const revoked = await revokeScimToken(getNeonDb(), tokenId, access.organizationId);
 
     if (!revoked) {
-      // Unknown, another tenant's, or already revoked — all indistinguishable.
       return NextResponse.json({ error: 'Token not found' }, { status: 404 });
     }
 

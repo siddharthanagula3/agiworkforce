@@ -1,12 +1,3 @@
-/**
- * RT-02: API key DoS via Argon2 scan
- *
- * Tests that:
- * - Garbage keys are rejected immediately (no Argon2 work)
- * - New keys (with key_id prefix) use single-row DB lookup
- * - Legacy keys go through the slow path but are still rejected for wrong format
- * - Format regex works correctly
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -16,7 +7,6 @@ vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-// ─── Argon2 mock — track call count ──────────────────────────────────────────
 const mockArgon2Verify = vi.fn();
 const mockArgon2Hash = vi.fn().mockResolvedValue('$argon2id$mocked-hash');
 vi.mock('argon2', () => ({
@@ -27,7 +17,6 @@ vi.mock('argon2', () => ({
   },
 }));
 
-// ─── Neon DB mock ─────────────────────────────────────────────────────────────
 const mockNeonQuery = vi.fn();
 const mockNeonExecute = vi.fn().mockResolvedValue(1);
 
@@ -47,7 +36,6 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockArgon2Verify.mockResolvedValue(false);
-    // Default: no key found
     mockNeonQuery.mockResolvedValue([]);
     mockNeonExecute.mockResolvedValue(1);
   });
@@ -62,7 +50,6 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
 
     it('does not match old key format (no underscore separator after prefix)', () => {
       const key = 'sk_live_API_KEY_TEST_OLD_FORMAT_REDACTED';
-      // Old format: no second underscore after the 8-hex keyId segment
       expect(KEY_ID_REGEX.test(key)).toBe(false);
     });
 
@@ -97,19 +84,16 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
       const keyId = '1a2b3c4d5e6f7890';
       const rawKey = `sk_live_${keyId}_someSecretValue`;
 
-      // Mock: no matching key found (invalid key)
       mockNeonQuery.mockResolvedValue([]);
 
       const result = await ApiKeyService.verifyKey(rawKey);
       expect(result).toBeNull();
 
-      // Should have queried api_keys table with the key_prefix
       expect(mockNeonQuery).toHaveBeenCalledOnce();
       const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
       expect(sql).toContain('api_keys');
       expect(sql).toContain('key_prefix');
       expect(params).toContain(keyId);
-      // Should NOT have run Argon2 (no matching key)
       expect(mockArgon2Verify).not.toHaveBeenCalled();
     });
 
@@ -118,7 +102,6 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
       const rawKey = `sk_live_${keyId}_someSecretValue`;
       const storedHash = '$argon2id$v=19$m=65536,t=3,p=4$fakehash';
 
-      // Mock: found a matching key
       mockNeonQuery.mockResolvedValue([
         {
           id: 'key-1',
@@ -137,7 +120,6 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
       const result = await ApiKeyService.verifyKey(rawKey);
       expect(result).not.toBeNull();
       expect(result?.id).toBe('key-1');
-      // Exactly one Argon2 verify call
       expect(mockArgon2Verify).toHaveBeenCalledOnce();
       expect(mockArgon2Verify).toHaveBeenCalledWith(storedHash, rawKey);
     });
@@ -163,7 +145,6 @@ describe('RT-02: API key DoS fix — fast verify path', () => {
 
       const result = await ApiKeyService.verifyKey(rawKey);
       expect(result).toBeNull();
-      // Only one Argon2 call — no fan-out
       expect(mockArgon2Verify).toHaveBeenCalledOnce();
     });
   });

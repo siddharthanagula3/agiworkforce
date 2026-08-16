@@ -67,8 +67,6 @@ describe('SSO entitlement gate', () => {
     mockExecute.mockResolvedValue(undefined);
   });
 
-  // Every plan that is NOT enterprise must be refused, including `team`, which
-  // holds `team_admin` but deliberately not `enterprise_controls`.
   const deniedPlans = ['local-only', 'byok', 'free', 'basic', 'pro', 'max', 'max_15x', 'team'];
 
   it.each(deniedPlans)('refuses GET for a %s subscriber', async (plan) => {
@@ -80,7 +78,6 @@ describe('SSO entitlement gate', () => {
     const body = (await response.json()) as { code: string; currentPlan: string };
     expect(body.code).toBe('SUBSCRIPTION_REQUIRED');
     expect(body.currentPlan).toBe(plan);
-    // The gate must short-circuit before any connection is read.
     expect(mockQuery).not.toHaveBeenCalled();
   });
 
@@ -167,7 +164,7 @@ describe('SSO entitlement gate', () => {
 
   it('admits an active enterprise subscriber', async () => {
     onPlan('enterprise');
-    mockQuery.mockResolvedValueOnce([]); // organization_members lookup
+    mockQuery.mockResolvedValueOnce([]);
 
     const response = await GET(jsonRequest('http://localhost/api/admin/sso', 'GET'));
 
@@ -198,8 +195,6 @@ describe('getSSOAdminAccess', () => {
       canManageSSO: true,
     });
 
-    // `team` outranks `pro` in price but holds no enterprise controls, which a
-    // tier comparison would get wrong.
     mockGetSubscription.mockResolvedValue({ plan_tier: 'team', status: 'active' });
     await expect(getSSOAdminAccess(db, 'u')).resolves.toEqual({
       plan: 'team',

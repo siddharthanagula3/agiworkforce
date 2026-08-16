@@ -1,10 +1,5 @@
-/**
- * MCP API — typed wrappers for mcp_*, mcpb_*, extension_*, and mcp_server_* Tauri commands.
- */
 
 import { command } from '@agiworkforce/client-runtime';
-
-// ---- Types ----
 
 export interface McpServerInfo {
   name: string;
@@ -55,8 +50,6 @@ export interface RegistryPackage {
   description: string;
   version: string;
 }
-
-// ---- MCP Core ----
 
 export async function mcpGetRegistry(): Promise<RegistryPackage[]> {
   return command<RegistryPackage[]>('mcp_get_registry');
@@ -166,8 +159,6 @@ export async function mcpUpdateFilesystemDirectories(directories: string[]): Pro
   return command<string>('mcp_update_filesystem_directories', { directories });
 }
 
-// ---- MCP OAuth ----
-
 export interface OAuthStartResponse {
   authUrl: string;
   state: string;
@@ -228,8 +219,6 @@ export async function mcpConnectConnector(connectorId: string): Promise<void> {
 export async function saveApiKey(provider: string, key: string): Promise<void> {
   return command<void>('save_api_key', { provider, key });
 }
-
-// ---- MCP Extensions ----
 
 export interface ExtensionInfo {
   id: string;
@@ -306,8 +295,6 @@ export async function extensionSelectPackage(): Promise<string | null> {
   return command<string | null>('extension_select_package');
 }
 
-// ---- MCP Bundles ----
-
 export interface McpBundle {
   id: string;
   name: string;
@@ -357,8 +344,6 @@ export async function mcpbGetCategories(): Promise<string[]> {
 export async function mcpbGetFeatured(): Promise<McpBundle[]> {
   return command<McpBundle[]>('mcpb_get_featured');
 }
-
-// ---- MCP Server (self-hosted) ----
 
 export async function mcpServerStart(): Promise<void> {
   return command<void>('mcp_server_start');

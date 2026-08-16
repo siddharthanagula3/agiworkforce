@@ -1,20 +1,8 @@
-/**
- * Regression tests for connect.ts.
- *
- * Covers:
- *   - happy-path lifecycle: open -> listTools -> callTool -> close
- *   - listTools failure path: client.close() is called before propagating
- *   - buildMcpToolCatalog: per-server failures surface via console.error and
- *     don't poison the rest of the catalog
- *
- * We mock the MCP SDK Client so no real subprocess / socket is ever spawned.
- */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 beforeEach(() => {
   vi.resetModules();
-  // Stub the transport resolver so we don't try to spawn anything.
   vi.doMock('../transport', () => ({
     resolveMcpTransport: vi.fn(() => ({
       /* fake transport */
@@ -93,7 +81,6 @@ describe('connectMcpServer — happy path lifecycle', () => {
           description: 'Reads a file from disk',
           inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
         },
-        // Tool with no description -> fallback should kick in
         { name: 'sleep' },
       ],
     });
@@ -117,16 +104,13 @@ describe('connectMcpServer — happy path lifecycle', () => {
     expect(handle.catalog.tools[0]?.title).toBe('Read File');
     expect(handle.catalog.tools[0]?.description).toBe('Reads a file from disk');
     expect(handle.catalog.tools[0]?.fallbackDescription).toBe('Tool read_file on MCP server fs');
-    // Second tool inherits empty inputSchema and fallback description.
     expect(handle.catalog.tools[1]?.toolName).toBe('sleep');
     expect(handle.catalog.tools[1]?.fallbackDescription).toBe('Tool sleep on MCP server fs');
     expect(handle.catalog.tools[1]?.inputSchema).toEqual({ type: 'object', properties: {} });
 
-    // Lifecycle assertions
     expect(state.connectCalled).toBe(1);
     expect(state.listToolsCalled).toBe(1);
 
-    // callTool on the handle round-trips through the stub
     const result = await handle.callTool('read_file', { path: '/etc/hosts' });
     expect(result.content[0]).toEqual({
       type: 'text',
@@ -145,7 +129,6 @@ describe('connectMcpServer — happy path lifecycle', () => {
       serverName: 'My Server / v2',
       config: { command: '/bin/echo' },
     });
-    // Spaces, slash, dot — all collapse to underscores; lowercased.
     expect(handle.safeServerName).toBe('my_server_v2');
   });
 });
@@ -170,8 +153,6 @@ describe('connectMcpServer — listTools failure', () => {
     }
     expect(caught).toBeInstanceOf(Error);
     expect((caught as Error).message).toMatch(/listTools failed/);
-    // Critical regression: client.close MUST run before the throw propagates,
-    // otherwise we leak an open transport for every failed connect.
     expect(state.closeCalled).toBe(1);
     expect(state.connectCalled).toBe(1);
     expect(state.listToolsCalled).toBe(1);
@@ -192,8 +173,6 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
         async listTools(): Promise<{ tools: ToolListItem[] }> {
           listCalls += 1;
           if (listCalls === 1) {
-            // The "good" server (alphabetical first by Object.entries order
-            // in mod.connectMcpServer) lists one tool.
             return { tools: [{ name: 't1' }] };
           }
           throw new Error('bad server: connection refused');
@@ -212,13 +191,11 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
       bad: { command: '/bin/false' },
     });
 
-    // Catalog still produced; only the good server's tool surfaces.
     expect(result.catalog.tools).toHaveLength(1);
     expect(result.catalog.tools[0]?.toolName).toBe('t1');
     expect(Object.keys(result.catalog.servers)).toEqual(['good']);
     expect(result.handles).toHaveLength(1);
 
-    // The bad server's failure was logged so operators can see it.
     const messages = errSpy.mock.calls.map((args) => args.join(' '));
     expect(messages.some((m) => m.includes('bad') && m.includes('connection refused'))).toBe(true);
   });
@@ -255,8 +232,6 @@ describe('buildMcpToolCatalog — per-server failure isolation', () => {
     expect(errSpy).toHaveBeenCalledTimes(2);
   });
 });
-
-// ─── FIX (audit 2026-05-20, §2): tool-name + schema validation tests ────
 
 import { isAcceptableMcpToolName, validateMcpInputSchema } from '../connect';
 
@@ -308,7 +283,6 @@ describe('validateMcpInputSchema', () => {
   });
 
   it('rejects schemas exceeding the depth cap', () => {
-    // Build a 20-level-deep nested schema (> 16).
     let leaf: Record<string, unknown> = { type: 'string' };
     for (let i = 0; i < 20; i++) {
       leaf = { type: 'object', properties: { nested: leaf } };

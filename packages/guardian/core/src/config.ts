@@ -1,11 +1,3 @@
-/**
- * `.agi-guardian.yml` repository configuration.
- *
- * Invalid or missing configuration must fail closed to the safest behavior:
- * shadow mode, no blocking, conservative comment budgets. Parse errors are
- * surfaced to the caller so they can be published as a config finding rather
- * than silently ignored.
- */
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
@@ -117,23 +109,16 @@ export const GuardianConfigSchema = z.object({
 });
 export type GuardianConfig = z.infer<typeof GuardianConfigSchema>;
 
-/** The fail-closed default configuration (shadow mode, conservative budgets). */
 export function defaultGuardianConfig(): GuardianConfig {
   return GuardianConfigSchema.parse({});
 }
 
 export interface ParsedGuardianConfig {
   config: GuardianConfig;
-  /** Non-empty when the repo config was invalid and defaults were applied. */
   errors: string[];
   source: 'repo' | 'default';
 }
 
-/**
- * Parse repository YAML into a validated config. Any failure — YAML syntax,
- * schema violation, non-object root — returns the fail-closed default config
- * together with the reasons, never a partially-trusted config.
- */
 export function parseGuardianConfig(yamlText: string | null | undefined): ParsedGuardianConfig {
   if (yamlText == null || yamlText.trim() === '') {
     return { config: defaultGuardianConfig(), errors: [], source: 'default' };
@@ -166,17 +151,11 @@ export function parseGuardianConfig(yamlText: string | null | undefined): Parsed
   return { config: result.data, errors: [], source: 'repo' };
 }
 
-/**
- * Minimal glob matching for ignore paths: supports `**`, `*`, and literal
- * segments. Deliberately dependency-free; not a full glob implementation.
- */
 export function matchesIgnorePath(path: string, patterns: readonly string[]): boolean {
   return patterns.some((pattern) => globToRegExp(pattern).test(path));
 }
 
 function globToRegExp(pattern: string): RegExp {
-  // Single-pass tokenizer: multi-pass string replacement would re-process the
-  // regex text produced by earlier passes (e.g. the `*` inside `.*`).
   let out = '';
   let i = 0;
   while (i < pattern.length) {
@@ -193,10 +172,6 @@ function globToRegExp(pattern: string): RegExp {
       out += '[^/]';
       i += 1;
     } else {
-      // `pattern[i]` is a single character, so replace-first already escaped
-      // all of it; the missing `g` was nonetheless a latent trap (and what
-      // js/incomplete-sanitization flagged) the moment this ever handles more
-      // than one character.
       out += (pattern[i] as string).replace(/[.+^${}()|[\]\\]/g, '\\$&');
       i += 1;
     }

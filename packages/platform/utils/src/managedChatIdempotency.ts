@@ -1,12 +1,3 @@
-/**
- * Stable client identity for one billable Managed Cloud chat operation.
- *
- * Callers own `operationId`: create it once at the user-action boundary and
- * reuse it for every transport retry. This module deliberately does not mint a
- * random value, because creating identity inside a retry loop defeats
- * idempotency. A deliberate continuation, regeneration, or tool resume must use
- * a new operation id.
- */
 
 export type ManagedChatSurface = 'web' | 'desktop' | 'mobile';
 export type ManagedChatPurpose = 'send' | 'continue' | 'tool-resume' | 'compare';
@@ -33,7 +24,6 @@ export function createManagedChatIdempotencyKey(identity: ManagedChatIdempotency
   return key;
 }
 
-/** True only for the AGI-owned, version-1 managed-chat key namespace. */
 export function isManagedChatIdempotencyKey(value: string): boolean {
   return KEY_PATTERN.test(value) && value.length <= 128;
 }

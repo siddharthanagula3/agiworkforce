@@ -1,13 +1,3 @@
-/**
- * Dialog Component Tests
- *
- * Tests for the Dialog UI component including:
- * - Opening and closing behavior
- * - Accessibility (aria-modal, focus management, escape key)
- * - Content rendering (header, footer, title, description)
- * - Close button customization
- * - User interactions
- */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -157,7 +147,6 @@ describe('Dialog Component', () => {
         </Dialog>,
       );
 
-      // The overlay is the parent element with the dark background
       const overlay = document.querySelector('[data-state="open"]');
       if (overlay) {
         await user.click(overlay);
@@ -435,12 +424,10 @@ describe('Dialog Component', () => {
         </Dialog>,
       );
 
-      // Tab through the dialog
       await user.tab();
       await user.tab();
       await user.tab();
 
-      // Focus should stay within dialog (wrap around or stay on last element)
       const dialog = screen.getByRole('dialog');
       expect(dialog.contains(document.activeElement)).toBe(true);
     });
@@ -558,11 +545,9 @@ describe('Dialog Component', () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
       render(<ControlledDialog />);
 
-      // Open
       await user.click(screen.getByText('Open'));
       expect(screen.getByRole('dialog')).toBeInTheDocument();
 
-      // Close via custom button
       await user.click(screen.getByText('Close Manually'));
       await waitFor(() => {
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

@@ -8,11 +8,6 @@ import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 
 const CONNECTORS_BY_ID = new Map(CONNECTORS.map((connector) => [connector.id, connector]));
 
-/**
- * Live connector-status checklist for a plugin detail page. Client-side because
- * connection state comes from the signed-in user's connector list; signed-out
- * visitors simply see every connector as not connected.
- */
 export function ConnectorChecklist({ connectorIds }: { connectorIds: string[] }) {
   const { connectedIds, loading: connectorsLoading } = useConnectors();
 

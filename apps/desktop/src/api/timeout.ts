@@ -1,15 +1,6 @@
-/**
- * Timeout Management API
- *
- * Provides interfaces for managing extended task timeouts and warnings.
- */
 
 import { invoke } from '../lib/tauri-mock';
 
-/**
- * TimeoutConfig fields use snake_case to match the Rust struct
- * (no `#[serde(rename_all = "camelCase")]` on the Rust side).
- */
 export interface TimeoutConfig {
   max_duration_secs: number;
   enable_warnings: boolean;
@@ -27,30 +18,18 @@ export type TimeoutResponse =
   | { type: 'pause_later' }
   | { type: 'abort' };
 
-/**
- * Get the current timeout configuration from settings
- */
 export const getTimeoutConfig = async (): Promise<TimeoutConfig> => {
   return invoke<TimeoutConfig>('timeout_get_config');
 };
 
-/**
- * Set a new timeout configuration
- */
 export const setTimeoutConfig = async (config: TimeoutConfig): Promise<void> => {
   return invoke<void>('timeout_set_config', { config });
 };
 
-/**
- * Get recommended timeout in seconds based on task type
- */
 export const getRecommendedTimeout = async (taskType: string): Promise<number> => {
   return invoke<number>('timeout_get_recommended', { taskType });
 };
 
-/**
- * Format duration in seconds to human-readable string (e.g., "2h 30m")
- */
 export const formatDuration = (seconds: number): string => {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -65,19 +44,13 @@ export const formatDuration = (seconds: number): string => {
   return `${secs}s`;
 };
 
-/**
- * Convert minutes to seconds with validation
- */
 export const minutesToSeconds = (minutes: number): number => {
   const MIN = 1;
-  const MAX = 72 * 60; // 72 hours
+  const MAX = 72 * 60;
   const clamped = Math.max(MIN, Math.min(MAX, minutes));
   return clamped * 60;
 };
 
-/**
- * Convert seconds to minutes
- */
 export const secondsToMinutes = (seconds: number): number => {
   return Math.round(seconds / 60);
 };

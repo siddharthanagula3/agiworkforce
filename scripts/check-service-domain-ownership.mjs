@@ -162,10 +162,6 @@ for (const relativePath of [
   requireFile(relativePath);
 }
 
-// The @agiworkforce/services compatibility facade was deleted at M8
-// (2026-07-15). Only the anti-regression checks below remain: nothing may
-// depend on or import the facade name, and the facade directory must not
-// reappear.
 if (exists('packages/services')) {
   errors.push('packages/services facade was deleted at M8 and must not reappear');
 }

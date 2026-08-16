@@ -21,10 +21,6 @@ import {
 } from '@/src/features/integrations/services/deviceIntegrations';
 import * as Notifications from 'expo-notifications';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 type IntegrationStatus = 'active' | 'inactive' | 'needs-permission' | 'unavailable';
 
 interface DeviceIntegration {
@@ -34,10 +30,6 @@ interface DeviceIntegration {
   status: IntegrationStatus;
   lastSync?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function permissionToStatus(p: PermissionStatus): IntegrationStatus {
   switch (p) {
@@ -49,9 +41,6 @@ function permissionToStatus(p: PermissionStatus): IntegrationStatus {
       return 'inactive';
   }
 }
-
-// STB-21: healthToStatus() and the Health/Google Fit row were removed with the
-// health-context service — the backend route they reported on never existed.
 
 function notifStatusToIntegration(s: Notifications.PermissionStatus): IntegrationStatus {
   if (s === 'granted') return 'active';
@@ -85,10 +74,6 @@ function statusLabel(status: IntegrationStatus): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Status icon component
-// ---------------------------------------------------------------------------
-
 function StatusIcon({ status, colors }: { status: IntegrationStatus; colors: ColorScheme }) {
   switch (status) {
     case 'active':
@@ -100,10 +85,6 @@ function StatusIcon({ status, colors }: { status: IntegrationStatus; colors: Col
       return <HelpCircle size={14} color={colors.textMuted} />;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Integration row
-// ---------------------------------------------------------------------------
 
 interface IntegrationRowProps {
   integration: DeviceIntegration;
@@ -153,10 +134,6 @@ function IntegrationRow({ integration, icon, colors, onPress }: IntegrationRowPr
   );
 }
 
-// ---------------------------------------------------------------------------
-// Icon registry
-// ---------------------------------------------------------------------------
-
 function getIconMap(colors: ColorScheme): Record<string, React.ReactNode> {
   return {
     calendar: <Calendar size={18} color={colors.agentActive} />,
@@ -165,9 +142,7 @@ function getIconMap(colors: ColorScheme): Record<string, React.ReactNode> {
   };
 }
 
-// ---------------------------------------------------------------------------
 // Main exported component
-// ---------------------------------------------------------------------------
 
 export function DeviceIntegrationStatus() {
   const colors = useThemeColors();

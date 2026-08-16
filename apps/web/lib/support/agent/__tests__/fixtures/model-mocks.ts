@@ -1,16 +1,3 @@
-/**
- * Shared provider mocks for the answer-engine tests.
- *
- * Imported lazily from inside each test file's `vi.mock` factory (factories are
- * evaluated at module-load time and may `await import`), so every test file
- * shares one instance of these spies.
- *
- * The point of the harness is that the provider path is WIRED UP and observable:
- * `resolveAutoRoute` returns a real-shaped selected route and the adapter/drain
- * pair returns whatever the test queues. An assertion that "the provider was
- * never constructed" is therefore non-vacuous — `answers-when-grounded` in
- * `citation-invariant.test.ts` proves the same harness DOES reach the provider.
- */
 
 import { vi, type Mock } from 'vitest';
 
@@ -33,7 +20,6 @@ interface ModelMocks {
   resolveAutoRoute: Mock;
   buildServerProviderAdapter: Mock;
   drainToLlmResponse: Mock;
-  /** Chat requests the adapter's `stream()` actually received. */
   streamedRequests: unknown[];
 }
 
@@ -44,7 +30,6 @@ export const modelMocks: ModelMocks = {
   streamedRequests: [],
 };
 
-/** Raw text the mocked provider returns next. */
 let nextModelText = '{"answer":"","citedChunkIds":[],"abstain":true,"abstainReason":"none"}';
 
 export function queueModelJson(payload: unknown): void {
@@ -55,10 +40,6 @@ export function queueModelRawText(text: string): void {
   nextModelText = text;
 }
 
-/**
- * Re-arm every spy. `vitest.config.ts` sets `mockReset: true`, so
- * implementations are cleared before each test and must be reinstalled.
- */
 export function armModelMocks(): void {
   process.env['SUPPORT_AGENT_ENABLED'] = '1';
   modelMocks.streamedRequests.length = 0;
@@ -80,7 +61,6 @@ export function armModelMocks(): void {
   }));
 }
 
-/** The user-role prompt text the provider actually received, if any. */
 export function lastUserPrompt(): string {
   const request = modelMocks.streamedRequests.at(-1) as
     | { messages?: { role?: string; content?: unknown }[] }

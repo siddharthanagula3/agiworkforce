@@ -1,20 +1,4 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-/**
- * Regression test for CompanionScreen's "Maximum update depth exceeded" crash.
- *
- * Found via live simulator testing: deep-linking to /(app)/companion crashed
- * immediately with a React "Maximum update depth exceeded" render error.
- * Root cause: `useAgentStore((s) => s.pendingApprovals.filter(...))` created a
- * brand-new array on every store read. Zustand's default selector equality is
- * reference (Object.is), so the "changed" array triggered an infinite
- * resubscribe/re-render loop. Fixed by selecting the raw array and filtering
- * in a useMemo keyed on that stable reference.
- *
- * This test renders the real screen against the real (default-state) Zustand
- * stores — only native/network service calls and heavy child screens are
- * mocked — and asserts it renders without React's update-depth error, which
- * is exactly the failure mode this regression guards against.
- */
 import React from 'react';
 import { render } from '@testing-library/react-native';
 
@@ -106,10 +90,6 @@ jest.mock('@/src/features/companion/components/ConnectionStateViews', () => {
 jest.mock('@/src/features/companion/components/DesktopInfoCard', () => ({
   DesktopInfoCard: () => null,
 }));
-// PAR-M28 added a first-run setup gate ahead of DisconnectedView. Stubbed like
-// every other companion child here — the checklist's own content is covered by
-// __tests__/dispatch-setup-checklist.test.tsx; what matters at this level is
-// which of the two the screen picks.
 let mockHasSeenDispatchSetup = true;
 jest.mock('@/src/features/companion/components/DesktopSetupChecklistView', () => {
   const RN = require('react-native');
@@ -158,8 +138,6 @@ describe('CompanionScreen', () => {
   });
 
   it('renders without a "Maximum update depth exceeded" infinite render loop', () => {
-    // Regression guard: this used to throw synchronously (React converts the
-    // repeated-setState loop into a thrown Error during render/commit).
     expect(() => render(<CompanionScreen />)).not.toThrow();
   });
 

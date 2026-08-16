@@ -1,16 +1,3 @@
-/**
- * @file The propose → confirm → execute protocol.
- *
- * THE SPLIT IS THE SECURITY PROPERTY.
- *
- * `proposeSupportAction` writes a row describing exactly one effect and returns
- * a token. `confirmSupportAction` takes ONLY `{ proposalId, confirmationToken }`
- * — no action id, no params — and re-reads what to do from the stored row. A
- * confirm request therefore cannot name a different action or different
- * parameters than the ones the user was shown, because it cannot name any.
- *
- * Every step fails closed. Ambiguity is a refusal, never a best guess.
- */
 
 import 'server-only';
 
@@ -45,7 +32,6 @@ import {
 } from './types';
 
 export interface ProposeInput {
-  /** MUST come from getClerkAuthUser(request). Never from a body or a model. */
   userId: string;
   actionId: string;
   params: unknown;
@@ -56,12 +42,10 @@ export interface ProposeInput {
 
 export interface ProposeOutput {
   proposal: SupportActionProposalView;
-  /** Returned exactly once. Only its SHA-256 is stored. */
   confirmationToken: string;
 }
 
 export interface ConfirmInput {
-  /** MUST come from getClerkAuthUser(request). */
   userId: string;
   proposalId: string;
   confirmationToken: string;
@@ -69,11 +53,6 @@ export interface ConfirmInput {
   request?: Request;
 }
 
-/**
- * Ownership validation per action. Runs at propose time AND after the token
- * claim: state can change inside the token's lifetime, and the post-claim call
- * is the one that gates the mutation.
- */
 async function assertTargetOwned(
   userId: string,
   actionId: SupportActionId,
@@ -86,9 +65,6 @@ async function assertTargetOwned(
     case 'regenerate_api_key':
       await assertApiKeyOwned(userId, String(params['keyId']));
       return;
-    // The remaining actions operate on "the caller's own account" as a whole.
-    // There is no target to own, and — critically — no parameter through which
-    // one could be named.
     case 'resend_verification_email':
     case 'export_account_data':
     case 'open_billing_portal':
@@ -130,7 +106,6 @@ function assertNotExcluded(actionId: string, userId: string, surface: SupportAct
   });
 }
 
-/** The actions this deployment can honestly offer, right now. */
 export function listAvailableSupportActions(): {
   actions: SupportActionOption[];
   unavailable: { id: SupportActionId; reason: string }[];
@@ -164,8 +139,6 @@ export async function proposeSupportAction(input: ProposeInput): Promise<Propose
   const { userId, surface } = input;
   if (!userId) throw new Error('proposeSupportAction requires an authenticated user id');
 
-  // Excluded first: a destructive request must be refused with an explanation
-  // and a real control, and must never touch the proposal machinery.
   assertNotExcluded(input.actionId, userId, surface);
 
   const definition = getSupportAction(input.actionId);
@@ -263,7 +236,6 @@ export async function proposeSupportAction(input: ProposeInput): Promise<Propose
     ...(input.request ? { request: input.request } : {}),
   });
 
-  // describe() is the SERVER's sentence. The model wrote none of this.
   const described = definition.describe(params);
   return {
     proposal: {
@@ -286,8 +258,6 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
   const { userId, surface } = input;
   if (!userId) throw new Error('confirmSupportAction requires an authenticated user id');
 
-  // One atomic claim decides caller binding, token validity, single use and
-  // expiry. Everything after this point works from the STORED row.
   const claimed = await claimProposal({
     proposalId: input.proposalId,
     userId,
@@ -295,8 +265,6 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
   });
 
   if (!claimed) {
-    // Deliberately undifferentiated: unknown id, someone else's proposal,
-    // already used and expired all look identical from outside.
     logger.warn(
       {
         event: 'support_action_claim_rejected',
@@ -325,8 +293,6 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
   const actionId = definition.id;
 
   const fail = async (reason: string, outcome: 'failure' | 'denied') => {
-    // A denied claim is NEVER rolled back to `proposed`. A spent token stays
-    // spent even when execution refused.
     await finalizeProposal({ proposalId: claimed.id, userId, outcome });
     await recordSupportActionAttempt({
       userId,
@@ -342,8 +308,6 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
 
   const storedParams = (claimed.params ?? {}) as Record<string, unknown>;
 
-  // Integrity: the row's params must still hash to what was proposed. Cheap,
-  // and it means a params edit made outside this code path cannot be executed.
   if (!digestsMatch(hashActionParams(storedParams), claimed.params_hash)) {
     await fail('params_hash_mismatch', 'denied');
     throw new SupportActionRefusal(
@@ -376,9 +340,6 @@ export async function confirmSupportAction(input: ConfirmInput): Promise<{
     );
   }
 
-  // Re-validate ownership AFTER the claim. A connector can be disconnected or a
-  // key revoked inside the token's five minutes; the honest outcome is a
-  // refusal the UI explains, not a mutation against stale state.
   try {
     await assertTargetOwned(userId, actionId, params);
   } catch (error) {
@@ -428,10 +389,6 @@ async function executeAction(
     case 'open_billing_portal':
       return executeHandoff(definition);
     case 'resend_verification_email':
-      // Unreachable while `isVerificationEmailSendable()` is false — the
-      // availability gate above refuses first. Kept as an explicit fail-closed
-      // branch so flipping the probe on without writing the sender cannot
-      // silently "succeed" at sending nothing.
       throw new SupportActionRefusal(
         'SUPPORT_ACTION_UNAVAILABLE',
         409,

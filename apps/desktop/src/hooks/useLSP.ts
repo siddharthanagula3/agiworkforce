@@ -83,7 +83,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
 
   const serverRef = useRef(server);
   const isStartingRef = useRef(isStarting);
-  // HKS-003 fix: Track mount state to prevent state updates after unmount
   const isMountedRef = useRef(true);
   serverRef.current = server;
   isStartingRef.current = isStarting;
@@ -99,19 +98,16 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         language,
         rootPath,
       });
-      // HKS-003 fix: Check if component is still mounted before updating state
       if (isMountedRef.current) {
         setServer(serverInfo);
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      // HKS-003 fix: Check if component is still mounted before updating state
       if (isMountedRef.current) {
         setError(errorMsg);
       }
       console.error('Failed to start LSP server:', errorMsg);
     } finally {
-      // HKS-003 fix: Check if component is still mounted before updating state
       if (isMountedRef.current) {
         setIsStarting(false);
       }
@@ -123,14 +119,12 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
 
     try {
       await invoke('lsp_stop_server', { language });
-      // HKS-003 fix: Check if component is still mounted before updating state
       if (isMountedRef.current) {
         setServer(null);
         setDiagnostics({});
         documentVersionRef.current = {};
       }
     } catch (err) {
-      // AUDIT-P3-ERROR: Log but don't fail - server may already be stopped
       console.debug('[LSP] Failed to stop server (may already be stopped):', err);
     }
   }, [language]);
@@ -148,7 +142,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         documentVersionRef.current[uri] = 1;
       } catch (err) {
-        // AUDIT-P3-ERROR: Log but continue - LSP features will be degraded
         console.debug('[LSP] Failed to notify document open (features may be limited):', err);
       }
     },
@@ -170,7 +163,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
           content,
         });
       } catch (err) {
-        // AUDIT-P3-ERROR: Log but continue - diagnostics may be stale
         console.debug('[LSP] Failed to notify document change (diagnostics may be stale):', err);
       }
     },
@@ -185,7 +177,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         await invoke('lsp_did_close', { language, uri });
         delete documentVersionRef.current[uri];
       } catch (err) {
-        // AUDIT-P3-ERROR: Log but continue - cleanup is best-effort
         console.debug('[LSP] Failed to notify document close:', err);
       }
     },
@@ -205,7 +196,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return items;
       } catch (err) {
-        // AUDIT-P3-ERROR: Log at debug level - completions are optional UX enhancement
         console.debug('[LSP] Failed to get completions:', err);
         return [];
       }
@@ -226,7 +216,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return hover;
       } catch (err) {
-        // AUDIT-P3-ERROR: Log at debug level - hover is optional UX enhancement
         console.debug('[LSP] Failed to get hover:', err);
         return null;
       }
@@ -247,7 +236,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return locations;
       } catch (err) {
-        // AUDIT-P3-ERROR: Log at debug level - go-to-definition is optional
         console.debug('[LSP] Failed to get definition:', err);
         return [];
       }
@@ -268,7 +256,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return locations;
       } catch (err) {
-        // AUDIT-P3-ERROR: Log at debug level - find-references is optional
         console.debug('[LSP] Failed to get references:', err);
         return [];
       }
@@ -295,7 +282,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return edit;
       } catch (err) {
-        // AUDIT-P3-ERROR: Rename failure is more impactful - keep at error level
         console.error('[LSP] Failed to rename symbol:', err);
         return null;
       }
@@ -314,7 +300,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return edits;
       } catch (err) {
-        // AUDIT-P3-ERROR: Format failure is user-initiated - keep at error level
         console.error('[LSP] Failed to format document:', err);
         return [];
       }
@@ -333,7 +318,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return symbols;
       } catch (err) {
-        // AUDIT-P3-ERROR: Symbol search is user-initiated but non-critical
         console.debug('[LSP] Failed to search workspace symbols:', err);
         return [];
       }
@@ -358,7 +342,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return actions;
       } catch (err) {
-        // AUDIT-P3-ERROR: Code actions are optional quick-fix suggestions
         console.debug('[LSP] Failed to get code actions:', err);
         return [];
       }
@@ -377,7 +360,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
         });
         return diags;
       } catch (err) {
-        // AUDIT-P3-ERROR: Diagnostics are important but graceful degradation is acceptable
         console.debug('[LSP] Failed to get diagnostics:', err);
         return [];
       }
@@ -392,13 +374,11 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
       const allDiags = await invoke<Record<string, LSPDiagnostic[]>>('lsp_get_all_diagnostics', {
         language,
       });
-      // HKS-003 fix: Check if component is still mounted before updating state
       if (isMountedRef.current) {
         setDiagnostics(allDiags);
       }
       return allDiags;
     } catch (err) {
-      // AUDIT-P3-ERROR: Diagnostics are important but graceful degradation is acceptable
       console.debug('[LSP] Failed to get all diagnostics:', err);
       return {};
     }
@@ -415,7 +395,6 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
   }, []);
 
   useEffect(() => {
-    // HKS-003 fix: Reset mount state on effect setup
     isMountedRef.current = true;
 
     if (autoStart) {
@@ -423,12 +402,10 @@ export function useLSP({ language, rootPath, autoStart = true }: UseLSPOptions) 
     }
 
     return () => {
-      // HKS-003 fix: Mark as unmounted to prevent state updates in async callbacks
       isMountedRef.current = false;
 
       if (serverRef.current) {
         void invoke('lsp_stop_server', { language }).catch((err) => {
-          // AUDIT-P3-ERROR: Cleanup failure - server may already be stopped
           console.debug('[LSP] Failed to stop server on cleanup (may already be stopped):', err);
         });
       }

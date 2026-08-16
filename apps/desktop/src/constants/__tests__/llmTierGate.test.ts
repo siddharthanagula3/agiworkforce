@@ -1,11 +1,3 @@
-/**
- * The desktop model gate used to re-derive the tier cascade locally, and its
- * Free branch was written as `accessTier === 'free' || accessTier === 'basic'`
- * — one roster for both plans. That is not the product: two Economy models
- * carry `tierPolicy.minTier: 'basic'`, so a Free desktop could select a model
- * the server (and every other surface) refuses. These pin that the desktop and
- * the shared catalog answer the same question the same way.
- */
 import { describe, it, expect } from 'vitest';
 import { getAllowedModelsForTier, getModelMetadataById } from '@agiworkforce/types';
 import {
@@ -42,11 +34,6 @@ describe('isModelAllowedForTier — Free is not Basic', () => {
     }
   });
 
-  // The roster the picker lists and the gate that enforces it are the same
-  // question. They used to be answered by two different bodies of code in this
-  // one file, and after the gate started reading `tierPolicy.minTier` they gave
-  // two different answers for Free: the roster offered all 5 Economy models
-  // while the gate refused 2. This fails against that shape.
   it('lists exactly the models the gate admits, for every tier', () => {
     const tiers = [
       'local-only',

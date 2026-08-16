@@ -1,24 +1,3 @@
-/**
- * Team and workspace membership, rendered inline.
- *
- * `GET /api/settings/organization` and the `/api/settings/team` family all
- * authenticate through `getClerkAuthUser`, so the device bearer reads and
- * mutates them directly. This replaces a "Manage team" button that opened
- * `/settings/team` in a webview gated on a Clerk browser cookie Desktop never
- * holds — it could land on `/login` while the app showed the user signed in.
- *
- * Two honesty constraints are enforced here rather than papered over:
- *   - Whether the user may administer the workspace is the server's verdict
- *     (`access.canManageTeam`), not a plan label this client re-derives. When
- *     it is false the admin controls are absent, not merely disabled-looking.
- *   - "Add member" adds an EXISTING AGI account by email. There is no
- *     invitation persistence or email delivery in this repo, so the copy says
- *     exactly that and an unknown address surfaces the server's own message.
- *
- * Seat limits are not shown: `maxMembers` is structurally null server-side
- * because licensed seat quantity is not persisted, and a fabricated limit is
- * worse than none.
- */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 

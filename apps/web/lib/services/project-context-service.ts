@@ -1,21 +1,6 @@
-/**
- * Project context service · loads a conversation's project scope into the LLM
- * request (web "AGI Work" / project-scoped chats).
- *
- * Mechanics only (service-layer rule): the caller (request-processor) owns the
- * policy of WHEN to load (conversation has a non-null project_id) and how to
- * handle failure. Loading is owner-guarded: the project row must belong to the
- * requesting user or no context is returned.
- *
- * Server-extracted project knowledge is bounded at ingestion and again while
- * building the prompt. File contents are untrusted reference data, never
- * instructions; rows uploaded before the extraction migration remain an
- * honest metadata-only manifest until re-uploaded or backfilled.
- */
 
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 
-/** Minimal query surface shared by the user-scoped and chat Neon db handles. */
 export interface ProjectContextDb {
   query<T>(sql: string, params?: unknown[]): Promise<T[]>;
 }
@@ -30,37 +15,17 @@ export interface ProjectContext {
     summary: string | null;
     extractedText: string | null;
   }>;
-  /**
-   * The project's OTHER conversations (most-recent first, excluding the current
-   * one) so the model can cross-reference sibling chats in the same project.
-   * Candidates are ranked against the current user request and carry a bounded
-   * excerpt of recent user/assistant turns, all treated as untrusted data.
-   */
   siblingChats: Array<{ title: string; preview: string | null }>;
 }
 
-// Deterministic size caps so a pathological project can never blow up the
-// prompt budget: instructions dominate (they are the product feature), the
-// manifest is a bounded index.
 const MAX_INSTRUCTIONS_CHARS = 8_000;
 const MAX_DESCRIPTION_CHARS = 1_000;
-/**
- * Retrieval reads at most this many knowledge files per turn (most-recent
- * first). Ingest enforces the SAME cap (knowledge-files POST) so a project can
- * never hold more files than retrieval will actually use — otherwise older
- * files would silently drop out of every project turn's context.
- */
 export const MAX_KNOWLEDGE_FILES = 20;
 const MAX_FILE_SUMMARY_CHARS = 300;
 const MAX_FILE_CONTENT_CHARS = 16_000;
 const MAX_TOTAL_FILE_CONTENT_CHARS = 48_000;
 const PG_UNDEFINED_TABLE = '42P01';
 const PG_UNDEFINED_COLUMN = '42703';
-/**
- * Cross-reference at most this many sibling chats per turn (most-recent first)
- * so a project with hundreds of chats can never blow the prompt budget. Title +
- * a short opening-message preview each.
- */
 export const MAX_SIBLING_CHATS = 15;
 const MAX_SIBLING_CANDIDATES = 40;
 const MAX_SIBLING_EXCERPT_CHARS = 1_600;
@@ -111,11 +76,6 @@ function isKnowledgeFileSchemaUnavailable(error: unknown): boolean {
   return code === PG_UNDEFINED_TABLE || code === PG_UNDEFINED_COLUMN;
 }
 
-/**
- * Load the project context for an owned project. Returns null when the project
- * does not exist, is archived, or belongs to a different user — the caller
- * proceeds without context in all three cases.
- */
 export async function loadProjectContext(
   db: ProjectContextDb,
   params: {
@@ -150,10 +110,6 @@ export async function loadProjectContext(
       summary: string | null;
       extracted_text: string | null;
     }>(
-      // The superseded_at filter matters most HERE: this is the query that
-      // feeds the model. Without it, re-uploading a corrected file left the
-      // stale version in the prompt alongside the correction, so the model saw
-      // two contradictory copies of the same document.
       `select file_name,
               summary,
               to_jsonb(project_knowledge_files)->>'extracted_text' as extracted_text
@@ -164,15 +120,9 @@ export async function loadProjectContext(
       [params.projectId],
     );
   } catch (error) {
-    // Knowledge files shipped behind additive migrations. A partially migrated
-    // database must not suppress the independent sibling-chat context that
-    // makes project conversation recall work.
     if (!isKnowledgeFileSchemaUnavailable(error)) throw error;
   }
 
-  // Pull a bounded candidate set, then rank it against the current request.
-  // The lateral subquery keeps only each chat's six most-recent visible turns;
-  // the outer chronological order makes the excerpt coherent for the model.
   const siblingRows = await db.query<{
     id: string;
     title: string | null;
@@ -350,19 +300,11 @@ export function formatProjectSystemPrompt(context: ProjectContext): string | nul
     );
   }
 
-  // Only the bare "working inside project X" line → nothing actionable to
-  // inject; skip so unscoped-feeling projects don't spend prompt tokens.
   if (sections.length === 1) return null;
 
   return sections.join('\n\n');
 }
 
-/**
- * Mutates chatRequest in place: merges the project block into the leading
- * system message, or prepends one. Mirrors applyResearchMode's contract; when
- * both apply, research stays first (it is mode framing) and project context
- * follows before the caller's own system content.
- */
 export function applyProjectContext(chatRequest: ChatCompletionRequest, prompt: string): void {
   const firstMessage = chatRequest.messages[0];
   if (firstMessage?.role === 'system' && typeof firstMessage.content === 'string') {

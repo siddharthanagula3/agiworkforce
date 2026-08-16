@@ -1,27 +1,21 @@
-/**
- * Shared composer accept-race contract (resolveOnAcceptedSend), used by both chat
- * screens so their draft-clear-on-accept behavior can't drift.
- */
 import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 
 describe('resolveOnAcceptedSend', () => {
   it('resolves true as soon as onAccepted fires (before the send settles)', async () => {
     let settle: (v: boolean) => void = () => {};
     const send = jest.fn((onAccepted: () => void) => {
-      onAccepted(); // store committed the user message
+      onAccepted();
       return new Promise<boolean>((r) => {
-        settle = r; // ...but the stream has NOT finished yet
+        settle = r;
       });
     });
 
     const result = await resolveOnAcceptedSend(send, () => {});
     expect(result).toBe(true);
-    // The send promise is still pending; resolving early is the whole point.
     settle(true);
   });
 
   it("falls back to the send's own return value when onAccepted never fires", async () => {
-    // e.g. a pre-flight gate blocked the send: it resolves false without accepting.
     const send = jest.fn(() => Promise.resolve(false));
     const result = await resolveOnAcceptedSend(send, () => {});
     expect(result).toBe(false);

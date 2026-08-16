@@ -66,8 +66,6 @@ export function classifyDeployScope(files, { all = false } = {}) {
       file === 'scripts/production-deploy-scope.mjs' ||
       file === 'scripts/production-deploy-scope.test.mjs' ||
       file === 'scripts/production-deploy-baseline.mjs';
-    // The web gate and its self-test: an edit to either must redeploy web, or
-    // the deploy job that runs them never fires for the change that broke them.
     const webDeployContract =
       file === 'scripts/verify-deployment.mjs' || file === 'scripts/verify-deployment.test.mjs';
     const gatewayDeployContract =
@@ -156,33 +154,6 @@ export function isEligibleProductionRun(run, repository) {
   );
 }
 
-/**
- * The commit a surface was last actually deployed FROM.
- *
- * WHY THIS EXISTS. The scope step used to diff `HEAD^..HEAD`, which silently
- * assumes every commit gets deployed. It does not: this workflow is gated on CI
- * success, so a commit that lands while CI is red is never deployed, and the
- * next green commit's one-commit diff does not contain it. Its changes are then
- * stranded forever — no later run will ever look at them again.
- *
- * That is not hypothetical. `d4cc8e8e5` fixed a total outage of the
- * authenticated API (argon2 prebuilds missing from the serverless bundle, 143
- * of 196 routes answering empty-body 500s). It landed while CI was red. When CI
- * finally went green on `11e267b5`, that commit touched only
- * `scripts/check-agent-context.mjs`, so scope said `web=false`, the deploy job
- * skipped, and the outage fix stayed unshipped while the workflow reported
- * success.
- *
- * WHY PER-SURFACE, AND WHY THE JOB AND NOT THE RUN. A run can succeed having
- * deployed nothing — that is exactly the failure above. So a run's own success
- * is not evidence that any particular surface shipped from its commit. The only
- * honest baseline is the newest run whose DEPLOY JOB FOR THAT SURFACE
- * succeeded, which is what `jobName` selects.
- *
- * Runs must be newest-first. Returns null when no run has ever deployed this
- * surface, which the caller must treat as "deploy everything" rather than
- * "deploy nothing" — never having shipped is not evidence of being up to date.
- */
 export function selectSurfaceBaseline(runs, repository, jobName) {
   for (const run of runs ?? []) {
     if (!isEligibleProductionRun(run, repository)) continue;

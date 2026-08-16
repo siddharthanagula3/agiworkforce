@@ -1,9 +1,3 @@
-/**
- * Zod schema for `corpus.generated.json`.
- *
- * Validated on first load. A malformed artifact yields "corpus unavailable",
- * which is an ABSTENTION — never a fallback to model priors. Fail closed.
- */
 
 import { z } from 'zod';
 
@@ -42,11 +36,6 @@ export const corpusArtifactSchema = z
 
 export type CorpusArtifact = z.infer<typeof corpusArtifactSchema>;
 
-/**
- * Route prefixes a citation may never point at. Mirrors the build script's
- * allowlist. Duplicated on purpose: the build guard runs at author time and
- * this one runs at load time, so a hand-edited artifact is still rejected.
- */
 export const NON_PUBLIC_PATH_PREFIXES = [
   '/settings',
   '/admin',

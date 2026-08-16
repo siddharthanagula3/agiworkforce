@@ -71,9 +71,7 @@ export interface ChromeManagedChatRequest {
   id: string;
   text: string;
   modelSelection?: string;
-  /** Route this turn through the lowest-cost, low-latency Auto profile. */
   quickMode?: boolean;
-  /** Requested catalog effort; reconciled again after a concrete route exists. */
   effort?: Effort;
   pageContext?: string;
   systemPrompt?: string;
@@ -82,9 +80,7 @@ export interface ChromeManagedChatRequest {
   extendedThinking?: boolean;
   currentModelKey?: string | null;
   previousTaskType?: RoutingTaskType | null;
-  /** Internal retry-stable identity; extension messages cannot supply it. */
   idempotencyKey?: string;
-  /** Background work must finish without pausing for a human response. */
   completionMode?: 'interactive' | 'unattended';
   signal?: AbortSignal;
 }
@@ -110,7 +106,6 @@ export interface ChromeManagedChatDependencies {
   getAuthToken: typeof getAuthToken;
   getModelAccess: typeof getManagedModelAccess;
   streamChat: typeof streamFreeChat;
-  /** Fires after admission + concrete routing, before provider streaming starts. */
   onRouting?: (routing: ChromeManagedRoutingResult) => void | Promise<void>;
   onText: (text: string) => void | Promise<void>;
   onAgentEvent?: (chunk: Extract<FreeTrialChunk, { type: 'agent-event' }>) => void | Promise<void>;
@@ -267,8 +262,6 @@ function createFenceNonce(): string {
 
 function buildUserContent(text: string, pageContext?: string): string {
   if (!pageContext) return text;
-  // Keep the unguessable nonce'd tag (fence-closing defense) AND gain the shared
-  // fence's NFC-normalize + zero-width/bidi-strip + close-tag-strip + sentinel.
   const nonce = createFenceNonce();
   return `${text}\n\n${fenceUntrustedContent(
     pageContext,
@@ -286,11 +279,6 @@ function isAutoSelection(selection: string): boolean {
   return selection === 'auto' || selection.startsWith('auto-');
 }
 
-/**
- * A live stream ending at an input boundary is successful for an interactive
- * panel: the user can approve or continue it. The same boundary is terminally
- * incomplete for scheduled work, which has nobody present to respond.
- */
 function adjudicateManagedChatCompletion(
   completionMode: ChromeManagedChatRequest['completionMode'],
   taskState: AgentTaskState | undefined,
@@ -315,7 +303,6 @@ function adjudicateManagedChatCompletion(
   return { status: 'success', routing };
 }
 
-/** Runtime boundary for route metadata restored from browser-local history. */
 export function normalizeChromeManagedRoutingMetadata(
   value: unknown,
 ): ChromeManagedRoutingMetadata | null {
@@ -411,9 +398,6 @@ export async function executeChromeManagedChat(
     };
   }
 
-  // Quick is a per-turn routing override. It must not mutate the user's saved
-  // picker selection, and it still passes through authenticated server
-  // admission before the canonical router chooses a concrete model.
   const requestedSelection = request.modelSelection?.trim() || 'auto';
   const selection = request.quickMode === true ? 'auto-economy' : requestedSelection;
   if (
@@ -467,9 +451,6 @@ export async function executeChromeManagedChat(
   messages.push(...(request.conversationHistory ?? []).map((message) => ({ ...message })));
   messages.push({ role: 'user', content: finalUserContent });
 
-  // Auto and Quick do not have a trustworthy effort ladder until routing has
-  // selected a concrete model. Reconcile here at the privileged owner so a
-  // stale cross-model preference can never become an unsupported wire value.
   const effort =
     request.effort === undefined ? undefined : resolveModelEffort(routing.modelKey, request.effort);
 

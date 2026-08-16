@@ -1,6 +1,3 @@
-/**
- * LocalStorage wrapper for web to polyfill desktop behavior and provide safe parsing
- */
 
 export function getItem<T>(key: string, defaultValue: T): T {
   if (typeof window === 'undefined') return defaultValue;

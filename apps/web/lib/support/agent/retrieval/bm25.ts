@@ -1,44 +1,23 @@
-/**
- * BM25 over an in-memory chunk index.
- *
- * Pure and I/O free so it can be exercised against a synthetic corpus in tests
- * without touching the real one. Lexical on purpose: the repo has no pgvector,
- * no embedding pipeline, and no embedding column, and "simple and inspectable"
- * is a requirement of this brief rather than a compromise — a reviewer can read
- * why a chunk was retrieved.
- */
 
 import { tokenize } from './tokenize';
 
 const K1 = 1.2;
 const B = 0.75;
 
-/**
- * Heading and curated tag terms are worth more than body terms: they are the
- * hand-written "what is this section about" signal, and boosting them is what
- * makes a two-word product question ("anthropic key") land on the right chunk
- * instead of on whichever long paragraph happens to repeat a word.
- */
 const FIELD_BOOST = 2;
 
-/** Small bonus when the raw normalized query appears verbatim in the chunk. */
 const PHRASE_BONUS = 1.5;
 
 export interface Bm25Document {
   id: string;
-  /** Body text. */
   text: string;
-  /** Heading path and curated tags — boosted. */
   boosted: string;
 }
 
 interface IndexedDocument {
   id: string;
-  /** term -> boosted term frequency */
   termFrequencies: Map<string, number>;
-  /** Boosted length, matching how `termFrequencies` was accumulated. */
   length: number;
-  /** Lowercased, normalized full text for the exact-phrase bonus. */
   haystack: string;
 }
 
@@ -87,7 +66,6 @@ export function buildBm25Index(documents: readonly Bm25Document[]): Bm25Index {
   };
 }
 
-/** Standard BM25 IDF with the +1 guard that keeps it non-negative. */
 function idf(index: Bm25Index, term: string): number {
   const df = index.documentFrequencies.get(term) ?? 0;
   return Math.log(1 + (index.size - df + 0.5) / (df + 0.5));
@@ -96,14 +74,9 @@ function idf(index: Bm25Index, term: string): number {
 export interface Bm25Hit {
   id: string;
   score: number;
-  /** Distinct query terms this document matched. */
   matchedTerms: string[];
 }
 
-/**
- * Score every document against the query. Returns hits with a positive score,
- * sorted by score descending then by id so the ordering is stable.
- */
 export function scoreBm25(index: Bm25Index, query: string): Bm25Hit[] {
   const queryTerms = [...new Set(tokenize(query))];
   if (queryTerms.length === 0 || index.size === 0) return [];

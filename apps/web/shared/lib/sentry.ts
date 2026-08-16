@@ -19,15 +19,12 @@ export interface Span {
   end(): void;
 }
 
-/* ---------- user context ---------- */
-
 export function setUser(user: {
   id: string;
   email?: string;
   username?: string;
   [key: string]: unknown;
 }): void {
-  // PII-safe: send ONLY a stable id to Sentry (never email/username/extra fields).
   if (user.id) {
     SentrySDK.setUser({ id: user.id });
     try {
@@ -46,8 +43,6 @@ export function clearUser(): void {
     // localStorage may not be available in SSR
   }
 }
-
-/* ---------- breadcrumbs ---------- */
 
 export function addBreadcrumb(
   message: string,
@@ -82,8 +77,6 @@ export function logStateChange(
   addBreadcrumb(`State: ${storeName}/${action}`, 'state', data);
 }
 
-/* ---------- capture ---------- */
-
 export function captureError(
   error: Error | string,
   context?: {
@@ -110,8 +103,6 @@ export function captureMessage(
   return SentrySDK.captureMessage(message, { level, extra: context });
 }
 
-/* ---------- tags / context ---------- */
-
 export function setTags(tags: Record<string, string>): void {
   SentrySDK.setTags(tags);
 }
@@ -120,15 +111,11 @@ export function setContext(name: string, context: Record<string, unknown>): void
   SentrySDK.setContext(name, context);
 }
 
-/* ---------- performance ---------- */
-
 export function startTransaction(name: string, operation: string): Span | undefined {
   if (!isSentryEnabled()) return undefined;
   const span = SentrySDK.startInactiveSpan({ name, op: operation });
   return { end: () => span.end() };
 }
-
-/* ---------- error tracking wrapper ---------- */
 
 export async function withErrorTracking<T>(
   fn: () => Promise<T>,
@@ -148,8 +135,6 @@ export async function withErrorTracking<T>(
   }
 }
 
-/* ---------- re-exports that mirror old API ---------- */
-
 export const SentryErrorBoundary: typeof SentrySDK.ErrorBoundary = SentrySDK.ErrorBoundary;
 
 export function withProfiler<T>(component: T): T {
@@ -164,7 +149,6 @@ export async function flush(timeout = 2000): Promise<boolean> {
   return SentrySDK.flush(timeout);
 }
 
-// Sentry namespace for direct-access imports — delegates to the real SDK.
 export const Sentry = {
   setUser: (user: Parameters<typeof SentrySDK.setUser>[0]) => SentrySDK.setUser(user),
   captureException: (err: unknown, opts?: Parameters<typeof SentrySDK.captureException>[1]) =>

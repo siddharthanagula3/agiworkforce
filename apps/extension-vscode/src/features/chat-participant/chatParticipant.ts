@@ -1,29 +1,3 @@
-/**
- * chatParticipant.ts — VS Code Chat Participant for AGI Workforce
- *
- * Registers as "@agi" in the VS Code Chat panel (GitHub Copilot chat view).
- * Handles slash commands (/explain, /fix, /refactor, /tests, /docs, /model)
- * and general conversation.
- *
- * The participant:
- * 1. Collects editor context as untrusted user data
- * 2. Starts or resumes a workspace-scoped developer session through the local host
- * 3. Streams app-server events back to the VS Code ChatResponseStream
- *
- * ── SYNC-RULE COMPLIANCE (locked 2026-05-22) ─────────────────────────────────
- * /goal rule: "CLI, VS Code, and Chrome must not sync consumer chat history."
- *
- * How this surface complies:
- *   • Developer sessions are persisted only by the workspace-scoped Rust
- *     app-server shared with the CLI.
- *   • No platform database client is imported or instantiated here or anywhere in
- *     this surface. No writes to chat_messages / conversations / user_projects.
- *   • ConversationSyncService and MobileConversationSyncService are never referenced.
- *   • platform/surface.ts throws at extension activation if SOURCE_SURFACE ("vscode")
- *     is ever reclassified as a SyncedAppSurface (isDeveloperSessionSurface assertion).
- *   • __tests__/surface.test.ts locks assertSurfaceCanSyncChats('vscode') → throws.
- * ─────────────────────────────────────────────────────────────────────────────
- */
 
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees';
@@ -44,8 +18,6 @@ import { buildCustomInstructionInput } from '../instructions';
 import { buildPromptReferenceInputs } from './promptReferences';
 import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
 import { assertRunnableStartedThread } from '../../integrations/developerSessionValidation';
-
-// ─── Context gathering ────────────────────────────────────────────────────────
 
 interface EditorContext {
   fileName: string;
@@ -74,7 +46,6 @@ function gatherEditorContext(): EditorContext {
 
   const selectedText = document.getText(selection);
 
-  // Gather surrounding lines for context
   const startLine = Math.max(0, selection.start.line - contextLines);
   const endLine = Math.min(document.lineCount - 1, selection.end.line + contextLines);
   const surroundingRange = new vscode.Range(startLine, 0, endLine, 0);
@@ -94,8 +65,6 @@ function isExecutionConfirmation(text: string): boolean {
   if (normalized === '') return false;
   return /^(yes|y|ok|okay|go|ship|do it|execute|run|continue|proceed)\b/.test(normalized);
 }
-
-// ─── Slash command user message builders ──────────────────────────────────────
 
 function buildUserMessage(request: vscode.ChatRequest, ctx: EditorContext): string {
   const { command, prompt } = request;
@@ -132,11 +101,8 @@ function buildUserMessage(request: vscode.ChatRequest, ctx: EditorContext): stri
       : 'What model are you currently using, and what models are available?';
   }
 
-  // General chat
   return prompt;
 }
-
-// ─── Main handler ─────────────────────────────────────────────────────────────
 
 function localThreadIdFromHistory(context: vscode.ChatContext): string | undefined {
   for (let index = context.history.length - 1; index >= 0; index--) {
@@ -167,11 +133,6 @@ const LOCAL_MODEL_NOT_FOUND_MESSAGE =
 const LOCAL_MODEL_DISCOVERY_FAILED_MESSAGE =
   'The AGI CLI could not verify the configured local model. Check the AGI CLI path in Settings, run `agi models scan`, then select an available model.';
 
-/**
- * Resolve the configured model without erasing a CLI-owned local provider
- * boundary. Known static picker ids are resolved without probing the CLI; only
- * otherwise-unknown ids may acquire Local authority through exact discovery.
- */
 async function resolveParticipantModel(
   runtime: Pick<LocalRuntimeClient, 'listLocalModels'>,
   configuredModel: string | null | undefined,
@@ -193,11 +154,6 @@ async function resolveParticipantModel(
   throw new Error(LOCAL_MODEL_NOT_FOUND_MESSAGE);
 }
 
-/**
- * Read the last response turn as one authority record. Older complete metadata
- * must never fill holes in a newer legacy/partial turn, because that could join
- * two different persisted threads into one transcript boundary.
- */
 function localThreadAuthorityFromHistory(
   context: vscode.ChatContext,
 ): LocalThreadAuthorityMetadata | undefined {
@@ -327,10 +283,8 @@ export function createChatHandler(
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken,
   ): Promise<vscode.ChatResult> => {
-    // Show typing indicator
     stream.progress('AGI Workforce is thinking…');
 
-    // Handle /model command — open model quick-pick and return early
     if (request.command === 'model') {
       await vscode.commands.executeCommand('agi-workforce.selectModel');
       stream.markdown('Model selector opened. Your next message will use the selected model.');
@@ -409,9 +363,6 @@ export function createChatHandler(
       const cancelledTurnId = turnId;
       cancellationTask = (async () => {
         try {
-          // Keep the event subscription alive until the CLI acknowledges this
-          // exact turn interruption. Otherwise Stop can make VS Code look idle
-          // while the local process continues executing in the workspace.
           await runtime.interruptTurn({
             threadId: cancelledThreadId,
             turnId: cancelledTurnId,
@@ -608,7 +559,6 @@ export function createChatHandler(
       cancellationSubscription.dispose();
     }
 
-    // Append helpful buttons for follow-up actions
     if (request.command === 'fix' || request.command === 'refactor') {
       stream.button({
         command: 'agi-workforce.explain',
@@ -631,26 +581,6 @@ function contextFilesParam(cwd: string): { contextFiles?: string[] } {
   return contextFiles.length === 0 ? {} : { contextFiles };
 }
 
-/**
- * Register the @agi chat participant and return a disposable.
- *
- * AUDIT (2026-05-20, §10): the chat participant must preserve the following
- * properties; any future change here MUST be reviewed against this list:
- *
- *   1. NO auto-execute of generated code. The handler only `stream.markdown`s
- *      the LLM response. Code blocks are rendered, not run.
- *   2. `stream.button({ command: <id> })` calls use ONLY hardcoded command
- *      IDs from this file (e.g. `agi-workforce.explain`). Never pass a
- *      command ID that originated from LLM output, message metadata, or
- *      workspace state.
- *   3. NO direct shell or filesystem operations from inside the handler.
- *      Agent-mode edits flow through `agentUI.ts` which has the
- *      Workspace-Trust gate (VSCODE-02) plus the LITL per-file diff review
- *      for sensitive paths (PR-2B / F-03). That gate is the trust boundary;
- *      anything that bypasses it is a regression.
- *
- * Reviewed and confirmed in the 2026-05-20 audit sweep — no gaps found.
- */
 export function registerChatParticipant(
   context: vscode.ExtensionContext,
   conversationTreeProvider?: ConversationTreeProvider,
@@ -678,10 +608,8 @@ export function registerChatParticipant(
     return undefined;
   }
 
-  // Icon shown next to @agi in the chat UI
   participant.iconPath = vscode.Uri.joinPath(context.extensionUri, 'media', 'icon-chat.png');
 
-  // Follow-up suggestions shown after each response
   participant.followupProvider = {
     provideFollowups(
       _result: vscode.ChatResult,
@@ -699,7 +627,6 @@ export function registerChatParticipant(
   return participant;
 }
 
-// Export pure boundary helpers for unit testing.
 export {
   buildRuntimeTurnInput,
   buildUserMessage,

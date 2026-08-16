@@ -1,17 +1,5 @@
-/**
- * Updater interval logic tests
- *
- * Verifies the check-interval skip behaviour: UpdateChecker should not
- * re-check within `checkIntervalHours` of the last successful check.
- * Tests are pure store/utility logic — no Tauri runtime required.
- */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-
-// ---------------------------------------------------------------------------
-// Helpers — replicate the interval check logic from UpdateChecker.tsx
-// so it can be tested without rendering the component.
-// ---------------------------------------------------------------------------
 
 function shouldSkipCheck(
   lastCheckTime: number | null,
@@ -32,31 +20,31 @@ describe('Updater check-interval skip logic', () => {
 
   it('skips when last check was less than checkIntervalHours ago', () => {
     const now = Date.now();
-    const lastCheck = now - ONE_HOUR_MS; // 1h ago, interval is 4h
+    const lastCheck = now - ONE_HOUR_MS;
     expect(shouldSkipCheck(lastCheck, 4, now)).toBe(true);
   });
 
   it('does not skip when last check was more than checkIntervalHours ago', () => {
     const now = Date.now();
-    const lastCheck = now - 5 * ONE_HOUR_MS; // 5h ago, interval is 4h
+    const lastCheck = now - 5 * ONE_HOUR_MS;
     expect(shouldSkipCheck(lastCheck, 4, now)).toBe(false);
   });
 
   it('skips exactly at boundary (just under interval)', () => {
     const now = Date.now();
-    const lastCheck = now - (4 * ONE_HOUR_MS - 1); // 1ms short of 4h
+    const lastCheck = now - (4 * ONE_HOUR_MS - 1);
     expect(shouldSkipCheck(lastCheck, 4, now)).toBe(true);
   });
 
   it('does not skip exactly at interval boundary (equal to interval)', () => {
     const now = Date.now();
-    const lastCheck = now - 4 * ONE_HOUR_MS; // exactly 4h ago
+    const lastCheck = now - 4 * ONE_HOUR_MS;
     expect(shouldSkipCheck(lastCheck, 4, now)).toBe(false);
   });
 
   it('respects a custom 6-hour interval', () => {
     const now = Date.now();
-    const lastCheck = now - 5 * ONE_HOUR_MS; // 5h ago, interval is 6h → skip
+    const lastCheck = now - 5 * ONE_HOUR_MS;
     expect(shouldSkipCheck(lastCheck, 6, now)).toBe(true);
   });
 
@@ -66,10 +54,6 @@ describe('Updater check-interval skip logic', () => {
     expect(shouldSkipCheck(lastCheck, 6, now)).toBe(false);
   });
 });
-
-// ---------------------------------------------------------------------------
-// Store integration: setLastCheckTime persists and is readable
-// ---------------------------------------------------------------------------
 
 describe('UpdaterStore check-time persistence', () => {
   beforeEach(async () => {
@@ -98,6 +82,6 @@ describe('UpdaterStore check-time persistence', () => {
     const { useUpdaterStore } = await import('../stores/updaterStore');
     useUpdaterStore.getState().setCheckIntervalHours(6);
     expect(useUpdaterStore.getState().checkIntervalHours).toBe(6);
-    useUpdaterStore.getState().setCheckIntervalHours(24); // restore
+    useUpdaterStore.getState().setCheckIntervalHours(24);
   });
 });

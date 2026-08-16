@@ -1,10 +1,3 @@
-/**
- * Check Run payload builders.
- *
- * Pure functions producing the exact REST payloads for
- * `POST /repos/{owner}/{repo}/check-runs`, including annotation batching
- * (GitHub accepts at most 50 annotations per request).
- */
 import {
   SEVERITY_WEIGHT,
   rankFindings,
@@ -70,7 +63,6 @@ export function toAnnotation(finding: Finding): CheckAnnotation {
   };
 }
 
-/** Split annotations into API-sized batches; the first batch rides on create. */
 export function batchAnnotations(annotations: readonly CheckAnnotation[]): CheckAnnotation[][] {
   const batches: CheckAnnotation[][] = [];
   for (let i = 0; i < annotations.length; i += MAX_ANNOTATIONS_PER_REQUEST) {
@@ -81,15 +73,9 @@ export function batchAnnotations(annotations: readonly CheckAnnotation[]): Check
 
 export interface CategoryCheck {
   payload: CheckRunPayload;
-  /** Annotation batches beyond the first, to send as check-run updates. */
   overflowBatches: CheckAnnotation[][];
 }
 
-/**
- * Build one category check run. Category checks are informational: their
- * conclusion is neutral when findings exist and success when clean; only the
- * Final Policy check may fail a PR.
- */
 export function buildCategoryCheck(
   name: string,
   headSha: string,
@@ -143,7 +129,6 @@ export function buildCategoryCheck(
   };
 }
 
-/** Build the single required Final Policy check from a policy decision. */
 export function buildPolicyCheck(headSha: string, decision: PolicyDecision): CheckRunPayload {
   const lines: string[] = [];
   for (const reason of decision.reasons) lines.push(`- ${reason}`);

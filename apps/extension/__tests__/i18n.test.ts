@@ -1,10 +1,3 @@
-/**
- * The extension shipped every user-facing string as an English literal baked
- * into the DOM-building code: no `_locales/`, no `default_locale`, no
- * `chrome.i18n` call anywhere. These tests hold the beachhead — the strings the
- * panel and the service worker write straight into the DOM and into the context
- * menu — inside the `_locales/en/messages.json` catalog.
- */
 
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -30,12 +23,6 @@ function read(relativePath: string): string {
   return readFileSync(join(APP_ROOT, relativePath), 'utf8');
 }
 
-/**
- * Collect the contents of every string/template literal in `source`, dropping
- * the `${...}` interpolations of template literals — a template's expressions
- * are code, not copy, and `padStart(2, '0')` must not read as translatable
- * text.
- */
 function stringLiteralsIn(source: string): string[] {
   const literals: string[] = [];
   let index = 0;
@@ -74,22 +61,12 @@ function stringLiteralsIn(source: string): string[] {
   return literals;
 }
 
-/**
- * Every assignment into a copy-bearing DOM property in `source`, paired with
- * the right-hand side up to the end of the statement so ternaries and
- * multi-line expressions are covered too.
- *
- * `+=` is matched as well as `=`: `el.textContent += ' English'` renders copy
- * exactly like `=` does, and an earlier version of this scanner let it through.
- */
 function copyAssignments(source: string): { line: number; expression: string }[] {
   const assignments: { line: number; expression: string }[] = [];
   const pattern = /(?<![=!<>])\.(?:textContent|title|placeholder)\s*\+?=(?!=)/g;
 
   for (const match of source.matchAll(pattern)) {
     const start = match.index + match[0].length;
-    // Statement end: the first `;` that is not inside a literal. Reusing the
-    // literal scanner would lose the offset, so track quoting inline.
     let index = start;
     let quote: string | undefined;
     while (index < source.length) {
@@ -156,9 +133,6 @@ describe('extension message catalog', () => {
   });
 
   it('declares every $NAME$ it interpolates, because Chrome renders an undeclared one literally', () => {
-    // chrome.i18n resolves `$NAME$` only against the entry's own `placeholders`
-    // map, keyed lower-case. An entry that interpolates a name it never
-    // declares ships the raw `$NAME$` to the user, and no type check sees it.
     const undeclared: string[] = [];
     for (const [key, entry] of Object.entries(catalog)) {
       for (const [, name] of entry.message.matchAll(/\$([A-Za-z0-9_]+)\$/g)) {
@@ -171,12 +145,6 @@ describe('extension message catalog', () => {
   });
 });
 
-/**
- * Drop the parts of an expression that are code rather than copy: catalog keys
- * (`t('spFoo'` → `t(`), string comparands (`status === 'past_due'`), the
- * attribute name of a `setAttribute` call, and the state argument of
- * `setManagedCloudChatState`.
- */
 function withoutIdentifiers(expression: string): string {
   return (
     expression
@@ -190,13 +158,6 @@ function withoutIdentifiers(expression: string): string {
   );
 }
 
-/**
- * Every `el.setAttribute('aria-label', …)` and `setManagedCloudChatState(…)`
- * call, paired with its argument list. Both write copy the property scanner
- * above cannot see: one through a method, one through module-level state that
- * `setManagedCloudChatState` later assigns to `.textContent` from an
- * identifier, which is how English literals reached the chat gate unnoticed.
- */
 function copyCalls(source: string): { line: number; expression: string }[] {
   const calls: { line: number; expression: string }[] = [];
   const pattern = /\bsetAttribute\(\s*'aria-label'|\bsetManagedCloudChatState\(/g;
@@ -230,21 +191,6 @@ function copyCalls(source: string): { line: number; expression: string }[] {
   return calls;
 }
 
-/**
- * What this guard does and does not cover.
- *
- * Covered: `.textContent`, `.title` and `.placeholder` assignments (`=` and
- * `+=`), `setAttribute('aria-label', …)`, and the message/label arguments to
- * `setManagedCloudChatState` — the last because it stores its arguments in
- * module state and writes them to the DOM from an identifier, which no
- * assignment scanner can see.
- *
- * NOT covered, and still English in `src/side_panel.ts`: text arguments to the
- * `el()` helper, `document.createTextNode(…)`, `title:`/`placeholder:` entries
- * in `el()` attribute objects, and the copy in `src/side_panel.html`,
- * `src/options.*`, `src/content.ts` and `src/features/**`. Those are a
- * separate pass; this guard must not be read as covering them.
- */
 describe('user-facing copy reaches the DOM through the catalog', () => {
   for (const file of LOCALIZED_SOURCES) {
     it(`${file} assigns textContent, title and placeholder only from the catalog or from data`, () => {
@@ -273,8 +219,6 @@ describe('user-facing copy reaches the DOM through the catalog', () => {
   }
 
   it('routes the upgrade button by state rather than by reading its own label', () => {
-    // Comparing textContent against an English literal silently sends every
-    // non-English user to the wrong page.
     const panel = read('src/side_panel.ts');
     expect(panel).not.toMatch(/\.textContent\s*===/);
     expect(panel).toContain("quotaUpgradeBtn.dataset['destination'] === 'billing'");
@@ -295,9 +239,6 @@ describe('t()', () => {
   });
 
   it('hands substitutions to chrome.i18n rather than expanding them itself', () => {
-    // Expanding `$USAGE$` here would mean reimplementing Chrome's placeholder
-    // rules against the English catalog, and every translated locale would be
-    // interpolated by a copy of those rules that no user ever exercises.
     const getMessage = vi.fn().mockReturnValue('Cloud: 42% left');
     (globalThis as { chrome?: unknown }).chrome = { i18n: { getMessage } };
 

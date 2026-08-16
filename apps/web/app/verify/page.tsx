@@ -85,8 +85,6 @@ function VerifyBody() {
   const code = searchParams.get('code');
   const email = searchParams.get('email');
 
-  // Device-link approval flow (/verify?code=<user_code>) takes precedence over
-  // the email-verification copy so the device-code QR/link is not a dead end.
   if (code) {
     return <VerifyDeviceBody code={code} />;
   }

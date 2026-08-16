@@ -27,7 +27,6 @@ function integerQueryValue(value: string | null, fallback: number): number {
 }
 
 function rethrowScheduleError(error: unknown): never {
-  // GOV-8: a plan ceiling is an entitlement refusal, not a malformed request.
   if (error instanceof ScheduleLimitError) throw createError.forbidden(error.message);
   if (error instanceof ScheduleValidationError) throw createError.validation(error.message);
   if (error instanceof ScheduleNotFoundError) throw createError.notFound('Schedule not found');
@@ -49,9 +48,6 @@ async function requestObject(request: NextRequest): Promise<Record<string, unkno
 }
 
 async function handleGetSchedules(request: NextRequest) {
-  // GOV-16: resolve the authenticated principal FIRST so the limit is keyed per
-  // user. Previously no identifier was passed, so this bucket fell back to the
-  // caller's IP and every user behind one NAT/office egress shared 60/min.
   const { db, userId } = await getUserScopedDb(request);
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
@@ -68,7 +64,6 @@ async function handleGetSchedules(request: NextRequest) {
 }
 
 async function handleCreateSchedule(request: NextRequest) {
-  // GOV-16: user-keyed, not IP-keyed (see handleGetSchedules).
   const { db, userId } = await getUserScopedDb(request);
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation', `user:${userId}`);
@@ -79,13 +74,7 @@ async function handleCreateSchedule(request: NextRequest) {
   const body = await requestObject(request);
 
   try {
-    // GOV-8: every firing of a schedule runs an unattended managed turn through
-    // `reserveManagedUsageRequest`. A rate limit bounds how fast schedules can
-    // be CREATED; only this plan ceiling bounds how many can exist and fire.
     const subscription = await SubscriptionService.getSubscription(db, userId);
-    // Plan ceilings are per account, not per active workspace. The request DB
-    // intentionally sees only Personal or one Team scope, so use a privileged
-    // count with an explicit owner predicate before the RLS-scoped insert.
     await assertScheduleQuota(getNeonDb(), userId, subscription?.plan_tier);
 
     const schedule = await createSchedule(db, userId, body as unknown as ScheduleInput);

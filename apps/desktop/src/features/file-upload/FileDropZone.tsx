@@ -7,7 +7,7 @@ const cn = (...classes: (string | undefined | false)[]) => classes.filter(Boolea
 interface FileDropZoneProps {
   onFilesSelected: (files: File[]) => void;
   accept?: string;
-  maxSize?: number; // In MB
+  maxSize?: number;
   maxFiles?: number;
   disabled?: boolean;
   className?: string;
@@ -112,7 +112,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       setError(null);
       setUploadedFiles((prev) => [...prev, ...validFiles]);
       onFilesSelected(validFiles);
-      e.target.value = ''; // Reset input
+      e.target.value = '';
     },
     [disabled, maxFiles, uploadedFiles.length, onFilesSelected, validateFile],
   );
@@ -120,7 +120,6 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
   const handleRemoveFile = (index: number) => {
     setUploadedFiles((prev) => {
       const updated = prev.filter((_, i) => i !== index);
-      // BUG-392: Notify parent of the updated file list after removal
       onFilesSelected(updated);
       return updated;
     });

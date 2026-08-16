@@ -1,18 +1,3 @@
-/**
- * Workflow Builder Store Integration — E2E Smoke Tests
- *
- * Tests the Wave 2 workflow builder wired through workflowStore:
- *  - Create workflow with nodes and edges
- *  - Update workflow name and properties
- *  - Add/remove nodes and edges (via updateWorkflow with modified definition)
- *  - Save workflow to store
- *  - Load workflow from store
- *  - Execution lifecycle: execute, pause, resume, cancel
- *  - Status retrieval and execution log fetching
- *  - Scheduling and event triggers
- *
- * All Tauri invoke() calls are mocked via the global test setup.
- */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { invoke } from '@tauri-apps/api/core';
@@ -22,10 +7,6 @@ import {
   type WorkflowNode,
   type WorkflowEdge,
 } from '../stores/workflowStore';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function makeNode(id: string, type = 'llm-task'): WorkflowNode {
   return {
@@ -56,10 +37,6 @@ function makeDefinition(overrides: Partial<WorkflowDefinition> = {}): WorkflowDe
   };
 }
 
-// ---------------------------------------------------------------------------
-// Setup
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
   vi.clearAllMocks();
   useWorkflowStore.setState({
@@ -74,10 +51,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.clearAllMocks();
 });
-
-// ---------------------------------------------------------------------------
-// 1. Create workflow with nodes and edges
-// ---------------------------------------------------------------------------
 
 describe('create workflow', () => {
   it('createWorkflow invokes Tauri and returns the new workflow ID', async () => {
@@ -113,10 +86,6 @@ describe('create workflow', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 2. Update workflow name and properties
-// ---------------------------------------------------------------------------
-
 describe('update workflow', () => {
   it('updateWorkflow calls Tauri and updates local state', async () => {
     const def = makeDefinition({ id: 'wf-local-1', name: 'Original Name' });
@@ -150,13 +119,9 @@ describe('update workflow', () => {
     const wfA = useWorkflowStore.getState().workflows.find((w) => w.id === 'wf-a');
     const wfB = useWorkflowStore.getState().workflows.find((w) => w.id === 'wf-b');
     expect(wfA?.name).toBe('Workflow A — Renamed');
-    expect(wfB?.name).toBe('Workflow B'); // untouched
+    expect(wfB?.name).toBe('Workflow B');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 3. Add and remove nodes and edges
-// ---------------------------------------------------------------------------
 
 describe('add and remove nodes and edges', () => {
   it('adding a node via updateWorkflow reflects in local state', async () => {
@@ -184,7 +149,6 @@ describe('add and remove nodes and edges', () => {
 
     vi.mocked(invoke).mockResolvedValueOnce(undefined);
 
-    // Remove n2 and the edge that references it
     const updatedDef = { ...def, nodes: [makeNode('n1')], edges: [] };
     await useWorkflowStore.getState().updateWorkflow('wf-remove-node', updatedDef);
 
@@ -213,19 +177,13 @@ describe('add and remove nodes and edges', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 4. Save workflow to store
-// ---------------------------------------------------------------------------
-
 describe('save workflow to store', () => {
   it('createWorkflow + fetchUserWorkflows round-trip populates store', async () => {
-    // Step 1: create returns an ID
     vi.mocked(invoke).mockResolvedValueOnce('wf-saved-001');
 
     const def = makeDefinition({ id: 'wf-saved-001' });
     await useWorkflowStore.getState().createWorkflow(def);
 
-    // Step 2: fetch returns the workflow from the backend
     vi.mocked(invoke).mockResolvedValueOnce([{ ...def, id: 'wf-saved-001' }]);
 
     await useWorkflowStore.getState().fetchUserWorkflows('user-test');
@@ -235,10 +193,6 @@ describe('save workflow to store', () => {
     expect(stored?.name).toBe('Test Workflow');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 5. Load workflow from store
-// ---------------------------------------------------------------------------
 
 describe('load workflow from store', () => {
   it('getWorkflow calls Tauri and returns the workflow definition', async () => {
@@ -289,10 +243,6 @@ describe('load workflow from store', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// 6. Delete workflow
-// ---------------------------------------------------------------------------
-
 describe('delete workflow', () => {
   it('deleteWorkflow removes the workflow from local state', async () => {
     const def1 = makeDefinition({ id: 'wf-del-1' });
@@ -308,10 +258,6 @@ describe('delete workflow', () => {
     expect(state.workflows[0]?.id).toBe('wf-del-2');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 7. Execution lifecycle
-// ---------------------------------------------------------------------------
 
 describe('execution lifecycle', () => {
   it('executeWorkflow returns an execution ID', async () => {
@@ -399,10 +345,6 @@ describe('execution lifecycle', () => {
     expect(useWorkflowStore.getState().executionLogs[0]?.eventType).toBe('started');
   });
 });
-
-// ---------------------------------------------------------------------------
-// 8. Scheduling and event triggers
-// ---------------------------------------------------------------------------
 
 describe('scheduling and event triggers', () => {
   it('scheduleWorkflow calls Tauri with cron expression', async () => {

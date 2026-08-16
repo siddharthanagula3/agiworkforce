@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mirrors lib/hooks/__tests__/useChatStream.save.test.ts's mocking convention:
-// stub the deps saveMessageToDb/notifyPersistenceFailure actually use (csrf
-// header builder, sonner toast, Clerk) so importing the real useChatStream
-// module (and this module, which re-exports from it) doesn't pull in Clerk's
-// runtime or zustand store wiring.
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: async (headers: HeadersInit = {}) => headers,
 }));
@@ -97,7 +92,6 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationUserMessage', () 
       role: 'user',
       content: 'a watercolor fox in a forest',
     });
-    // Server assigned a different id — the store must reconcile to it.
     expect(updateMessage).toHaveBeenCalledWith(USER_MESSAGE_ID, { id: SAVED_USER_MESSAGE_ID });
     expect(result).toEqual({ ok: true, messageId: SAVED_USER_MESSAGE_ID });
   });
@@ -155,21 +149,11 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const body = lastRequestBody(fetchMock);
 
-    // The core regression: content must be the U+200B placeholder, never ''.
-    // CreateMessageSchema rejects empty/whitespace-only content server-side —
-    // sending '' here would silently drop the whole turn instead of saving it.
     expect(body['content']).toBe(EMPTY_ASSISTANT_CONTENT_PLACEHOLDER);
     expect(body['content']).not.toBe('');
-    // U+200B is deliberately NOT stripped by String.prototype.trim() (it's
-    // outside the ECMAScript White_Space set) — that's exactly why the schema
-    // treats it as non-whitespace content while it renders as nothing.
     expect((body['content'] as string).trim().length).toBe(1);
     expect((body['content'] as string).length).toBe(1);
 
-    // This is what makes reload rehydration work: MessageBubble renders
-    // <ImageGenerationCard> exactly when metadata.toolType === 'image-generation',
-    // reading imageUrl/imageGenPrompt/imageGenAspect/imageGenModel from it —
-    // the saved payload must carry that same shape verbatim.
     expect(body['metadata']).toEqual(metadata);
     expect(body['role']).toBe('assistant');
     expect(body['model']).toBe(IMAGE_MODEL_ID);
@@ -181,9 +165,6 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
   });
 
   it('upserts via the same message id on regenerate-in-place (idempotent, no duplicate row)', async () => {
-    // Regenerate reuses the SAME messageId as the original save — the route's
-    // ON CONFLICT contract means this updates the existing row rather than
-    // creating a second one for the same visual message.
     const fetchMock = vi
       .fn()
       .mockResolvedValue(jsonResponse(200, { message: { id: ASSISTANT_MESSAGE_ID } }));
@@ -204,7 +185,6 @@ describe('WEB-IMAGE-CHAT-PERSISTENCE-01: persistImageGenerationAssistantMessage'
     expect((body['metadata'] as MessageMetadata).imageUrl).toBe(
       'https://blob.example/generated/fox-v2.png',
     );
-    // Same id came back — no reconciliation needed, no duplicate implied.
     expect(updateMessage).not.toHaveBeenCalled();
   });
 

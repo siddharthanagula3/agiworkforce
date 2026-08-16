@@ -1,9 +1,3 @@
-/**
- * OpenRouter model catalog.
- *
- * Source of truth: `@agiworkforce/model-registry`, projected through the
- * shared provider-catalog adapter using the canonical `open_router` provider.
- */
 
 import { getProviderModelCatalog, type ModelInfo } from '@agiworkforce/types';
 

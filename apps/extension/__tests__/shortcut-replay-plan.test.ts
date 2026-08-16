@@ -1,13 +1,3 @@
-/**
- * shortcut-replay-plan.test.ts — regression for the prompt-shortcut replay bug.
- *
- * A shortcut created from the "+ Create shortcut" prompt modal is stored with an
- * empty `actions` array and a `prompt`. The replay handler used to look only at
- * `actions`, so a prompt shortcut dispatched an empty RUN_PAGE_ACTIONS batch that
- * no-oped on the page yet still reported "completed" (fake success). These tests
- * pin the decision (`planShortcutReplay`) that now routes prompt shortcuts through
- * the chat path and refuses shortcuts that have neither actions nor a prompt.
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   handleSaveShortcut,

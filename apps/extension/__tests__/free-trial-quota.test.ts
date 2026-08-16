@@ -14,10 +14,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRoutingSlotModel, INTERACTIVE_CARD_REQUEST_KEY } from '@agiworkforce/types';
 
-// ---------------------------------------------------------------------------
-// Chrome storage shim — hoisted before module imports
-// ---------------------------------------------------------------------------
-
 const chromeMock = vi.hoisted(() => {
   const localStore: Record<string, unknown> = {};
   const sessionStore: Record<string, unknown> = {};
@@ -67,10 +63,6 @@ const chromeMock = vi.hoisted(() => {
   return mock;
 });
 
-// ---------------------------------------------------------------------------
-// fetch stub — hoisted
-// ---------------------------------------------------------------------------
-
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
@@ -87,10 +79,6 @@ const clerkAuthMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../src/features/cloud-bridge/clerkAuth', () => clerkAuthMock);
-
-// ---------------------------------------------------------------------------
-// Imports — after mock hoisting
-// ---------------------------------------------------------------------------
 
 import {
   FREE_TRIAL_MODEL,
@@ -113,11 +101,6 @@ import {
   type FreeTrialChunk,
 } from '../src/features/cloud-bridge/freeTrialClient';
 
-// ---------------------------------------------------------------------------
-// Test helpers
-// ---------------------------------------------------------------------------
-
-/** Collect all chunks from the async generator. */
 async function collectChunks(gen: AsyncGenerator<FreeTrialChunk>): Promise<FreeTrialChunk[]> {
   const chunks: FreeTrialChunk[] = [];
   for await (const chunk of gen) {
@@ -126,7 +109,6 @@ async function collectChunks(gen: AsyncGenerator<FreeTrialChunk>): Promise<FreeT
   return chunks;
 }
 
-/** Build a fake SSE ReadableStream from a list of data payloads. */
 function makeSseStream(dataLines: string[]): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
   const lines = dataLines.map((d) => `data: ${d}\n\n`).join('');
@@ -138,7 +120,6 @@ function makeSseStream(dataLines: string[]): ReadableStream<Uint8Array> {
   });
 }
 
-/** Construct a fake Response with a body stream. */
 function makeStreamResponse(
   dataLines: string[],
   status = 200,
@@ -169,7 +150,6 @@ function makeRawStreamResponse(payload: string, status = 200): Response {
   } as unknown as Response;
 }
 
-/** Construct a fake error Response (no body stream). */
 function makeErrorResponse(status: number, bodyText: string): Response {
   return {
     ok: false,
@@ -182,12 +162,7 @@ function makeErrorResponse(status: number, bodyText: string): Response {
 const SAMPLE_MESSAGES: FreeTrialMessage[] = [{ role: 'user', content: 'Hello!' }];
 const LEGACY_FREE_PROMPTS_USED_KEY = 'agi_free_prompts_used';
 
-// ---------------------------------------------------------------------------
-// Reset between tests
-// ---------------------------------------------------------------------------
-
 beforeEach(() => {
-  // Clear all storage
   for (const k of Object.keys(chromeMock._localStore)) delete chromeMock._localStore[k];
   for (const k of Object.keys(chromeMock._sessionStore)) delete chromeMock._sessionStore[k];
   vi.clearAllMocks();
@@ -196,17 +171,12 @@ beforeEach(() => {
   clerkAuthMock.getFreshClerkToken.mockResolvedValue(null);
   clerkAuthMock.signOutClerk.mockResolvedValue(undefined);
   clerkAuthMock.signOutClerkIfCurrent.mockResolvedValue(false);
-  // Re-install chrome global after clearAllMocks resets mocks
   (globalThis as Record<string, unknown>).chrome = chromeMock;
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
-
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
 
 describe('constants', () => {
   it('FREE_TRIAL_MODEL is a non-empty string read from models.json', () => {
@@ -417,10 +387,6 @@ describe('getManagedModelAccess', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Auth: getAuthToken
-// ---------------------------------------------------------------------------
-
 describe('getAuthToken', () => {
   it('returns null when both stores are empty', async () => {
     expect(await getAuthToken()).toBeNull();
@@ -457,10 +423,6 @@ describe('getAuthToken', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Auth: clearAuthToken
-// ---------------------------------------------------------------------------
-
 describe('clearAuthToken', () => {
   it('removes both session and local tokens', async () => {
     chromeMock._sessionStore['agi_clerk_session_token'] = 'sess';
@@ -489,10 +451,6 @@ describe('clearAuthToken', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// streamFreeChat — network failure
-// ---------------------------------------------------------------------------
-
 describe('streamFreeChat — network failure', () => {
   it('yields server_error on network exception', async () => {
     fetchMock.mockRejectedValueOnce(new Error('Failed to fetch'));
@@ -513,10 +471,6 @@ describe('streamFreeChat — network failure', () => {
     expect(chunks[0]).toMatchObject({ type: 'error', code: 'server_error' });
   });
 });
-
-// ---------------------------------------------------------------------------
-// streamFreeChat — 401 / 403 responses
-// ---------------------------------------------------------------------------
 
 describe('streamFreeChat — auth and quota errors', () => {
   it('yields auth_required on 401 without clearing ambient auth in the transport', async () => {
@@ -577,10 +531,6 @@ describe('streamFreeChat — auth and quota errors', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// streamFreeChat — 5xx / non-OK
-// ---------------------------------------------------------------------------
-
 describe('streamFreeChat — 5xx server error', () => {
   it('yields server_error on 500 response', async () => {
     fetchMock.mockResolvedValueOnce(makeErrorResponse(500, 'Internal Server Error'));
@@ -594,10 +544,6 @@ describe('streamFreeChat — 5xx server error', () => {
     expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// streamFreeChat — happy path SSE streaming
-// ---------------------------------------------------------------------------
 
 describe('streamFreeChat — SSE happy path', () => {
   it('yields text chunks and a done chunk on successful stream', async () => {
@@ -883,10 +829,6 @@ describe('streamFreeChat — SSE happy path', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// streamFreeChat — input truncation
-// ---------------------------------------------------------------------------
-
 describe('streamFreeChat — input truncation', () => {
   it('truncates message content exceeding MANAGED_CHAT_MAX_INPUT_CHARS', async () => {
     const longContent = 'x'.repeat(40_000);
@@ -973,10 +915,6 @@ describe('managed-cloud attachment payloads', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// streamFreeChat — inline stream error
-// ---------------------------------------------------------------------------
-
 describe('streamFreeChat — inline stream error', () => {
   it('yields quota_exceeded on inline stream error with limit_reached code', async () => {
     const sseLines = [
@@ -1057,10 +995,6 @@ describe('streamFreeChat — inline stream error', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// streamFreeChat — abort signal
-// ---------------------------------------------------------------------------
-
 describe('streamFreeChat — abort signal', () => {
   it('yields cancelled without issuing a fetch when the signal is already aborted', async () => {
     const controller = new AbortController();
@@ -1135,13 +1069,8 @@ describe('streamFreeChat — abort signal', () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// streamFreeChat — stream ends without explicit finish
-// ---------------------------------------------------------------------------
-
 describe('streamFreeChat — stream ends without finish_reason', () => {
   it('fails closed and does not increment when a stream closes after partial text', async () => {
-    // Send text but no finish_reason — stream just closes
     const sseLines = [
       JSON.stringify({ choices: [{ delta: { content: 'hello' }, finish_reason: null }] }),
     ];
@@ -1153,7 +1082,6 @@ describe('streamFreeChat — stream ends without finish_reason', () => {
   });
 
   it('fails closed when the response body closes without any terminal event', async () => {
-    // Stream closes without any content
     fetchMock.mockResolvedValueOnce(makeStreamResponse([]));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks).toEqual([expect.objectContaining({ type: 'error', code: 'protocol_error' })]);
@@ -1167,10 +1095,6 @@ describe('streamFreeChat — stream ends without finish_reason', () => {
     expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 });
-
-// ---------------------------------------------------------------------------
-// streamFreeChat — body contains the model from models.json
-// ---------------------------------------------------------------------------
 
 describe('streamFreeChat — model routing', () => {
   it('sends the concrete routed model supplied by the caller', async () => {

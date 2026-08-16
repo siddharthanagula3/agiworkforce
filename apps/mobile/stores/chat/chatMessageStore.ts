@@ -47,8 +47,6 @@ import {
 import type { MobileArtifactProvenance } from '@/src/features/artifacts/types';
 import { getConversationMessageStore } from './conversationRepository';
 import { useCloudSyncStateStore } from './cloudSyncStateStore';
-// SEPARATION-FIX: cloud conversations are physically separated into their own store.
-// Lazy import to avoid circular dependency at module initialisation time.
 function getCloudStore() {
   /* eslint-disable @typescript-eslint/no-require-imports */
   const { useChatCloudMessageStore } =
@@ -61,11 +59,6 @@ export { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 export interface ForkConversationOptions {
   title?: string;
   model?: string;
-  /**
-   * The message id in the source conversation at which this fork branches. When
-   * omitted, the fork branches after the whole thread (the last source message).
-   * Reuses the shared BranchNavigator `forkPointMessageId` semantics.
-   */
   forkPointMessageId?: string;
 }
 
@@ -77,7 +70,6 @@ interface MessageState {
   isLoadingMessages: boolean;
 
   setCurrentConversationId: (id: string | null) => void;
-  /** Clear shared UI selection only when it points at an outgoing Cloud account. */
   clearCloudConversationSelection: (cloudConversationIds: string[]) => void;
   loadConversations: () => Promise<void>;
   createConversation: (title?: string, projectId?: string) => Promise<string>;
@@ -88,7 +80,6 @@ interface MessageState {
   deleteConversation: (id: string) => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   renameConversation: (id: string, title: string) => Promise<void>;
-  /** Persist the active model in the Local or Cloud store that owns the conversation. */
   setConversationModel: (id: string, model: string) => Promise<boolean>;
   pinConversation: (id: string) => Promise<void>;
   makeConversationPermanent: (id: string) => void;
@@ -182,19 +173,12 @@ export const useChatMessageStore = create<MessageState>()(
       loadConversations: async () => {
         set({ isLoadingConversations: true });
         try {
-          // SEPARATION-FIX: Cloud conversations fetched from the API are routed
-          // to useChatCloudMessageStore, never written into this local store.
-          // This store only holds Local Mode conversations.
           if (shouldLoadCloudConversationList()) {
             const conversations: ManagedCloudConversation[] = [];
             let offset = 0;
             let hasMore = true;
             let historyStats: ManagedCloudConversationHistoryStats | undefined;
             while (hasMore) {
-              // `archived=exclude` matters: the server default is `include`, so
-              // omitting it put chats archived on another surface straight back
-              // into Mobile. Paginate to exhaustion: Chrome Managed Cloud chats
-              // older than the first page must remain visible here too.
               const data = ManagedCloudConversationListResponseSchema.parse(
                 await api.get<unknown>(
                   `/api/chat/conversations?limit=100&offset=${offset}&includeHistoryStats=${offset === 0 ? '1' : '0'}&archived=exclude`,
@@ -264,19 +248,12 @@ export const useChatMessageStore = create<MessageState>()(
         const forkId = await createConversationForMode(
           set,
           forkTitle,
-          // Carry the source chat's project in BOTH modes. The fork stays in
-          // sourceMode, so a cloud fork inherits a cloud project id and a local
-          // fork a local one — the namespace can never cross. For cloud, re-validate
-          // against a live cloud project so a tombstoned id isn't propagated.
           sourceMode === 'local'
             ? sourceConversation?.projectId
             : resolveCloudProjectId(sourceConversation?.projectId),
           forkModel,
           sourceMode,
         );
-        // Persist the parent/branch relation so a fork is a real branch, not an
-        // untracked copy (CAP-035). The fork point defaults to the last message of
-        // the source thread — a whole-thread copy diverges after it.
         const forkPointMessageId =
           options?.forkPointMessageId ?? sourceMessages[sourceMessages.length - 1]?.id;
         const now = Date.now();
@@ -307,7 +284,6 @@ export const useChatMessageStore = create<MessageState>()(
                   provider: providerForExecutionMode(sourceMode),
                   executionMode: sourceMode,
                   updatedAt: new Date(now).toISOString(),
-                  // Real branch relation back to the source conversation.
                   parentConversationId: sourceConversationId,
                   forkPointMessageId,
                 }
@@ -329,20 +305,11 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       deleteConversation: async (id) => {
-        // SEPARATION-FIX: check local store first; if not found, delegate to cloud store.
         const localConversation = get().conversations.find((c) => c.id === id);
         if (!localConversation) {
           const cloudStore = getCloudStore();
           const cloudConversation = cloudStore.getState().conversations.find((c) => c.id === id);
           if (cloudConversation && shouldSyncConversationRemote(cloudConversation)) {
-            // PRIVACY/DATA-LOSS FIX: confirm the server delete BEFORE hiding the
-            // conversation locally. The previous optimistic remove + swallowed
-            // catch hid a conversation that still existed server-side (so the
-            // user believed sensitive content was gone while it persisted) and
-            // let it resurrect on the next pull. Retry transient failures; only
-            // remove locally once the server has acknowledged the delete. On a
-            // hard failure, surface it and leave the conversation visible so the
-            // user knows it was NOT deleted.
             const deleted = await deleteCloudConversationWithRetry(id);
             if (!deleted) {
               Alert.alert(
@@ -373,7 +340,6 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       loadMessages: async (conversationId) => {
-        // SEPARATION-FIX: check which store owns this conversation.
         const localConversation = get().conversations.find((c) => c.id === conversationId);
         const cloudStore = getCloudStore();
         const cloudConversation = !localConversation
@@ -390,13 +356,6 @@ export const useChatMessageStore = create<MessageState>()(
           existing.length > 0 &&
           !existing.some((m) => m.isStreaming)
         ) {
-          // Derive from the cache too, not only from a network response.
-          //
-          // This early return is the common path — a transcript is cached after
-          // the first open — so capturing only after the fetch meant a chat the
-          // user had already visited never gained its artifacts. Derivation is
-          // idempotent, so running it on cached messages costs a no-op when
-          // they were already captured.
           captureArtifactsForLoadedMessages(
             existing,
             conversationId,
@@ -405,12 +364,6 @@ export const useChatMessageStore = create<MessageState>()(
           );
           return;
         }
-        // A new-chat navigation and its first send run concurrently: the screen
-        // mounts and starts this read while sendMessage is still committing the
-        // optimistic user/assistant rows. Keep the exact request-start objects
-        // so the response can be reconciled against mutations that happened
-        // while the network request was in flight instead of blindly replacing
-        // the transcript with an older (often empty) server snapshot.
         const cloudMessagesAtRequestStart = cloudConversation ? (existingCloudMsgs ?? []) : [];
 
         set({ isLoadingMessages: true });
@@ -436,11 +389,8 @@ export const useChatMessageStore = create<MessageState>()(
           const normalizedMessages = messageRows.map((message) =>
             normalizeManagedCloudMessage(message, conversationId),
           ) as ChatMessage[];
-          // Route messages to the correct store.
           if (cloudConversation) {
             const cloudState = cloudStore.getState();
-            // Account teardown clears the owning conversation synchronously.
-            // Never let an old account's late response recreate its transcript.
             if (!cloudState.conversations.some((candidate) => candidate.id === conversationId)) {
               return;
             }
@@ -466,14 +416,6 @@ export const useChatMessageStore = create<MessageState>()(
             }));
           }
 
-          // Artifacts for history, not just for the turn that produced them.
-          //
-          // Capture ran only as a response finished streaming, so reopening a
-          // conversation from the server showed its code and documents as plain
-          // markdown — the artifact card, the gallery entry and the full-screen
-          // viewer were all missing for anything not generated in this session.
-          // Derivation is pure and its ids are deterministic, so re-deriving a
-          // message the app already captured is a no-op.
           captureArtifactsForLoadedMessages(
             normalizedMessages,
             conversationId,
@@ -495,7 +437,6 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       renameConversation: async (id, title) => {
-        // SEPARATION-FIX: route to the store that owns this conversation.
         const localConversation = get().conversations.find((c) => c.id === id);
         if (!localConversation) {
           const cloudStore = getCloudStore();
@@ -505,12 +446,6 @@ export const useChatMessageStore = create<MessageState>()(
               cloudStore.getState().conversations.find((c) => c.id === id),
             )
           ) {
-            // DATA-LOSS FIX: enqueue the rename so the sync engine push() re-sends
-            // the cached (renamed) title even if the immediate PUT fails. Without
-            // this, a failed PUT left the new title only in this device's cache,
-            // where the next pull/list-replace reverted it. The clobber-guard in
-            // setCloudConversations / applyConversationDeltas preserves this
-            // locally-dirty title until the push lands.
             markConversationForSync(id);
             try {
               await api.put(
@@ -566,7 +501,6 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       pinConversation: async (id) => {
-        // SEPARATION-FIX: route to the store that owns this conversation.
         const localConv = get().conversations.find((c) => c.id === id);
         if (!localConv) {
           const cloudStore = getCloudStore();
@@ -593,7 +527,6 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       makeConversationPermanent: (id) => {
-        // Route to the correct store.
         if (get().conversations.find((c) => c.id === id)) {
           set((state) => ({
             conversations: state.conversations.map((c) =>
@@ -606,7 +539,6 @@ export const useChatMessageStore = create<MessageState>()(
       },
 
       markConversationRead: (id) => {
-        // Route to the correct store.
         if (get().conversations.find((c) => c.id === id)) {
           set((state) => ({
             conversations: state.conversations.map((c) =>
@@ -634,10 +566,6 @@ export const useChatMessageStore = create<MessageState>()(
 
       setMessageReaction: (conversationId, messageId, reaction) => {
         const ownerStore = getConversationMessageStore(conversationId);
-        // Optimistically persist the rating into message metadata so it survives
-        // FlashList row recycling and reload (the previous per-row state was
-        // dropped on scroll — a dead control). metadata.reaction mirrors the web
-        // shape (PATCH /messages/[messageId]).
         ownerStore.setState((state) => {
           const msgs = state.messages[conversationId];
           if (!msgs) return state;
@@ -650,10 +578,6 @@ export const useChatMessageStore = create<MessageState>()(
             },
           };
         });
-        // Cloud conversations: persist server-side so the rating is durable and
-        // visible cross-surface (web reads the same metadata.reaction). Best-
-        // effort — the tap must not block on the network, and local state is the
-        // source of truth for display.
         const conversation = ownerStore
           .getState()
           .conversations.find((c) => c.id === conversationId);
@@ -695,16 +619,6 @@ export const useChatMessageStore = create<MessageState>()(
               executionModeForConversation(conversation) === 'cloud',
           );
         const newMessageId = () => (isCloudConversation ? uuidv7() : generateMessageId());
-        // The reply must be timestamped strictly AFTER the prompt.
-        //
-        // Both rows previously shared one `now`, and cloud transcripts sort by
-        // `createdAt` then by `id` (compareCloudMessagesByCreatedAtThenId). The
-        // tie therefore fell through to the ids — and because `assistantMessageId`
-        // is minted before the user row's id, monotonic uuidv7 made the
-        // ASSISTANT sort first: every generated image rendered above the prompt
-        // that asked for it (founder 2026-08-13). Distinct timestamps put the
-        // answer in the comparator's primary key, so the order also survives a
-        // cross-device pull rather than depending on id minting order.
         const userCreatedAt = new Date();
         const now = userCreatedAt.toISOString();
         const assistantCreatedAt = new Date(userCreatedAt.getTime() + 1).toISOString();
@@ -755,11 +669,6 @@ export const useChatMessageStore = create<MessageState>()(
         if (isCloudConversation) {
           markConversationForSync(conversationId);
           markMessageForSync(conversationId, userMessage.id);
-          // Keep the in-flight assistant row authoritative while the newly
-          // opened Cloud chat hydrates from the server. Without marking this
-          // row dirty, a concurrent initial pull can treat the locally-created
-          // placeholder as stale, remove it, and leave the terminal media
-          // callback with no message to update.
           markMessageForSync(conversationId, assistantMessage.id);
         }
 
@@ -908,9 +817,6 @@ export const useChatMessageStore = create<MessageState>()(
               executionModeForConversation(conversation) === 'cloud',
           );
         const newMessageId = () => (isCloudConversation ? uuidv7() : generateMessageId());
-        // Same ordering contract as beginImageGeneration above: the reply is
-        // timestamped strictly after the prompt so the cloud comparator never
-        // has to break a tie on ids that were minted in the opposite order.
         const userCreatedAt = new Date();
         const now = userCreatedAt.toISOString();
         const assistantCreatedAt = new Date(userCreatedAt.getTime() + 1).toISOString();
@@ -961,20 +867,12 @@ export const useChatMessageStore = create<MessageState>()(
         if (isCloudConversation) {
           markConversationForSync(conversationId);
           markMessageForSync(conversationId, userMessage.id);
-          // The queued assistant row must survive the same initial Cloud
-          // transcript hydration race as image generation above. It is synced
-          // only when the terminal video state calls syncNow().
           markMessageForSync(conversationId, assistantMessage.id);
         }
 
         return assistantMessageId;
       },
 
-      /**
-       * Provider progress tick. Local-only on purpose: a video task emits many
-       * of these over its minutes-long run, and syncing each one would burn the
-       * sync budget to animate a progress bar. The terminal state syncs.
-       */
       updateVideoGenerationProgress: (conversationId, assistantMessageId, progress, status) => {
         const ownerStore = getConversationMessageStore(conversationId);
         ownerStore.setState((state) => {
@@ -1129,13 +1027,8 @@ export const useChatMessageStore = create<MessageState>()(
       },
     }),
     {
-      // SEPARATION-FIX: Local conversations persist under a dedicated Local key.
-      // Cloud conversations are persisted separately in `useChatCloudMessageStore`
-      // under 'chat-message-store-cloud'. The two namespaces never share keys in
-      // MMKV, ensuring physical separation between Local and Cloud data at rest.
       name: 'chat-message-store-local',
       storage: createJSONStorage(() => mmkvStorage),
-      // AUDIT-FIX: MMKV-RACE
       skipHydration: true,
       onRehydrateStorage: () => (_state, error) => {
         if (error) console.warn('[chatMessageStore] Hydration failed:', error);
@@ -1143,10 +1036,6 @@ export const useChatMessageStore = create<MessageState>()(
       partialize: (state) => {
         const MAX_CONVERSATIONS = 200;
         const MAX_MESSAGES_PER_CONVERSATION = 100;
-        // SEPARATION-FIX: only persist LOCAL conversations in this store.
-        // Cloud conversations must never co-mingle with local storage.
-        // Temporary/incognito conversations are excluded entirely — they must
-        // not survive relaunch (never persist to the recents/history store).
         const conversations = state.conversations
           .filter((c) => executionModeForConversation(c) === 'local' && !c.temporary)
           .slice(0, MAX_CONVERSATIONS);
@@ -1171,41 +1060,20 @@ function generateMessageId(): string {
   return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/**
- * Turn a transport/runtime failure into something a user can act on.
- *
- * A failed generation used to print the raw throw straight into the transcript,
- * so a cancelled request read "fetch failed: FetchRequestCanceledException:
- * Fetch request has been canceled (at Expo/NativeResponse.swift:63)" — a Swift
- * file path and an exception class name in the middle of a chat. Recognised
- * transport failures get plain sentences; anything unrecognised still shows its
- * message (dropping it entirely would hide real provider errors like a content
- * policy refusal), but the internal frame suffix is stripped.
- */
 function presentableMediaError(errorMessage: string): string {
   if (/cancell?ed/i.test(errorMessage)) return 'the request was cancelled.';
   if (/timed?\s*out|timeout/i.test(errorMessage)) return 'the request timed out. Try again.';
   if (/network|offline|internet|ENOTFOUND|ECONNREFUSED/i.test(errorMessage)) {
     return 'no network connection. Reconnect and try again.';
   }
-  // Drop " (at Some/Native/Frame.swift:63)"-style location suffixes.
   return errorMessage.replace(/\s*\(at\s+[^)]*\)\s*$/, '').trim() || 'please try again.';
 }
 
-/** Extract the HTTP status from an api-client error (it throws `HTTP <status>: …`). */
 function httpStatusFromError(error: unknown): number | null {
   const match = error instanceof Error ? error.message.match(/HTTP (\d{3})/) : null;
   return match ? Number(match[1]) : null;
 }
 
-/**
- * Delete a cloud conversation server-side, retrying transient failures.
- * Returns true only when the server has acknowledged the delete (a 404 counts
- * as success — the row is already gone, so the delete is idempotently
- * satisfied). Returns false on a non-transient 4xx or after exhausting retries,
- * so the caller can keep the conversation visible and surface the failure
- * instead of silently hiding content that still lives in the cloud.
- */
 async function deleteCloudConversationWithRetry(id: string, maxAttempts = 3): Promise<boolean> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
@@ -1213,11 +1081,8 @@ async function deleteCloudConversationWithRetry(id: string, maxAttempts = 3): Pr
       return true;
     } catch (error) {
       const status = httpStatusFromError(error);
-      // 404 = already deleted server-side → idempotently satisfied.
       if (status === 404) return true;
-      // Other 4xx (e.g. 403) are not transient — stop and report failure.
       if (status !== null && status >= 400 && status < 500) return false;
-      // 5xx / network error — retry with backoff.
       if (attempt >= maxAttempts) return false;
       await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
     }
@@ -1225,33 +1090,17 @@ async function deleteCloudConversationWithRetry(id: string, maxAttempts = 3): Pr
   return false;
 }
 
-/**
- * Derive artifacts for a transcript that came from the server.
- *
- * Only assistant turns carry artifacts, and cloud artifacts must be stamped
- * with the owning account: `MobileArtifactProvenance` requires an ownerId for
- * scope 'cloud', and the store rejects a record without one. If there is no
- * signed-in owner, cloud artifacts are skipped rather than mis-attributed.
- */
 function captureArtifactsForLoadedMessages(
   messages: ChatMessage[],
   conversationId: string,
   conversationTitle: string,
   scope: 'local' | 'cloud',
 ): void {
-  // The SAME owner source the artifact store gates on. addArtifacts drops any
-  // cloud row whose ownerId !== captureCloudAccountEpoch()'s, silently, so a
-  // different-but-plausible source (useAuthStore.clerkUserId) produced rows
-  // that were derived correctly and then discarded on write.
   const ownerId = captureCloudAccountEpoch()?.ownerId ?? null;
   if (scope === 'cloud' && !ownerId) return;
   const provenance: MobileArtifactProvenance =
     scope === 'cloud' ? { scope: 'cloud', ownerId: ownerId as string } : { scope: 'local' };
 
-  // Derive here rather than calling chatExecutionStore's copy: that store
-  // already lazy-requires THIS one to break a cycle, and importing back the
-  // other way would close it at module-init time. Derivation only needs the
-  // artifacts feature, which this module already depends on.
   try {
     const artifacts = messages
       .filter((message) => message.role === 'assistant' && message.content.trim().length > 0)
@@ -1273,10 +1122,6 @@ function captureArtifactsForLoadedMessages(
 }
 
 function shouldLoadCloudConversationList(): boolean {
-  // Gate on isClerkSignedIn to prevent unauthenticated api.get('/api/chat/conversations')
-  // calls that trigger the "Session Expired" alert in handleUnrecoverableAuth when
-  // appMode is 'cloud' but no real Clerk session exists (e.g. demo build with
-  // cloudUnlocked=true persisted from a prior session).
   return (
     isCloudChatEnabled() &&
     useChatAppModeStore.getState().appMode === 'cloud' &&
@@ -1284,15 +1129,6 @@ function shouldLoadCloudConversationList(): boolean {
   );
 }
 
-/**
- * Resolve the cloud project a new/forked cloud chat should be stamped with.
- *
- * TRUST BOUNDARY: reads ONLY the cloud project store, never the local one, and
- * validates the candidate (explicit id, else the cloud active project) against a
- * LIVE (non-tombstoned) cloud project. A local project id, an unknown id, or a
- * tombstoned id all resolve to `undefined` — so a cloud chat can never be stamped
- * with a cross-namespace or dangling project_id.
- */
 function resolveCloudProjectId(explicit?: string): string | undefined {
   const { activeProjectId, projects } = useCloudProjectStore.getState();
   const candidate = explicit ?? activeProjectId ?? undefined;
@@ -1308,13 +1144,6 @@ function shouldSyncConversationRemote(conversation: ConversationSummary | undefi
   return isCloudChatEnabled() && isCloudConversation(conversation);
 }
 
-/**
- * Validate model identity, entitlement, and immutable conversation boundary
- * before either Local or Cloud persistence mutates. This is intentionally
- * repeated at the store action boundary rather than trusting picker state:
- * account/tier state can change between render and press, and future callers
- * must not be able to queue an invalid Cloud model for sync.
- */
 function isConversationModelSelectionAllowed(
   conversation: ConversationSummary,
   model: string,
@@ -1345,15 +1174,6 @@ interface ReconcileLoadedCloudMessagesInput {
   dirtyMessageIds: Set<string>;
 }
 
-/**
- * Three-way reconciliation for a conversation read that races local activity.
- *
- * The server is authoritative for rows untouched during the request. Local
- * additions, edits, deletions, dirty writes, and streaming placeholders win
- * until their own sync completes. This prevents the common first-send race:
- * GET starts against an empty conversation, the turn streams locally, then
- * the stale empty GET response arrives and erases the visible transcript.
- */
 function reconcileLoadedCloudMessages({
   serverMessages,
   requestStartMessages,
@@ -1364,8 +1184,6 @@ function reconcileLoadedCloudMessages({
   const currentById = new Map(currentMessages.map((message) => [message.id, message]));
   const reconciled = new Map(serverMessages.map((message) => [message.id, message]));
 
-  // A row present when the request began but missing now was deleted locally
-  // while the request was in flight. Do not resurrect it from a stale response.
   for (const message of requestStartMessages) {
     if (!currentById.has(message.id)) reconciled.delete(message.id);
   }
@@ -1384,10 +1202,6 @@ function reconcileLoadedCloudMessages({
     return createdAtOrder === 0 ? a.id.localeCompare(b.id) : createdAtOrder;
   });
 }
-
-// mergeCloudConversations removed: cloud conversations no longer write into
-// the local store. They are stored exclusively in useChatCloudMessageStore
-// under 'chat-message-store-cloud'. See SEPARATION-FIX comments above.
 
 async function createConversationForMode(
   set: (
@@ -1408,9 +1222,6 @@ async function createConversationForMode(
   }
 
   try {
-    // Offline-first: generate the cloud identity (UUIDv7) client-side so the
-    // conversation has a stable id the sync engine can push, independent of the
-    // server round-trip. The create endpoint accepts and echoes this id.
     const id = uuidv7();
     const isTemporary = useSettingsStore.getState().isTemporaryChat;
     const data = ManagedCloudCreateConversationResponseSchema.parse(
@@ -1418,9 +1229,6 @@ async function createConversationForMode(
         id,
         title: title ?? 'New Chat',
         projectId,
-        // Server stores this as web_conversations.is_temporary so the
-        // purge-temporary-chats cron job can bound retention (~30 days) —
-        // see apps/web/db/neon/0050_temporary_chat_retention.sql.
         isTemporary,
       }),
     );
@@ -1431,16 +1239,10 @@ async function createConversationForMode(
       model: normalizedCloudConversation.model ?? model,
       provider: providerForExecutionMode('cloud'),
       executionMode: 'cloud',
-      // Local history-visibility flag (see isHistoryVisibleConversation) — set
-      // from the same toggle value sent to the server above.
       temporary: isTemporary,
     };
-    // SEPARATION-FIX: cloud conversation goes to the cloud store, NOT the local store.
-    // The local store `set` function is intentionally not called here.
     getCloudStore().getState().addCloudConversation(conversation);
-    // Queue the conversation for the next sync push (metadata LWW-reconciles cross-device).
     markConversationForSync(conversation.id);
-    // currentConversationId is shared UI state, not conversation data — safe to set here.
     set(() => ({ currentConversationId: conversation.id }));
     return conversation.id;
   } catch {

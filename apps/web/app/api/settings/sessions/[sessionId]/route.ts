@@ -1,10 +1,3 @@
-/**
- * DELETE /api/settings/sessions/[sessionId] · end one active Clerk session.
- *
- * Reachable by the same three first-party callers as the collection route (web
- * cookie, Mobile Clerk JWT, Desktop device bearer) — see `../session-principal`
- * for how each one's "is this my own session" answer is resolved.
- */
 import 'server-only';
 
 import { clerkClient } from '@clerk/nextjs/server';
@@ -27,7 +20,6 @@ async function handleRevoke(
   const rateLimitResponse = await withRateLimit(request, 'settings-session-revoke');
   if (rateLimitResponse) return rateLimitResponse;
 
-  // Auth before CSRF, per the ordering invariant documented in lib/csrf.ts.
   const { userId, currentSessionId } = await resolveSessionsPrincipal(request);
 
   const csrfError = await requireCsrfToken(request);
@@ -53,8 +45,6 @@ async function handleRevoke(
     await client.sessions.revokeSession(target.id);
   }
 
-  // A device-token caller has no Clerk session, so it can never be revoking its
-  // own: `isCurrent` stays false and the client is not told to sign itself out.
   const isCurrent = currentSessionId !== null && target.id === currentSessionId;
   logger.info({ userId, sessionId: target.id, isCurrent }, 'Account session revoked');
 

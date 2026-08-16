@@ -1,20 +1,5 @@
 'use client';
 
-/**
- * ConversationTitleMenu · the active-chat header title rendered as a dropdown
- * trigger (chevron) exposing Rename / Move to project / Delete.
- *
- * Extracted from WebChatPage so the interactive title has a focused, testable
- * home (WebChatPage itself is too heavy to mount in a unit test). All actions
- * are prop-driven; the component owns only the inline-rename UI state.
- *
- * - Rename swaps the title for an inline <input>; Enter / blur commits via
- *   onRename (no-op on empty / unchanged), Escape cancels.
- * - Move to project renders a submenu over `projects` (only when non-empty and
- *   onMoveToProject is provided).
- * - Delete calls onDelete (the caller is responsible for its own confirm).
- */
-
 import { useCallback, useState } from 'react';
 import { ChevronDown, GitFork, Pencil, Printer, Trash2, FolderInput } from 'lucide-react';
 import {
@@ -29,24 +14,12 @@ import {
 } from '@agiworkforce/ui';
 
 export interface ConversationTitleMenuProps {
-  /** Current conversation title (already filtered to non-empty, != 'New Chat'). */
   title: string;
-  /** Projects available as move-to targets. */
   projects: ReadonlyArray<{ id: string; name: string }>;
-  /** Commit a new title. */
   onRename: (title: string) => void;
-  /** Move the conversation into a project. Omit to hide the submenu. */
   onMoveToProject?: (projectId: string) => void;
-  /** Delete the conversation (caller confirms). */
   onDelete: () => void;
-  /** Print the transcript. Omit to hide the item. */
   onPrint?: () => void;
-  /**
-   * Fork the whole conversation into a new one branched from its last message.
-   * Omit to hide the item. The per-message "Branch conversation" action in
-   * MessageBubble already covers branching from an arbitrary point; this is the
-   * conversation-level entry point that had no UI.
-   */
   onFork?: () => void;
 }
 
@@ -75,9 +48,6 @@ export function ConversationTitleMenu({
 
   return (
     <div
-      // Stay in the header's flex flow. An absolutely centred title can overlap
-      // the fixed action group when a Sources/Artifacts panel narrows the chat
-      // column even though the browser viewport itself is still wide.
       className="flex min-w-0 flex-1 items-center justify-center"
     >
       {isRenaming ? (

@@ -1,11 +1,3 @@
-/**
- * AutomationBuilder — event-triggered agent automation UI
- *
- * Lets operators configure triggers (Cron / Webhook / File Watcher), view
- * per-trigger execution logs, enable/disable triggers, and delete them.
- *
- * All Tauri invoke() params are camelCase per IPC rules.
- */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { useShallow } from 'zustand/react/shallow';
@@ -68,8 +60,6 @@ import {
 import { Switch } from '@/ui/Switch';
 import { EmptyState } from '@/ui/EmptyState';
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 const CRON_PRESETS: { label: string; value: string }[] = [
   { label: 'Every hour', value: '0 * * * *' },
   { label: 'Daily at 9am', value: '0 9 * * *' },
@@ -77,8 +67,6 @@ const CRON_PRESETS: { label: string; value: string }[] = [
   { label: 'Monthly 1st 9am', value: '0 9 1 * *' },
 ];
 
-// Each default carries the `type` discriminant the Rust `TriggerConfig` enum
-// requires; serde cannot pick a variant without it.
 const DEFAULT_CRON_CONFIG: CronConfig = { type: 'cron', expression: '0 9 * * *' };
 const DEFAULT_WEBHOOK_CONFIG: WebhookConfig = {
   type: 'webhook',
@@ -91,8 +79,6 @@ const DEFAULT_FILE_WATCHER_CONFIG: FileWatcherConfig = {
   glob: '**/*',
   debounceMs: 500,
 };
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function triggerTypeLabel(type: TriggerType): string {
   switch (type) {
@@ -133,8 +119,6 @@ function formatDuration(ms: number | null): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-// ── Default form state ────────────────────────────────────────────────────────
-
 function defaultFormState(): CreateTriggerInput {
   return {
     name: '',
@@ -149,8 +133,6 @@ function defaultFormState(): CreateTriggerInput {
     },
   };
 }
-
-// ── Execution log entry ───────────────────────────────────────────────────────
 
 function ExecutionEntry({ execution }: { execution: TriggerExecution }) {
   const statusColor =
@@ -180,8 +162,6 @@ function ExecutionEntry({ execution }: { execution: TriggerExecution }) {
     </div>
   );
 }
-
-// ── Execution log panel ───────────────────────────────────────────────────────
 
 interface ExecutionLogPanelProps {
   triggerId: string;
@@ -225,8 +205,6 @@ function ExecutionLogPanel({ triggerId, executions, onLoad }: ExecutionLogPanelP
     </div>
   );
 }
-
-// ── Trigger card ──────────────────────────────────────────────────────────────
 
 interface TriggerCardProps {
   trigger: EventTriggerDefinition;
@@ -355,8 +333,6 @@ function TriggerCard({
   );
 }
 
-// ── Config summary (read-only) ────────────────────────────────────────────────
-
 function ConfigSummary({ trigger }: { trigger: EventTriggerDefinition }) {
   const cfg = trigger.config;
   let summary = '';
@@ -378,8 +354,6 @@ function ConfigSummary({ trigger }: { trigger: EventTriggerDefinition }) {
   );
 }
 
-// ── Trigger form (create / edit) ──────────────────────────────────────────────
-
 interface TriggerFormProps {
   open: boolean;
   initial: CreateTriggerInput | null;
@@ -392,14 +366,12 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
   const [form, setForm] = useState<CreateTriggerInput>(initial ?? defaultFormState());
   const [saving, setSaving] = useState(false);
 
-  // Dynamic model list from the catalog (rule-models-json: no hardcoded model IDs).
   const availableModels = useModelStore((s) => s.availableModels);
   const automationModelOptions = useMemo(
     () => availableModels.filter((m) => m.available).map((m) => ({ value: m.id, label: m.name })),
     [availableModels],
   );
 
-  // Sync when the dialog re-opens with new initial data
   useEffect(() => {
     if (open) {
       setForm(initial ?? defaultFormState());
@@ -430,7 +402,6 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
         multiple: false,
         title: 'Select Watch Directory',
       });
-      // Cancelling the picker returns null; leave the field as the user left it.
       if (typeof selected !== 'string') return;
       setForm((prev) => ({
         ...prev,
@@ -576,8 +547,6 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                       ...prev,
                       config: {
                         ...(prev.config as WebhookConfig),
-                        // Rust stores a bearer token, not a boolean. Turning the
-                        // switch on mints one; turning it off clears it.
                         authToken: checked ? crypto.randomUUID() : null,
                       },
                     }))
@@ -701,7 +670,6 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
                       </SelectItem>
                     ))
                   ) : (
-                    // Fallback while model store is loading — empty state.
                     <SelectItem value="" disabled>
                       Loading models…
                     </SelectItem>
@@ -762,8 +730,6 @@ function TriggerForm({ open, initial, editId, onClose, onSubmit }: TriggerFormPr
   );
 }
 
-// ── Loading skeleton ──────────────────────────────────────────────────────────
-
 function TriggerSkeleton() {
   return (
     <div className="space-y-3">
@@ -783,8 +749,6 @@ function TriggerSkeleton() {
     </div>
   );
 }
-
-// ── Main component ─────────────────────────────────────────────────────────────
 
 export function AutomationBuilder() {
   const {
@@ -813,16 +777,12 @@ export function AutomationBuilder() {
     })),
   );
 
-  // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<EventTriggerDefinition | null>(null);
 
-  // Fetch on mount
   useEffect(() => {
     void fetchTriggers();
   }, [fetchTriggers]);
-
-  // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleOpenCreate = useCallback(() => {
     setEditTarget(null);
@@ -887,8 +847,6 @@ export function AutomationBuilder() {
     [fetchExecutions],
   );
 
-  // ── Form initial data ──────────────────────────────────────────────────────
-
   const formInitial: CreateTriggerInput | null = editTarget
     ? {
         name: editTarget.name,
@@ -898,8 +856,6 @@ export function AutomationBuilder() {
         action: editTarget.action,
       }
     : null;
-
-  // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-surface-base">

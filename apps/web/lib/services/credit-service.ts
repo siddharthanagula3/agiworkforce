@@ -254,15 +254,6 @@ export class CreditService {
     }
   }
 
-  /**
-   * Persist and apply a post-response credit settlement through the canonical
-   * Neon outbox. The database function atomically owns idempotency, terminal
-   * business decisions, retry state, and the call into deduct_credits().
-   *
-   * A transport failure is retried inline with the exact same idempotency key.
-   * If the database accepted an attempt but the response was lost, the next
-   * call returns the stored result instead of charging twice.
-   */
   static async settleCreditsDurably(
     operation: CreditSettlementOperation,
     db: DatabaseAdapter = getNeonDb(),
@@ -356,7 +347,6 @@ export class CreditService {
     return result;
   }
 
-  /** SERVICE-CONTEXT: cron-only recovery across all users. */
   static async processPendingSettlements(
     batchSize = 100,
     db: DatabaseAdapter = getNeonDb(),
@@ -399,11 +389,6 @@ export class CreditService {
     return `${userId}:${operationType}:${requestId}`;
   }
 
-  /**
-   * Add the higher plan's allowance delta without resetting usage or purchased
-   * top-ups. The upgrade receipt makes this idempotent even when the renewal
-   * period stays unchanged and Stripe sends several events for one upgrade.
-   */
   static async carryUsageIntoUpgradedPeriod(
     userId: string,
     subscriptionId: string,

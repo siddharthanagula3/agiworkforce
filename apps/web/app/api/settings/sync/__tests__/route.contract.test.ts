@@ -1,12 +1,3 @@
-/**
- * Contract test for GET/POST /api/settings/sync.
- *
- * Asserts the live route handlers' JSON output parses against the shared
- * `SettingsSyncPullResponseSchema` / `SettingsSyncPushResponseSchema` from
- * @agiworkforce/cloud-contracts — the schemas mobile's cloudSyncEngine validates
- * pulled settings documents with. (The allowlist/secret-scrub behavior has
- * its own dedicated tests; this file pins only the response envelope.)
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
@@ -18,8 +9,6 @@ vi.mock('server-only', () => ({}));
 
 const { mockQuery } = vi.hoisted(() => ({ mockQuery: vi.fn() }));
 
-// vi.fn(impl) creation-time implementations survive the config-level
-// `mockReset: true` (which wipes .mockResolvedValue set in factories).
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
 }));

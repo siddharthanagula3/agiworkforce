@@ -6,11 +6,6 @@ import {
   showsThinkingSwitch,
 } from '../thinkingPolicy';
 
-/**
- * Model ids are read from the registry, never hardcoded from memory: these
- * helpers pick a live catalog entry matching the shape each case needs, so the
- * test follows models.json instead of pinning a name that can be retired.
- */
 function firstModelIdWhere(predicate: (id: string) => boolean): string {
   const match = listCanonicalModels().find((model) => predicate(model.id));
   if (!match) throw new Error('No catalog model matches this reasoning shape');
@@ -35,8 +30,6 @@ describe('resolveThinkingSendPolicy', () => {
       requestedThinking: false,
     });
 
-    // The composer default is `false`; sending it unclamped is the exact
-    // request the route answers with a 422 invalid_thinking_configuration.
     expect(policy.thinkingEnabled).toBe(true);
     expect(policy.alwaysOn).toBe(true);
     expect(policy.showsSwitch).toBe(false);

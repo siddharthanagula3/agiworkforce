@@ -41,11 +41,6 @@ function capabilityForQuality(qualityTier: string): CapabilityTier | undefined {
   }
 }
 
-/**
- * Build the Chrome picker from authenticated server admission intersected with
- * the bundled capability catalog. Unknown server ids remain hidden until this
- * extension version has the metadata required to route them honestly.
- */
 export function getManagedModelPickerOptions(
   access: ManagedModelAccess | null,
 ): ManagedModelPickerOption[] {
@@ -84,11 +79,6 @@ export function getManagedModelBadgeLabel(modelId: string): string {
   return getModelMetadataById(modelId)?.name ?? modelId;
 }
 
-/**
- * Resolve the reasoning slider from the same model catalog used by the
- * provider request path. Auto has no honest effort ladder until the router has
- * returned a concrete model, so it stays explicitly unavailable beforehand.
- */
 export function getManagedEffortControlState(
   selection: string,
   currentModelKey: string | undefined,
@@ -124,11 +114,6 @@ export function getManagedEffortControlState(
   };
 }
 
-/**
- * Resolve the only effort value that may leave the side panel. Auto/Quick has
- * no concrete capability contract before routing, so any latent preference is
- * deliberately omitted until `currentModelKey` is known.
- */
 export function getManagedOutboundEffort(
   selection: string,
   currentModelKey: string | undefined,

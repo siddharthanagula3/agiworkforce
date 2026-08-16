@@ -1,12 +1,4 @@
 // TODO(task-1.3): migrate to packages/client/client-runtime/state (see AppStateStore.ts domain mapping)
-/**
- * Artifact Store
- *
- * Manages artifact state for the live previews panel. Provides CRUD operations,
- * version management, and real-time streaming support.
- *
- * All Tauri IPC calls are delegated to the typed API wrappers in '@/api/artifacts'.
- */
 
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
@@ -37,10 +29,6 @@ import {
   artifactClearAll,
   artifactListPersisted,
 } from '@/api/artifacts';
-
-// =============================================================================
-// Re-export types from the API layer so existing consumers keep working
-// =============================================================================
 
 export type {
   ArtifactType,
@@ -89,10 +77,6 @@ import type {
   ArtifactListFilter,
 } from '@/api/artifacts';
 
-// =============================================================================
-// Diff Types
-// =============================================================================
-
 export interface ArtifactDiff {
   hunks: Array<{
     startLine: number;
@@ -103,56 +87,31 @@ export interface ArtifactDiff {
   changeDescription?: string;
 }
 
-// =============================================================================
-// Progressive (display-only) artifact draft
-// =============================================================================
-
-/**
- * A `create_artifact` tool call whose arguments are still streaming.
- *
- * This is a DISPLAY-ONLY projection of partially parsed tool input — it is
- * never persisted, never versioned, and never becomes an `Artifact`. The real
- * artifact arrives on `chat:artifact` once the tool executes, at which point
- * `finalizeArtifactDraft` swaps the panel over to it.
- */
 export interface ArtifactDraft {
-  /** Stable per-turn key: `${messageId}:${toolCallIndex}`. */
   key: string;
   title: string | null;
   artifactType: string | null;
   content: string;
   language: string | null;
-  /** True once the streamed argument object closed (content is final text). */
   complete: boolean;
-  /** Whether showing this draft is what opened the panel. */
   openedPanel: boolean;
 }
 
-// =============================================================================
-// Store State
-// =============================================================================
-
 interface ArtifactStoreState {
-  // Artifacts cache
   artifacts: Map<string, Artifact>;
   summaries: ArtifactSummary[];
 
-  // Active artifact for panel
   activeArtifactId: string | null;
   selectedVersion: number | null;
 
-  // Panel state
   panelOpen: boolean;
   panelWidth: number;
 
-  // Loading states
   isLoading: boolean;
-  isStreaming: string | null; // ID of currently streaming artifact
+  isStreaming: string | null;
 
-  // Progressive tool-call preview (display only, never persisted)
   draft: ArtifactDraft | null;
 
-  // Actions
   createArtifact: (
     title: string,
     artifactType: ArtifactType,
@@ -208,7 +167,6 @@ interface ArtifactStoreState {
   ) => Promise<VersionDiff | null>;
   getStats: () => Promise<ArtifactStoreStats | null>;
 
-  // Panel actions
   setActiveArtifact: (id: string | null) => void;
   setSelectedVersion: (version: number | null) => void;
   openPanel: () => void;
@@ -216,32 +174,22 @@ interface ArtifactStoreState {
   togglePanel: () => void;
   setPanelWidth: (width: number) => void;
 
-  // Progressive draft actions (display only)
   updateArtifactDraft: (draft: Omit<ArtifactDraft, 'openedPanel'>) => void;
-  /** Real artifact landed: point the panel at it and drop the draft. */
   finalizeArtifactDraft: (artifactId: string) => void;
-  /** Tool call ended without an artifact (error/stop): undo the preview. */
   discardArtifactDraft: (key?: string) => void;
 
-  // Bulk operations
   clearAllArtifacts: () => Promise<boolean>;
   exportAllArtifacts: () => Promise<Artifact[] | null>;
   importAllArtifacts: (artifacts: Artifact[]) => Promise<boolean>;
 
-  // Utility
   clearCache: () => void;
   resetOnLogout: () => void;
 }
-
-// =============================================================================
-// Store Implementation
-// =============================================================================
 
 export const useArtifactStore = create<ArtifactStoreState>()(
   devtools(
     persist(
       (set, get) => ({
-        // Initial state
         artifacts: new Map(),
         summaries: [],
         activeArtifactId: null,
@@ -252,7 +200,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         isStreaming: null,
         draft: null,
 
-        // Create a new artifact
         createArtifact: async (
           title,
           artifactType,
@@ -287,7 +234,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Create a streaming artifact
         createStreamingArtifact: async (
           title,
           artifactType,
@@ -315,12 +261,10 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Append content to streaming artifact
         appendStreamingContent: async (id, delta) => {
           try {
             await artifactAppendStreaming(id, delta);
 
-            // Update local cache
             set((state) => {
               const artifact = state.artifacts.get(id);
               if (artifact) {
@@ -338,7 +282,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Finalize streaming artifact
         finalizeStreamingArtifact: async (id, changeDescription) => {
           try {
             const artifact = await artifactFinalizeStreaming(id, changeDescription);
@@ -355,9 +298,7 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Get artifact by ID
         getArtifact: async (id) => {
-          // Check cache first
           const cached = get().artifacts.get(id);
           if (cached) return cached;
 
@@ -375,7 +316,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Get rendered artifact
         getRenderedArtifact: async (id) => {
           try {
             return await artifactGetRendered(id);
@@ -385,7 +325,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Update artifact
         updateArtifact: async (id, content, changeDescription, title, metadata, tags) => {
           set({ isLoading: true });
           try {
@@ -411,11 +350,9 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Apply a targeted diff to an artifact (avoids full content replacement)
         applyDiffToArtifact: async (id, diff) => {
           set({ isLoading: true });
           try {
-            // Attempt the dedicated Tauri command first
             try {
               const artifact = await artifactApplyDiff(id, diff.hunks, diff.changeDescription);
               set((state) => {
@@ -428,7 +365,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
               // Command not yet registered — apply the diff locally and call artifact_update
             }
 
-            // Fallback: compute new content locally and call the existing update path
             const cached = get().artifacts.get(id);
             if (!cached) {
               return null;
@@ -441,7 +377,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Rollback artifact to version
         rollbackArtifact: async (id, version) => {
           set({ isLoading: true });
           try {
@@ -460,7 +395,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Delete artifact
         deleteArtifact: async (id) => {
           try {
             await artifactDelete(id);
@@ -479,7 +413,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Archive artifact
         archiveArtifact: async (id) => {
           try {
             await artifactArchive(id);
@@ -499,7 +432,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Unarchive artifact
         unarchiveArtifact: async (id) => {
           try {
             await artifactUnarchive(id);
@@ -519,7 +451,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Pin artifact
         pinArtifact: async (id, pinned) => {
           try {
             await artifactPin(id, pinned);
@@ -539,11 +470,10 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Add tags
         addTags: async (id, tags) => {
           try {
             await artifactAddTags(id, tags);
-            await get().getArtifact(id); // Refresh from server
+            await get().getArtifact(id);
             return true;
           } catch (error) {
             console.error('Error adding tags:', error);
@@ -551,11 +481,10 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Remove tags
         removeTags: async (id, tags) => {
           try {
             await artifactRemoveTags(id, tags);
-            await get().getArtifact(id); // Refresh from server
+            await get().getArtifact(id);
             return true;
           } catch (error) {
             console.error('Error removing tags:', error);
@@ -563,7 +492,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // List artifacts
         listArtifacts: async (filter) => {
           set({ isLoading: true });
           try {
@@ -578,7 +506,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Get artifacts by conversation
         getArtifactsByConversation: async (conversationId) => {
           try {
             return await artifactGetByConversation(conversationId);
@@ -588,7 +515,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // List persisted artifacts from SQLite (bypasses in-memory cache)
         listPersistedArtifacts: async (conversationId, limit) => {
           try {
             const summaries = await artifactListPersisted(conversationId, limit);
@@ -600,7 +526,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Get version history
         getVersionHistory: async (id) => {
           try {
             return await artifactGetVersions(id);
@@ -610,7 +535,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Get version diff
         getVersionDiff: async (id, fromVersion, toVersion) => {
           try {
             return await artifactGetDiff(id, fromVersion, toVersion);
@@ -620,7 +544,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Get stats
         getStats: async () => {
           try {
             return await artifactGetStats();
@@ -630,7 +553,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Panel actions
         setActiveArtifact: (id) => set({ activeArtifactId: id, selectedVersion: null }),
         setSelectedVersion: (version) => set({ selectedVersion: version }),
         openPanel: () => set({ panelOpen: true }),
@@ -638,8 +560,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
         togglePanel: () => set((state) => ({ panelOpen: !state.panelOpen })),
         setPanelWidth: (width) => set({ panelWidth: width }),
 
-        // Progressive preview of a streaming `create_artifact` tool call.
-        // Nothing here touches the backend: no create, no append, no version.
         updateArtifactDraft: (draft) =>
           set((state) => {
             const isSameDraft = state.draft?.key === draft.key;
@@ -673,12 +593,10 @@ export const useArtifactStore = create<ArtifactStoreState>()(
             if (key !== undefined && state.draft.key !== key) return state;
             return {
               draft: null,
-              // Only close what the preview itself opened.
               panelOpen: state.draft.openedPanel ? false : state.panelOpen,
             };
           }),
 
-        // Bulk operations
         clearAllArtifacts: async () => {
           set({ isLoading: true });
           try {
@@ -706,7 +624,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           set({ isLoading: true });
           try {
             await artifactImportAll(artifacts);
-            // Refresh the list after import
             const summaries = await artifactList();
             set({ summaries, isLoading: false });
             return true;
@@ -718,7 +635,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
           }
         },
 
-        // Utility
         clearCache: () => set({ artifacts: new Map(), summaries: [] }),
         resetOnLogout: () =>
           set({
@@ -735,10 +651,6 @@ export const useArtifactStore = create<ArtifactStoreState>()(
       {
         name: 'artifact-store',
         version: 1,
-        // IMPORTANT: `artifacts: Map<string, Artifact>` must stay excluded from
-        // partialize. JSON.stringify serializes Maps as `{}`, so including it would
-        // silently break persistence. If you ever need to persist artifacts, add a
-        // custom `storage` option with Map-aware replacer/reviver functions.
         partialize: (state) => ({
           panelWidth: state.panelWidth,
         }),

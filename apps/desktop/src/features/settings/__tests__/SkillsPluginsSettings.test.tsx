@@ -1,15 +1,8 @@
-/**
- * Tests for SkillsPluginsSettings component
- *
- * Covers: non-Tauri fallback, loading state, error handling,
- * successful plugin/command/skill/agent display, and empty-state rendering.
- */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SkillsPluginsSettings } from '../SkillsPluginsSettings';
 
-// Radix UI / jsdom compat polyfills
 if (typeof Element.prototype.hasPointerCapture === 'undefined') {
   Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
 }
@@ -26,8 +19,6 @@ class MockResizeObserver {
   disconnect = vi.fn();
 }
 global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
-
-// ── Module mocks ──────────────────────────────────────────────────────────────
 
 const mockInvoke = vi.fn();
 const mockIsTauriContext = vi.fn(() => true);
@@ -54,8 +45,6 @@ vi.mock('@/stores/projectStore', () => ({
   ),
   selectCurrentFolder: (s: { currentFolder: string | null }) => s.currentFolder,
 }));
-
-// ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const PLUGINS_JSON = JSON.stringify({
   version: 2,
@@ -162,8 +151,6 @@ function setupSuccessfulLoad({
   });
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 describe('SkillsPluginsSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -182,7 +169,6 @@ describe('SkillsPluginsSettings', () => {
 
   describe('Loading state', () => {
     it('shows loading spinner while data is being fetched', () => {
-      // Never resolves — component stays in loading state
       mockInvoke.mockReturnValue(new Promise(() => {}));
       render(<SkillsPluginsSettings />);
 
@@ -205,7 +191,6 @@ describe('SkillsPluginsSettings', () => {
       render(<SkillsPluginsSettings />);
 
       await waitFor(() => {
-        // hookify → Hookify
         expect(screen.getByText('Hookify')).toBeInTheDocument();
       });
     });
@@ -218,7 +203,6 @@ describe('SkillsPluginsSettings', () => {
         expect(screen.getByText('Code Review')).toBeInTheDocument();
       });
 
-      // Expand the Code Review row
       await userEvent.click(screen.getByText('Code Review').closest('button')!);
 
       await waitFor(() => {
@@ -252,9 +236,7 @@ describe('SkillsPluginsSettings', () => {
       setupSuccessfulLoad();
       render(<SkillsPluginsSettings />);
 
-      // Agent name not visible until section is expanded
       await waitFor(() => {
-        // The section header should exist (with count badge "1")
         expect(screen.getByText('Project Agents')).toBeInTheDocument();
       });
       expect(screen.queryByText('frontend-engineer')).not.toBeInTheDocument();
@@ -306,7 +288,6 @@ describe('SkillsPluginsSettings', () => {
 
       render(<SkillsPluginsSettings />);
 
-      // Component should settle without crashing
       await waitFor(() => {
         expect(screen.queryByText(/loading plugins/i)).not.toBeInTheDocument();
       });
@@ -317,7 +298,6 @@ describe('SkillsPluginsSettings', () => {
       setupSuccessfulLoad({ pluginsJson: 'invalid-json' });
       render(<SkillsPluginsSettings />);
 
-      // JSON.parse error should be caught — no plugins shown, no crash
       await waitFor(() => {
         expect(screen.queryByText(/loading plugins/i)).not.toBeInTheDocument();
       });

@@ -1,11 +1,3 @@
-/**
- * BrandedGreeting Component
- *
- * Personalized, time-aware greeting shown in the empty chat state.
- * Reads the user's display name from the auth store and rotates
- * greetings based on time of day. The spinning AgiMark brand glyph
- * anchors the AGI Workforce brand, matching web's GreetingBanner.
- */
 
 import React, { useMemo } from 'react';
 import { AgiMark } from '@agiworkforce/ui';
@@ -62,8 +54,6 @@ function getGreeting(name: string | null): { headline: string; subline: string }
     pool = EVENING_GREETINGS;
   }
 
-  // Use the minute hand to pick a stable-but-rotated entry within a session.
-  // This avoids randomness that would re-render on every mount.
   const index = new Date().getMinutes() % pool.length;
   const template = pool[index] ?? pool[0]!;
 
@@ -87,7 +77,6 @@ export const BrandedGreeting: React.FC<BrandedGreetingProps> = ({
   const user = useUnifiedAuthStore(selectUser);
   const firstName = useMemo(() => {
     if (!user?.name) return null;
-    // Take only the first word of the display name for a friendlier greeting
     return user.name.split(' ')[0] ?? null;
   }, [user?.name]);
 

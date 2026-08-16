@@ -105,7 +105,6 @@ export function VoiceSettings() {
   const startListening = useVoiceInputStore((s) => s.startListening);
   const stopListening = useVoiceInputStore((s) => s.stopListening);
 
-  // Backend voice capabilities and controls
   const capabilities = useVoiceModeStore((s) => s.capabilities);
   const wakeWordActive = useVoiceModeStore((s) => s.wakeWordActive);
   const globalPttActive = useVoiceModeStore((s) => s.globalPttActive);
@@ -126,10 +125,6 @@ export function VoiceSettings() {
   const [piperVoices, setPiperVoices] = useState<PiperVoiceInfo[]>([]);
   const [downloadingModel, setDownloadingModel] = useState<string | null>(null);
   const [downloadingVoice, setDownloadingVoice] = useState<string | null>(null);
-  // Fail closed: local Whisper dictation only works when the `local-whisper`
-  // Cargo feature is compiled in. Shipped builds omit it, so the Local Whisper
-  // provider would always fail. Probe the backend and disable the option unless
-  // it is genuinely available. No selectable provider may always-fail.
   const [localWhisperAvailable, setLocalWhisperAvailable] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<string>(
     () => localStorage.getItem(VOICE_PERSONA_STORAGE_KEY) ?? 'professional',
@@ -140,7 +135,6 @@ export function VoiceSettings() {
     localStorage.setItem(VOICE_PERSONA_STORAGE_KEY, personaId);
   }, []);
 
-  // Fetch capabilities and local models on mount
   useEffect(() => {
     fetchCapabilities().catch((err: unknown) => {
       console.error('Failed to fetch voice capabilities:', err);
@@ -160,10 +154,6 @@ export function VoiceSettings() {
       .catch(() => setLocalWhisperAvailable(false));
   }, [fetchCapabilities, listWhisperModels, listPiperVoices]);
 
-  // Microphone picker: browser device list (the in-app path captures via
-  // getUserMedia). Labels are only populated once mic permission has been
-  // granted; unlabeled devices get a stable positional name. Refreshes on
-  // plug/unplug via `devicechange`.
   useEffect(() => {
     let cancelled = false;
     const refreshDevices = async () => {
@@ -192,11 +182,6 @@ export function VoiceSettings() {
     };
   }, []);
 
-  // `enumerateDevices` returns nothing until mic permission is granted, and an
-  // unplugged mic drops out of the list entirely. Without an entry matching the
-  // saved id the Select has no item for its value and renders a blank trigger,
-  // so the remembered choice looks lost. The persisted label is what lets us
-  // name it while the real device is out of reach.
   const savedDeviceUnavailable = Boolean(
     inputDeviceId && !inputDevices.some((device) => device.deviceId === inputDeviceId),
   );
@@ -251,7 +236,6 @@ export function VoiceSettings() {
   const isProcessing = mode === 'processing';
   const isBusy = isRecording || isTranscribing || isProcessing;
 
-  // Fail closed: null capabilities (probe not loaded) presents as unavailable.
   const systemDictationAvailable = capabilities?.systemDictationAvailable === true;
 
   const selectedPostProcess = POST_PROCESSING_OPTIONS.find((o) => o.value === postProcessingMode);
@@ -295,9 +279,6 @@ export function VoiceSettings() {
               </SelectTrigger>
               <SelectContent>
                 {PROVIDER_OPTIONS.map((opt) => {
-                  // Local Whisper only works when the on-device backend is
-                  // compiled in. Disable (never silently hide → never silently
-                  // reroute) it otherwise so it can't be picked and always fail.
                   const unavailable = opt.value === 'local_whisper' && !localWhisperAvailable;
                   return (
                     <SelectItem key={opt.value} value={opt.value} disabled={unavailable}>

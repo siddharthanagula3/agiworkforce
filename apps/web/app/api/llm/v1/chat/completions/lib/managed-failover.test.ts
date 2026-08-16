@@ -1,14 +1,3 @@
-/**
- * Managed-failover plan semantics (AUTO-ROUTER-MIGRATION-01 web twin).
- * Mirrors the gateway's pinned semantics (services/api-gateway
- * __tests__/routes/llm-managed-failover.test.ts): rotation only on the five
- * availability categories and direct-provider rate limits, plus credential
- * rejections — which condemn the ONE rejected provider account and skip its
- * remaining routes — never on abort/client-error classes,
- * per-attempt tier re-admission, structural rotation-freedom for explicit
- * selections (empty plan), and a derived attempt view that keeps ONE
- * reservation while attributing the serving model.
- */
 
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { listCanonicalModels } from '@agiworkforce/types';
@@ -35,9 +24,6 @@ vi.mock('@/lib/services/provider-adapter-service', () => ({
   resolveProviderFromModel: (...args: unknown[]) => mockResolveProviderFromModel(...args),
 }));
 
-// request-processor pulls in the full processing stack; the failover module
-// only needs its two pure helpers. Stub them with behavior-faithful
-// signatures so this stays a unit test of plan semantics.
 vi.mock('./request-processor', () => ({
   resolveRequestEffort: vi.fn(() => undefined),
   buildThinkingConfig: vi.fn(() => undefined),
@@ -121,8 +107,6 @@ describe('rotation eligibility (gateway parity)', () => {
     ['server_overload (529)', httpError(529, '{"type":"overloaded_error"}')],
     ['rate limit (429)', httpError(429, 'rate limit exceeded')],
     ['api_timeout', Object.assign(new Error('request timeout'), {})],
-    // A rejected managed key condemns ONE provider account, not the request:
-    // the remaining plan routes hold distinct keys and must still be tried.
     ['credential failure (401)', httpError(401, 'authentication error (401)')],
     ['forbidden (403)', httpError(403, 'permission denied')],
     ['revoked oauth token', new Error('This oauth token has been revoked')],
@@ -135,8 +119,6 @@ describe('rotation eligibility (gateway parity)', () => {
   });
 
   it('skips the rejected provider’s own remaining routes rather than replaying the same key', () => {
-    // candidate-a is on the primary's provider (anthropic) — the same rejected
-    // key — so it must be skipped; candidate-b (google) serves.
     mockResolveProviderFromModel.mockImplementation((model: string) =>
       model === 'candidate-a' ? 'anthropic' : 'google',
     );
@@ -153,8 +135,6 @@ describe('rotation eligibility (gateway parity)', () => {
   });
 
   it('condemns only the provider that was rejected, not one that merely 503d', () => {
-    // openai's 503 is an availability failure: its later plan routes stay
-    // admissible, unlike a rejected credential.
     mockResolveProviderFromModel.mockReturnValue('openai');
     const plan = makePlan(makeProcessed());
     expect(plan.next(httpError(503))?.model).toBe('candidate-a');
@@ -241,22 +221,12 @@ describe('attempt view (attribution + single reservation)', () => {
     expect(view.provider).toBe('openai');
     expect(view.usedFallback).toBe(true);
     expect(view.fallbackReason).toBe('managed_failover');
-    // One reservation spans attempts: the exact same object, not a copy —
-    // finalize/settle paths key off it, so a second reservation can never
-    // be created by rotation.
     expect(view.managedUsage).toBe(processed.managedUsage);
     expect(view.requestId).toBe(processed.requestId);
-    // The primary is untouched (a failed attempt must not mutate it).
     expect(processed.chatRequest.model).toBe('primary-model');
     expect(processed.usedFallback).toBe(false);
   });
 
-  /**
-   * CPST Stage-0 telemetry (managed cloud only,
-   * docs/design/execution-plan-contract-and-cpst-2026-08-05.md §4.2). This is
-   * the only place an additional provider attempt is created inside one billed
-   * request, so it is the only honest source of the `retries` counter.
-   */
   it('counts each rotation as one retry and leaves the un-rotated request unknown', () => {
     const processed = makeProcessed();
     expect(processed.retries).toBeUndefined();
@@ -267,16 +237,11 @@ describe('attempt view (attribution + single reservation)', () => {
     const second = buildFailoverAttemptView(first, 'candidate-b', 'openai');
     expect(second.retries).toBe(2);
 
-    // The primary view is never mutated, so a request that never rotated keeps
-    // reporting the counter as absent (unknown), not as zero.
     expect(processed.retries).toBeUndefined();
     expect(first.retries).toBe(1);
   });
 
   it('increments retries across successive plan rotations (production call shape)', () => {
-    // Regression: the plan previously built every attempt from the ORIGINAL
-    // request view, so `retries` evaluated to 1 on every rotation. This test
-    // rotates through the plan the way route.ts actually does.
     const plan = makePlan(makeProcessed());
 
     const first = plan.next(httpError(503));
@@ -290,15 +255,6 @@ describe('attempt view (attribution + single reservation)', () => {
   });
 });
 
-/**
- * Route-level failover: retry the SAME model through OpenRouter before
- * changing model at all.
- *
- * Model rotation answers an outage with a different model, which is why it is
- * withheld from explicit selections. Retrying the identical model on another
- * wire has no such cost, so it is allowed where rotation is not — including
- * for explicit selections and empty fallback plans.
- */
 describe('OpenRouter route failover', () => {
   const savedKey = process.env['OPENROUTER_API_KEY'];
 
@@ -311,7 +267,6 @@ describe('OpenRouter route failover', () => {
     else process.env['OPENROUTER_API_KEY'] = savedKey;
   });
 
-  /** A real catalog model, so it has a genuine OpenRouter failover slug. */
   function anthropicRequest(overrides: Partial<ProcessedRequest> = {}): ProcessedRequest {
     return makeProcessed({
       provider: 'anthropic',
@@ -332,14 +287,11 @@ describe('OpenRouter route failover', () => {
     const attempt = makePlan(anthropicRequest()).next(httpError(503));
     expect(attempt).not.toBeNull();
     expect(attempt!.provider).toBe('openrouter');
-    // The user asked for one model and gets that same model — that is the point.
     expect(attempt!.model).toBe(ANTHROPIC_FAILOVER_MODEL);
     expect(attempt!.processed.fallbackReason).toBe('openrouter_route_failover');
   });
 
   it('works for an explicit selection, which model rotation cannot serve', () => {
-    // Empty plan = explicit selection. Rotation is structurally unavailable
-    // here; a route retry is not, because the answer is unchanged.
     const attempt = makePlan(anthropicRequest({ fallbackModels: [] })).next(httpError(503));
     expect(attempt?.provider).toBe('openrouter');
     expect(attempt?.model).toBe(ANTHROPIC_FAILOVER_MODEL);
@@ -348,7 +300,6 @@ describe('OpenRouter route failover', () => {
   it('is attempted at most once, then falls through to model rotation', () => {
     const plan = makePlan(anthropicRequest());
     expect(plan.next(httpError(503))?.provider).toBe('openrouter');
-    // A second availability failure must not loop back to OpenRouter.
     const second = plan.next(httpError(503));
     expect(second?.provider).not.toBe('openrouter');
     expect(second?.model).toBe('candidate-a');
@@ -371,16 +322,11 @@ describe('OpenRouter route failover', () => {
   });
 
   it('does not fire for a model with no OpenRouter route', () => {
-    // `primary-model` is not in the catalog, so no slug exists. It must fall
-    // through to rotation rather than be sent to OpenRouter under a made-up id.
     const attempt = makePlan(makeProcessed()).next(httpError(503));
     expect(attempt?.provider).not.toBe('openrouter');
   });
 
   it('does not fire when the request carries provider-native tool payloads', () => {
-    // Anthropic's server-side tools are vendor-wire-specific and unverified
-    // through the proxy; ordinary function tools are fine because the model on
-    // the far side is identical.
     const withNativeTools = anthropicRequest({
       fallbackModels: [],
       llmRequest: {

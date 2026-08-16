@@ -117,13 +117,6 @@ export function DisconnectedView({ onScanPress }: { onScanPress: () => void }) {
   );
 }
 
-/**
- * Numbered prerequisites for a pairing attempt. Shared by the pre-pair
- * explainer and the failure screen: the same three things are worth checking
- * before you scan and after a scan fails, and before PAR-M14 the list only
- * existed in the DISCONNECTED view — unreachable once the status flipped to
- * 'error'.
- */
 export function PairingChecklist({ steps, className }: { steps: string[]; className?: string }) {
   return (
     <View className={`gap-4 w-full${className ? ` ${className}` : ''}`}>
@@ -178,8 +171,6 @@ export function ConnectingView({ onCancel }: { onCancel: () => void }) {
 export function ErrorView({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   const colors = useThemeColors();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  // useAuthStore().user is always null in v1 — Clerk is the real signed-in user
-  // source (same pattern as src/features/settings/cloud-account/index.tsx:47).
   const { user } = useUser();
   const accountEmail = user?.primaryEmailAddress?.emailAddress ?? null;
 

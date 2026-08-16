@@ -164,10 +164,6 @@ describe('on-device catalog: tier-2 vision option (P6, gated off)', () => {
   });
 
   it('claims vision-in NOMINALLY only — effective vision stays install-gated', () => {
-    // Tier-2 image plumbing ships (tier2.ts mediaPath path); the honest
-    // runtime capability is effectiveTier2VisionIn (multimodal.ts), which is
-    // false until the model is actually installed — pinned in
-    // tier2-vision.test.ts.
     const model = requireExecutorchVisionModel();
     expect(model.capabilities.visionIn).toBe(true);
   });

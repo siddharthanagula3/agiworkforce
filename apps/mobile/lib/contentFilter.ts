@@ -21,10 +21,6 @@ import {
 
 export type { ContentFilterResult } from '@agiworkforce/types';
 
-/**
- * Exact refusal copy — do not modify without legal review.
- * Compliant with EU AI Act Article 5(1)(b) and Google Play GenAI policy.
- */
 export const MINOR_SAFE_REFUSAL =
   "This content isn't available in AGI for users under the minimum age in your region. " +
   'If you believe this is an error, a parent or guardian can adjust age settings in Settings > Privacy.';

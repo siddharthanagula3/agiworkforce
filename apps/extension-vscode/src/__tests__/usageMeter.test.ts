@@ -19,9 +19,6 @@ function setConfiguredModel(model: string): void {
     ),
     update: vi.fn().mockResolvedValue(undefined),
     has: vi.fn().mockReturnValue(false),
-    // `Config.model()` reads the user/global scope via `inspect()`, not `get()`,
-    // so a checked-out .vscode/settings.json cannot move the trust boundary.
-    // Stubbing only `get()` silently yields DEFAULTS.model instead.
     inspect: vi.fn((key: string) => (key === 'model' ? { key, globalValue: model } : undefined)),
   });
 }
@@ -47,11 +44,6 @@ describe('usageMeter', () => {
     expect(fetchTierInfo).not.toHaveBeenCalled();
   });
 
-  // The managed billing contract is percentage-only: TierInfoSchema never
-  // returns exact token/cent counts, so buildManagedMeter derives `remaining`
-  // as a 0-1 fraction from usagePercentage and never emits usedTokens/limitTokens
-  // (the exact token/cap client fields were intentionally dropped — see
-  // known-flaws.md VS Code usage rewire).
   it('derives a remaining fraction from the percentage-only usage contract', async () => {
     vi.mocked(fetchTierInfo).mockResolvedValue({
       tier: 'max',

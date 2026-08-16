@@ -1,12 +1,3 @@
-/**
- * Unit tests for the deterministic task-family fast path.
- *
- * Every family gets a positive case and, where it has a priority neighbour, a
- * case proving the ordering. The ambiguous branches are tested explicitly:
- * "the classifier declined" is a first-class outcome, not an error path.
- *
- * All inputs are fixed literals. No wall-clock value is read anywhere.
- */
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -68,8 +59,6 @@ describe('classifyTaskFamily · ambiguous fall-through', () => {
   });
 
   it('treats an absent length as unknown rather than short', () => {
-    // The dangerous failure would be defaulting to simple_chat, which routes to
-    // the cheapest band. Absent must never mean "short".
     expect(classifyTaskFamily({ estimatedInputTokens: 100 }).family).toBeNull();
   });
 

@@ -1,18 +1,5 @@
-/**
- * Cloud sync WIRING integration (P2 Phase 1).
- *
- * Proves the live send path is wired to the sync engine end-to-end: a cloud-mode
- * send writes the finalized turn into the REAL cloud store, marks the conversation
- * + messages dirty with UUIDv7 ids, and a subsequent syncNow() pushes them to
- * /api/chat/sync. Local sends are untouched (no cloud-store writes, no dirty queue).
- *
- * Only services/streaming, services/api, and a few native shims are mocked; the
- * stores (execution, cloud message, sidecar, app mode) are the real implementations.
- */
 import { isUuidV7, setUuidV7RandomSource } from '@agiworkforce/utils';
 
-// Inject a deterministic byte source so uuidv7() works regardless of the test
-// runtime's global crypto. The monotonic counter still makes each id unique.
 setUuidV7RandomSource((n) => {
   const bytes = new Uint8Array(n);
   for (let i = 0; i < n; i += 1) bytes[i] = (i * 31 + 7) & 0xff;
@@ -109,13 +96,12 @@ const mockStreamChat = streamChat as jest.MockedFunction<typeof streamChat>;
 const mockGet = api.get as jest.MockedFunction<typeof api.get>;
 const mockPost = api.post as jest.MockedFunction<typeof api.post>;
 
-const CONV_ID = '0190a000-0000-7000-8000-000000000001'; // a valid UUIDv7 conversation id
+const CONV_ID = '0190a000-0000-7000-8000-000000000001';
 const CLOUD_MODEL = LOCKED_CLOUD_MODELS[0]?.id ?? requireMobileCloudModel().id;
 const LOCAL_MODEL = requireLocalModel().id;
 const IMAGE_MODEL = requireMediaSlotModel('image').id;
 const AUTO_MODEL = requireAutoMode().id;
 
-/** Drive streamChat to emit one content delta then complete. */
 function streamReplies(text: string) {
   mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
     callbacks.onDelta({ content: text });
@@ -135,10 +121,7 @@ beforeEach(() => {
   useCloudSyncStateStore.getState().reset();
   useChatCloudMessageStore.getState().clearCloudData();
   useChatMessageStore.setState({ conversations: [], messages: {} });
-  useChatAppModeStore.getState().setAppMode('local'); // onDone's auto-sync no-ops while asserting
-  // Contract-valid empty pulls per endpoint — the engine schema-validates every
-  // response, so a chat-shaped page returned for memory/projects/settings fails
-  // the parse and flips sync status to 'error'.
+  useChatAppModeStore.getState().setAppMode('local');
   mockGet.mockImplementation((async (path: string) => {
     if (path.startsWith('/api/memory/sync')) return { memories: [], cursor: '0', hasMore: false };
     if (path.startsWith('/api/projects/sync')) return { projects: [], cursor: '0', hasMore: false };
@@ -178,7 +161,6 @@ describe('cloud repository authority', () => {
       createdAt: '2026-01-01T00:00:01.000Z',
     };
 
-    // Cloud store owns the conversation and is the only transcript authority.
     useChatCloudMessageStore.getState().addCloudConversation({
       id: CONV_ID,
       title: 'Cloud Chat',
@@ -193,10 +175,8 @@ describe('cloud repository authority', () => {
     });
     useChatCloudMessageStore.getState().setCloudMessages(CONV_ID, [userMsg]);
 
-    // Simulate stale data left by the pre-migration split-brain writer.
     useChatMessageStore.setState({ messages: { [CONV_ID]: [userMsg, assistantInFlight] } });
 
-    // Combined reads do not union the residue back into the Cloud transcript.
     const merged = useChatStore.getState().messages[CONV_ID] ?? [];
     expect(merged.map((m) => m.role)).toEqual(['user']);
     expect(merged.find((m) => m.role === 'assistant')).toBeUndefined();
@@ -305,9 +285,6 @@ describe('cloud send → sync write-through', () => {
     );
     expect(isUuidV7(forkMessages[0]!.id)).toBe(true);
 
-    // CAP-035: the fork persists a real parent/branch relation, not an
-    // untracked copy. The parent link points at the source conversation and the
-    // fork point is the last source message id.
     const forkConversation = useChatCloudMessageStore
       .getState()
       .conversations.find((c) => c.id === forkId);
@@ -316,7 +293,6 @@ describe('cloud send → sync write-through', () => {
   });
 
   it('writes the finalized turn into the cloud store with UUIDv7 ids and marks it dirty', async () => {
-    // A real cloud conversation lives in the cloud store (created via the REST path).
     useChatCloudMessageStore.getState().addCloudConversation({
       id: CONV_ID,
       title: 'Cloud Chat',
@@ -333,7 +309,6 @@ describe('cloud send → sync write-through', () => {
 
     await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi there', CLOUD_MODEL);
 
-    // Cloud store now holds the user + assistant messages with valid UUIDv7 ids.
     const cloudMsgs = useChatCloudMessageStore.getState().messages[CONV_ID] ?? [];
     expect(cloudMsgs).toHaveLength(2);
     expect(cloudMsgs.map((m) => m.role)).toEqual(['user', 'assistant']);
@@ -341,7 +316,6 @@ describe('cloud send → sync write-through', () => {
     expect(cloudMsgs[1]?.content).toBe('Hello from cloud');
     for (const m of cloudMsgs) expect(isUuidV7(m.id)).toBe(true);
 
-    // The sidecar has queued the conversation + both messages for the next push.
     const sync = useCloudSyncStateStore.getState();
     expect(sync.dirtyConversationIds).toContain(CONV_ID);
     expect(sync.dirtyMessages.map((d) => d.messageId).sort()).toEqual(
@@ -365,14 +339,10 @@ describe('cloud send → sync write-through', () => {
     streamReplies('Reply');
     await useChatExecutionStore.getState().sendMessage(CONV_ID, 'question', CLOUD_MODEL);
 
-    // Flip to managed mode and sync.
     useChatAppModeStore.getState().setAppMode('cloud');
     await syncNow();
 
     expect(mockPost).toHaveBeenCalled();
-    // Filter specifically for the chat sync call — settings sync now also POSTs
-    // in the same syncNow() cycle (after pullProjects), so we can't rely on
-    // "last call" ordering. Find the call that targeted /api/chat/sync.
     const chatSyncCall = mockPost.mock.calls.find((c) => (c[0] as string) === '/api/chat/sync') as
       | [
           string,
@@ -382,7 +352,6 @@ describe('cloud send → sync write-through', () => {
     expect(chatSyncCall).toBeDefined();
     expect(chatSyncCall![1].conversations.map((c) => c.id)).toContain(CONV_ID);
     expect(chatSyncCall![1].messages.map((m) => m.role).sort()).toEqual(['assistant', 'user']);
-    // Queue drains once the server acks.
     expect(useCloudSyncStateStore.getState().dirtyMessages).toHaveLength(0);
   });
 
@@ -406,8 +375,6 @@ describe('cloud send → sync write-through', () => {
     });
     streamReplies('local reply');
 
-    // The local-runtime path may reject on the stubbed localGenerate; we only care
-    // that the cloud store + sync queue stay untouched, so swallow any rejection.
     await useChatExecutionStore
       .getState()
       .sendMessage('local-1', 'hello', LOCAL_MODEL)
@@ -421,8 +388,6 @@ describe('cloud send → sync write-through', () => {
 
 describe('cross-device history continuation', () => {
   it('feeds cloud-store (pulled) history to the LLM when continuing a conversation authored elsewhere', async () => {
-    // Prior turns exist ONLY in the cloud store (pulled from web/desktop), never in
-    // the local message store — the cross-device continuation case.
     useChatCloudMessageStore.getState().addCloudConversation({
       id: CONV_ID,
       title: 'Started on Web',
@@ -462,7 +427,6 @@ describe('cross-device history continuation', () => {
     const contents = (capturedBody?.messages ?? []).map((m) =>
       typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     );
-    // The pulled web turns are present AND precede the new mobile message.
     expect(contents).toEqual(
       expect.arrayContaining(['started on web', 'replied on web', 'continue on mobile']),
     );

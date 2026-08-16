@@ -29,41 +29,8 @@ import {
   type ProviderUsageObservation,
 } from './managed-usage-accounting-service';
 
-/**
- * Cloud Code agent turn — the bounded model↔tool loop.
- *
- * This is the piece that turns Cloud Code from a remote terminal (user types a
- * command, `runCloudCodeCommand` runs it) into a goal-directed agent: the user
- * states an objective once and the model drives the sandbox toward it.
- *
- * WHAT THIS FILE OWNS
- *   - Assembling the provider request (system prompt, tools, transcript).
- *   - Draining `ProviderAdapter.stream()` into completed tool calls.
- *   - Enforcing the loop bounds (max steps, wall clock, cancellation).
- *   - Routing each tool call through the approval boundary.
- *
- * WHAT IT DELIBERATELY DOES NOT OWN
- *   - **Risk classification.** `classifyCommandRisk` is the single owner; this
- *     file never second-guesses it. A loop that could downgrade a verdict would
- *     make the classifier's fail-closed design meaningless.
- *   - **Sandbox mechanics.** Execution goes through the injected `ToolRunner`,
- *     which the caller builds from the session's own E2B executor and scope, so
- *     this module has no sandbox lifecycle knowledge and stays unit-testable.
- *   - **Billing.** The caller wraps the loop in reserve/settle. Exposed here as
- *     `onStepCommitted`, invoked before each provider call so a caller can
- *     extend its lease — matching how the metered chat path reserves a provider
- *     step before every external call.
- *   - **Persistence.** Emitted as events; the caller writes rows (0082).
- */
-
-/** Bounds. A loop without these is an unbounded spend on someone's card. */
 export const CLOUD_CODE_AGENT_MAX_STEPS = 24;
-/**
- * The turn's wall-clock budget. Named in `lib/deadline-policy.ts` alongside the
- * per-command deadline it contains, so the two cannot be changed independently.
- */
 export const CLOUD_CODE_AGENT_MAX_DURATION_MS = CLOUD_CODE_TURN_BUDGET_MS;
-/** Tool output beyond this is truncated before it re-enters the context. */
 export const CLOUD_CODE_AGENT_MAX_TOOL_OUTPUT = 30_000;
 
 export type CloudCodeAgentStopReason =
@@ -86,34 +53,16 @@ export interface CloudCodeToolOutcome {
   isError: boolean;
 }
 
-/**
- * Executes one tool call against the session sandbox. Supplied by the caller so
- * this loop never touches E2B directly.
- *
- * `runCommand` is only ever called for a command the loop has already cleared
- * through the approval boundary.
- *
- * `timeoutMs` is REQUIRED and is computed by the loop, not by the runner: it is
- * the per-command cap clamped to what remains of the turn's budget. A runner
- * that substituted its own fixed cap would let a command started near the end
- * of a turn outlive the turn.
- */
 export interface CloudCodeToolRunner {
   readFile(path: string): Promise<CloudCodeToolOutcome>;
   listFiles(path: string | undefined): Promise<CloudCodeToolOutcome>;
   runCommand(command: string, timeoutMs: number): Promise<CloudCodeToolOutcome>;
-  /** write_file / create_folder / execute_code, owned by lib/e2b/execution-tools. */
   runSharedExecutionTool(
     name: string,
     args: Record<string, unknown>,
   ): Promise<CloudCodeToolOutcome>;
 }
 
-/**
- * A command the loop refuses to run unattended. The caller persists this as a
- * `cloud_code_agent_approvals` row and suspends the turn; on approval it
- * resumes with `preApproved` carrying the decision.
- */
 export interface CloudCodeApprovalRequest {
   stepIndex: number;
   toolUseId: string;
@@ -134,16 +83,9 @@ export interface CloudCodeAgentEvent {
 export interface CloudCodeAgentResult {
   stopReason: CloudCodeAgentStopReason;
   stepsUsed: number;
-  /**
-   * Summed provider usage across every step of the turn. Zeros when no
-   * provider call reported usage, which the caller must treat as "unknown"
-   * rather than "free".
-   */
   usage: CloudCodeTurnUsage;
   finalMessage: string;
-  /** Set when stopReason === 'awaiting_approval'. */
   pendingApproval?: CloudCodeApprovalRequest;
-  /** Full transcript, so a resumed turn continues rather than restarts. */
   messages: ProviderMessage[];
   errorMessage?: string;
 }
@@ -154,14 +96,10 @@ export interface RunCloudCodeAgentTurnInput {
   goal: string;
   runner: CloudCodeToolRunner;
   signal: AbortSignal;
-  /** Repository context for the system prompt, when the session has one. */
   repositoryUrl?: string | null;
   workspacePath?: string;
-  /** Resume: prior transcript from a suspended turn. */
   priorMessages?: ProviderMessage[];
-  /** Resume: the decision for the command that suspended the turn. */
   preApproved?: { toolUseId: string; command: string; approved: boolean };
-  /** Called before each provider call so the caller can extend its usage lease. */
   onStepCommitted?: (stepIndex: number) => Promise<void> | void;
   onEvent?: (event: CloudCodeAgentEvent) => Promise<void> | void;
   maxSteps?: number;
@@ -189,7 +127,6 @@ function buildSystemPrompt(input: RunCloudCodeAgentTurnInput): string {
   return lines.join('\n');
 }
 
-/** OpenAI-shaped defs from the tool contract → the adapter boundary shape. */
 function toProviderToolDefs(): ToolDef[] {
   return cloudCodeAgentToolDefs().map((t) => ({
     name: t.function.name,
@@ -204,23 +141,15 @@ export function truncateToolOutput(
 ): string {
   if (output.length <= limit) return output;
   const omitted = output.length - limit;
-  // Keep the TAIL: compiler and test output puts the failure at the end, and a
-  // head-truncated log reliably hides the reason the agent needs to see.
   return `[${omitted} earlier characters omitted]\n${output.slice(output.length - limit)}`;
 }
 
 interface DrainedTurn {
   text: string;
   toolCalls: ToolUseBlock[];
-  /**
-   * Provider-reported token usage for this assistant turn, when the stream
-   * emitted a `usage` chunk. Previously the `default: break` below swallowed
-   * it, which is why the turn could not be billed at what it actually cost.
-   */
   usage?: CloudCodeProviderCallUsage;
 }
 
-/** Token usage accumulated across every provider call in a turn. */
 export type CloudCodeTurnUsage = ObservedProviderUsage;
 
 type CloudCodeProviderCallUsage = Pick<
@@ -233,11 +162,6 @@ type CloudCodeProviderCallUsage = Pick<
   | 'reasoningTokens'
 >;
 
-/**
- * Collect one assistant turn from the provider stream. Tool arguments arrive as
- * partial JSON across `tool-use-delta` chunks and are only parsed once the
- * matching `tool-use-end` has been seen.
- */
 export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Promise<DrainedTurn> {
   let text = '';
   let usage: CloudCodeProviderCallUsage | undefined;
@@ -261,9 +185,6 @@ export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Pr
         completed.push(chunk.toolUseId);
         break;
       case 'usage':
-        // A provider may emit several usage chunks; the last one is the
-        // authoritative total for the turn, matching how the metered chat
-        // path treats them.
         usage = {
           inputTokens: chunk.inputTokens ?? 0,
           outputTokens: chunk.outputTokens ?? 0,
@@ -287,14 +208,10 @@ export async function drainAssistantTurn(stream: AsyncIterable<StreamChunk>): Pr
     if (raw.trim()) {
       try {
         const parsed: unknown = JSON.parse(raw);
-        // A model can emit valid JSON that is not an object (`"x"`, `[1]`).
-        // Coerce to {} rather than trusting the shape downstream.
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
           input = parsed as Record<string, unknown>;
         }
       } catch {
-        // Malformed partial JSON: surface as empty args so the tool reports an
-        // honest validation error back to the model instead of throwing here.
         input = {};
       }
     }
@@ -312,13 +229,6 @@ function toolResultBlock(toolUseId: string, outcome: CloudCodeToolOutcome): Cont
   };
 }
 
-/**
- * Run the agent turn.
- *
- * Returns rather than throws for every expected stop: the caller must persist a
- * terminal state and settle usage even when the turn fails, and an exception
- * path makes that easy to skip.
- */
 export async function runCloudCodeAgentTurn(
   input: RunCloudCodeAgentTurnInput,
 ): Promise<CloudCodeAgentResult> {
@@ -327,11 +237,6 @@ export async function runCloudCodeAgentTurn(
   const maxSteps = input.maxSteps ?? CLOUD_CODE_AGENT_MAX_STEPS;
   const maxDurationMs = input.maxDurationMs ?? CLOUD_CODE_AGENT_MAX_DURATION_MS;
 
-  /**
-   * Per-command cap, clamped to what is LEFT of the turn's budget. The budget
-   * is only checked at the top of a step, so an unclamped 120 s command
-   * admitted with seconds to spare would run the turn past `maxDurationMs`.
-   */
   const commandDeadlineMs = (): number =>
     nestedDeadlineMs(CLOUD_CODE_COMMAND_DEADLINE_MS, maxDurationMs, now() - startedAt);
 
@@ -344,9 +249,6 @@ export async function runCloudCodeAgentTurn(
   let stepsUsed = 0;
   let finalMessage = '';
 
-  // Resume path: the turn suspended on an approval. Apply the decision as this
-  // step's tool result before calling the model again, so the model learns the
-  // outcome instead of re-proposing the same command.
   if (input.preApproved) {
     const { toolUseId, command, approved } = input.preApproved;
     const outcome: CloudCodeToolOutcome = approved
@@ -362,9 +264,6 @@ export async function runCloudCodeAgentTurn(
     });
   }
 
-  // Accumulates across EVERY provider call in the turn. A multi-step turn makes
-  // many calls, so per-call usage must be summed rather than taken from the
-  // last one.
   const usage = createObservedProviderUsage();
 
   while (stepsUsed < maxSteps) {
@@ -414,7 +313,6 @@ export async function runCloudCodeAgentTurn(
       await input.onEvent?.({ type: 'assistant-text', stepIndex: stepsUsed, text: drained.text });
     }
 
-    // No tool calls ⇒ the model is answering, which is how a turn ends.
     if (drained.toolCalls.length === 0) {
       return { stopReason: 'done', stepsUsed, finalMessage, messages, usage };
     }
@@ -441,13 +339,8 @@ export async function runCloudCodeAgentTurn(
         const verdict = classifyCommandRisk(command);
 
         if (verdict.risk === 'denied') {
-          // Refused, but the TURN continues: the model is told why so it can
-          // choose a different approach. Only a caller-level policy ends the
-          // turn on denial.
           outcome = { output: `Refused: ${verdict.reason}`, isError: true };
         } else if (verdict.risk === 'requires_approval') {
-          // Suspend. Everything decided so far is already in `messages`, so the
-          // resumed turn continues from here rather than replaying the work.
           messages.push({ role: 'user', content: results });
           return {
             stopReason: 'awaiting_approval',

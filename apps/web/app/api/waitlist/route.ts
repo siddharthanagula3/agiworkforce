@@ -10,11 +10,6 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
 import { requireCsrfToken } from '@/lib/csrf';
 
-/**
- * Hash an email address with SHA-256 before storage.
- * Emails are PII; they are not needed for display or notifications in this
- * route (userId is the canonical identifier). Only the hash is stored.
- */
 function hashEmail(email: string): string {
   return createHash('sha256').update(email.toLowerCase().trim()).digest('hex');
 }
@@ -79,9 +74,6 @@ async function handlePost(request: NextRequest): Promise<NextResponse> {
     ? payload.billingInterval
     : ('yearly' as const);
   const source = typeof payload.source === 'string' ? payload.source.slice(0, 100) : 'pricing';
-  // Hash the email before storage: the plaintext is not needed for dedup or
-  // notifications in this route. userId is the unique key; email_hash lets
-  // ops audit duplicate addresses without retaining cleartext PII.
   const emailHash = email != null ? hashEmail(email) : null;
   const db = getNeonDb();
   const now = new Date().toISOString();

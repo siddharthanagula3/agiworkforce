@@ -1,19 +1,3 @@
-/**
- * E2E spec — 02: onboarding
- *
- * Critical path:
- *   cold launch → age gate (real first screen on a fresh install)
- *   enter an adult age → continue → privacy hero shown
- *   tap "Start chatting" → compliance disclosure modal
- *   accept disclosure → device-tier detection screen
- *   tap "Continue" or "Download model" → installed/download path
- *   arrive at chat empty state
- *
- * Precondition for CI: start Metro with
- *   EXPO_PUBLIC_AGI_VISUAL_QA_DISABLE_BIOMETRIC=1
- * before running this spec. The app does not read Detox-only biometric
- * launch arguments.
- */
 
 import { device, element, by, waitFor } from 'detox';
 
@@ -21,7 +5,6 @@ jest.setTimeout(540000);
 
 describe('Onboarding — local setup with cloud invite gate', () => {
   beforeAll(async () => {
-    // Cold launch: delete all app data so onboarding always shows.
     await device.launchApp({
       newInstance: true,
       delete: true,
@@ -89,20 +72,16 @@ describe('Onboarding — local setup with cloud invite gate', () => {
 
   it('tapping the download button advances through installed or download flow', async () => {
     await element(by.id('device-tier-download-btn')).tap();
-    // The download screen is skipped when the recommended model is already
-    // installed or the selected runtime is provided by the OS.
     try {
       await waitFor(element(by.id('onboarding-download-screen')))
         .toBeVisible()
         .withTimeout(4000);
     } catch {
-      // Installed or OS-provided model: already in chat.
       return;
     }
   });
 
   it('shows the download percent counter', async () => {
-    // Only checked when download screen is visible (non-Tier-1 path).
     try {
       await waitFor(element(by.id('download-percent')))
         .toBeVisible()
@@ -113,9 +92,6 @@ describe('Onboarding — local setup with cloud invite gate', () => {
   });
 
   it('"Continue to chat" skip button navigates to chat empty state', async () => {
-    // The skip button is a no-op while the recommended model is still
-    // resolving/downloading (see handleSkipToChat's tier2Loading guard), so
-    // retry the tap until the app actually transitions to chat.
     const deadline = Date.now() + 480000;
     let reachedChat = false;
     while (Date.now() < deadline && !reachedChat) {

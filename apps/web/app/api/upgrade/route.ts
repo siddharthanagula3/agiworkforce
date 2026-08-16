@@ -66,7 +66,6 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   const db = getNeonDb();
   const stripe = getStripe();
 
-  // Fetch current subscription
   type SubRow = Pick<
     SubscriptionRow,
     | 'status'
@@ -109,9 +108,6 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
 
   const currentTier = sub.plan_tier ?? 'free';
-  // Mirrors app/api/upgrade/preview/route.ts: a same-tier request on a per-seat
-  // plan is a seat change and is decided below, once Stripe has told us how many
-  // seats the subscription currently bills.
   const sameTierSeatChange = currentTier === targetPlan && isPerSeatBillingPlan(targetPlan);
   if (!sameTierSeatChange && !isUpgrade(currentTier, targetPlan)) {
     throw createError.validation(
@@ -187,20 +183,6 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
   }
   if (!stripeItem) throw createError.internal('Subscription has no items');
 
-  // A subscription already scheduled to cancel must not be silently upgraded.
-  //
-  // `subscriptions.update` does NOT implicitly clear `cancel_at_period_end`, so
-  // before this guard the flow charged a proration and left the cancellation in
-  // place — while UpgradeConfirmDialog told the user "Your renewal date stays
-  // the same" and quoted a monthly price that would never be billed. The buyer
-  // does receive the upgraded tier for the remaining days, so this is a
-  // disclosure failure rather than a pure overcharge, but it is one the user
-  // discovers only when the plan disappears.
-  //
-  // Refusing rather than setting `cancel_at_period_end: false` is deliberate:
-  // resurrecting a subscription somebody deliberately cancelled, as a side
-  // effect of a different action, is a larger surprise than being told to
-  // resume first. Resume is one click away in the portal.
   if (cancelAtPeriodEnd) {
     return NextResponse.json(
       {
@@ -245,8 +227,6 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         plan: targetPlan,
         billingInterval,
         stripeSubscriptionId: stripeSubId,
-        // Binds the seat count the customer actually saw priced. A token issued
-        // for N seats cannot be replayed to apply a different N.
         seats: requestedSeats,
       },
       requireEnv('STRIPE_SECRET_KEY'),
@@ -275,14 +255,8 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
       stripeSubId,
       {
         items: [{ id: stripeItem.id, price: newPriceId, quantity: requestedSeats }],
-        // Keep the current renewal date. Stripe invoices only the prorated
-        // price/seat difference for the remaining time in this period.
         proration_behavior: 'always_invoice',
-        // Must match the signed invoice preview exactly. Stripe documents
-        // using the same proration_date on preview and update to prevent a
-        // time-of-confirmation price drift.
         proration_date: prorationDate,
-        // Stripe applies the plan change only after the immediate invoice is paid.
         payment_behavior: 'pending_if_incomplete',
         expand: ['latest_invoice.confirmation_secret'],
         metadata: {
@@ -293,9 +267,6 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
         },
       },
       {
-        // Quantity is part of the key. Without it, "5 seats -> 10" and
-        // "5 seats -> 25" collide whenever they share a proration second, and
-        // Stripe replays the first result for the second request.
         idempotencyKey: `upgrade:${stripeSubId}:${stripeItem.price.id}:${newPriceId}:${requestedSeats}:${prorationDate}`,
       },
     );
@@ -347,8 +318,6 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
     'Stripe upgrade paid; awaiting canonical webhook activation',
   );
 
-  // Audit: user-initiated plan change. Plan slugs and the billing interval only
-  // — no Stripe ids, invoice urls or client secrets reach the audit row.
   await recordAuditEvent({
     userId,
     eventType: 'plan_changed',

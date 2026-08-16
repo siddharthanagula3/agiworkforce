@@ -1,16 +1,3 @@
-/**
- * Tests for POST /api/mobile/feedback.
- *
- * Covers:
- *   - The mobile app's Send Feedback screen (apps/mobile/src/features/feedback)
- *     was calling this exact path with no route behind it — a 404 on every
- *     submission, silently losing user feedback. This is the regression guard.
- *   - Inserts a row into public.feedback with the signed-in user's id attached.
- *   - Accepts anonymous (unauthenticated) feedback — user_id null — since Local
- *     mode users with no Cloud account must still be able to submit feedback.
- *   - Validates type is one of bug/feature/general and message is non-empty.
- *   - 400s on an invalid payload (bad type, empty message, message too long).
- */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 

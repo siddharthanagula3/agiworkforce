@@ -46,20 +46,12 @@ describe('managed usage request lifecycle migration', () => {
   });
 
   it('distinguishes every process-crash boundary without charging an unknown outcome', () => {
-    // Before provider start: both an unfinished reservation and a completed
-    // reservation are eligible for customer-favoring recovery.
     expect(migration).toMatch(
       /status in \('reserving', 'reserved', 'provider_started'\)[\s\S]*lease_expires_at <= now\(\)/i,
     );
-    // After provider start but before durable success: the same recovery path
-    // refunds and records whether egress had begun.
     expect(migration).toMatch(/'provider_started', v_request\.provider_started_at is not null/i);
-    // After durable provider success: terminal completed rows are outside the
-    // stale scan and carry the success timestamp plus actual usage settlement.
     expect(migration).toMatch(/status = v_final_status[\s\S]*provider_succeeded_at/i);
     expect(migration).toMatch(/v_final_status := 'completed'/i);
-    // After client delivery: delivery is audit-only; completed remains terminal
-    // and cannot be transformed into a refund by the stale worker.
     expect(migration).toMatch(/client_delivered_at = now\(\)/i);
     expect(migration).toMatch(/if v_request\.status <> 'completed'/i);
   });

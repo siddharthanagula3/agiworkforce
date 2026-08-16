@@ -1,23 +1,5 @@
 'use client';
 
-/**
- * ConnectorLogo — shared brand-logo component for Settings panels.
- *
- * Resolution order (no tiles, zero mock initials):
- *   1. simple-icons glyph — brand SVG path in brand hex, if present in v16
- *   2. Official brand asset URL — <img> rendered with the real brand mark
- *   3. Gradient tile + initials — LAST RESORT only when neither above matches
- *
- * All simple-icons imports are confirmed present in simple-icons v16.18.1.
- * Brands absent from v16 (Slack, OpenAI, Salesforce, Microsoft, LinkedIn,
- * Canva, Adobe, AWS, Azure, Monday, Twilio, SendGrid, Pipedrive, Freshdesk,
- * SharePoint, Segment, Plaid, Cerner) resolve via CONNECTOR_LOGO_URLS below.
- *
- * packages/ui/ui cannot import from apps/web, so the URL map is self-contained here.
- * It mirrors the authoritative entries in
- * apps/web/features/connectors/config/connector-logos.ts.
- */
-
 import { useState } from 'react';
 import {
   siAirtable,
@@ -90,22 +72,13 @@ import {
 } from 'simple-icons';
 import { cn } from '../cn';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 interface SimpleIconData {
   path: string;
   hex: string;
   title: string;
 }
 
-// ---------------------------------------------------------------------------
-// Tier 1: simple-icons glyphs (v16 confirmed)
-// ---------------------------------------------------------------------------
-
 const ICON_MAP: Record<string, SimpleIconData> = {
-  // Google Suite
   gmail: siGmail,
   'google-calendar': siGooglecalendar,
   'google-drive': siGoogledrive,
@@ -114,7 +87,6 @@ const ICON_MAP: Record<string, SimpleIconData> = {
   bigquery: siGooglebigquery,
   gcp: siGooglecloud,
 
-  // Productivity
   notion: siNotion,
   airtable: siAirtable,
   clickup: siClickup,
@@ -124,7 +96,6 @@ const ICON_MAP: Record<string, SimpleIconData> = {
   evernote: siEvernote,
   asana: siAsana,
 
-  // Developer
   github: siGithub,
   gitlab: siGitlab,
   bitbucket: siBitbucket,
@@ -136,7 +107,6 @@ const ICON_MAP: Record<string, SimpleIconData> = {
   vercel: siVercel,
   n8n: siN8n,
 
-  // Collaboration / Comm
   confluence: siConfluence,
   atlassian: siAtlassian,
   jira: siJira,
@@ -145,24 +115,20 @@ const ICON_MAP: Record<string, SimpleIconData> = {
   telegram: siTelegram,
   whatsapp: siWhatsapp,
 
-  // CRM / Sales
   hubspot: siHubspot,
   calendly: siCalendly,
   intercom: siIntercom,
   zendesk: siZendesk,
 
-  // Marketing
   mailchimp: siMailchimp,
   mixpanel: siMixpanel,
   posthog: siPosthog,
 
-  // Social
   twitter: siX,
   instagram: siInstagram,
   facebook: siFacebook,
   youtube: siYoutube,
 
-  // Finance
   stripe: siStripe,
   shopify: siShopify,
   quickbooks: siQuickbooks,
@@ -170,10 +136,8 @@ const ICON_MAP: Record<string, SimpleIconData> = {
   paypal: siPaypal,
   square: siSquare,
 
-  // Design
   figma: siFigma,
 
-  // AI / ML
   'anthropic-api': siAnthropic,
   huggingface: siHuggingface,
   wandb: siWeightsandbiases,
@@ -181,15 +145,12 @@ const ICON_MAP: Record<string, SimpleIconData> = {
   ollama: siOllama,
   elevenlabs: siElevenlabs,
 
-  // MCP
   modelcontextprotocol: siModelcontextprotocol,
   context7: siModelcontextprotocol,
 
-  // Cloud / Infra
   cloudflare: siCloudflare,
   digitalocean: siDigitalocean,
 
-  // Data
   snowflake: siSnowflake,
   databricks: siDatabricks,
   postgresql: siPostgresql,
@@ -197,24 +158,11 @@ const ICON_MAP: Record<string, SimpleIconData> = {
   redis: siRedis,
   elasticsearch: siElasticsearch,
 
-  // Storage
   dropbox: siDropbox,
   box: siBox,
 };
 
-// ---------------------------------------------------------------------------
-// Tier 2: official brand-asset URLs
-// Brands absent from simple-icons v16; covers every connector in the catalog.
-// Mirror of apps/web/features/connectors/config/connector-logos.ts (key entries).
-// ---------------------------------------------------------------------------
-
 const CONNECTOR_LOGO_URLS: Record<string, string> = {
-  // Microsoft family — official SVGs via Wikimedia/Microsoft. Outlook,
-  // OneDrive, Teams, and SharePoint resolve through Commons' stable
-  // Special:FilePath redirect (not a hashed /wikipedia/commons/x/xx/ path)
-  // because Commons re-hashes those URLs whenever the underlying file is
-  // renamed, which had left these four hotlinks 404ing and falling back to
-  // plain-letter tiles.
   slack: 'https://a.slack-edge.com/80588/marketing/img/icons/icon_slack_hash_colored.png',
   outlook:
     'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20Office%20Outlook%20%282018%E2%80%93present%29.svg',
@@ -228,42 +176,29 @@ const CONNECTOR_LOGO_URLS: Record<string, string> = {
     'https://commons.wikimedia.org/wiki/Special:FilePath/Microsoft%20365%20%282022%29.svg',
   azure: 'https://upload.wikimedia.org/wikipedia/commons/a/a8/Microsoft_Azure_Logo.svg',
 
-  // AI
   openai: 'https://upload.wikimedia.org/wikipedia/commons/4/4d/OpenAI_Logo.svg',
 
-  // CRM
   salesforce: 'https://upload.wikimedia.org/wikipedia/commons/f/f9/Salesforce.com_logo.svg',
   pipedrive: 'https://www.google.com/s2/favicons?domain=pipedrive.com&sz=64',
   freshdesk: 'https://www.google.com/s2/favicons?domain=freshdesk.com&sz=64',
 
-  // Social / Comm
   linkedin: 'https://upload.wikimedia.org/wikipedia/commons/c/ca/LinkedIn_logo_initials.png',
   twilio: 'https://www.google.com/s2/favicons?domain=twilio.com&sz=64',
   sendgrid: 'https://www.google.com/s2/favicons?domain=sendgrid.com&sz=64',
 
-  // Design — no current Canva mark on Commons (file was removed), so this
-  // resolves Canva's own site favicon instead of falling back to a bare tile.
   canva: 'https://www.google.com/s2/favicons?domain=canva.com&sz=64',
   adobe: 'https://upload.wikimedia.org/wikipedia/commons/8/8d/Adobe_Corporate_Logo.png',
 
-  // Cloud / Infra
   aws: 'https://upload.wikimedia.org/wikipedia/commons/9/93/Amazon_Web_Services_Logo.svg',
 
-  // Marketing
   segment: 'https://www.google.com/s2/favicons?domain=segment.com&sz=64',
   monday: 'https://upload.wikimedia.org/wikipedia/commons/c/c6/Monday_logo.svg',
 
-  // Finance
   plaid: 'https://www.google.com/s2/favicons?domain=plaid.com&sz=64',
 
-  // Healthcare
   'epic-fhir': 'https://www.google.com/s2/favicons?domain=epic.com&sz=64',
   cerner: 'https://www.google.com/s2/favicons?domain=oracle.com&sz=64',
 };
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function getIcon(id: string): SimpleIconData | null {
   return ICON_MAP[id.toLowerCase()] ?? null;
@@ -273,22 +208,11 @@ function getLogoUrl(id: string): string | null {
   return CONNECTOR_LOGO_URLS[id.toLowerCase()] ?? null;
 }
 
-/**
- * Pure-black / near-black brand glyphs (Notion #000000, GitHub #181717, etc.)
- * would be invisible on a same-colored background. Render them in the theme's
- * foreground color via `currentColor` so they stay legible in BOTH light and
- * dark mode (dark glyph on light surface, light glyph on dark surface). Colored
- * brands keep their own hex, which contrasts fine against the neutral tile.
- */
 function fillColor(icon: SimpleIconData): string {
   const hex = icon.hex.toUpperCase();
   if (hex === '000000' || hex === '181717' || hex === '181818') return 'currentColor';
   return `#${icon.hex}`;
 }
-
-// ---------------------------------------------------------------------------
-// SIZE config
-// ---------------------------------------------------------------------------
 
 const SIZE = {
   sm: { wrapper: 'h-8 w-8 rounded-lg', svg: 16, img: 20 },
@@ -296,18 +220,10 @@ const SIZE = {
   lg: { wrapper: 'h-11 w-11 rounded-xl', svg: 22, img: 28 },
 } as const;
 
-// ---------------------------------------------------------------------------
-// ConnectorLogo
-// ---------------------------------------------------------------------------
-
 export interface ConnectorLogoProps {
-  /** Connector id used to look up the brand logo */
   connectorId: string;
-  /** Fallback theme classes — only used when no glyph or URL matches */
   fallbackGradient?: string;
-  /** Fallback 1-2 char text rendered on the gradient tile */
   fallbackText?: string;
-  /** Icon size variant */
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
@@ -321,16 +237,11 @@ export function ConnectorLogo({
 }: ConnectorLogoProps) {
   const [urlFailed, setUrlFailed] = useState(false);
 
-  // Normalize id to the catalog key form. Surfaces differ: web uses hyphen ids
-  // (google-calendar), desktop uses underscores (google_calendar). Map both to
-  // the hyphenated keys in ICON_MAP / CONNECTOR_LOGO_URLS so logos resolve on
-  // every surface instead of falling back to the tile.
   const id = connectorId.toLowerCase().replace(/_/g, '-');
   const icon = getIcon(id);
   const logoUrl = getLogoUrl(id);
   const { wrapper, svg, img } = SIZE[size];
 
-  // Tier 1: simple-icons glyph
   if (icon) {
     return (
       <div
@@ -356,7 +267,6 @@ export function ConnectorLogo({
     );
   }
 
-  // Tier 2: official brand-asset URL image
   if (logoUrl && !urlFailed) {
     return (
       <div
@@ -383,7 +293,6 @@ export function ConnectorLogo({
     );
   }
 
-  // Tier 3: gradient tile — last resort
   return (
     <div
       className={cn(

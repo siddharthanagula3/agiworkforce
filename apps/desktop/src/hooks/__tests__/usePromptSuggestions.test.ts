@@ -1,9 +1,3 @@
-/**
- * Tests for usePromptSuggestions Hook
- *
- * Tests pattern matching and suggestion generation for Gemini CLI-style
- * inline prompt suggestions.
- */
 
 import { renderHook } from '@testing-library/react';
 import { usePromptSuggestions } from '../usePromptSuggestions';
@@ -351,7 +345,6 @@ describe('usePromptSuggestions', () => {
       const suggestions = result.current;
 
       suggestions.forEach((suggestion) => {
-        // Emoji typically encoded as Unicode characters
         expect(suggestion.icon.length).toBeGreaterThan(0);
       });
     });

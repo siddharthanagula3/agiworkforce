@@ -1,20 +1,3 @@
-/**
- * @file Cloud Chat API Routes
- * @security
- * - Rate limiting: Applied per-endpoint based on operation type
- * - Input validation: Zod schemas with .strict() to reject unexpected fields
- * - Authentication: JWT required (via authenticateToken)
- * - Plan enforcement: Canonical managed-chat entitlement required
- * - Ownership validation: Users can only access their own conversations
- *
- * Rate limit rationale (OWASP compliant):
- * - GET /: 60/min - read list, lightweight
- * - POST /: 30/min - write, creates DB row
- * - GET /:id: 60/min - read single, lightweight
- * - DELETE /:id: 10/min - destructive operation
- * - PATCH /:id: 30/min - metadata write
- * - POST /send: 30/min - retired unmetered execution path
- */
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
@@ -28,22 +11,10 @@ import { logger } from '../lib/logger';
 
 const router: Router = Router();
 
-// Apply authentication and plan enforcement to all routes on this router.
 router.use(authenticateToken);
 router.use(requireManagedChatPlan);
 
-// Router-level floor. Every route below already declares its own, stricter
-// limiter, so this changes no current limit — `default` is 100/min and the
-// tightest here is 10/min. It exists so a route ADDED to this file later is
-// never unlimited by omission, which is what `js/missing-rate-limiting`
-// flagged and what the other nine gateway routers already do. Mounted after
-// authenticateToken so keyGenerator resolves `user:<id>` rather than falling
-// back to the caller's IP.
 router.use(createRateLimiter('default'));
-
-// =============================================================================
-// VALIDATION SCHEMAS
-// =============================================================================
 
 const createConversationSchema = z
   .object({
@@ -62,10 +33,6 @@ const updateConversationSchema = z
     message: 'At least one field must be provided for update',
   });
 
-// =============================================================================
-// HELPER: Verify conversation ownership
-// =============================================================================
-
 async function verifyConversationOwnership(conversationId: string, user: UserAuth): Promise<void> {
   const db = getUserScopedClient(user);
   const { data: conversation, error } = await db
@@ -79,22 +46,11 @@ async function verifyConversationOwnership(conversationId: string, user: UserAut
     throw new AppError('Conversation not found', 404);
   }
 
-  // Mask ownership as 404 to prevent enumeration attacks
   if (conversation.user_id !== user.userId) {
     throw new AppError('Conversation not found', 404);
   }
 }
 
-// =============================================================================
-// ROUTES
-// =============================================================================
-
-/**
- * GET /api/cloud-chat
- * List all conversations for the authenticated user (excluding soft-deleted).
- *
- * SECURITY: Rate limited to 60/min for responsive UX on list operations.
- */
 router.get('/', createRateLimiter('cloud-chat-list'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -118,12 +74,6 @@ router.get('/', createRateLimiter('cloud-chat-list'), async (req: Request, res: 
   res.json({ conversations: conversations ?? [] });
 });
 
-/**
- * POST /api/cloud-chat
- * Create a new conversation for the authenticated user.
- *
- * SECURITY: Rate limited to 30/min for write operations.
- */
 router.post('/', createRateLimiter('cloud-chat-create'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -161,12 +111,6 @@ router.post('/', createRateLimiter('cloud-chat-create'), async (req: Request, re
   res.status(201).json({ conversation });
 });
 
-/**
- * GET /api/cloud-chat/:id
- * Get a single conversation with its messages.
- *
- * SECURITY: Rate limited to 60/min; ownership verified before returning data.
- */
 router.get('/:id', createRateLimiter('cloud-chat-get'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {
@@ -182,7 +126,6 @@ router.get('/:id', createRateLimiter('cloud-chat-get'), async (req: Request, res
   await verifyConversationOwnership(conversationId, user);
 
   const db = getUserScopedClient(user);
-  // Fetch conversation metadata and messages in parallel.
   const [convResult, msgsResult] = await Promise.all([
     db
       .from('conversations')
@@ -203,7 +146,6 @@ router.get('/:id', createRateLimiter('cloud-chat-get'), async (req: Request, res
   }
 
   if (msgsResult.error) {
-    // Non-fatal: metadata remains useful if message history is temporarily unavailable.
     logger.debug({ error: msgsResult.error, conversationId }, 'Failed to fetch messages');
   }
 
@@ -213,12 +155,6 @@ router.get('/:id', createRateLimiter('cloud-chat-get'), async (req: Request, res
   });
 });
 
-/**
- * DELETE /api/cloud-chat/:id
- * Soft-delete a conversation (sets is_deleted=true).
- *
- * SECURITY: Rate limited to 10/min for destructive operations.
- */
 router.delete(
   '/:id',
   createRateLimiter('cloud-chat-delete'),
@@ -254,12 +190,6 @@ router.delete(
   },
 );
 
-/**
- * PATCH /api/cloud-chat/:id
- * Update conversation title or archive status.
- *
- * SECURITY: Rate limited to 30/min for metadata writes.
- */
 router.patch('/:id', createRateLimiter('cloud-chat-patch'), async (req: Request, res: Response) => {
   const user = req.user;
   if (!user) {

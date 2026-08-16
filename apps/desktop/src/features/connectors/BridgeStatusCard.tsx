@@ -91,36 +91,15 @@ function SurfaceIcon({ surface }: { surface: BridgeRow['surface'] }) {
 }
 
 interface BridgeStatusCardProps {
-  /**
-   * Optional override for the fetcher. Defaults to
-   * `browserExtension.extensionStatus()`. Test-friendly seam.
-   */
   fetcher?: () => Promise<ExtensionStatusDiagnostics>;
-  /** Optional override for the Tauri-environment gate. Test-friendly seam. */
   isTauriHost?: boolean;
 }
 
-/**
- * Renders Chrome + VS Code bridge health in the connector hub.
- *
- * Derived from the Tauri `extension_status` diagnostics payload exposed via
- * `@agiworkforce/desktop-command-client`'s `browserExtension.extensionStatus()`. PLAN.md section 6:
- * "Add Chrome and VS Code bridge status to connector hub."
- *
- * Both bridges share the same `.ipc_token`. Chrome reports its native-host
- * state; VS Code reports an authenticated realtime client, so a listening
- * WebSocket port alone is never shown as connected.
- */
 export function BridgeStatusCard({ fetcher, isTauriHost = isTauri }: BridgeStatusCardProps = {}) {
   const [payload, setPayload] = useState<ExtensionStatusDiagnostics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Unmount guard — see hooks/useIsMounted for rationale. Without this,
-  // an in-flight fetcher promise that resolves after the card unmounts
-  // (StrictMode double-mount in dev, fast nav, etc.) triggers a React
-  // warning AND would overwrite fresher state from a new mount with
-  // stale resolved values from the previous one.
   const mountedRef = useIsMounted();
 
   const effectiveFetcher = fetcher ?? browserExtension.extensionStatus;

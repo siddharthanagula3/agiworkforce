@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useTerminal } from '../useTerminal';
 
-// Mock the tauri-mock module
 vi.mock('../../lib/tauri-mock', () => ({
   invoke: vi.fn(),
   listen: vi.fn(() => Promise.resolve(() => {})),
@@ -70,7 +69,7 @@ describe('useTerminal', () => {
         await result.current.createSession('powershell');
       });
 
-      expect(mockListen).toHaveBeenCalledTimes(2); // output and exit events
+      expect(mockListen).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -328,7 +327,6 @@ describe('useTerminal', () => {
         // Expected to throw
       }
 
-      // Error callback should have been called with the error
       expect(onError).toHaveBeenCalled();
       expect(capturedError).toBeInstanceOf(Error);
       expect(capturedError?.message).toBe('Connection failed');

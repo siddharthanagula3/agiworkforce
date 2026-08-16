@@ -1,14 +1,3 @@
-/**
- * LLM Constants — thin shim over the canonical models.json (single source of truth)
- *
- * Generated model data is consumed from packages/contracts/types/src/models.json through
- * @agiworkforce/types. Authoring lives in packages/ai/model-registry/catalog; this
- * file re-exports it with the same named exports
- * that the 29+ TS importers expect.
- *
- * To add a new model, edit the model-registry curation/evidence inputs and run
- * pnpm sync:models. Never edit the generated models.json directly.
- */
 
 import type { Provider } from '../types/provider';
 import type { SubscriptionTier } from './planModels';
@@ -38,8 +27,6 @@ import {
 
 export type { EnvironmentAvailability, ModelEnvironment };
 export { evaluateModelEnvironment };
-
-// ---- Types (unchanged from original) ----
 
 export interface ModelCapabilities {
   streaming: boolean;
@@ -74,11 +61,6 @@ export interface ModelMetadata {
     | 'stt'
     | 'embedding'
     | 'music';
-  /**
-   * Published token context limit for text/chat models. Media APIs can omit
-   * this because their documented limits use other units (for example,
-   * characters and duration).
-   */
   contextWindow?: number;
   inputCost: number;
   outputCost: number;
@@ -103,19 +85,9 @@ export interface ModelMetadata {
   qualityTier: 'fast' | 'balanced' | 'best';
   bestFor: string[];
   released?: string;
-  /** Mirrors the optional `deprecated` flag in models.json. */
   deprecated?: boolean;
-  /**
-   * GATING signal: if set, this model's agentic value depends on the named
-   * execution environment being live. Pickers must gray it out when the
-   * environment is not configured + available. Absent = no gating (every
-   * current model). Mirrors ModelMetadata.requiresEnvironment from
-   * @agiworkforce/types/model-catalog.
-   */
   requiresEnvironment?: 'e2b' | 'local-runtime';
 }
-
-// ---- Derived data from JSON ----
 
 const config = modelsJson;
 
@@ -163,12 +135,10 @@ const CURRENT_PICKER_MODEL_OPTIONS: GroupedModelOption[] = getCatalogPickerModel
   provider: model.provider,
 }));
 
-/** Selectable Managed Cloud Auto control projected from routing policy. */
 export function getManagedAutoModelOptions(): ModelOption[] {
   return MANAGED_AUTO_MODEL_OPTIONS.map((option) => ({ ...option }));
 }
 
-/** Current selectable models for one provider, sourced from the canonical tier roster. */
 export function getProviderModelOptions(provider: Provider): ModelOption[] {
   if (provider === 'managed_cloud') {
     return getManagedAutoModelOptions();
@@ -179,7 +149,6 @@ export function getProviderModelOptions(provider: Provider): ModelOption[] {
   );
 }
 
-/** Current Auto control and provider models for grouped Desktop controls. */
 export function getCurrentModelOptions(): GroupedModelOption[] {
   return [
     ...MANAGED_AUTO_MODEL_OPTIONS.map((option) => ({
@@ -203,18 +172,6 @@ export const MODEL_CONTEXT_WINDOWS: Record<string, number> = Object.fromEntries(
   }),
 );
 
-// ---- Tier logic (reads arrays from JSON) ----
-
-/**
- * Every model any subscription roster can offer, in catalog order.
- *
- * Only a universe to filter — the cascade itself is NOT rebuilt here. A local
- * `TIER_ALLOWED_MODELS` table used to union these three rosters per tier, which
- * put a second answer to "what may this plan select" in the same file as
- * `isModelAllowedForTier`; once that function started reading each model's
- * `tierPolicy.minTier` the two disagreed for Free (roster said 5 Economy models,
- * gate refused 2 of them).
- */
 const SELECTABLE_MODELS: readonly string[] = Array.from(
   new Set([
     ...getCatalogAllowedModelsForTier('economy'),
@@ -222,8 +179,6 @@ const SELECTABLE_MODELS: readonly string[] = Array.from(
     ...getCatalogAllowedModelsForTier('flagship_additions'),
   ]),
 );
-
-// ---- Helper functions (unchanged signatures) ----
 
 export function getModelMetadata(modelId: string): ModelMetadata | null {
   return (getModelMetadataById(modelId) as ModelMetadata | null) ?? null;
@@ -262,22 +217,9 @@ export function formatCost(inputCost?: number, outputCost?: number): string {
 }
 
 export function isModelAllowedForTier(modelId: string, tier: SubscriptionTier): boolean {
-  // Delegated, not re-derived (apps/web/shared/config/llm.ts does the same). The
-  // local cascade collapsed Free into Basic and so sold Free the whole Economy
-  // roster, while the catalog gate also weighs each model's `tierPolicy.minTier`
-  // — the field FREE_TRIAL_MODELS is built from. Two Economy models carry
-  // minTier 'basic', so the copy here let a Free desktop pick models the server
-  // refuses.
   return canAccessModelForSubscriptionTier(modelId, tier);
 }
 
-/**
- * The models `tier` may select — by construction the exact set for which
- * `isModelAllowedForTier` answers true, so a roster and the gate that enforces
- * it can never drift apart again. 'local-only' and 'byok' get an empty list:
- * the managed-cloud gate fails closed for them (they route through the user's
- * own keys), and pretending otherwise is what made the old table wrong.
- */
 export function getAllowedModelsForTier(tier: SubscriptionTier): string[] {
   return SELECTABLE_MODELS.filter((modelId) => isModelAllowedForTier(modelId, tier));
 }
@@ -312,9 +254,6 @@ export function normalizeSubscriptionTier(
 export function getAllowedAutoModesForTier(
   _tier: SubscriptionTier | string | null | undefined,
 ): string[] {
-  // One self-routing "Auto" for every tier. Tier no longer picks an Auto
-  // *profile* — the resolver derives the profile per task and clamps it to the
-  // plan's reachable slots, so every user sees a single "Auto" option.
   return ['auto'];
 }
 
@@ -348,24 +287,7 @@ export function getTierPolicy(tier: SubscriptionTier | string | null | undefined
   return getCatalogTierPolicy(tier);
 }
 
-// ---------------------------------------------------------------------------
-// Environment gating (Phase A — Phase B replaces environmentAvailability with
-// the real managed-compute-beta signal once the E2B client is wired in).
-// ---------------------------------------------------------------------------
-
-/**
- * Return the current availability of a model's required execution environment.
- *
- * PHASE A: returns { configured: false } for every environment, locking all
- * env-gated models until Phase B wires the real managed-compute-beta signal.
- * No current model sets requiresEnvironment, so this never triggers today.
- *
- * PHASE B: replace the body with a hook/context read that checks whether the
- * managed-compute beta is enabled for the current user and whether E2B is
- * currently reachable, then return { configured: true, available: <ping> }.
- */
 export function environmentAvailability(_env: ModelEnvironment): EnvironmentAvailability {
-  // Phase A: all environments are unconfigured — env-gated models stay locked.
   return { configured: false };
 }
 

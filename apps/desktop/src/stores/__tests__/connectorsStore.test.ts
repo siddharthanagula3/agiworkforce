@@ -24,7 +24,6 @@ async function getMcpClientMock(): Promise<McpClientMocks> {
   return McpClient as unknown as McpClientMocks;
 }
 
-// Mirrors the private `CONNECTORS_PERSIST_KEY` in the store under test.
 const CONNECTORS_PERSIST_KEY = 'agiworkforce-connectors-store';
 
 function resetConnectorsStore() {
@@ -124,12 +123,6 @@ describe('connectorsStore', () => {
       expect(persisted.state).not.toHaveProperty('oauthStartedAt');
     });
 
-    // `migrate` is a chain of early returns, so every storage version that can
-    // still be on disk has to be exercised: a payload at v3 leaves through the
-    // `< 4` arm, v4/v5 through `< 6` and v6 through `< 7`, and none of them ever
-    // reaches the tail. The timeout timer that would have resolved these flows
-    // died with the process that wrote them, so rehydrating any of these
-    // verbatim left gmail waiting for a callback forever.
     it.each([3, 4, 5, 6, 7])(
       'clears a stuck pending flow left behind by storage version %i',
       async (version) => {
